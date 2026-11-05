@@ -204,6 +204,8 @@ function RA:BuildCard()
     card:SetScript("OnMouseUp", function(_, button)
         if button == "RightButton" and RA.rare then RA:CloseCard() end
     end)
+    card:SetScript("OnEnter", function() RA:CoverCard() end)
+    card:SetScript("OnLeave", function() RA:OnCardLeave() end)
     card:Hide()
     self.card = card
 

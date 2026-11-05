@@ -507,6 +507,7 @@ function RA:CloseCard()
     self:StopTick()
     self:HideCard()
     self:SyncEvents()
+    self:ClearTarget()
 end
 
 function RA:OpenCard(decision, rare)
@@ -541,6 +542,7 @@ function RA:OpenCard(decision, rare)
     if self.rare ~= rare then return end
 
     self:SyncEvents()
+    self:ArmTarget()
     self:CheckTargeted()
     self:StartTick()
 
@@ -749,6 +751,7 @@ function RA:PLAYER_REGEN_ENABLED()
     if not rare then return end
     rare.combat = false
     self:PaintState(rare)
+    self:SettleTarget()
 end
 
 -- The plate listener stays out of instances entirely.
@@ -777,6 +780,113 @@ function RA:PlacePin()
     end
     C_Map.SetUserWaypoint(UiMapPoint.CreateFromCoordinates(map, x / 100, y / 100))
     C_SuperTrack.SetSuperTrackedUserWaypoint(true)
+end
+
+---------------------------------------------------------------------------------
+-- Secure target button
+---------------------------------------------------------------------------------
+
+-- Parented to UIParent, not the card, so the card can hide and slide in combat
+-- with no protected frame under it.
+local TARGET_NAME = "KE_RareAlertTarget"
+local TARGET_MACRO = "/targetexact %s"
+local SKULL_MACRO = "/cleartarget\n/targetexact %s\n/tm !8"
+local TARGET_LEVEL_ABOVE = 10
+
+function RA:CreateTarget()
+    if self.target or InCombatLockdown() then return end
+    local target = CreateFrame("Button", TARGET_NAME, UIParent,
+        "SecureActionButtonTemplate, SecureHandlerStateTemplate")
+    target:RegisterForClicks("AnyUp", "AnyDown")
+    target:SetAttribute("type1", "macro")
+    -- A bare /click passes down as false, and the secure handler would act only
+    -- on the down while ActionButtonUseKeyDown is on.
+    target:SetAttribute("useOnKeyDown", false)
+    -- Combat entry is lockdown, so only a secure handler can hide the button
+    -- then. Showing it again is ordinary Lua once combat ends.
+    target:SetAttribute("_onstate-combat", [=[
+        if newstate == "hide" then self:Hide() end
+    ]=])
+    target:SetScript("PostClick", function(_, button, down)
+        if button == "RightButton" and not down and RA.rare then RA:CloseCard() end
+    end)
+    target:SetScript("OnLeave", function() RA:UncoverCard() end)
+    target:Hide()
+    self.target = target
+end
+
+function RA:ArmTarget()
+    local rare, target = self.rare, self.target
+    if not rare or not target or InCombatLockdown() then return end
+    local macro = self.db.SkullOnClick and SKULL_MACRO or TARGET_MACRO
+    target:SetAttribute("macrotext1", macro:format((rare.name:gsub("%c", ""))))
+end
+
+function RA:ClearTargetNow()
+    -- A newer card owns the macro.
+    if self.rare or InCombatLockdown() then return end
+    self:UncoverCard()
+    self.target:SetAttribute("macrotext1", nil)
+end
+
+function RA:ClearTarget()
+    if not self.target then return end
+    if InCombatLockdown() then
+        KE:RunAfterCombat(function() self:ClearTargetNow() end)
+        return
+    end
+    self:ClearTargetNow()
+end
+
+function RA:CoverCard()
+    local card, target = self.card, self.target
+    if not self.rare or not card or not target or InCombatLockdown() then return end
+    local left, bottom = card:GetLeft(), card:GetBottom()
+    local pin = self.parts.pin
+    local right = pin:IsShown() and pin:GetLeft() or card:GetRight()
+    if not left or not bottom or not right then return end
+    local scale = card:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    target:ClearAllPoints()
+    target:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * scale, bottom * scale)
+    target:SetSize((right - left) * scale, card:GetHeight() * scale)
+    target:SetFrameStrata(card:GetFrameStrata())
+    target:SetFrameLevel(card:GetFrameLevel() + TARGET_LEVEL_ABOVE)
+    -- The driver runs only while the button is up, so an idle button costs nothing.
+    if not self.combatDriver then
+        RegisterStateDriver(target, "combat", "[combat] hide; [nocombat] show")
+        self.combatDriver = true
+    end
+    target:Show()
+end
+
+function RA:UncoverCard()
+    local target = self.target
+    if not target or InCombatLockdown() then return end
+    target:Hide()
+    if self.combatDriver then
+        UnregisterAttributeDriver(target)
+        self.combatDriver = false
+    end
+end
+
+-- Runs from the module's combat-end event and from the button's deferred
+-- creation, in whichever order they arrive, so the last one finds the button.
+function RA:SettleTarget()
+    local card = self.card
+    if not self.rare or not card or InCombatLockdown() then return end
+    self:ArmTarget()
+    if card:IsMouseOver() then
+        self:CoverCard()
+    else
+        self:UncoverCard()
+    end
+end
+
+-- The button covering the card takes the mouse from it, which is not a leave.
+function RA:OnCardLeave()
+    local target = self.target
+    if target and target:IsShown() and target:IsMouseOver() then return end
+    self:UncoverCard()
 end
 
 ---------------------------------------------------------------------------------
@@ -867,6 +977,7 @@ function RA:ApplySettings()
         self:PaintState(rare)
         self:RefreshBearing(rare)
         self:RefreshHealth(rare)
+        self:ArmTarget()
     elseif self.shown == "preview" then
         self:PaintPreview()
     end
@@ -887,6 +998,11 @@ function RA:OnEnable()
     self:RegWithEditMode()
     self:RegisterEvent("PLAYER_ENTERING_WORLD")
     self:PLAYER_ENTERING_WORLD()
+    KE:RunAfterCombat(function()
+        if not self.db.Enabled then return end
+        self:CreateTarget()
+        self:SettleTarget()
+    end)
 end
 
 function RA:OnDisable()
