@@ -551,6 +551,15 @@ local function DressBookSpell(button)
     end
 end
 
+-- overrideWidth narrows the bar, track and mask but leaves Fill at the
+-- template's 441, so the backdrop on Fill ran past the bar. The width is the
+-- mask's span at 100%: it starts 1px into Fill and is width + offset long.
+local function FitBookBarFill(bar)
+    local fill, width = bar and bar.Fill, bar and bar.overrideWidth
+    if not fill or not width then return end
+    fill:SetWidth(width + (bar.overrideMaskRightOffset or 0) + 1)
+end
+
 -- Blizzard re-atlases each slot's Background per profession, so it is faded
 -- rather than cleared.
 local function SkinBookPage(page)
@@ -563,10 +572,35 @@ local function SkinBookPage(page)
             if slot.Background then slot.Background:SetAlpha(0) end
             S.Backdrop(slot)
             SkinRankBar(slot.StatusBar)
+            FitBookBarFill(slot.StatusBar)
+            if slot.UnlearnButton then S.CloseButton(slot.UnlearnButton) end
             S.FontStrings(slot, nil, "OUTLINE")
             for i = 1, 4 do DressBookSpell(slot["SpellButton" .. i]) end
         end
     end
+end
+
+-- 28 fills the 30-wide tab inside its border.
+local SIDE_TAB_ICON = 28
+local ICON_CROP = 0.08
+
+-- Blizzard re-crops each tab icon to its own baked frame on every check
+-- change, so KE's crop goes back on after it.
+local function KeepIconCrop(icon, left)
+    if left ~= ICON_CROP then
+        icon:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP)
+    end
+end
+
+local function SkinProfessionTab(tab)
+    if not tab then return end
+    S.SideTab(tab, nil, nil, SIDE_TAB_ICON)
+
+    local icon = tab.Icon
+    if not icon or S.data(icon).keCropHooked then return end
+    S.data(icon).keCropHooked = true
+    S.Icon(icon, true)
+    hooksecurefunc(icon, "SetTexCoord", KeepIconCrop)
 end
 
 local function Skin()
@@ -578,8 +612,8 @@ local function Skin()
     if PF.TabSystem then SkinTabRow(PF.TabSystem) end
     -- The overview tab sits outside the profession tabs' array.
     if PF.rightProfessionTabs then
-        S.SideTabsInPlace({ PF.ProfessionsOverviewTab })
-        S.SideTabsInPlace(PF.rightProfessionTabs)
+        SkinProfessionTab(PF.ProfessionsOverviewTab)
+        for _, tab in ipairs(PF.rightProfessionTabs) do SkinProfessionTab(tab) end
     end
     if PF.BookPage then SkinBookPage(PF.BookPage) end
 
