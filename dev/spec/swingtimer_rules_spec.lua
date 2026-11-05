@@ -1,6 +1,6 @@
 -- Modules/Combat/SwingTimer/SwingTimerRules.lua -- the rules a later edit breaks
--- silently: duration refusal, bar order, slots and when a bar shows, the cached
--- speed, range, melee state, the window, the hunter's stop-by and shot time, the
+-- silently: duration refusal, bar order, slots and when a bar shows, whether a
+-- weapon is known, range, melee state, the window, the hunter's stop-by and shot time, the
 -- words, the cast tick, seals, the Blizzard button's refusals, and the Target
 -- bar's hit rules. Constants, data tables and proof switches get no case, and
 -- ParryHastened gets none: smoke checks it.
@@ -48,19 +48,16 @@ describe("swing timer bar rules", function()
         end
     end)
 
-    it("keeps the cached speed through an unreadable read and restarts a swap only on a plain read", function()
+    it("keeps the last answer on a weapon through an unreadable read and restarts a swap only on a plain read", function()
         for _, row in ipairs({
-            { name = "plain replaces", readable = true, read = 2.6, cached = 3.0, speed = 2.6, known = true },
-            { name = "plain nil: no weapon", readable = true, read = nil, cached = 3.0, speed = nil, known = false },
-            { name = "plain zero: no weapon", readable = true, read = 0, cached = 3.0, speed = nil, known = false },
-            { name = "unreadable keeps", readable = false, read = 2.6, cached = 3.0, speed = 3.0, known = true },
-            { name = "a swing's duration as the cache stands in", readable = false, read = nil, cached = 1.9,
-              speed = 1.9, known = true },
-            { name = "unreadable, no cache", readable = false, read = nil, cached = nil, speed = nil, known = false },
+            { name = "plain speed: a weapon", readable = true, read = 2.6, known = false, want = true },
+            { name = "plain nil: no weapon", readable = true, read = nil, known = true, want = false },
+            { name = "plain zero: no weapon", readable = true, read = 0, known = true, want = false },
+            { name = "unreadable keeps known", readable = false, read = 2.6, known = true, want = true },
+            { name = "unreadable keeps unknown", readable = false, read = 2.6, known = false, want = false },
+            { name = "unreadable, no answer yet", readable = false, read = nil, known = nil, want = false },
         }) do
-            local speed, known = Rules.ResolveSpeed(row.readable, row.read, row.cached)
-            assert.equals(row.speed, speed, row.name)
-            assert.equals(row.known, known, row.name)
+            assert.equals(row.want, Rules.WeaponKnown(row.readable, row.read, row.known), row.name)
         end
         assert.equals(2.0, Rules.SwapRestartSpeed(true, 2.0))
         assert.is_nil(Rules.SwapRestartSpeed(true, nil))
@@ -146,31 +143,27 @@ describe("swing timer ranged rules", function()
         end
     end)
 
-    it("words the bar MOVE before the zone, STILL or STOP in it, STILL in the aim and STOP while held", function()
+    it("words the reload MOVE before the zone, and STILL or STOP in it", function()
         for _, row in ipairs({
-            { phase = "reload", inZone = false, moving = false, want = "MOVE" },
-            { phase = "reload", inZone = false, moving = true, want = "MOVE" },
-            { phase = "reload", inZone = true, moving = false, want = "STILL" },
-            { phase = "reload", inZone = true, moving = true, want = "STOP" },
-            { phase = "aim", inZone = false, moving = false, want = "STILL" },
-            { phase = "held", inZone = false, moving = true, want = "STOP" },
-            { phase = "ready", inZone = false, moving = false, want = nil },
+            { inZone = false, moving = false, want = "MOVE" },
+            { inZone = false, moving = true, want = "MOVE" },
+            { inZone = true, moving = false, want = "STILL" },
+            { inZone = true, moving = true, want = "STOP" },
         }) do
-            assert.equals(row.want, Rules.RangedWord(row.phase, row.inZone, row.moving))
+            assert.equals(row.want, Rules.ReloadWord(row.inZone, row.moving))
         end
     end)
 
     it("places a tick inside the swing and pins one past the end as a clip", function()
-        local fraction, clipped = Rules.TickFraction(true, 105, 100, 10)
+        local fraction, clipped = Rules.TickFraction(105, 100, 10)
         assert.near(0.5, fraction, 1e-9)
         assert.is_false(clipped)
-        fraction, clipped = Rules.TickFraction(true, 111, 100, 10)
+        fraction, clipped = Rules.TickFraction(111, 100, 10)
         assert.equals(1, fraction)
         assert.is_true(clipped)
-        fraction, clipped = Rules.TickFraction(true, 99, 100, 10)
+        fraction, clipped = Rules.TickFraction(99, 100, 10)
         assert.equals(0, fraction)
         assert.is_false(clipped)
-        assert.is_nil((Rules.TickFraction(false, 105, 100, 10)))
     end)
 end)
 

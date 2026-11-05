@@ -544,7 +544,7 @@ function ST:ReadWeapons()
         local row = self.bars[key]
         local wasKnown = row.known
         local read = select(SPEED_RETURN[key], UnitAttackSpeed("player"))
-        row.speed, row.known = R.ResolveSpeed(not KE:IsSecretValue(read), read, row.speed)
+        row.known = R.WeaponKnown(not KE:IsSecretValue(read), read, row.known)
         if row.known ~= wasKnown then changed = true end
     end
     return changed
@@ -671,8 +671,7 @@ end
 ---------------------------------------------------------------------------------
 -- Event handlers (Ace3 and the unit frame dispatch by method name)
 ---------------------------------------------------------------------------------
-function ST:NoteSwing(row, duration)
-    if not row.speed then row.speed = duration end
+function ST:NoteSwing(row)
     row.used = true
     if row.known then
         self:ApplyBarShown(row)
@@ -690,7 +689,7 @@ function ST:PLAYER_SWING(_, duration, swingType)
     local now = GetTime()
     row.starts, row.ends, row.swingDuration = now, now + duration, duration
     self:TakeLatency(row)
-    self:NoteSwing(row, duration)
+    self:NoteSwing(row)
     if key == "R" then
         self.autoRepeatOn = true
     else
@@ -726,7 +725,7 @@ function ST:WEAPON_SLOT_CHANGED()
         local read = select(SPEED_RETURN[key], UnitAttackSpeed("player"))
         local readable = not KE:IsSecretValue(read)
         local restart = R.SwapRestartSpeed(readable, read)
-        row.speed, row.known = R.ResolveSpeed(readable, read, row.speed)
+        row.known = R.WeaponKnown(readable, read, row.known)
         if restart and self:SwingRunning(row, now) then
             row.starts, row.ends, row.swingDuration = now, now + restart, restart
             self:TakeLatency(row)
@@ -834,7 +833,7 @@ end
 function ST:PlaceTick(row)
     local fraction, clipped
     if self.castEnd and row.state == "running" and row.phase ~= "aim" and self:TickAllowed(row) then
-        fraction, clipped = R.TickFraction(true, self.castEnd, row.starts, row.swingDuration)
+        fraction, clipped = R.TickFraction(self.castEnd, row.starts, row.swingDuration)
     end
     if not fraction then
         row.tick:Hide()
@@ -908,7 +907,7 @@ function ST:PaintReload(row, now)
     local aim, latency = R.AIM_SECONDS, row.latency or 0
     local stopAt = math.max(row.ends - aim - latency, row.starts)
     local inZone = now >= stopAt
-    local word = R.RangedWord("reload", inZone, self.moving)
+    local word = R.ReloadWord(inZone, self.moving)
     row.state, row.phase, row.stopAt = "running", "reload", stopAt
     self:SetLabel(row, GUIDE_LABEL[word])
     self:SetFillColor(row, GUIDE_COLOR[word])

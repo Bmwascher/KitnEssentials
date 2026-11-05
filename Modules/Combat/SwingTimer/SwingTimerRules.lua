@@ -77,12 +77,10 @@ function Rules.BarShown(showWhenSwings, isPrimary, known, used)
     return isPrimary or used == true
 end
 
--- Returns the speed and whether a weapon is known. An unreadable read says
--- nothing about the weapon, so the cache answers.
-function Rules.ResolveSpeed(readable, read, cached)
-    if not readable then return cached, cached ~= nil end
-    if Rules.ValidDuration(read) then return read, true end
-    return nil, false
+-- An unreadable read says nothing about the weapon, so the last answer stands.
+function Rules.WeaponKnown(readable, read, known)
+    if not readable then return known == true end
+    return Rules.ValidDuration(read)
 end
 
 function Rules.SwapRestartSpeed(readable, read)
@@ -145,14 +143,9 @@ function Rules.RangedAtEnd(moving, casting, outOfRange, now, shotAt)
     return "ready"
 end
 
-function Rules.RangedWord(phase, inZone, moving)
-    if phase == "reload" then
-        if not inZone then return "MOVE" end
-        return moving and "STOP" or "STILL"
-    end
-    if phase == "aim" then return "STILL" end
-    if phase == "held" then return "STOP" end
-    return nil
+function Rules.ReloadWord(inZone, moving)
+    if not inZone then return "MOVE" end
+    return moving and "STOP" or "STILL"
 end
 
 function Rules.TickIgnored(spellID)
@@ -160,8 +153,8 @@ function Rules.TickIgnored(spellID)
 end
 
 -- Returns the fraction and whether the cast clips the swing, or nil.
-function Rules.TickFraction(readable, castEnd, swingStart, duration)
-    if not readable or not Rules.ValidDuration(duration) then return nil end
+function Rules.TickFraction(castEnd, swingStart, duration)
+    if not Rules.ValidDuration(duration) then return nil end
     local fraction = (castEnd - swingStart) / duration
     if fraction > 1 then return 1, true end
     return math_max(0, fraction), false
