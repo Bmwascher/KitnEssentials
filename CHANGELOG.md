@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.6
+
+### WoW Forever only
+
+- The Character window's Dark Theme skin now covers the level row, swaps the
+  bronze bar beside the stats for a dim line, and uses the KE arrow on the
+  stats toggle
+- The ammo count reads over its icon instead of hiding behind it
+- The Character window shows the ranged weapon's item level below the bow
+
+---
+
 ## v4.16.5
 
 ### WoW Forever only
