@@ -1,5 +1,24 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.5
+
+### WoW Forever only
+
+- Quest offers show their full text with the Quests skin on, instead of only
+  the opening letters. The skin now turns on the game's Instant Quest Text
+  setting, because the writing-in effect cannot show with its white text
+
+---
+
+## v4.16.4
+
+### WoW Forever only
+
+- The Spellbook's category icons stay inside the window. They no longer move
+  past its left edge on some reloads
+
+---
+
 ## v4.16.3
 
 ### Both clients
