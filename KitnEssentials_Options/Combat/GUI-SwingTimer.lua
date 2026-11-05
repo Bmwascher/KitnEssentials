@@ -304,9 +304,12 @@ GUIFrame:RegisterContent("SwingTimer", function(scrollChild, yOffset)
     manager:SetCondition("heightFree", function() return not heightMatched end)
 
     local sizeRow = GUIFrame:CreateRow(displayCard.content, Theme.rowHeight)
+    -- A size matched or typed in EllesmereUI's unlock mode can lie outside the
+    -- ranges below, so each range widens to show the size the bars have.
+    local width, height = db.Width or 240, db.Height or 16
     local widthSlider = GUIFrame:CreateSlider(sizeRow, "Width", {
-        min = 100, max = 600, step = 1,
-        value = db.Width or 240,
+        min = math.min(100, math.floor(width)), max = math.max(600, math.ceil(width)), step = 1,
+        value = width,
         callback = function(val)
             db.Width = val
             ApplySettings()
@@ -315,8 +318,8 @@ GUIFrame:RegisterContent("SwingTimer", function(scrollChild, yOffset)
     sizeRow:AddWidget(widthSlider, 0.5)
     manager:Register(widthSlider, "widthFree")
     local heightSlider = GUIFrame:CreateSlider(sizeRow, "Height", {
-        min = 8, max = 40, step = 1,
-        value = db.Height or 16,
+        min = math.min(8, math.floor(height)), max = math.max(40, math.ceil(height)), step = 1,
+        value = height,
         callback = function(val)
             db.Height = val
             ApplySettings()
