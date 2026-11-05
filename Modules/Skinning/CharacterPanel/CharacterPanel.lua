@@ -116,6 +116,12 @@ local STRIP_TOP_SLOTS = {}
 if IS_FOREVER then STRIP_TOP_SLOTS[INVSLOT_OFFHAND] = true end
 local TOP_STRIP_HEIGHT = 30
 
+-- The ranged slot has the off hand's strip above it and, for ammo users, the
+-- ammo slot beside it. The window's edge leaves one line of room below it.
+local STRIP_BOTTOM_SLOTS = {}
+if IS_FOREVER then STRIP_BOTTOM_SLOTS[INVSLOT_RANGED] = true end
+local BOTTOM_STRIP_HEIGHT = 16
+
 -- Enchantable slot buttons
 local enchantSlotButtons = {
     [INVSLOT_HEAD]      = "CharacterHeadSlot",
@@ -2172,6 +2178,14 @@ function CP:CreateSlotDetail(slotFrame, slotID)
         detail.enchantText:SetJustifyH("CENTER")
         detail.enchantText:SetPoint("BOTTOM", detail, "BOTTOM", 0, 2)
         AnchorGemsRightOf(detail, detail.ilvlText)
+    elseif STRIP_BOTTOM_SLOTS[slotID] then
+        detail:SetPoint("TOP", slotFrame, "BOTTOM", 0, 0)
+        detail:SetHeight(BOTTOM_STRIP_HEIGHT)
+        detail.ilvlText:SetJustifyH("CENTER")
+        detail.ilvlText:SetPoint("TOP", detail, "TOP", 0, -2)
+        detail.enchantText:SetJustifyH("LEFT")
+        detail.enchantText:SetPoint("LEFT", detail.ilvlText, "RIGHT", 4, 0)
+        AnchorGemsLeftOf(detail, detail.ilvlText)
     elseif stripLeft then
         detail:SetPoint("TOPRIGHT", slotFrame, "TOPLEFT", 0, 0)
         detail:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMLEFT", 0, 0)
@@ -2192,21 +2206,6 @@ function CP:CreateSlotDetail(slotFrame, slotID)
 
     ffd.detail = detail
     return detail
-end
-
--- Forever's ammo slot sits 19 px right of the ranged slot and is 27 px wide.
--- Blizzard decides on every show whether it is shown, so each render re-anchors.
-local RANGED_AMMO_CLEARANCE = 46
-
-local function AnchorRangedStrip(detail, slotFrame)
-    local x = 0
-    local usesAmmo = _G.UnitUsesAmmo
-    if slotFrame == _G.CharacterRangedSlot and usesAmmo and usesAmmo("player") then
-        x = RANGED_AMMO_CLEARANCE
-    end
-    detail:ClearAllPoints()
-    detail:SetPoint("TOPLEFT", slotFrame, "TOPRIGHT", x, 0)
-    detail:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMRIGHT", x, 0)
 end
 
 -- Facing slots across the model, by row. The shirt and tabard rows carry no
@@ -2371,7 +2370,6 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     if data == nil then data = C_TooltipInfo.GetInventoryItem(unit, slotID) end
 
     local detail = self:CreateSlotDetail(slotFrame, slotID)
-    if slotID == INVSLOT_RANGED then AnchorRangedStrip(detail, slotFrame) end
     local fontFace    = self.db.FontFace
     local fontSize    = self.db.SlotInfoFontSize or 11
     local fontOutline = self.db.FontOutline or "OUTLINE"
