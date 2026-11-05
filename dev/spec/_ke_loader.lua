@@ -3681,13 +3681,15 @@ function L.loadPositionCardRules()
     return KE.PositionCardRules, KE
 end
 
--- Modules/Combat/ClassTools/CustomCooldownsRules.lua. Pure logic: nothing to
--- stub. Returns KE.
+-- Modules/Combat/SwingTimer/SwingTimerRules.lua. Pure logic: nothing to stub.
+-- Returns KE.
 function L.loadSwingTimerRules(overrides)
     installMock(overrides, {})
     return helpers.loadModule("Modules/Combat/SwingTimer/SwingTimerRules.lua", {})
 end
 
+-- Modules/Combat/ClassTools/CustomCooldownsRules.lua. Pure logic: nothing to
+-- stub. Returns KE.
 function L.loadCustomCooldownsRules(overrides)
     installMock(overrides, {})
     return helpers.loadModule("Modules/Combat/ClassTools/CustomCooldownsRules.lua", {})
