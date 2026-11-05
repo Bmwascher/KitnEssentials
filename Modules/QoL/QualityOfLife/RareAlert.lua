@@ -521,11 +521,17 @@ function RA:OpenCard(decision, rare)
     self.shown = decision
     RA.Stamp(self.seen, rare.npc, GetTime())
 
+    -- Up and ticking before any paint, in the same frame, so an error in one
+    -- leaves a card that closes by time and not one that blocks every quiet alert.
+    self:BuildCard()
+    self.card:Show()
+    self:SyncEvents()
+    self:StartTick()
+
     self:ReadMap(rare)
     self:ReadSpot(rare)
     self:ReadDrop(rare)
 
-    self:BuildCard()
     self:ApplyCardLook()
     self:PaintIdentity(rare)
     self:PaintState(rare)
@@ -536,14 +542,11 @@ function RA:OpenCard(decision, rare)
     -- A token read here can close the card, and then nothing below may run.
     self:RefreshHealth(rare)
     if self.rare ~= rare then return end
-    self.card:Show()
     self:ResolveToken()
     if self.rare ~= rare then return end
 
-    self:SyncEvents()
     self:ArmTarget()
     self:CheckTargeted()
-    self:StartTick()
 
     if decision == "loud" then
         self:PlayLoudEffects()
