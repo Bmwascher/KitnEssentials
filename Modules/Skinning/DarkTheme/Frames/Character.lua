@@ -719,7 +719,7 @@ local function Skin()
     local levelRow = _G.PaperDollFrame and _G.PaperDollFrame.TopBackgroundStripHost
     if levelRow then S.StripTextures(levelRow) end
     local paneToggle = frame.RightPaneToggleButton
-    if paneToggle and not S.data(paneToggle).skinned then
+    if paneToggle and frame.UpdateRightPaneToggleButton and not S.data(paneToggle).skinned then
         S.ArrowButton(paneToggle, "left")
         hooksecurefunc(frame, "UpdateRightPaneToggleButton", PointPaneToggle)
         PointPaneToggle(frame)
