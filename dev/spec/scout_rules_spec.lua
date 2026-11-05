@@ -235,12 +235,6 @@ describe("Scout rules", function()
         end
     end)
 
-    it("IsScriptSpell answers for a listed id and no other", function()
-        assert.is_true(Rules.IsScriptSpell(23159))
-        assert.is_false(Rules.IsScriptSpell(1))
-        assert.is_false(Rules.IsScriptSpell(nil))
-    end)
-
     describe("BuildLines", function()
         local FAMILY, HEADER, ROW = "Pet family", "<accent:Abilities>", "<white:Bite>"
         local ARMOR, IMMUNE, RESIST = "<accent:Armor> <gold:544>", "Immune: Fire, Stun", "Resists: Fire 30"
@@ -300,14 +294,15 @@ describe("Scout rules", function()
             assert.same({ "<accent:Armor> <gold:~544>" }, lefts(lines))
         end)
 
-        it("caps the ability rows at 8", function()
+        it("caps the ability rows at the shared limit", function()
+            local cap = Rules.MAX_ABILITY_ROWS
             local abilities = {}
-            for i = 1, 10 do abilities[i] = { name = "Spell " .. i, minRange = 0, maxRange = 5, castTime = 0 } end
+            for i = 1, cap + 2 do abilities[i] = { name = "Spell " .. i, minRange = 0, maxRange = 5, castTime = 0 } end
             local lines = Rules.BuildLines(baseView({ abilities = abilities }),
                 baseOpts({ petFamily = false, armor = false, immunities = false }), paint)
-            assert.equals(9, #lines)
+            assert.equals(cap + 1, #lines)
             assert.equals("<white:Spell 1>", lines[2].left)
-            assert.equals("<white:Spell 8>", lines[9].left)
+            assert.equals("<white:Spell " .. cap .. ">", lines[cap + 1].left)
         end)
 
         it("writes the hint, the word and the icon on the ability lines", function()

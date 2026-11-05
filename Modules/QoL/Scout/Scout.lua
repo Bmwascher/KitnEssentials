@@ -165,6 +165,9 @@ local ShowDetails
 local function RequestDescription(id)
     requested[id] = true
     Spell:CreateFromSpellID(id):ContinueOnSpellLoad(function()
+        -- Loaded data can be evicted, so a later draw may need to ask again. A
+        -- spell still uncached here stays latched, so the two cannot loop.
+        if C_Spell.IsSpellDataCached(id) then requested[id] = nil end
         if record.on then ShowDetails() end
     end)
 end

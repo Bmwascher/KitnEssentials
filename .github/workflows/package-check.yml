@@ -19,9 +19,10 @@ jobs:
         with:
           args: -d
 
-      # The settings pages refuse to load when the two addons report
-      # different versions, so all tocs must carry the same substituted line.
-      # A missing data toc also means a broken move-folder.
+      # Every toc must carry the same substituted line. The settings pages refuse
+      # to load when they and the main addon report different versions. The data
+      # folder has no such gate: a data toc that is missing or differs means a
+      # broken move-folder or a suffix the packager did not substitute.
       - name: Check the toc versions
         run: |
           zip=$(ls .release/*.zip | head -n 1)
