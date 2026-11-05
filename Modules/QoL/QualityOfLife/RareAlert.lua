@@ -190,6 +190,9 @@ end
 
 function RA:RefreshPin(rare)
     self:PaintPin(self:PinSpot(rare) ~= nil)
+    -- The button stops at the pin's left edge, so a late pin would sit under it.
+    local target = self.target
+    if target and target:IsShown() then self:CoverCard() end
 end
 
 function RA:UpdateBearing(rare)
