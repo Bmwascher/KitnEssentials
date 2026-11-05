@@ -638,15 +638,15 @@ function ST:LayoutBars()
     -- A matched height belongs to the whole stack, so it is pulled again when the
     -- rows, spacing or row height change, and a matched width when the width
     -- does. Nothing else pulls: a pull re-applies the target's other children too.
+    -- Recorded only on a true answer: a pull refused inside another axis's apply
+    -- stays pending, and the width check below, after the height pull, takes it.
     local unlock = KE.EUIUnlock
     if unlock then
-        if rows ~= self.pulledRows or db.Spacing ~= self.pulledSpacing or db.Height ~= self.pulledHeight then
-            self.pulledRows, self.pulledSpacing = rows, db.Spacing
-            unlock:PullMatch("SwingTimer", "height")
-            self.pulledHeight = db.Height
+        if (rows ~= self.pulledRows or db.Spacing ~= self.pulledSpacing or db.Height ~= self.pulledHeight)
+            and unlock:PullMatch("SwingTimer", "height") then
+            self.pulledRows, self.pulledSpacing, self.pulledHeight = rows, db.Spacing, db.Height
         end
-        if db.Width ~= self.pulledWidth then
-            unlock:PullMatch("SwingTimer", "width")
+        if db.Width ~= self.pulledWidth and unlock:PullMatch("SwingTimer", "width") then
             self.pulledWidth = db.Width
         end
     end

@@ -139,4 +139,35 @@ describe("EUIUnlockBridge match child", function()
             assert.equals(row.want, pulls, row.name)
         end
     end)
+
+    it("counts a pull of the axis being applied as done, and makes a refused one a frame later unless it runs first", function()
+        for _, row in ipairs({
+            { name = "made a frame later", pullFirst = false },
+            { name = "pulled before then", pullFirst = true },
+        }) do
+            local pulls, answers = 0, {}
+            local eui = {
+                GetWidthMatchTarget = function() return "ERB_Health" end,
+                PropagateWidthMatch = function() pulls = pulls + 1 end,
+            }
+            local element, KE
+            element, KE = publish({
+                setWidth = function() end,
+                setHeight = function()
+                    answers.height = KE.EUIUnlock:PullMatch("Thing", "height")
+                    answers.width = KE.EUIUnlock:PullMatch("Thing", "width")
+                end,
+            }, eui)
+            local queued = {}
+            _G.C_Timer = { After = function(_, fn) queued[#queued + 1] = fn end }
+            eui._propagatingMatch = true
+            element.setHeight("KE_Thing", 34)
+            eui._propagatingMatch = false
+            assert.is_true(answers.height, row.name)
+            assert.is_false(answers.width, row.name)
+            if row.pullFirst then KE.EUIUnlock:PullMatch("Thing", "width") end
+            for _, fn in ipairs(queued) do fn() end
+            assert.equals(1, pulls, row.name)
+        end
+    end)
 end)

@@ -20,7 +20,7 @@ local function load()
     ST.rowCount = 2
     ST.ApplySettings = function() rec.applied = rec.applied + 1 end
     ST:RegWithUnlock()
-    return ST, rec
+    return ST, rec, KE
 end
 
 describe("swing timer in unlock mode", function()
@@ -44,5 +44,30 @@ describe("swing timer in unlock mode", function()
         assert.equals(300, ST.db.Width)
         assert.equals(24, ST.db.Height)
         assert.equals(2, rec.applied)
+    end)
+
+    it("records a pulled axis only when the pull answers true, so a refused one is tried again", function()
+        local ST, _, KE = load()
+        local calls, answer = {}, { height = true, width = false }
+        KE.EUIUnlock.PullMatch = function(_, _, axis)
+            calls[#calls + 1] = axis
+            return answer[axis]
+        end
+        local function stubFrame()
+            return { ClearAllPoints = function() end, SetPoint = function() end, SetSize = function() end }
+        end
+        ST.bars = { MH = { frame = stubFrame(), known = true }, OH = { frame = stubFrame() }, R = { frame = stubFrame() } }
+        ST.order = { "MH", "OH", "R" }
+        ST.frame = stubFrame()
+        ST.ApplyBarShown = function() end
+        ST.UpdateHolder = function() end
+        ST.LayoutTarget = function(_, slot) return slot - 1 end
+
+        ST:LayoutBars()
+        ST:LayoutBars()
+        answer.width = true
+        ST:LayoutBars()
+        ST:LayoutBars()
+        assert.same({ "height", "width", "width", "width" }, calls)
     end)
 end)

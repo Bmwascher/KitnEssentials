@@ -126,11 +126,18 @@ local function ScheduleMatchCheck(config)
     end)
 end
 
+-- The key and axis whose setter this bridge is running, so a pull made from
+-- inside that apply knows the apply already covers it.
+local sizingKey, sizingAxis
+
 -- Unlock mode pcalls a match child's setter, but its typed size boxes call it
 -- bare, so a raise is contained here and still reported.
-local function ApplyMatchedSize(config, setter, size)
+local function ApplyMatchedSize(config, axis, setter, size)
     if type(size) ~= "number" or size ~= size or size <= 0 then return end
+    local outerKey, outerAxis = sizingKey, sizingAxis
+    sizingKey, sizingAxis = config.key, axis
     local ok, err = pcall(setter, size)
+    sizingKey, sizingAxis = outerKey, outerAxis
     if not ok then geterrorhandler()(err) end
     ScheduleMatchCheck(config)
 end
@@ -151,8 +158,8 @@ local function BuildElement(config, opts)
     local setHeight = opts and opts.setHeight
     local matchUnavailable, matchedWidth, matchedHeight, positionHeld
     if setWidth or setHeight then
-        if setWidth then matchedWidth = function(_, w) ApplyMatchedSize(config, setWidth, w) end end
-        if setHeight then matchedHeight = function(_, h) ApplyMatchedSize(config, setHeight, h) end end
+        if setWidth then matchedWidth = function(_, w) ApplyMatchedSize(config, "width", setWidth, w) end end
+        if setHeight then matchedHeight = function(_, h) ApplyMatchedSize(config, "height", setHeight, h) end end
         -- After a match apply outside unlock mode, unlock mode re-places a child
         -- whose position reads CENTER/CENTER against the screen, noInitHook or
         -- not. Held while no unlock anchor places it, KE's own placement stands;
@@ -348,15 +355,43 @@ function Bridge:MatchTarget(key, axis)
     return nil
 end
 
+-- Pulls refused inside an apply of another axis, per key and axis, made a frame
+-- later unless a pull of that axis runs first.
+local deferredPulls = {}
+
+local function DeferPull(key, axis)
+    local slot = deferredPulls[key]
+    if not slot then
+        slot = {}
+        deferredPulls[key] = slot
+    end
+    if slot[axis] then return end
+    slot[axis] = true
+    C_Timer.After(0, function()
+        if not slot[axis] then return end
+        slot[axis] = nil
+        Bridge:PullMatch(key, axis)
+    end)
+end
+
 -- A match whose CHILD is ours has no per-child apply to call; pushing from the
--- child's target reaches it, along with that target's other children. Refused
--- inside unlock mode's own apply, which is already sizing this child: a nested
--- push would re-apply the siblings and clear its in-progress flag early.
+-- child's target reaches it, along with that target's other children. Answers
+-- false only for a pull it could not make yet. Inside unlock mode's own apply it
+-- never pushes, since a nested push would re-apply the siblings and clear the
+-- apply's in-progress flag early: the axis being applied is already covered,
+-- and any other is made a frame later.
 function Bridge:PullMatch(key, axis)
     local eui = EUI()
-    if not eui or eui._propagatingMatch or not published[KEY_PREFIX .. key] then return end
+    if not eui or not published[KEY_PREFIX .. key] then return true end
+    if eui._propagatingMatch then
+        if sizingKey == key and sizingAxis == axis then return true end
+        DeferPull(key, axis)
+        return false
+    end
+    local slot = deferredPulls[key]
+    if slot then slot[axis] = nil end
     local target = self:MatchTarget(key, axis)
-    if not target then return end
+    if not target then return true end
     if axis == "height" then
         if eui.PropagateHeightMatch then
             KE:SafeCall("EllesmereUI height pull", eui.PropagateHeightMatch, target)
@@ -364,6 +399,7 @@ function Bridge:PullMatch(key, axis)
     elseif eui.PropagateWidthMatch then
         KE:SafeCall("EllesmereUI width pull", eui.PropagateWidthMatch, target)
     end
+    return true
 end
 
 -- Unlock mode applies every match at login, before KE publishes, so a KE child
