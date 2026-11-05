@@ -36,7 +36,6 @@ local debugprofilestop = debugprofilestop
 local ipairs = ipairs
 local issecretvalue = issecretvalue
 local pcall = pcall
-local tonumber = tonumber
 local type = type
 local wipe = wipe
 
@@ -122,10 +121,6 @@ local function HideDivider()
     divider:ClearAllPoints()
 end
 
-local function HexChannel(hex, first)
-    return tonumber(hex:sub(first, first + 1), 16) / 255
-end
-
 -- Height and left edge from Scout's first line, right edge from the tooltip, as
 -- the game anchors a tooltip status bar. Nothing is written onto the tooltip.
 local function ShowDivider(tooltip, index)
@@ -134,8 +129,7 @@ local function ShowDivider(tooltip, index)
     if not divider then
         divider = tooltip:CreateTexture(nil, "ARTWORK")
         divider:SetHeight(DIVIDER_HEIGHT)
-        local hex = PALETTE.muted
-        divider:SetColorTexture(HexChannel(hex, 1), HexChannel(hex, 3), HexChannel(hex, 5))
+        divider:SetColorTexture(CreateColorFromHexString("ff" .. PALETTE.muted):GetRGB())
         Scout.divider = divider
     end
     divider:ClearAllPoints()
@@ -156,14 +150,19 @@ local function ClearRecord()
     HideBlock()
 end
 
--- The next-frame draw handles a record with something to show; anything else
--- leaves no block.
+local function IsKeyHeld()
+    local isDown = KEY_DOWN[Scout.db.DetailsKey]
+    return isDown and isDown()
+end
+
+-- The next-frame draw handles a held key over a record with something to show;
+-- anything else, a missed key release included, leaves no block.
 local function SettleBlock()
-    if record.on and (#record.ids > 0 or record.immunity) then return end
+    if record.on and (#record.ids > 0 or record.immunity) and IsKeyHeld() then return end
     HideBlock()
 end
 
--- A shown unit tooltip is rebuilt about once a second: cleared, then the post
+-- A shown unit tooltip is rebuilt about 1.5 times a second: cleared, then the post
 -- call runs again in the same frame. Hiding at once would leave the block off
 -- screen until the next-frame draw, so the hide waits a frame as well.
 local function ForgetSoon()
@@ -171,11 +170,6 @@ local function ForgetSoon()
     if not block then return end
     local shown = block:IsShown()
     if issecretvalue(shown) or shown then C_Timer.After(0, SettleBlock) end
-end
-
-local function IsKeyHeld()
-    local isDown = KEY_DOWN[Scout.db.DetailsKey]
-    return isDown and isDown()
 end
 
 local function ShownHere()

@@ -114,7 +114,7 @@ read_globals = {
     math = { fields = { "clamp" } },
 
     -- Frame and UI
-    "CreateFrame", "CreateFont", "CreateColor", "UIParent", "Settings",
+    "CreateFrame", "CreateFont", "CreateColor", "CreateColorFromHexString", "UIParent", "Settings",
     "CreateAbbreviateConfig",
     "CreateFramePool", "CreateTexturePool",
     "BackdropTemplateMixin", "Mixin", "CreateFromMixins", "CreateAndInitFromMixin",
