@@ -566,6 +566,8 @@ function RA:CheckUnit(source, unit)
         self:ReadUnitState(rare)
         rare = self.rare
     end
+    -- The GUID alone decides this: the class or name can read secret while it does not.
+    if rare and source == "target" then self:CheckTargeted() end
     local class = Plain(UnitClassification(unit))
     if class ~= "rare" and class ~= "rareelite" then return end
 
@@ -574,10 +576,7 @@ function RA:CheckUnit(source, unit)
     if not guid or not name then return end
     local npc = RA.NpcOf(guid)
 
-    if rare and rare.npc == npc then
-        if source == "target" then self:CheckTargeted() end
-        return
-    end
+    if rare and rare.npc == npc then return end
 
     local gray, levelColor = UnitDanger(unit)
     local tapped = Known(UnitIsTapDenied(unit), false)
