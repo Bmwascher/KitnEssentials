@@ -121,7 +121,7 @@ local function HideDivider()
     divider:ClearAllPoints()
 end
 
--- Height and left edge from Scout's first line, right edge from the tooltip, as
+-- Place and left edge from Scout's first line, right edge from the tooltip, as
 -- the game anchors a tooltip status bar. Nothing is written onto the tooltip.
 local function ShowDivider(tooltip, index)
     local line = tooltip:GetLeftLine(index)
