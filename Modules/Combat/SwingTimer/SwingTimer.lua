@@ -84,6 +84,7 @@ end
 function ST:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)
+    self.movementOn = false
 end
 
 function ST:RefuseMissingApi()
@@ -146,6 +147,7 @@ function ST:OnDisable()
             self:CancelEdgeTimers(row)
             row.starts, row.ends, row.swingDuration = nil, nil, nil
             row.state, row.phase, row.used, row.outOfRange = "empty", nil, false, false
+            row.latency = nil
             self:SetWord(row, nil)
             self:ParkBar(row, false)
             self:HideMarks(row)
@@ -155,6 +157,7 @@ function ST:OnDisable()
 end
 
 function ST:ResetState()
+    self.movementOn, self.moving, self.lastStop = false, false, nil
     self.castEnd = nil
     self.isPreview = false
     self.meleeOn = false
@@ -490,8 +493,14 @@ end
 -- The one recompute: it reads state and the clock, so any event or timer edge
 -- can call it, and closing a preview restores live state through it.
 function ST:RefreshBar(row)
+    -- Above the preview's return: the listeners follow the state, not the painting.
+    if row.key == "R" then self:SyncMovement() end
     if self.isPreview then return end
-    self:RefreshMelee(row)
+    if self:IsGuided(row) then
+        self:RefreshGuide(row)
+    else
+        self:RefreshMelee(row)
+    end
     self:PlaceTick(row)
     self:UpdateHolder()
 end
@@ -631,6 +640,7 @@ function ST:SyncEvents()
         self:ReleaseRange()
     end
     self:SyncCastEvents()
+    self:SyncGuideEvents()
     if db.RangeCheck or self:TargetEstimateOn() then
         self:RegisterEvent("PLAYER_TARGET_CHANGED")
     else
@@ -659,6 +669,7 @@ function ST:PLAYER_SWING(_, duration, swingType)
     local row = self.bars[key]
     local now = GetTime()
     row.starts, row.ends, row.swingDuration = now, now + duration, duration
+    self:TakeLatency(row)
     self:NoteSwing(row, duration)
     if key == "R" then
         self.autoRepeatOn = true
@@ -697,6 +708,7 @@ function ST:WEAPON_SLOT_CHANGED()
         row.speed, row.known = R.ResolveSpeed(readable, read, row.speed)
         if restart and self:SwingRunning(row, now) then
             row.starts, row.ends, row.swingDuration = now, now + restart, restart
+            self:TakeLatency(row)
             self:RefreshBar(row)
         end
     end
@@ -818,8 +830,167 @@ end
 
 function ST:OnCastChanged()
     self.castEnd = ReadCastEnd()
+    local ranged = self.bars.R
+    if self:IsGuided(ranged) and (ranged.state == "parked" or ranged.phase == "aim") then
+        self:RefreshBar(ranged)
+    end
     if self.isPreview then return end
     for _, key in ipairs(WEAPON_KEYS) do self:PlaceTick(self.bars[key]) end
 end
 
 for _, event in ipairs(CAST_EVENTS) do ST[event] = ST.OnCastChanged end
+
+---------------------------------------------------------------------------------
+-- Ranged guide
+---------------------------------------------------------------------------------
+local GOLD_ZONE_ALPHA = 0.5
+local RED_ZONE_ALPHA = 0.6
+local GO_BAND = { 0.95, 0.96, 0.97, 0.62 }
+local GUIDE_LABEL = { MOVE = "R  MOVE", STILL = "R  STILL", STOP = "R  STOP" }
+local GUIDE_COLOR = { MOVE = "ColorR", STILL = "ColorStill", STOP = "ColorStop" }
+
+-- The latency belongs to the swing, guide on or off, so switching the guide on
+-- mid-swing has nothing to catch up on.
+function ST:TakeLatency(row)
+    if row.key ~= "R" or not self.guideClass then return end
+    row.latency = WorldLatency()
+end
+
+-- Before the first swing there is no latency to read.
+function ST:ShotAt(row)
+    return R.ShotTime(row.ends or 0, self.lastStop, R.AIM_SECONDS, row.latency or 0)
+end
+
+function ST:HideZones(row)
+    row.zoneStop:Hide()
+    row.zoneGo:Hide()
+end
+
+function ST:PlaceZones(row, aim, latency, stopping)
+    local stopBy, go = R.Zones(row.swingDuration, aim, latency)
+    if row.zoneStopBy ~= stopBy or row.zoneGoAt ~= go then
+        row.zoneStopBy, row.zoneGoAt = stopBy, go
+        self:PlaceSpan(row, row.zoneStop, stopBy, go)
+        self:PlaceSpan(row, row.zoneGo, go, 1)
+    end
+    local r, g, b = KE:ResolveColor(self.db[stopping and "ColorStop" or "ColorStill"], WHITE)
+    row.zoneStop:SetVertexColor(r, g, b, stopping and RED_ZONE_ALPHA or GOLD_ZONE_ALPHA)
+    row.zoneGo:SetColorTexture(GO_BAND[1], GO_BAND[2], GO_BAND[3], GO_BAND[4])
+    row.zoneStop:Show()
+    row.zoneGo:Show()
+end
+
+function ST:PaintReload(row, now)
+    local db = self.db
+    local aim, latency = R.AIM_SECONDS, row.latency or 0
+    local stopAt = math.max(row.ends - aim - latency, row.starts)
+    local inZone = now >= stopAt
+    local word = R.RangedWord("reload", inZone, self.moving)
+    row.state, row.phase, row.stopAt = "running", "reload", stopAt
+    self:SetLabel(row, GUIDE_LABEL[word])
+    self:SetFillColor(row, GUIDE_COLOR[word])
+    if db.HunterStyle == "windup" then
+        self:HideZones(row)
+        -- The bar's timer covers the reload or the aim; the countdown runs to the shot.
+        row.shotDuration = row.shotDuration or C_DurationUtil.CreateDuration()
+        row.shotDuration:SetTimeFromStart(row.starts, row.swingDuration)
+        if word == "MOVE" then
+            self:StartFill(row, row.starts, stopAt - row.starts, db.Deplete)
+        elseif word == "STOP" then
+            self:ParkBar(row, true)
+        else
+            self:StartFill(row, stopAt, row.ends - stopAt, not db.Deplete)
+        end
+        self:ShowCountdown(row, row.shotDuration)
+    else
+        self:StartFill(row, row.starts, row.swingDuration, db.Deplete)
+        self:ShowCountdown(row, row.duration)
+        self:PlaceZones(row, aim, latency, word == "STOP")
+    end
+    if not inZone then row.stopTimer = C_Timer.NewTimer(stopAt - now, row.onEdge) end
+    row.endTimer = C_Timer.NewTimer(row.ends - now, row.onEdge)
+end
+
+function ST:PaintDue(row, now)
+    local db = self.db
+    local out = row.outOfRange and db.RangeCheck
+    local shotAt = self:ShotAt(row)
+    local phase = R.RangedAtEnd(self.moving, self.castEnd ~= nil, out, now, shotAt)
+    self:HideZones(row)
+    if phase == "aim" then
+        if row.phase ~= "aim" then row.aimFrom = now end
+        row.state, row.phase = "running", "aim"
+        self:SetLabel(row, GUIDE_LABEL.STILL)
+        self:SetFillColor(row, GUIDE_COLOR.STILL)
+        self:StartFill(row, row.aimFrom, shotAt - row.aimFrom, not db.Deplete)
+        self:ShowCountdown(row, row.duration)
+        row.endTimer = C_Timer.NewTimer(shotAt - now, row.onEdge)
+        return
+    end
+    row.state, row.phase = "parked", phase
+    if phase == "held" then
+        self:SetLabel(row, GUIDE_LABEL.STOP)
+        self:SetFillColor(row, GUIDE_COLOR.STOP)
+        self:SetWord(row, "HELD")
+    else
+        self:PaintIdentity(row)
+        self:SetWord(row, out and "RANGE" or "READY")
+    end
+    self:ParkBar(row, true)
+end
+
+function ST:RefreshGuide(row)
+    self:CancelEdgeTimers(row)
+    local now = GetTime()
+    if not self.autoRepeatOn then
+        row.state, row.phase = "empty", nil
+        self:HideZones(row)
+        self:PaintIdentity(row)
+        self:SetWord(row, nil)
+        self:ParkBar(row, false)
+    elseif row.ends and now < row.ends then
+        self:PaintReload(row, now)
+    else
+        self:PaintDue(row, now)
+    end
+    self:PaintRange(row)
+end
+
+function ST:SyncMovement()
+    local want = self:IsGuided(self.bars.R) and self.autoRepeatOn
+    if want and not self.movementOn then
+        self.movementOn = true
+        self:RegisterEvent("PLAYER_STARTED_MOVING")
+        self:RegisterEvent("PLAYER_STOPPED_MOVING")
+        local moving = IsPlayerMoving()
+        self.moving = not KE:IsSecretValue(moving) and moving == true
+    elseif not want and self.movementOn then
+        self.movementOn = false
+        self:UnregisterEvent("PLAYER_STARTED_MOVING")
+        self:UnregisterEvent("PLAYER_STOPPED_MOVING")
+        self.moving = false
+    end
+end
+
+function ST:SyncGuideEvents()
+    if not self:GuideOn() then self.bars.R.phase = nil end
+    self:SyncMovement()
+end
+
+function ST:OnMovementChanged(moving)
+    self.moving = moving
+    local now = GetTime()
+    if not moving then self.lastStop = now end
+    local row = self.bars.R
+    -- Before the stop-by line nothing on the bar depends on movement.
+    if row.phase == "reload" and now < row.stopAt then return end
+    if row.phase then self:RefreshBar(row) end
+end
+
+function ST:PLAYER_STARTED_MOVING()
+    self:OnMovementChanged(true)
+end
+
+function ST:PLAYER_STOPPED_MOVING()
+    self:OnMovementChanged(false)
+end
