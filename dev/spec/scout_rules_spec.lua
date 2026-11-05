@@ -330,16 +330,25 @@ describe("Scout rules", function()
         end)
     end)
 
-    it("DetailsBelow fits the block under the tooltip, and turns upward on a nil reading", function()
+    it("DetailsBelow keeps the chosen side unless the block runs off the screen, and turns upward on a nil reading", function()
         for _, row in ipairs({
-            { bottom = 300, height = 200, gap = 2, want = true },
-            { bottom = 202, height = 200, gap = 2, want = true },
-            { bottom = 100, height = 200, gap = 2, want = false },
-            { height = 200, gap = 2, want = false },
-            { bottom = 300, gap = 2, want = false },
-            { bottom = 300, height = 200, want = false },
+            { position = "below", bottom = 300, height = 200, gap = 2, want = true },
+            { position = "below", bottom = 202, height = 200, gap = 2, want = true },
+            { position = "below", bottom = 100, height = 200, gap = 2, want = false },
+            { position = "below", height = 200, gap = 2, want = false },
+            { position = "below", bottom = 300, gap = 2, want = false },
+            { position = "below", bottom = 300, height = 200, want = false },
+            { position = "junk", bottom = 300, height = 200, gap = 2, want = true },
+            { position = "above", bottom = 300, top = 500, height = 200, gap = 2, screen = 768, want = false },
+            { position = "above", bottom = 300, top = 566, height = 200, gap = 2, screen = 768, want = false },
+            { position = "above", bottom = 300, top = 600, height = 200, gap = 2, screen = 768, want = true },
+            { position = "above", bottom = 300, height = 200, gap = 2, screen = 768, want = false },
+            { position = "above", bottom = 300, top = 600, height = 200, gap = 2, want = false },
+            { position = "above", bottom = 300, top = 600, gap = 2, screen = 768, want = false },
         }) do
-            assert.equals(row.want, Rules.DetailsBelow(row.bottom, row.height, row.gap))
+            assert.equals(row.want,
+                Rules.DetailsBelow(row.position, row.bottom, row.top, row.height, row.gap, row.screen),
+                row.position .. " " .. tostring(row.top) .. " " .. tostring(row.bottom))
         end
     end)
 end)

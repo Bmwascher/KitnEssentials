@@ -172,10 +172,12 @@ local function Scaled(frame, value)
 end
 
 local function PlaceBlock(b)
-    local below = Rules.DetailsBelow(
+    local below = Rules.DetailsBelow(Scout.db.DetailsPosition,
         Scaled(GameTooltip, GameTooltip:GetBottom()),
+        Scaled(GameTooltip, GameTooltip:GetTop()),
         Scaled(b, b:GetHeight()),
-        Scaled(b, DETAILS_GAP))
+        Scaled(b, DETAILS_GAP),
+        Scaled(UIParent, UIParent:GetTop()))
     b:ClearAllPoints()
     if below then
         b:SetPoint("TOPLEFT", GameTooltip, "BOTTOMLEFT", 0, -DETAILS_GAP)

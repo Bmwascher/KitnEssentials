@@ -3071,6 +3071,7 @@ if KE.BASELINE_LOAD then
         PetFamily = true,
         KeyHint = true,
         DetailsKey = "ctrl",
+        DetailsPosition = "below",
     }
 end
 

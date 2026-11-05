@@ -114,7 +114,7 @@ GUIFrame:RegisterContent("Scout", function(scrollChild, yOffset)
     local cardDetails = GUIFrame:CreateCard(scrollChild, "Ability Details", yOffset)
     manager:Register(cardDetails, "all")
 
-    local row = GUIFrame:CreateRow(cardDetails.content, Theme.rowHeightLast)
+    local row = GUIFrame:CreateRow(cardDetails.content, Theme.rowHeight)
     local keyDropdown = GUIFrame:CreateDropdown(row, "Details Key", {
         options = Rules.DETAILS_KEYS,
         value = db.DetailsKey,
@@ -126,17 +126,31 @@ GUIFrame:RegisterContent("Scout", function(scrollChild, yOffset)
     row:AddWidget(keyDropdown, 0.5)
     manager:Register(keyDropdown, "details")
 
-    local hintCheck = GUIFrame:CreateCheckbox(row, "Key Hint in the Abilities Line", {
+    local positionDropdown = GUIFrame:CreateDropdown(row, "Details Position", {
+        options = Rules.DETAILS_POSITIONS,
+        value = db.DetailsPosition,
+        tooltip = "The block goes to the other side only when it would run off the screen.",
+        callback = function(position)
+            db.DetailsPosition = position
+            ApplySettings()
+        end,
+    })
+    row:AddWidget(positionDropdown, 0.5)
+    manager:Register(positionDropdown, "details")
+    cardDetails:AddRow(row, Theme.rowHeight)
+
+    local hintRow = GUIFrame:CreateRow(cardDetails.content, Theme.rowHeightLast)
+    local hintCheck = GUIFrame:CreateCheckbox(hintRow, "Key Hint in the Abilities Line", {
         value = db.KeyHint == true,
         callback = function(checked)
             db.KeyHint = checked
             ApplySettings()
         end,
     })
-    row:AddWidget(hintCheck, 0.5)
+    hintRow:AddWidget(hintCheck, 0.5)
     manager:Register(hintCheck, "abilities")
 
-    cardDetails:AddRow(row, Theme.rowHeightLast, 0)
+    cardDetails:AddRow(hintRow, Theme.rowHeightLast, 0)
     yOffset = cardDetails:GetNextOffset()
 
     manager:SetCondition("abilities", function() return db.Abilities == true end)

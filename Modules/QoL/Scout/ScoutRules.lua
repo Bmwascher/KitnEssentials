@@ -32,6 +32,11 @@ Rules.DETAILS_KEYS = {
     { key = "shift", text = "Shift" },
 }
 
+Rules.DETAILS_POSITIONS = {
+    { key = "below", text = "Below" },
+    { key = "above", text = "Above" },
+}
+
 local DOT = " \194\183 "
 local ICON_SIZE = 14
 local MAX_LISTED_WORDS = 5
@@ -304,9 +309,14 @@ function Rules.BuildLines(view, opts, paint)
     return lines, fullImmunity
 end
 
-function Rules.DetailsBelow(tooltipBottom, blockHeight, gap)
-    if type(tooltipBottom) ~= "number" or type(blockHeight) ~= "number" or type(gap) ~= "number" then
-        return false
+-- The chosen side unless the block would run off the screen there. Any other
+-- saved value reads as below, and an unreadable number puts the block above.
+function Rules.DetailsBelow(position, tooltipBottom, tooltipTop, blockHeight, gap, screenTop)
+    if type(blockHeight) ~= "number" or type(gap) ~= "number" then return false end
+    if position == "above" then
+        if type(tooltipTop) ~= "number" or type(screenTop) ~= "number" then return false end
+        return tooltipTop + gap + blockHeight > screenTop
     end
+    if type(tooltipBottom) ~= "number" then return false end
     return tooltipBottom - gap - blockHeight >= 0
 end
