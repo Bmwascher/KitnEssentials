@@ -84,58 +84,22 @@ describe("EUIUnlockBridge match child", function()
         end
     end)
 
-    it("checks once a frame and rebuilds its own open page only when the match differs from the one it shows", function()
-        local target
+    it("does no settings window work when a matched size is applied, the page reading the match only when built", function()
         local element, KE = publish({ setWidth = function() end }, {
-            GetWidthMatchTarget = function() return target end,
+            GetWidthMatchTarget = function() return "ERB_Health" end,
         })
         local queued, rebuilt = {}, 0
         _G.C_Timer = { After = function(_, fn) queued[#queued + 1] = fn end }
-        local function build() KE.EUIUnlock:ShownMatchTargets("Thing") end
         KE.GUIFrame = {
             mainFrame = { IsShown = function() return true end },
             selectedSidebarItem = "Thing",
-            RefreshContent = function()
-                rebuilt = rebuilt + 1
-                build()
-            end,
+            RefreshContent = function() rebuilt = rebuilt + 1 end,
         }
-        build()
-        local function settle()
-            local run = queued
-            queued = {}
-            for _, fn in ipairs(run) do fn() end
-        end
-
         element.setWidth("KE_Thing", 240)
-        element.setWidth("KE_Thing", 240)
-        assert.equals(1, #queued)
-        settle()
+        assert.equals(0, #queued)
+        for _, fn in ipairs(queued) do fn() end
         assert.equals(0, rebuilt)
-
-        target = "ERB_Health"
-        element.setWidth("KE_Thing", 240)
-        settle()
-        assert.equals(1, rebuilt)
-
-        element.setWidth("KE_Thing", 240)
-        settle()
-        assert.equals(1, rebuilt)
-
-        -- Made with the window closed, so no check ran; the page then opens on
-        -- it, and the match is cleared under the open page.
-        target = "ERB_Power"
-        build()
-        target = nil
-        element.setWidth("KE_Thing", 240)
-        settle()
-        assert.equals(2, rebuilt)
-
-        KE.GUIFrame.selectedSidebarItem = "Other"
-        target = "ERB_Health"
-        element.setWidth("KE_Thing", 240)
-        settle()
-        assert.equals(2, rebuilt)
+        assert.is_nil(KE.EUIUnlock.ShownMatchTargets)
     end)
 
     it("does not pull while EllesmereUI is applying a match", function()
