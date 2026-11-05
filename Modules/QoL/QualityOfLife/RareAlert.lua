@@ -545,7 +545,8 @@ function RA:OpenCard(decision, rare)
     self:ResolveToken()
     if self.rare ~= rare then return end
 
-    self:ArmTarget()
+    -- A card hidden and shown in one frame under a resting mouse may fire no enter.
+    self:SettleTarget()
     self:CheckTargeted()
 
     if decision == "loud" then
