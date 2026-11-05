@@ -123,3 +123,46 @@ function Rules.Mirror(fraction, deplete)
     if deplete then return 1 - fraction end
     return fraction
 end
+
+local math_max = math.max
+local SHOT_SPELLS = { [75] = true, [5019] = true }
+
+-- The stop-by line and the start of the final latency, as fractions of the bar.
+function Rules.Zones(duration, aim, latency)
+    local stopBy = 1 - (aim + latency) / duration
+    local go = 1 - latency / duration
+    return math_max(0, stopBy), math_max(0, go)
+end
+
+function Rules.ShotTime(swingEnd, lastStop, aim, latency)
+    return math_max(swingEnd, (lastStop or 0) + aim + latency)
+end
+
+function Rules.RangedAtEnd(moving, casting, outOfRange, now, shotAt)
+    if moving then return "held" end
+    if casting or outOfRange then return "wait" end
+    if now < shotAt then return "aim" end
+    return "ready"
+end
+
+function Rules.RangedWord(phase, inZone, moving)
+    if phase == "reload" then
+        if not inZone then return "MOVE" end
+        return moving and "STOP" or "STILL"
+    end
+    if phase == "aim" then return "STILL" end
+    if phase == "held" then return "STOP" end
+    return nil
+end
+
+function Rules.TickIgnored(spellID)
+    return SHOT_SPELLS[spellID] == true
+end
+
+-- Returns the fraction and whether the cast clips the swing, or nil.
+function Rules.TickFraction(readable, castEnd, swingStart, duration)
+    if not readable or not Rules.ValidDuration(duration) then return nil end
+    local fraction = (castEnd - swingStart) / duration
+    if fraction > 1 then return 1, true end
+    return math_max(0, fraction), false
+end

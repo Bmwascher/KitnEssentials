@@ -111,3 +111,65 @@ describe("swing timer bar rules", function()
         end
     end)
 end)
+
+describe("swing timer ranged rules", function()
+    local Rules
+
+    before_each(function()
+        Rules = L.loadSwingTimerRules().SwingTimerRules
+    end)
+
+    it("places stop-by and go for a normal bow and clamps both when aim plus latency exceeds the swing", function()
+        local stopBy, go = Rules.Zones(2.9, 0.5, 0.06)
+        assert.near((2.9 - 0.56) / 2.9, stopBy, 1e-9)
+        assert.near((2.9 - 0.06) / 2.9, go, 1e-9)
+        stopBy, go = Rules.Zones(0.05, 0.5, 0.06)
+        assert.equals(0, stopBy)
+        assert.equals(0, go)
+    end)
+
+    it("takes the later of the swing end and the last stop plus aim plus latency", function()
+        assert.equals(100, Rules.ShotTime(100, 98, 0.5, 0.06))
+        assert.near(100.36, Rules.ShotTime(100, 99.8, 0.5, 0.06), 1e-9)
+        assert.equals(100, Rules.ShotTime(100, nil, 0.5, 0.06))
+    end)
+
+    it("answers a due shot in the order moving, casting or out of range, aim, ready", function()
+        for _, row in ipairs({
+            { moving = true, casting = true, out = true, now = 5, shotAt = 6, want = "held" },
+            { moving = false, casting = true, out = false, now = 5, shotAt = 6, want = "wait" },
+            { moving = false, casting = false, out = true, now = 5, shotAt = 6, want = "wait" },
+            { moving = false, casting = false, out = false, now = 5, shotAt = 6, want = "aim" },
+            { moving = false, casting = false, out = false, now = 7, shotAt = 6, want = "ready" },
+        }) do
+            assert.equals(row.want, Rules.RangedAtEnd(row.moving, row.casting, row.out, row.now, row.shotAt))
+        end
+    end)
+
+    it("words the bar MOVE before the zone, STILL or STOP in it, STILL in the aim and STOP while held", function()
+        for _, row in ipairs({
+            { phase = "reload", inZone = false, moving = false, want = "MOVE" },
+            { phase = "reload", inZone = false, moving = true, want = "MOVE" },
+            { phase = "reload", inZone = true, moving = false, want = "STILL" },
+            { phase = "reload", inZone = true, moving = true, want = "STOP" },
+            { phase = "aim", inZone = false, moving = false, want = "STILL" },
+            { phase = "held", inZone = false, moving = true, want = "STOP" },
+            { phase = "ready", inZone = false, moving = false, want = nil },
+        }) do
+            assert.equals(row.want, Rules.RangedWord(row.phase, row.inZone, row.moving))
+        end
+    end)
+
+    it("places a tick inside the swing and pins one past the end as a clip", function()
+        local fraction, clipped = Rules.TickFraction(true, 105, 100, 10)
+        assert.near(0.5, fraction, 1e-9)
+        assert.is_false(clipped)
+        fraction, clipped = Rules.TickFraction(true, 111, 100, 10)
+        assert.equals(1, fraction)
+        assert.is_true(clipped)
+        fraction, clipped = Rules.TickFraction(true, 99, 100, 10)
+        assert.equals(0, fraction)
+        assert.is_false(clipped)
+        assert.is_nil((Rules.TickFraction(false, 105, 100, 10)))
+    end)
+end)
