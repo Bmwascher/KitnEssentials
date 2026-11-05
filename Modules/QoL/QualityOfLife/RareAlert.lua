@@ -233,6 +233,8 @@ function RA:MarkDead(rare)
     rare.dead = true
     rare.closeIn = rare.closeIn or CLOSE_AFTER
     self:PaintState(rare)
+    -- The tick stops reading a dead vignette, so its last value would stay up.
+    if not rare.unit then self:RefreshHealth(rare) end
 end
 
 function RA:ReadUnitHealth(rare)
@@ -272,11 +274,11 @@ end
 function RA:RefreshHealth(rare)
     if rare.unit then
         if self:TokenHolds(rare) then self:ReadUnitHealth(rare) end
-    elseif rare.vignetteGUID and not rare.left then
+    elseif rare.vignetteGUID and not rare.left and not rare.dead then
         rare.lastHealth = nil
         self:UpdateVignetteHealth(rare)
     else
-        -- Cleared so the tick repaints when a vignette that left comes back.
+        -- Nothing feeds the bar here. Cleared so the tick repaints a vignette that returns.
         rare.lastHealth = nil
         self:PaintHealth(nil)
     end
