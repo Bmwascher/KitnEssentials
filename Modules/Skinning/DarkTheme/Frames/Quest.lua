@@ -341,6 +341,24 @@ local function ShowRequiredMoney()
     end
 end
 
+local function RedrawQuestDescription()
+    local description = _G.QuestInfoDescriptionText
+    if not (description and description:IsVisible()) then return end
+    local text = description:GetText()
+    if not text then return end
+    description:SetText("")
+    description:SetText(text)
+end
+
+-- Forever writes the quest offer in with an alpha gradient. With this skin's
+-- white text, a freshly opened window stays on the gradient's opening letters
+-- until the text is replaced, and replacing it only works once it has drawn.
+local function QuestDescriptionRevealEnded(parent)
+    if parent == _G.QuestDetailScrollChildFrame then
+        C_Timer.After(0, RedrawQuestDescription)
+    end
+end
+
 local function Skin()
     local frame = _G.QuestFrame
     if not frame then return S.Skip("QuestFrame missing") end
@@ -395,6 +413,10 @@ local function Skin()
             -- Forwarded through varargs: the checker types the Blizzard
             -- function as taking none, while it is called with the panel.
             hooksecurefunc("QuestFrameGreetingPanel_OnShow", function(...) GreetingPanel_OnShow(...) end)
+        end
+        if KE.IS_FOREVER and _G.QuestInfo_ShowAlphaDependentText and _G.QuestInfo_FadeInAlphaDependentText then
+            hooksecurefunc("QuestInfo_ShowAlphaDependentText", QuestDescriptionRevealEnded)
+            hooksecurefunc("QuestInfo_FadeInAlphaDependentText", QuestDescriptionRevealEnded)
         end
     end
 
