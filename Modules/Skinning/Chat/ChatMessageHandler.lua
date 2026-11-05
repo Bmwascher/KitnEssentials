@@ -1046,7 +1046,7 @@ end
 
 -- Message formatter, formats the message body
 function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, channelLength, coloredName, arg1, arg2, arg3,
-                              arg4, _, arg6, arg7, arg8, _, _, arg11, arg12, arg13, arg14, _, _, arg17)
+                              arg4, _, arg6, arg7, arg8, _, _, arg11, _, arg13, arg14, _, _, arg17)
     local body
 
     -- Only return early if message itself is nil
