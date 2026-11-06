@@ -669,10 +669,7 @@ end
 function ST:RefreshBar(row)
     -- Above the preview's return: the listeners follow the state, not the painting.
     if row.key == "R" then self:SyncMovement() end
-    if self.isPreview then
-        row.ghostFrom = nil
-        return
-    end
+    if self.isPreview then return end
     if row.isTarget then
         self:RefreshTarget(row)
     elseif self:IsGuided(row) then
