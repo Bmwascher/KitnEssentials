@@ -115,6 +115,7 @@
     <Include file="Skinning\DarkTheme\Addons\Addons-Camelot.xml" />
     <Script file="Skinning\RestedXP\RestedXPSafe.lua" />
     <Script file="Skinning\RestedXP\RestedXPRules.lua" />
+    <Script file="Skinning\RestedXP\RestedXPTheme.lua" />
     <Script file="Skinning\RestedXP\RestedXPWindowModel.lua" />
     <Include file="Skinning\DamageMeter\DamageMeter.xml" />
 </Ui>
