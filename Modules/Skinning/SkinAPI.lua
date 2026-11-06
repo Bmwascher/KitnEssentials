@@ -2481,8 +2481,12 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
         end
         recenter()
         resize()
-        hooksecurefunc(icon, "SetPoint", function(_, point, _, _, x, y)
-            if point == "CENTER" and (not x or x == 0) and (not y or y == 0) then return end
+        -- Reads the resolved point: Blizzard's press and release use the
+        -- short SetPoint("CENTER", x, y) form, whose offsets are not the
+        -- 4th and 5th arguments.
+        hooksecurefunc(icon, "SetPoint", function()
+            local point, _, _, x, y = icon:GetPoint(1)
+            if point == "CENTER" and x == 0 and y == 0 and icon:GetNumPoints() == 1 then return end
             recenter()
         end)
         hooksecurefunc(icon, "SetSize", function(_, w, h)

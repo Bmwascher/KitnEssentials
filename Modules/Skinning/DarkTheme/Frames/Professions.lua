@@ -537,8 +537,13 @@ local function DressBookSpell(button)
     button:SetPushedTexture(WHITE)
     button:GetPushedTexture():SetColorTexture(1, 1, 1, 0.5)
 
+    -- Alpha, not Hide: Blizzard re-shows the overlay on every update.
+    if button.IconBorder then button.IconBorder:SetAlpha(0) end
+    if button.IconTextureOverlay then button.IconTextureOverlay:SetAlpha(0) end
+
     local icon = button.IconTexture
     if not icon then return end
+    if button.OutlineMask then icon:RemoveMaskTexture(button.OutlineMask) end
     icon:ClearAllPoints()
     icon:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
     icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
@@ -549,6 +554,16 @@ local function DressBookSpell(button)
         button.highlightTexture:SetPoint("TOPLEFT", ibd, "TOPLEFT", 1, -1)
         button.highlightTexture:SetPoint("BOTTOMRIGHT", ibd, "BOTTOMRIGHT", -1, 1)
     end
+end
+
+-- overrideWidth narrows the bar, track and mask but leaves Fill at the
+-- template's 441, and the backdrop sits on Fill. Fill takes the mask's
+-- full-bar span (width + offset, starting 1px in) plus 1px each side, so a
+-- full bar leaves both border pixels clear.
+local function FitBookBarFill(bar)
+    local fill, width = bar and bar.Fill, bar and bar.overrideWidth
+    if not fill or not width then return end
+    fill:SetWidth(width + (bar.overrideMaskRightOffset or 0) + 2)
 end
 
 -- Blizzard re-atlases each slot's Background per profession, so it is faded
@@ -563,10 +578,40 @@ local function SkinBookPage(page)
             if slot.Background then slot.Background:SetAlpha(0) end
             S.Backdrop(slot)
             SkinRankBar(slot.StatusBar)
+            FitBookBarFill(slot.StatusBar)
+            -- Gamepad mode re-runs OnLoad with a new overrideWidth.
+            if slot.StatusBar then hooksecurefunc(slot.StatusBar, "OnLoad", FitBookBarFill) end
+            if slot.UnlearnButton then S.CloseButton(slot.UnlearnButton) end
             S.FontStrings(slot, nil, "OUTLINE")
             for i = 1, 4 do DressBookSpell(slot["SpellButton" .. i]) end
         end
     end
+end
+
+-- 28 fills the 30-wide tab inside its border.
+local SIDE_TAB_ICON = 28
+local ICON_CROP = 0.08
+-- Clears the column off the window's border. The y it is placed at, -60,
+-- is the XML's own.
+local SIDE_TAB_GAP = 1
+
+-- Blizzard re-crops each tab icon to its own baked frame on every check
+-- change, so KE's crop goes back on after it.
+local function KeepIconCrop(icon, left)
+    if left ~= ICON_CROP then
+        icon:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP)
+    end
+end
+
+local function SkinProfessionTab(tab)
+    if not tab then return end
+    S.SideTab(tab, nil, nil, SIDE_TAB_ICON)
+
+    local icon = tab.Icon
+    if not icon or S.data(icon).keCropHooked then return end
+    S.data(icon).keCropHooked = true
+    S.Icon(icon, true)
+    hooksecurefunc(icon, "SetTexCoord", KeepIconCrop)
 end
 
 local function Skin()
@@ -576,10 +621,16 @@ local function Skin()
     S.Frame(PF)
     if PF.MaximizeMinimize then S.MaxMinFrame(PF.MaximizeMinimize) end
     if PF.TabSystem then SkinTabRow(PF.TabSystem) end
-    -- The overview tab sits outside the profession tabs' array.
+    -- The overview tab sits outside the profession tabs' array. The others
+    -- chain below it, so moving it moves the column.
     if PF.rightProfessionTabs then
-        S.SideTabsInPlace({ PF.ProfessionsOverviewTab })
-        S.SideTabsInPlace(PF.rightProfessionTabs)
+        local overview = PF.ProfessionsOverviewTab
+        SkinProfessionTab(overview)
+        if overview then
+            overview:ClearAllPoints()
+            overview:SetPoint("TOPLEFT", PF, "TOPRIGHT", SIDE_TAB_GAP, -60)
+        end
+        for _, tab in ipairs(PF.rightProfessionTabs) do SkinProfessionTab(tab) end
     end
     if PF.BookPage then SkinBookPage(PF.BookPage) end
 
