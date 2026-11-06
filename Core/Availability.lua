@@ -23,8 +23,11 @@ local FOREVER_ALLOWED = {
     ProfilesReset = true,
     -- Dark Theme: the engine, Color Picker, the skins command, the page
     -- with the tabs that configure what loads, the Addon Skins card and the
-    -- role icon card. Raid Control and the Group Finder skin stay withheld.
+    -- role icon card. The Group Finder skin stays withheld.
     BlizzardFrames = true,
+    -- Raid Control: the module and its card. Its Vantus Rune row and raid
+    -- buff strip stay withheld, and Group Sort does not load.
+    RaidControl = true,
     ColorPicker = true,
     SkinAPI = true,
     SkinBlizzardFrames = true,

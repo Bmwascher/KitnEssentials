@@ -50,6 +50,7 @@
     <Script file="QoL\QualityOfLife\GUI-CopyAnything.lua" />
     <Script file="Skinning\DarkTheme\GUI-ColorPicker.lua" />
     <Script file="QoL\QualityOfLife\GUI-MoveFrames.lua" />
+    <Script file="Skinning\DarkTheme\GUI-RaidControl.lua" />
     <Script file="QoL\QualityOfLife\GUI-QualityOfLife.lua" />
     <Script file="QoL\GroupTools\GUI-GroupTools.lua" />
     <Script file="QoL\GUI-SecondaryStats.lua" />

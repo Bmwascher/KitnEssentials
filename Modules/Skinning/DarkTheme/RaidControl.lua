@@ -109,6 +109,12 @@ local PANEL_HEIGHT = 155
 local BUTTON_HEIGHT = 20
 local BUTTON_WIDTH = PANEL_WIDTH - 20
 local TARGET_SIZE = 22
+local TEXT_SIZE = 13
+
+-- Retail-only rows: the Vantus rune spell and the buff strip's spell ids do
+-- not exist on every client.
+local VANTUS_ADMITTED = not KE.IsFeatureAvailable or KE:IsFeatureAvailable("RaidControlVantus") == true
+local BUFFS_ADMITTED = not KE.IsFeatureAvailable or KE:IsFeatureAvailable("RaidControlBuffs") == true
 
 -- Bottom row: role-count plate on the left, Close filling the rest. Both
 -- widths come from these numbers, so the two always abut.
@@ -261,7 +267,7 @@ local function CreateUtilButton(name, parent, template, width, height, point, re
         -- as the floor: worst case is wrong typeface, never invisible
         -- controls.
         local text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        S.SetFont(text, 14, "")
+        S.SetFont(text, TEXT_SIZE, "")
         text:SetPoint("CENTER", btn, "CENTER", 0, 0)
         text:SetJustifyH("CENTER")
         text:SetText(btn.label)
@@ -297,7 +303,7 @@ local function CreateDropdown(name, parent, width, point, relativeto, point2, xO
 
     if label then
         dropdown.label = dropdown:CreateFontString(nil, "OVERLAY")
-        S.SetFont(dropdown.label, 14, "")
+        S.SetFont(dropdown.label, TEXT_SIZE, "")
         dropdown.label:SetPoint("LEFT", dropdown, "RIGHT", 4, 0)
         dropdown.label:SetText(label)
     end
@@ -334,7 +340,7 @@ local function CreateCheckBox(name, parent, size, point, relativeto, point2, xOf
     if box.Text then
         box.Text:SetPoint("LEFT", box, "RIGHT", 2, 0)
         box.Text:SetText(box.label)
-        S.SetFont(box.Text, 14, "")
+        S.SetFont(box.Text, TEXT_SIZE, "")
     end
 
     box:SetPoint(point, relativeto, point2, xOfs, yOfs)
@@ -646,7 +652,7 @@ function RC:CreateRoleIcons(panel)
         frame.texture = texture
 
         local Count = frame:CreateFontString(nil, "OVERLAY")
-        S.SetFont(Count, 14, "OUTLINE")
+        S.SetFont(Count, TEXT_SIZE, "OUTLINE")
         Count:SetPoint("LEFT", frame, "RIGHT", 1, 0)
         Count:SetText("0")
         frame.count = Count
@@ -1242,8 +1248,8 @@ function RC:Setup()
     local panelHeight = PANEL_HEIGHT
     if not hasGroupSort then panelHeight = panelHeight - 2 * (BUTTON_HEIGHT + 3) end
     if hasSharedNotes then panelHeight = panelHeight + (BUTTON_HEIGHT + 3) end
-    -- The Vantus row is unconditional and was not in PANEL_HEIGHT's baseline.
-    panelHeight = panelHeight + (BUTTON_HEIGHT + 3)
+    -- The Vantus row was not in PANEL_HEIGHT's baseline.
+    if VANTUS_ADMITTED then panelHeight = panelHeight + (BUTTON_HEIGHT + 3) end
     panel:SetSize(PANEL_WIDTH, panelHeight)
     -- Remembered so ApplyGroupContext subtracts from a FIXED number rather
     -- than from the live height -- reading the current size and adjusting it
@@ -1266,7 +1272,7 @@ function RC:Setup()
     local pos = db.Position
     local ShowButton = CreateUtilButton("KE_RaidControlShowButton", UIParent, "SecureHandlerClickTemplate",
         136, BUTTON_HEIGHT, nil, nil, nil, nil, nil, _G.RAID_CONTROL or "Raid Control", nil, nil, OnClick_ShowButton)
-    KE.Skins.SetFont(ShowButton.Text, 16, "")
+    KE.Skins.SetFont(ShowButton.Text, TEXT_SIZE + 2, "")
     if pos.bottom then
         ShowButton:SetPoint("BOTTOM", UIParent, "BOTTOM", pos.x or -400, -1)
     else
@@ -1495,13 +1501,15 @@ function RC:Setup()
         end
     end
 
-    local VantusButton = CreateUtilButton("KE_RaidControlVantus", panel, nil,
-        BUTTON_WIDTH, BUTTON_HEIGHT, "TOPLEFT", lastUtilRow, "BOTTOMLEFT",
-        lastUtilXOfs, lastUtilYOfs,
-        "Check Vantus Runes", nil, nil, VantusRuneCheck)
-    raidOnly[#raidOnly + 1] = { h = BUTTON_HEIGHT + 3, VantusButton }
-    lastUtilRow = VantusButton
-    lastUtilXOfs, lastUtilYOfs = 0, -3
+    if VANTUS_ADMITTED then
+        local VantusButton = CreateUtilButton("KE_RaidControlVantus", panel, nil,
+            BUTTON_WIDTH, BUTTON_HEIGHT, "TOPLEFT", lastUtilRow, "BOTTOMLEFT",
+            lastUtilXOfs, lastUtilYOfs,
+            "Check Vantus Runes", nil, nil, VantusRuneCheck)
+        raidOnly[#raidOnly + 1] = { h = BUTTON_HEIGHT + 3, VantusButton }
+        lastUtilRow = VantusButton
+        lastUtilXOfs, lastUtilYOfs = 0, -3
+    end
 
     -- NSRT Shared Notes: opens NorthernSkyRaidTools' window on the
     -- SharedNotes tab. NSRT's internals are addon-private; the public
@@ -1549,9 +1557,11 @@ function RC:Setup()
     -- because hiding it costs the PANEL no height -- it never had any of the
     -- panel's; PositionSections simply drops it from the section chain and the
     -- markers close up against the panel.
-    local buffStrip = self:CreateBuffStrip(panel)
-    self:LayoutBuffStrip()
-    raidOnly[#raidOnly + 1] = { h = 0, buffStrip }
+    if BUFFS_ADMITTED then
+        local buffStrip = self:CreateBuffStrip(panel)
+        self:LayoutBuffStrip()
+        raidOnly[#raidOnly + 1] = { h = 0, buffStrip }
+    end
 
     -- Role check exists on Midnight, add the icon strip
     self:CreateRoleIcons(panel)
