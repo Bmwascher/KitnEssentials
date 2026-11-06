@@ -120,5 +120,6 @@
     <Script file="Skinning\RestedXP\RestedXPIcons.lua" />
     <Script file="Skinning\RestedXP\RestedXPSetup.lua" />
     <Script file="Skinning\RestedXP\RestedXPWindowModel.lua" />
+    <Script file="Skinning\RestedXP\RestedXPWindow.lua" />
     <Include file="Skinning\DamageMeter\DamageMeter.xml" />
 </Ui>
