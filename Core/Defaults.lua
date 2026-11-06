@@ -3063,7 +3063,7 @@ if KE.BASELINE_LOAD then
     Defaults.profile.Scout = {
         Enabled = false,
         ShowInWorld = true,
-        ShowInCombat = false,
+        ShowInCombat = true,
         Abilities = true,
         ControlWords = true,
         Armor = true,
@@ -3072,7 +3072,7 @@ if KE.BASELINE_LOAD then
         Divider = true,
         KeyHint = true,
         DetailsKey = "ctrl",
-        DetailsPosition = "below",
+        DetailsPosition = "above",
     }
 end
 
