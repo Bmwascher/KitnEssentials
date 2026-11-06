@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.13
+
+### WoW Forever only
+
+- World Marker Cycler is now available (Group Tools, World Markers tab):
+  place world markers at your cursor in your chosen order with one key,
+  and clear them all with another
+
+---
+
 ## v4.16.12
 
 ### Both clients
