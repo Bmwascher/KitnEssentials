@@ -1239,6 +1239,7 @@ local function Activate(want)
     active = want
     if want then
         retake = true
+        Model.Stale()
         TestShowIn()
         RefreshAccepts()
         ApplyGeometry()
