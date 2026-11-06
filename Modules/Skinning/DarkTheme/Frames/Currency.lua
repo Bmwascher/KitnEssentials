@@ -64,6 +64,7 @@ local function StyleEntry(child)
         S.Backdrop(child)
     end
 
+    if KE.IS_FOREVER then S.CharacterRowHighlight(child) end
     local icon = child.Content and child.Content.CurrencyIcon
     if icon then S.Icon(icon, true) end
     S.data(child).skinned = true
@@ -105,6 +106,7 @@ local function ApplySkin()
     if frame.filterDropdown then S.DropDown(frame.filterDropdown) end
 
     if frame.ScrollBar then S.ScrollBar(frame.ScrollBar) end
+    if KE.IS_FOREVER then S.CharacterListLines(frame.ScrollBox) end
     if frame.ScrollBox then S.HookScrollBox(frame.ScrollBox, StyleEntry) end
 
     -- TokenFramePopup (the currency options flyout).
@@ -114,9 +116,13 @@ local function ApplySkin()
     local popup = _G.TokenFramePopup or _G.TokenDetailFrame
     if popup and not S.data(popup).popupSkinned then
         S.data(popup).popupSkinned = true
-        S.StripTextures(popup)
-        S.Backdrop(popup)
-        if popup.DescriptionScrollBar then S.ScrollBar(popup.DescriptionScrollBar) end
+        if KE.IS_FOREVER then
+            S.CharacterSidePane(popup)
+        else
+            S.StripTextures(popup)
+            S.Backdrop(popup)
+            if popup.DescriptionScrollBar then S.ScrollBar(popup.DescriptionScrollBar) end
+        end
         if popup.InactiveCheckbox then S.CheckBox(popup.InactiveCheckbox) end
         if popup.BackpackCheckbox then S.CheckBox(popup.BackpackCheckbox) end
         if popup.CurrencyTransferToggleButton then
