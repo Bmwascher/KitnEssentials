@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.14
+
+### WoW Forever only
+
+- New Rare Alert setting under QoL, off by default: in the open world, a card
+  at the top of the screen warns you when a rare is near, with its portrait,
+  name, level, health, best drop and a pin to its spawn spot, and a horn.
+  Click the card or press your key to target the rare; out of combat this
+  also marks it with a skull. Picking KitnEssentials at the RareScanner
+  conflict prompt turns off only RareScanner's rare scan
+
+---
+
 ## v4.16.13
 
 ### WoW Forever only
