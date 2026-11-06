@@ -31,6 +31,7 @@ local BLOCK_HEIGHT, BARS_HEIGHT = 124, 26
 local MAX_STOPS, STOPS_TOP, STOP_HEIGHT, READ_HEIGHT = 3, 88, 14, 18
 local ROW_HEIGHT, SECTION_HEIGHT, ICON_SIZE = 30, 20, 22
 local NEED, GAP, PIN_INSET = 308, 8, 66
+local SCROLLBAR_ROOM = 8
 local BOOK_BUTTON_WIDTH, BOOK_BUTTON_HEIGHT = 150, 26
 local DATA_DELAY = 0.1
 local WHITE = "Interface\\Buttons\\WHITE8X8"
@@ -673,7 +674,7 @@ local function SetTrainerMode(atTrainer)
         frame.scroll:SetPoint("TOPLEFT", frame.block, "BOTTOMLEFT", 0, -PAD)
     end
     frame.scroll:SetPoint("BOTTOMRIGHT", frame.footer, "TOPRIGHT", -PAD, PAD)
-    frame.content:SetWidth(WIDTH - 2 * PAD)
+    frame.content:SetWidth(WIDTH - 2 * PAD - SCROLLBAR_ROOM)
 end
 
 local function UpdateBookButton()
@@ -811,7 +812,7 @@ end
 local function BuildScroll()
     local scroll = CreateFrame("ScrollFrame", nil, frame)
     local content = CreateFrame("Frame", nil, scroll)
-    content:SetSize(WIDTH - 2 * PAD, 1)
+    content:SetSize(WIDTH - 2 * PAD - SCROLLBAR_ROOM, 1)
     scroll:SetScrollChild(content)
     frame.scroll, frame.content = scroll, content
     if KE.GUI and KE.GUI.CreateScrollbar then
