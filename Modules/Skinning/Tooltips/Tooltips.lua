@@ -474,9 +474,9 @@ end
 --
 -- TooltipDataLineType declares UnitLevel on both clients, but the live level
 -- row is not confirmed to carry it, so the row is found by matching the
--- localized level template against each line's text. The templates are GlobalStrings and are reduced to plain
--- substrings once, on first use rather than at file scope, so load order
--- cannot matter.
+-- localized level template against each line's text. The templates are
+-- GlobalStrings and are reduced to plain substrings once, on first use
+-- rather than at file scope, so load order cannot matter.
 local levelMatchA, levelMatchB
 local function LevelMatchers()
     if levelMatchA == nil then
@@ -534,7 +534,7 @@ local function LevelConColor(level)
     end
     -- Forever's nameplates band levels tighter than the quest log does, so
     -- the tooltip asks the nameplate's own rule there and the two agree.
-    -- Retail's nameplates already use the quest log's bands.
+    -- Retail keeps the quest log's bands.
     local plate = KE.IS_FOREVER and _G.NameplateLevelFrameMixin
     if plate and plate.GetDifficultyColor then
         local mine = UnitEffectiveLevel("player")
