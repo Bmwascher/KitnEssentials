@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.10
+
+### Both clients
+
+- New Level Colors setting in the Tooltips skin, on by default: the level
+  of an NPC you can attack is now colored by how hard it is for you, like a
+  player's, and a skull-level unit's "??" shows red; turned off, levels are
+  plain
+- On WoW Forever, tooltip level colors follow the nameplate's level bands,
+  so a tooltip and its nameplate show the same color
+
+---
+
 ## v4.16.9
 
 ### WoW Forever only
