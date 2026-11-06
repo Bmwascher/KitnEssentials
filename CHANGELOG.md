@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.17
+
+### WoW Forever only
+
+- New Swing Timer setting under Combat, off by default: a bar for each weapon
+  shows when your next melee swing or Auto Shot lands, with a countdown.
+  Hunters can add a guide for when to stand still before the shot, and you
+  can also show your target's estimated swing
+
+---
+
 ## v4.16.16
 
 ### Both clients
