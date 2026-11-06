@@ -587,7 +587,7 @@ end
 local SIDE_TAB_ICON = 28
 local ICON_CROP = 0.08
 -- Clears the column off the window's border; Blizzard's y is kept.
-local SIDE_TAB_GAP = 2
+local SIDE_TAB_GAP = 1
 
 -- Blizzard re-crops each tab icon to its own baked frame on every check
 -- change, so KE's crop goes back on after it.
