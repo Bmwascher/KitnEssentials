@@ -72,6 +72,9 @@
     <Script file="Skinning\DarkTheme\ColorPicker.lua" />
     <Script file="QoL\QualityOfLife\MoveFrames.lua" />
     <Script file="Skinning\DarkTheme\RaidControl.lua" />
+    <Script file="QoL\QualityOfLife\RareAlert.lua" />
+    <Script file="QoL\QualityOfLife\RareAlertRules.lua" />
+    <Script file="QoL\QualityOfLife\RareAlertCard.lua" />
     <Script file="Skinning\DarkTheme\VehicleExit.lua" />
     <Script file="QoL\SecondaryStats\SecondaryStatsFormat.lua" />
     <Script file="QoL\SecondaryStats\SecondaryStatsForever.lua" />

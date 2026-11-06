@@ -31,6 +31,17 @@ local function EUIKickTrackerConfig()
     return cfg
 end
 
+-- Read on each call: a profile switch in RareScanner replaces the table.
+local function RareScannerGeneral()
+    local aceAddon = LibStub and LibStub("AceAddon-3.0", true)
+    local addon = aceAddon and aceAddon:GetAddon("RareScanner", true)
+    local db = type(addon) == "table" and addon.db
+    local profile = type(db) == "table" and db.profile
+    local general = type(profile) == "table" and profile.general
+    if type(general) ~= "table" then return nil end
+    return general
+end
+
 local CONFLICTS = {
     {
         module = "SkinTooltips",
@@ -294,6 +305,32 @@ local CONFLICTS = {
                 isActive = function()
                     local cfg = EUIKickTrackerConfig()
                     return cfg ~= nil and cfg.enabled == true and cfg.showPlates ~= false
+                end,
+            },
+        },
+    },
+    {
+        module = "RareAlert",
+        label  = "Rare Alert",
+        dbPath = { "RareAlert" },
+        addons = { "RareScanner" },
+        resolvers = {
+            RareScanner = {
+                label  = "RareScanner's rare scan",
+                manual = "untick Search for rare NPCs in RareScanner's General options",
+                -- The flag covers rare alerts only: its containers, events and
+                -- map keep working.
+                apply = function()
+                    local general = RareScannerGeneral()
+                    if not general then return false end
+                    general.scanRares = false
+                    return true
+                end,
+                -- Unreadable reads as on: a wrong on costs a repeated prompt,
+                -- a wrong off costs two alerts in silence.
+                isActive = function()
+                    local general = RareScannerGeneral()
+                    return general == nil or general.scanRares ~= false
                 end,
             },
         },

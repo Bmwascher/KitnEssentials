@@ -721,3 +721,124 @@ describe("/kes conflicts", function()
     end)
 
 end)
+
+describe("Core/Conflicts.lua RareScanner row", function()
+    local savedLibStub
+
+    before_each(function()
+        savedLibStub = _G.LibStub
+    end)
+
+    after_each(function()
+        _G.LibStub = savedLibStub
+    end)
+
+    -- Stands in for AceAddon's registry holding the rival's addon object, or
+    -- holding nothing.
+    local function rival(addon)
+        _G.LibStub = function()
+            return {
+                GetAddon = function(_, name)
+                    if name == "RareScanner" then return addon end
+                    return nil
+                end,
+            }
+        end
+    end
+
+    local function holding(general)
+        return { db = { profile = { general = general } } }
+    end
+
+    local function rareEnv(enabled)
+        return {
+            profile = { RareAlert = { Enabled = enabled } },
+            isLoaded = function(name, resolver)
+                if name ~= "RareScanner" then return false end
+                if resolver and resolver.isActive then return resolver.isActive() end
+                return true
+            end,
+            shouldNotLoad = false,
+        }
+    end
+
+    local function resolver()
+        local KE = L.loadConflicts(nil, { forever = true })
+        rival(holding({ scanRares = true }))
+        return KE:BuildConflictQueue(rareEnv(true))[1].resolver
+    end
+
+    it("queues one item on Forever with the module on, the rival loaded and its scan on", function()
+        local KE = L.loadConflicts(nil, { forever = true })
+        rival(holding({ scanRares = true }))
+        local queue = KE:BuildConflictQueue(rareEnv(true))
+        assert.equals(1, #queue)
+        assert.equals("RareAlert", queue[1].module)
+        assert.equals("RareScanner", queue[1].source)
+    end)
+
+    it("queues nothing with the module off or on a retail load", function()
+        for _, row in ipairs({
+            { name = "module off", forever = true,  enabled = false },
+            { name = "retail",     forever = false, enabled = true },
+        }) do
+            local KE = L.loadConflicts(nil, { forever = row.forever })
+            rival(holding({ scanRares = true }))
+            assert.same({}, KE:BuildConflictQueue(rareEnv(row.enabled)), row.name)
+        end
+    end)
+
+    it("isActive reads the scan flag, and an unreadable table as on", function()
+        local isActive = resolver().isActive
+        for _, row in ipairs({
+            { name = "scan on",        addon = holding({ scanRares = true }),  active = true },
+            { name = "scan unset",     addon = holding({}),                    active = true },
+            { name = "scan off",       addon = holding({ scanRares = false }), active = false },
+            { name = "no general",     addon = holding(nil),                   active = true },
+            { name = "no profile",     addon = { db = {} },                    active = true },
+            { name = "no db",          addon = {},                             active = true },
+            { name = "addon not found", addon = nil,                           active = true },
+        }) do
+            rival(row.addon)
+            assert.equals(row.active, isActive(), row.name)
+        end
+    end)
+
+    it("apply turns the scan off in the table the rival holds", function()
+        local apply = resolver().apply
+        local general = { scanRares = true, scanContainers = true }
+        rival(holding(general))
+        assert.is_true(apply())
+        assert.same({ scanRares = false, scanContainers = true }, general)
+    end)
+
+    it("apply refuses an unreadable table and writes nothing", function()
+        local apply = resolver().apply
+        for _, row in ipairs({
+            { name = "no general",      addon = holding(nil), after = holding(nil) },
+            { name = "no db",           addon = {},           after = {} },
+            { name = "addon not found", addon = nil,          after = nil },
+        }) do
+            rival(row.addon)
+            assert.is_false(apply(), row.name)
+            assert.same(row.after, row.addon, row.name)
+        end
+    end)
+
+    -- Choosing KitnEssentials takes only the rare scan: a refusal must never
+    -- fall through to disabling the whole addon.
+    it("a failed apply on accept prints the manual line and disables nothing", function()
+        local KE, prompts, disabled, printed = L.loadConflicts(nil, { forever = true })
+        rival(nil)
+        KE.db.profile.RareAlert = { Enabled = true }
+        _G.C_AddOns.IsAddOnLoaded = function(name) return name == "RareScanner" end
+        _G.frames[1]:Fire("PLAYER_ENTERING_WORLD")
+        assert.equals(1, #prompts)
+
+        prompts[1].onAccept()
+
+        assert.same({}, disabled)
+        local lines = table.concat(printed, "\n")
+        assert.is_truthy(lines:find("untick Search for rare NPCs in RareScanner's General options", 1, true))
+    end)
+end)

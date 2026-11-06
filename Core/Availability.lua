@@ -128,10 +128,10 @@ local FOREVER_ALLOWED = {
     KickTrackerPlates = true,
     FocusMarkerKick = true,
     -- QoL: the Quality of Life page with its Spell Alerts, Move Frames, Copy
-    -- Anything and Slash Commands tabs, Secondary Stats, and the Group Tools
-    -- row with its Ready Check and World Markers tabs. Great Vault Alert, Raid
-    -- Notifications, the other QoL rows and the PI Macro Builder line stay
-    -- withheld.
+    -- Anything, Slash Commands and Rare Alert tabs, Secondary Stats, and the
+    -- Group Tools row with its Ready Check and World Markers tabs. Great Vault
+    -- Alert, Raid Notifications, the other QoL rows and the PI Macro Builder
+    -- line stay withheld.
     QualityOfLife = true,
     SpellAlerts = true,
     MoveFrames = true,
@@ -141,6 +141,7 @@ local FOREVER_ALLOWED = {
     GroupTools = true,
     ReadyCheckConsumables = true,
     WorldMarkerCycler = true,
+    RareAlert = true,
     -- Combat: Combat Timer, Combat Texts, Cursor Effects with its Cursor and
     -- Taunt tabs, Player Crosshair, Range Display, Focus Castbar, Combat Res,
     -- the Class Tools row with its All Classes tab (Custom Cooldowns, DoT
@@ -196,6 +197,7 @@ local FOREVER_ALLOWED = {
 local FOREVER_ONLY = {
     ForeverOnlyProbe = true,
     Scout = true,
+    RareAlert = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.
