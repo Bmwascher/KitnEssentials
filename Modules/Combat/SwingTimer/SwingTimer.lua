@@ -410,7 +410,15 @@ function ST:CancelEdgeTimers(row)
     end
 end
 
+-- Every arm records its fill: GetValue reads 0 on a timer-driven bar, so the
+-- record is the only way to know where the bar stands.
+function ST:RecordFill(row, start, duration, drains, timed)
+    row.fillStart, row.fillDuration, row.fillDrains = start, duration, drains
+    row.fillSwing, row.holdsEnd = row.starts, timed
+end
+
 function ST:StartFill(row, start, duration, deplete)
+    self:RecordFill(row, start, duration, deplete, true)
     row.duration:SetTimeFromStart(start, duration)
     row.bar:SetTimerDuration(row.duration, Enum.StatusBarInterpolation.Immediate, FillDirection(deplete))
     row.spark:Show()
@@ -419,10 +427,48 @@ end
 -- A parked timer keeps painting its terminal state and SetValue alone does not
 -- repaint it, so the timer is re-armed on a finished duration as well.
 function ST:ParkBar(row, full)
-    row.duration:SetTimeFromStart(GetTime() - 1, 1)
+    local start = GetTime() - 1
+    self:RecordFill(row, start, 1, not full, false)
+    row.duration:SetTimeFromStart(start, 1)
     row.bar:SetTimerDuration(row.duration, Enum.StatusBarInterpolation.Immediate, FillDirection(not full))
     row.bar:SetValue(full and 1 or 0)
     row.spark:Hide()
+end
+
+-- Whether the bar stands on a timed fill of the swing it shows, or holds the
+-- end of one.
+function ST:OnOwnFill(row)
+    return row.holdsEnd == true and row.fillSwing == row.starts
+end
+
+-- A bar waiting on its shot or swing stays where it stands: a fill of this
+-- swing still running finishes, a finished one holds its end, and an emptied
+-- or held bar stays as it is.
+function ST:HoldBar(row, now)
+    local own = self:OnOwnFill(row)
+    if own and now < row.fillStart + row.fillDuration then
+        self:StartFill(row, row.fillStart, row.fillDuration, row.fillDrains)
+        row.endTimer = C_Timer.NewTimer(row.fillStart + row.fillDuration - now, row.onEdge)
+        return
+    end
+    self:ParkBar(row, R.FillAt(row.fillStart, row.fillDuration, row.fillDrains, now) > 0.5)
+    row.holdsEnd = own
+end
+
+-- Moves the bar on from where it stands to reach `toward` at endAt. Off a fill
+-- of this swing, such as the red hold, it starts from the far end.
+function ST:FillToward(row, now, endAt, toward)
+    local fraction = 1 - toward
+    if self:OnOwnFill(row) then
+        fraction = R.FillAt(row.fillStart, row.fillDuration, row.fillDrains, now)
+    end
+    local start, duration, drains = R.FillToward(fraction, now, endAt, toward)
+    if start then
+        self:StartFill(row, start, duration, drains)
+    else
+        self:ParkBar(row, toward == 1)
+        row.holdsEnd = true
+    end
 end
 
 -- The binding goes off before a word is written, or it overwrites the word.
@@ -552,7 +598,11 @@ function ST:RefreshMelee(row)
     else
         local out = row.outOfRange and self.db.RangeCheck
         self:SetWord(row, state == "parked" and (out and "RANGE" or "READY") or nil)
-        self:ParkBar(row, state == "parked")
+        if state == "parked" then
+            self:HoldBar(row, now)
+        else
+            self:ParkBar(row, false)
+        end
         row.window:Hide()
     end
     self:PaintRange(row)
@@ -987,15 +1037,17 @@ function ST:PaintReload(row, now)
     self:SetFillColor(row, GUIDE_COLOR[word])
     if db.HunterStyle == "windup" then
         self:HideZones(row)
-        -- The bar's timer covers the reload or the aim; the countdown runs to the shot.
+        -- The bar's timer covers the reload or the aim; the countdown runs to the
+        -- shot, which a stop inside the zone moves past the swing end.
+        local shotAt = self:ShotAt(row)
         row.shotDuration = row.shotDuration or C_DurationUtil.CreateDuration()
-        row.shotDuration:SetTimeFromStart(row.starts, row.swingDuration)
+        row.shotDuration:SetTimeFromStart(row.starts, shotAt - row.starts)
         if word == "MOVE" then
             self:StartFill(row, row.starts, stopAt - row.starts, db.Deplete)
         elseif word == "STOP" then
             self:ParkBar(row, true)
         else
-            self:StartFill(row, stopAt, row.ends - stopAt, not db.Deplete)
+            self:FillToward(row, now, shotAt, db.Deplete and 1 or 0)
         end
         self:ShowCountdown(row, row.shotDuration)
     else
@@ -1014,11 +1066,12 @@ function ST:PaintDue(row, now)
     local phase = R.RangedAtEnd(self.moving, self.castEnd ~= nil, out, now, shotAt)
     self:HideZones(row)
     if phase == "aim" then
-        if row.phase ~= "aim" then row.aimFrom = now end
         row.state, row.phase = "running", "aim"
         self:SetLabel(row, GUIDE_LABEL.STILL)
         self:SetFillColor(row, GUIDE_COLOR.STILL)
-        self:StartFill(row, row.aimFrom, shotAt - row.aimFrom, not db.Deplete)
+        -- After a stop in the zone the drain is already part way down; the aim
+        -- carries it on rather than starting again from the top.
+        self:FillToward(row, now, shotAt, db.Deplete and 1 or 0)
         self:ShowCountdown(row, row.duration)
         row.endTimer = C_Timer.NewTimer(shotAt - now, row.onEdge)
         return
@@ -1028,11 +1081,12 @@ function ST:PaintDue(row, now)
         self:SetLabel(row, GUIDE_LABEL.STOP)
         self:SetFillColor(row, GUIDE_COLOR.STOP)
         self:SetWord(row, "HELD")
+        self:ParkBar(row, true)
     else
         self:PaintIdentity(row)
         self:SetWord(row, out and "RANGE" or "READY")
+        self:HoldBar(row, now)
     end
-    self:ParkBar(row, true)
 end
 
 function ST:RefreshGuide(row)
