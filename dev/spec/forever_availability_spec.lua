@@ -80,6 +80,9 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "HuntersMark",      want = false },
             { load = "baseline",            seed = BASELINE,             id = "GreatVaultAlert",  want = false },
             { load = "baseline",            seed = BASELINE,             id = "PIMacroBuilder",   want = false },
+            { load = "baseline",            seed = BASELINE,             id = "RaidControl",       want = true },
+            { load = "baseline",            seed = BASELINE,             id = "RaidControlVantus", want = false },
+            { load = "baseline",            seed = BASELINE,             id = "RaidControlBuffs",  want = false },
             -- Dungeon Tools: eight modules, the Dungeon Alerts and Kicks &
             -- Casts rows and five tabs are admitted; the keystone reminders
             -- and group finder tab and Party Stops are not.
