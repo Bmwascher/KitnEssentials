@@ -1306,13 +1306,13 @@ end
 -- A ColoredProgressBarTemplate bar is a Frame, not a StatusBar: a Fill
 -- texture the mixin sizes, clipped by a Mask, over a track texture. The track
 -- and the mask go, and the backdrop hugs the fill's row. The fill takes KE's
--- bar texture, reapplied whenever Blizzard sets its atlas or coords; the texture
--- is white, so a colored atlas becomes a tint.
+-- bar texture, reapplied whenever Blizzard sets its atlas. A colored atlas
+-- becomes a tint, raised to offset the texture's gray.
 local COLORED_BAR_FILL_H = 15
 local COLORED_BAR_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\Statusbars\\KitnEssentials"
 local COLORED_BAR_TINT = {
-    ["common-stat-bar-blue"] = { 0.04, 0.26, 0.53 },
-    ["common-stat-bar-green"] = { 0.06, 0.48, 0.12 },
+    ["common-stat-bar-blue"] = { 0.06, 0.36, 0.75 },
+    ["common-stat-bar-green"] = { 0.08, 0.68, 0.17 },
 }
 
 function S.ColoredBar(bar)
@@ -1342,19 +1342,14 @@ function S.ColoredBar(bar)
         fill:SetVertexColor(tint[1], tint[2], tint[3])
         tinting = false
     end
-    local function ApplyCoords()
-        fill:SetTexCoord(0, bar.fillPercent or 1, 0, 1)
-    end
     local function ApplyFill(_, atlas)
         tint = COLORED_BAR_TINT[atlas]
         fill:SetTexture(COLORED_BAR_TEX)
-        ApplyCoords()
         ApplyTint()
     end
     local atlas = fill:GetAtlas()
     hooksecurefunc(fill, "SetAtlas", ApplyFill)
     hooksecurefunc(fill, "SetVertexColor", ApplyTint)
-    hooksecurefunc(bar, "SetFillPercent", ApplyCoords)
     ApplyFill(fill, atlas)
 end
 

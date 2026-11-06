@@ -9,6 +9,7 @@ local function SkinPage()
     if not frame or S.data(frame).skinned then return end
     S.StripTextures(frame)
     S.CharacterSidePane(frame.DetailFrame)
+    S.CharacterPaneRows(frame.DetailFrame)
     S.data(frame).skinned = true
 end
 

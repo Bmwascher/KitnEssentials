@@ -19,12 +19,12 @@ local HEADER_INSET = 6
 local AMMO_ARROW_ATLAS = "UI-Character-Info-GearSlot-Arrow"
 local PANE_DIVIDER_ATLAS = "common-framedivider"
 local PANE_LINE_ALPHA = 0.15
-local function KillChildArt(parent, atlas, all)
+local function KillChildArt(parent, atlas)
     for _, child in ipairs({ parent:GetChildren() }) do
         local region = child.GetRegions and child:GetRegions()
         if region and region.GetAtlas and region:GetAtlas() == atlas then
             S.KillTexture(region)
-            if not all then return child end
+            return child
         end
     end
 end
@@ -56,7 +56,7 @@ local ItemLocation = ItemLocation
 local ILVL_FONT = 13
 local TITLE_FONT = 13
 local STAT_GRAD_WIDTH = 80
-local STAT_GRAD_TEX = "Interface\\Buttons\\WHITE8x8"
+local FLAT_TEX = "Interface\\Buttons\\WHITE8x8"
 
 -- Slot item level and gem icons are drawn by CharacterPanel.lua, not here.
 
@@ -65,8 +65,6 @@ local STAT_GRAD_TEX = "Interface\\Buttons\\WHITE8x8"
 -- read their tree node instead.
 local LIST_ROW_FONT = 12
 local LIST_LINE_ATLAS = "UI-Character-Info-ScrollLine-Long"
-local LIST_HIGHLIGHT_TEX = "Interface\\Buttons\\WHITE8x8"
-local PANE_CATEGORY_INSET = 6
 
 local function ListHeaderCollapsed(header)
     if not header then return false end
@@ -104,7 +102,7 @@ function S.CharacterRowHighlight(row)
         painting = false
     end
     for _, region in ipairs(regions) do
-        region:SetTexture(LIST_HIGHLIGHT_TEX)
+        region:SetTexture(FLAT_TEX)
         hooksecurefunc(region, "SetVertexColor", Paint)
         Paint(region)
     end
@@ -140,7 +138,14 @@ function S.CharacterListRow(child)
 end
 
 function S.CharacterListLines(scrollBox)
-    if scrollBox then KillChildArt(scrollBox, LIST_LINE_ATLAS, true) end
+    if not scrollBox or S.data(scrollBox).keListLines then return end
+    S.data(scrollBox).keListLines = true
+    for _, child in ipairs({ scrollBox:GetChildren() }) do
+        local region = child.GetRegions and child:GetRegions()
+        if region and region.GetAtlas and region:GetAtlas() == LIST_LINE_ATLAS then
+            region:SetAlpha(0)
+        end
+    end
 end
 
 function S.CharacterListPage(frame)
@@ -165,14 +170,21 @@ local function SkinPaneRow(row)
         local bd = S.Backdrop(row)
         if bd then
             bd:ClearAllPoints()
-            bd:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -PANE_CATEGORY_INSET)
-            bd:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, PANE_CATEGORY_INSET)
+            bd:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -HEADER_INSET)
+            bd:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, HEADER_INSET)
         end
     end
 end
 
 local function SkinPaneRows(pane)
     for _, row in ipairs({ pane.Content:GetChildren() }) do SkinPaneRow(row) end
+end
+
+-- Only the Skills and PvP panes add icon or category rows.
+function S.CharacterPaneRows(pane)
+    if not pane or not pane.Content or not pane.LayoutRows then return end
+    hooksecurefunc(pane, "LayoutRows", SkinPaneRows)
+    SkinPaneRows(pane)
 end
 
 -- Docked in the window's right half, so it shares the window's background and
@@ -183,10 +195,6 @@ function S.CharacterSidePane(pane)
     S.StripTextures(pane)
     if pane.CloseButton then S.CloseButton(pane.CloseButton) end
     if pane.DescriptionScrollBar then S.ScrollBar(pane.DescriptionScrollBar) end
-    if pane.Content and pane.LayoutRows then
-        hooksecurefunc(pane, "LayoutRows", SkinPaneRows)
-        SkinPaneRows(pane)
-    end
 end
 
 -- Two mirrored fades from the row's center outward, replacing the plate rather
@@ -207,14 +215,14 @@ local function ColorizeStatPane(frame)
     local solid, clear = CreateColor(r, g, b, 0.25), CreateColor(r, g, b, 0)
 
     local right = frame:CreateTexture(nil, "BORDER")
-    right:SetTexture(STAT_GRAD_TEX)
+    right:SetTexture(FLAT_TEX)
     right:SetPoint("TOPLEFT", frame, "TOP")
     right:SetPoint("BOTTOMLEFT", frame, "BOTTOM")
     right:SetWidth(STAT_GRAD_WIDTH)
     right:SetGradient("HORIZONTAL", solid, clear)
 
     local left = frame:CreateTexture(nil, "BORDER")
-    left:SetTexture(STAT_GRAD_TEX)
+    left:SetTexture(FLAT_TEX)
     left:SetPoint("TOPRIGHT", frame, "TOP")
     left:SetPoint("BOTTOMRIGHT", frame, "BOTTOM")
     left:SetWidth(STAT_GRAD_WIDTH)
