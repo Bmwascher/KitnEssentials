@@ -556,6 +556,10 @@ end
 -- An NPC's row keeps Blizzard's wording ("Level 12 Beast (Elite)"); only
 -- the number is recolored, so the creature type needs no rebuild.
 local function ColorNpcLevel(tt, unit)
+    -- Only units the player can attack, as Blizzard's target frame does.
+    local canAttack = UnitCanAttack("player", unit)
+    if KE:IsSecretValue(canAttack) or not canAttack then return end
+
     local levelLine = FindLevelLine(tt, 1)
     local text = levelLine and levelLine:GetText()
     if not text or KE:IsSecretValue(text) then return end
