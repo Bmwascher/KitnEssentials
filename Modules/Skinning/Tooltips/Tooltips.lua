@@ -472,13 +472,11 @@ end
 
 -- Locating the level row.
 --
--- Blizzard publishes no line type for it: TooltipDataLineType has UnitName,
--- UnitThreat and UnitOwner but nothing for level
--- (TooltipInfoSharedDocumentation.lua, 12.0.7). So the row is found
--- by matching the localized level template against each
--- line's text. The templates are GlobalStrings and are reduced to plain
--- substrings once, on first use rather than at file scope, so load order
--- cannot matter.
+-- TooltipDataLineType declares UnitLevel on both clients, but the live level
+-- row is not confirmed to carry it, so the row is found by matching the
+-- localized level template against each line's text. The templates are
+-- GlobalStrings and are reduced to plain substrings once, on first use
+-- rather than at file scope, so load order cannot matter.
 local levelMatchA, levelMatchB
 local function LevelMatchers()
     if levelMatchA == nil then
@@ -524,6 +522,70 @@ local function FindLevelLine(tt, offset)
             end
         end
     end
+end
+
+-- A skull unit reports level -1, which the difficulty color reads as
+-- trivial gray.
+local SKULL_RED = { r = 1, g = 0.1, b = 0.1 }
+local function LevelConColor(level)
+    if level <= 0 then
+        local colors = _G.QuestDifficultyColors
+        return colors and colors.impossible or SKULL_RED
+    end
+    -- Forever's nameplates band levels tighter than the quest log does, so
+    -- the tooltip asks the nameplate's own rule there and the two agree.
+    -- Retail keeps the quest log's bands.
+    local plate = KE.IS_FOREVER and _G.NameplateLevelFrameMixin
+    if plate and plate.GetDifficultyColor then
+        local mine = UnitEffectiveLevel("player")
+        if not KE:IsSecretValue(mine) and type(mine) == "number" then
+            local color = plate.GetDifficultyColor(plate, level - mine)
+            if color then return color end
+        end
+    end
+    return GetCreatureDifficultyColor(level)
+end
+
+-- Wraps the first occurrence of `token` in a color code; a number matches
+-- only whole, so "8" never colors part of "18". Nil when the token is
+-- missing or the row already carries a color, so a re-run on the same
+-- tooltip leaves the row alone.
+local function ColorLevelToken(text, token, color)
+    if not color or text:find("|c", 1, true) then return nil end
+    local s, e
+    if token:find("^%d+$") then
+        s, e = text:find("%f[%d]" .. token .. "%f[%D]")
+    else
+        s, e = text:find(token, 1, true)
+    end
+    if not s then return nil end
+    return text:sub(1, s - 1) .. KE:WrapColor(token, color.r, color.g, color.b) .. text:sub(e + 1)
+end
+
+-- An NPC's row keeps Blizzard's wording ("Level 12 Beast (Elite)"); only
+-- the number is recolored, so the creature type needs no rebuild.
+local function ColorNpcLevel(tt, unit)
+    -- Only units the player can attack, as Blizzard's target frame does.
+    local canAttack = UnitCanAttack("player", unit)
+    if KE:IsSecretValue(canAttack) or not canAttack then return end
+
+    local levelLine = FindLevelLine(tt, 1)
+    local text = levelLine and levelLine:GetText()
+    if not text or KE:IsSecretValue(text) then return end
+
+    local level = UnitEffectiveLevel(unit)
+    if KE:IsSecretValue(level) or type(level) ~= "number" then return end
+    local color = LevelConColor(level)
+
+    local colored = ColorLevelToken(text, level > 0 and tostring(level) or "??", color)
+    -- A scaled NPC can show its real level rather than the effective one.
+    if not colored and level > 0 then
+        local real = UnitLevel(unit)
+        if not KE:IsSecretValue(real) and type(real) == "number" and real > 0 then
+            colored = ColorLevelToken(text, tostring(real), color)
+        end
+    end
+    if colored then levelLine:SetText(colored) end
 end
 
 -- Reading a unit's name is only safe when its identity is not restricted.
@@ -854,7 +916,9 @@ function TT:OnTooltipSetUnit(tt, data)
             local level = UnitEffectiveLevel(unit)
             local realLevel = UnitLevel(unit)
             local race = UnitRace(unit)
-            local diff = GetCreatureDifficultyColor(level)
+            -- No color leaves the number white.
+            local diff
+            if db.LevelColors ~= false and level then diff = LevelConColor(level) end
             local r = diff and diff.r
             local g = diff and diff.g
             local b = diff and diff.b
@@ -877,6 +941,10 @@ function TT:OnTooltipSetUnit(tt, data)
         if specLine and db.ClassColorNames and unitColor then
             specLine:SetTextColor(unitColor:GetRGB())
         end
+    end
+
+    if db.LevelColors ~= false and not UnitIsPlayer(unit) then
+        ColorNpcLevel(tt, unit)
     end
 
     -- Faction row. "Alliance" / "Horde" duplicates what the name and level
@@ -1388,3 +1456,5 @@ TT._EngineDrawsAuraIDs = EngineDrawsAuraIDs
 TT._GetAuraIDCVarLifecycleToken = function() return auraIDCVarLifecycleToken, "petaction-setter" end
 TT._ComposeNameLine = ComposeNameLine
 TT._EffectiveLineOptions = EffectiveLineOptions
+TT._LevelConColor = LevelConColor
+TT._ColorLevelToken = ColorLevelToken

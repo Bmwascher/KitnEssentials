@@ -158,8 +158,16 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
         tooltip = "Removes the plain 'Alliance' or 'Horde' line. The name and level lines already carry it.",
         callback = function(checked) db.HideFactionLine = checked; ApplySettings() end,
     })
-    row4c:AddWidget(hideFactionCheck, 1)
+    row4c:AddWidget(hideFactionCheck, 0.5)
     manager:Register(hideFactionCheck, "all")
+
+    local levelColorsCheck = GUIFrame:CreateCheckbox(row4c, "Level Colors", {
+        value = db.LevelColors ~= false,
+        tooltip = "Colors the level number by how it compares to yours: red, orange, yellow, green or gray. A skull level reads red.",
+        callback = function(checked) db.LevelColors = checked; ApplySettings() end,
+    })
+    row4c:AddWidget(levelColorsCheck, 0.5)
+    manager:Register(levelColorsCheck, "all")
     card4:AddRow(row4c, 40)
 
     card4:AddSeparator()
