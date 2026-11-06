@@ -141,7 +141,8 @@ read_globals = {
     -- Trainer
     "ClassTrainerFrame", "ClassTrainerTrainButton",
     "GetTrainerServiceInfo", "GetTrainerServiceCost", "GetNumTrainerServices",
-    "BuyTrainerService",
+    "BuyTrainerService", "IsTradeskillTrainer",
+    "C_Trainer", "C_PetInfo", "PlaceAction", "GetActionInfo", "InputUtil", "CreateVector2D",
 
     -- Enums and constants
     "Enum", "Constants", "CurveConstants",
