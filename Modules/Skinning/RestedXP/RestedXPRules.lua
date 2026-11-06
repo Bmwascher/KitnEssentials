@@ -267,6 +267,21 @@ function Rules.SameDeep(a, b)
     return true
 end
 
+-- The theme's font path for a font name. A media pack can load after RestedXP
+-- starts, so the start-up build takes the path a later load found for the same
+-- name; once every addon has loaded, a name the library does not know has no path,
+-- and the kept one goes. Returns the path and the record to keep.
+function Rules.ThemeFont(name, found, kept, early, fallback)
+    local same = type(kept) == "table" and kept.name == name
+    if found then
+        if same and kept.path == found then return found, kept end
+        return found, { name = name, path = found }
+    end
+    if not early then return fallback, nil end
+    if same and type(kept.path) == "string" then return kept.path, kept end
+    return fallback, kept
+end
+
 -- Whether a preview still shows what a write would do.
 function Rules.SameRows(a, b)
     if #a ~= #b then return false end

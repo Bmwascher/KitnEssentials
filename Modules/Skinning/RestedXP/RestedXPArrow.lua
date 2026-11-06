@@ -36,7 +36,7 @@ local DIAGONAL = math_sqrt(2)
 local active, installed, textHooked
 local layer, swapped, fitted, rxpImage, textHome
 local keeping, composing
-local onYards
+local onYards, alphaHooked, yardsAlpha
 local wordsFor, wordsRaw, wordsText, wordsPending
 
 ---------------------------------------------------------------------------------
@@ -231,11 +231,28 @@ local function HookText(af)
     hooksecurefunc(af.text, "SetText", OnArrowText)
 end
 
--- The step box's yards read the same write, with or without this part on.
+-- RestedXP hides the arrow by alpha alone when it has no distance or facing, and
+-- sets that alpha only when it changes, except on the wrong continent.
+local function OnArrowAlpha(af, alpha)
+    if Secret(alpha) or alpha == yardsAlpha then return end
+    yardsAlpha = alpha
+    if onYards then onYards(af) end
+end
+
+local function HookAlpha(af)
+    if alphaHooked then return end
+    alphaHooked = true
+    hooksecurefunc(af, "SetAlpha", OnArrowAlpha)
+end
+
+-- The step box's yards read the same writes, with or without this part on.
 function Arrow.WatchYards(fn)
     local af = _G.RXPG_ARROW
     onYards = fn
-    if fn and Has(af, "HookScript") and type(af.text) == "table" then HookText(af) end
+    if fn and Has(af, "HookScript") and type(af.text) == "table" then
+        HookText(af)
+        HookAlpha(af)
+    end
 end
 
 ---------------------------------------------------------------------------------

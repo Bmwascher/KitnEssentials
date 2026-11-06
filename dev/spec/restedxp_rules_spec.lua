@@ -385,6 +385,23 @@ describe("restedxp rules", function()
         assert.is_false(Rules.SameDeep(Theme(), nil))
     end)
 
+    it("keeps the font a later load found, for the start-up theme only", function()
+        local kept = { name = "Pack", path = "pack.ttf" }
+        local path, record = Rules.ThemeFont("Pack", "pack.ttf", nil, false, "default.ttf")
+        assert.equals("pack.ttf", path)
+        assert.same(kept, record)
+        assert.equals(kept, select(2, Rules.ThemeFont("Pack", "pack.ttf", kept, true, "default.ttf")))
+        for _, row in ipairs({
+            { "Pack", true, "pack.ttf", kept },
+            { "Other", true, "default.ttf", kept },
+            { "Pack", false, "default.ttf", nil },
+        }) do
+            local got, keep = Rules.ThemeFont(row[1], nil, kept, row[2], "default.ttf")
+            assert.equals(row[3], got, row[1])
+            assert.equals(row[4], keep, row[1])
+        end
+    end)
+
     it("keeps each RestedXP profile's record apart", function()
         local records = { A = { before = { activeTheme = "Dark" } } }
         assert.equals("Dark", Rules.RecordFor(records, "A").before.activeTheme)

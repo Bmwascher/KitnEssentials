@@ -53,8 +53,20 @@ function Theme.WindowColors()
         })
 end
 
-function Theme.Build()
-    return Rules.ThemeFields(Theme.Tokens(), Theme.Option("FollowPalette"), KE:GetFontPath(), DB().PanelColor)
+-- At RestedXP's start a media pack loaded after it has not named its fonts yet, so
+-- that build uses the path kept from a load that found the global font.
+local function FontPath(early)
+    local name, lsm = KE:GetGlobalFont(), KE.LSM
+    local found = lsm and name and lsm:Fetch("font", name, true) or nil
+    local store = KE:GetCharStore(false)
+    local kept = store and store.RestedXPFont
+    local path, keep = Rules.ThemeFont(name, found, kept, early == true, KE:GetFontPath())
+    if keep ~= kept then KE:GetCharStore(true).RestedXPFont = keep end
+    return path
+end
+
+function Theme.Build(early)
+    return Rules.ThemeFields(Theme.Tokens(), Theme.Option("FollowPalette"), FontPath(early), DB().PanelColor)
 end
 
 local function Profile()
@@ -109,8 +121,8 @@ function Theme.AddEarly()
         list = {}
         _G.RXPGuides_Themes = list
     end
-    list[Rules.THEME_NAME] = Theme.Build()
-    lastBuilt = Theme.Build()
+    list[Rules.THEME_NAME] = Theme.Build(true)
+    lastBuilt = Theme.Build(true)
 end
 
 -- Sends the theme only if its values changed, and says so. A reload re-renders all

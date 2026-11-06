@@ -426,21 +426,23 @@ end
 local function SkinPlaceholders(frame)
     for _, button in ipairs({ frame:GetChildren() }) do
         local texture = button.placeholder
-        if texture then
-            local id = texture:GetTexture()
-            local path = K.PLACEHOLDER_GLYPHS[id] and Icons.TextureFor(K.PLACEHOLDER_GLYPHS[id])
-            if path then
-                placeholders[texture] = id
-                texture:SetTexture(path)
-            end
+        local id = texture and texture:GetTexture()
+        local glyph = not Secret(id) and id and K.PLACEHOLDER_GLYPHS[id]
+        local path = glyph and Icons.TextureFor(glyph)
+        if path then
+            texture:SetTexture(path)
+            placeholders[texture] = { id = id, shown = texture:GetTexture() }
         end
     end
 end
 
+-- RestedXP draws a found target's portrait or icon on the same texture and does
+-- not draw it again until the target changes, so only KE's own file goes back.
 local function RestorePlaceholders()
-    for texture, id in pairs(placeholders) do
+    for texture, swap in pairs(placeholders) do
         placeholders[texture] = nil
-        texture:SetTexture(id)
+        local now = texture:GetTexture()
+        if not Secret(now) and now ~= nil and now == swap.shown then texture:SetTexture(swap.id) end
     end
 end
 
@@ -699,7 +701,7 @@ local function MakeGrip(parent)
     grip:SetHighlightTexture(K.GRIP_HIGHLIGHT)
     grip:SetScript("OnMouseDown", function()
         if Option("Lock") then return end
-        sizingModel = Model.Read(_G.RXP, READ_OPTIONS)
+        sizingModel = Run("WindowGripRead", Model.Read, _G.RXP, READ_OPTIONS)
         sizing = { width = window:GetWidth(), steps = Option("ListedSteps"), db = DB() }
         window:StartSizing(K.GRIP_CORNER)
     end)

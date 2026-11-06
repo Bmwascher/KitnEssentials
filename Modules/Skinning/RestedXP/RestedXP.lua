@@ -94,6 +94,10 @@ local function StartParts(self)
     else
         Theme.Stop()
     end
+    -- Every path into RestedXP's Own gives the player's theme back here, a profile
+    -- switch included. Once written, the record holds no theme, so a later pass
+    -- writes nothing.
+    if look == "own" then Setup.RestoreTheme() end
     if self.parts.Arrow and Theme.Option("ArrowEnabled") then
         Arrow.Start()
     else
@@ -158,7 +162,6 @@ function M:LookChanged()
     local own = Theme.Option("Look") == "own"
     self:ApplySettings()
     if own then
-        Setup.RestoreTheme()
         self:AskIconsBack()
     else
         AskIfIconsStale()

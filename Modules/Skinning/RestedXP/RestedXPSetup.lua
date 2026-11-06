@@ -29,6 +29,7 @@ local TEXT_MISSED = "RestedXP started before KitnEssentials could apply its setu
 local TEXT_REFUSED = "The reload did not happen, so nothing changed. Click the button again to apply it."
 local TEXT_NOT_LOADING = "Turn on KitnEssentials and RestedXP Guides in the AddOns list for this character, " ..
     "then click again. Nothing changed."
+local TEXT_NO_PROFILE = "RestedXP's profile could not be read, so nothing changed."
 -- The page's line for a click whose change could not be kept: a refused reload, or
 -- an addon set not to load next time.
 local watching, onProfileChange, clickNote
@@ -213,6 +214,18 @@ end
 function Setup.NotLoading()
     clickNote = TEXT_NOT_LOADING
     Safe.Notice("SetupNotLoading", TEXT_NOT_LOADING)
+    Setup.ProfileChanged()
+end
+
+-- The click asks this before it asks for the reload, so a change with no profile
+-- name to save under asks for none.
+function Setup.CanSave()
+    return ProfileKey() ~= nil
+end
+
+function Setup.NoProfile()
+    clickNote = TEXT_NO_PROFILE
+    Safe.Notice("SetupNoProfile", TEXT_NO_PROFILE)
     Setup.ProfileChanged()
 end
 
