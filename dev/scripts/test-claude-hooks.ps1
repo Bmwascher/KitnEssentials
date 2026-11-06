@@ -617,6 +617,41 @@ try {
         $hit = $oc -match ('(?m)^\s+\.superpowers/review-sources/' + [regex]::Escape($c.dir) + '\s*$')
         Check "retention [C]: $($c.name)" ($ocOk -and $hit -eq $c.queued) $oc
     }
+
+    # [D] lists a worktree only when main holds a commit its branch made. Every
+    # branch here but d-open is reachable from main.
+    $dproj = Join-Path $outside 'dproj'
+    New-Item -ItemType Directory -Path $dproj | Out-Null
+    function DGit([string]$dir) { git -C $dir -c user.name=t -c user.email=t@t -c commit.gpgsign=false @args 2>&1 | Out-Null }
+    $dwt = @{}
+    function DBranch([string]$n) { $dwt[$n] = Join-Path $outside "dwt-$n"; DGit $dproj worktree add -q -b "d-$n" $dwt[$n] main }
+    DGit $dproj init -q -b main
+    DGit $dproj commit -q --allow-empty --no-verify -m init
+    foreach ($n in @('empty', 'along', 'ff', 'noff', 'reset', 'open')) { DBranch $n }
+    foreach ($n in @('ff', 'noff', 'reset', 'open')) { DGit $dwt[$n] commit -q --allow-empty --no-verify -m "work $n" }
+    DGit $dproj merge -q --ff-only d-ff
+    DGit $dproj merge -q --no-ff --no-verify -m 'merge d-noff' d-noff
+    DBranch 'nolog'
+    DGit $dwt['nolog'] commit -q --allow-empty --no-verify -m 'work nolog'
+    DGit $dproj merge -q --ff-only d-nolog
+    DGit $dproj reflog expire --expire=now --expire-unreachable=now refs/heads/d-nolog
+    DGit $dwt['reset'] reset -q --hard main
+    DGit $dwt['along'] merge -q --ff-only main
+    $od = (& pwsh -NoProfile -File (Join-Path $root 'dev\scripts\check-artifact-retention.ps1') -Root $dproj -Soft 2>&1 | Out-String)
+    $odOk = $LASTEXITCODE -eq 0 -and $od -notmatch 'FAIL \[(script|B/C/D)\]' -and "$(git -C $dproj rev-parse d-reset)" -eq "$(git -C $dproj rev-parse main)"
+    $dRows = @(
+        @{ name = 'a branch merged with a merge commit is listed'; b = 'noff'; listed = $true },
+        @{ name = 'a fast-forward merged branch is listed'; b = 'ff'; listed = $true },
+        @{ name = 'a branch with no commits is not listed'; b = 'empty'; listed = $false },
+        @{ name = 'a branch fast-forwarded along main is not listed'; b = 'along'; listed = $false },
+        @{ name = 'a branch reset off its only commit is not listed'; b = 'reset'; listed = $false },
+        @{ name = 'a fast-forward merged branch with no reflog is not listed'; b = 'nolog'; listed = $false },
+        @{ name = 'an unmerged branch is not listed'; b = 'open'; listed = $false }
+    )
+    foreach ($r in $dRows) {
+        $hit = $od -match ('\[D\] worktree on merged branch ' + [regex]::Escape("d-$($r.b)") + ' :')
+        Check "retention [D]: $($r.name)" ($odOk -and $hit -eq $r.listed) $od
+    }
 } finally {
     # Each step runs regardless of the others; native git exits are checked
     # because they do not throw, and any leftover fails the run.
