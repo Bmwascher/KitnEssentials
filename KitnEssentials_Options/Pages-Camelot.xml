@@ -29,6 +29,7 @@
     <Script file="QoL\QualityOfLife\GUI-SpellAlerts.lua" />
     <Script file="Combat\StatusTexts\GUI-PlayerAbsorbs.lua" />
     <Script file="Combat\StatusTexts\GUI-NoMovementAlert.lua" />
+    <Script file="QoL\GroupTools\GUI-WorldMarkerCycler.lua" />
     <Script file="Combat\StatusTexts\GUI-PotionReady.lua" />
     <Script file="QoL\GroupTools\GUI-ReadyCheckConsumables.lua" />
     <Script file="DungeonTools\KicksCasts\GUI-DungeonCasts.lua" />
