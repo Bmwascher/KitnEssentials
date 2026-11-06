@@ -1,0 +1,221 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Modules/QoL/Campfire/CampfireButtons.lua                ║
+-- ║  Purpose: Campfire's secure Sleeping Bag and kit         ║
+-- ║           buttons, their placement and combat driver.    ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+---@class KE
+local KE = select(2, ...)
+
+local Rules = KE.CampfireRules
+local Views = KE.CampfireViews
+
+local C_Container = C_Container
+local C_Item = C_Item
+local C_Timer = C_Timer
+local CreateFrame = CreateFrame
+local GetTime = GetTime
+local InCombatLockdown = InCombatLockdown
+local RegisterStateDriver = RegisterStateDriver
+local UIParent = UIParent
+local UnregisterStateDriver = UnregisterStateDriver
+
+local Buttons = {}
+KE.CampfireButtons = Buttons
+
+local ROUND_SCALE, ROUND_GAP = 0.55, 12
+local SIMPLE_SIZE, SIMPLE_GAP = 26, 4
+local KIT_LABEL, KIT_LABEL_SIZE, KIT_LABEL_GAP = "Light a Fire", 13, 3
+local COUNT_SIZE = 12
+-- A cooldown this short is the global cooldown, not the item's own.
+local GLOBAL_COOLDOWN = 1.5
+local COOLDOWN_PAD = 0.1
+
+local bag, kit, sample, active
+local cooldownGen = 0
+
+local function Dress(frame)
+    -- Plain SetTexture with no filter argument: a game icon loaded with
+    -- TRILINEAR crashes the Forever client.
+    frame.icon = frame:CreateTexture(nil, "ARTWORK")
+    frame.icon:SetAllPoints(frame)
+    frame.cooldown = CreateFrame("Cooldown", nil, frame, "CooldownFrameTemplate")
+    frame.cooldown:SetAllPoints(frame)
+    frame.cooldown:EnableMouse(false)
+    frame.cooldown:SetDrawEdge(false)
+    frame.cooldown:SetDrawBling(false)
+    frame.cooldown:SetHideCountdownNumbers(true)
+    frame.cooldown:Hide()
+    frame.count = frame:CreateFontString(nil, "OVERLAY")
+    frame.count:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
+    frame.label = frame:CreateFontString(nil, "OVERLAY")
+    frame.label:SetPoint("TOP", frame, "BOTTOM", 0, -KIT_LABEL_GAP)
+end
+
+local function NewSecure(name)
+    local button = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate")
+    button:RegisterForClicks("AnyUp", "AnyDown")
+    button:Hide()
+    Dress(button)
+    return button
+end
+
+local function SetIcon(frame, itemId)
+    if frame.iconItem == itemId then return end
+    local icon = C_Item.GetItemIconByID(itemId)
+    if not icon then return end
+    frame.icon:SetTexture(icon)
+    frame.iconItem = itemId
+end
+
+-- Secure frames take coordinates, never an anchor to the shape: an anchor would
+-- make the shape protected, and the shape changes in combat.
+local function SpotFor(db)
+    if db.Shape == "ROUND" then
+        local x, y = Views.round:GetCenter()
+        if not x then return nil end
+        local size = db.RoundSize * ROUND_SCALE
+        local half = db.RoundSize / 2 + Views.TRACK_OUT
+        local side = db.ListSide == "LEFT" and 1 or -1
+        return x + side * (half + ROUND_GAP + size / 2), y - half + size / 2, size
+    end
+    local x, y = Views.simple:GetCenter()
+    if not x then return nil end
+    return x - db.SimpleWidth / 2 - SIMPLE_GAP - SIMPLE_SIZE / 2, y, SIMPLE_SIZE
+end
+
+local function Place(frame, x, y, size)
+    if frame.placedX == x and frame.placedY == y and frame.placedSize == size then return end
+    frame.placedX, frame.placedY, frame.placedSize = x, y, size
+    frame:ClearAllPoints()
+    frame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
+    frame:SetSize(size, size)
+end
+
+local function Style(frame, which, stacks, db)
+    KE:ApplyFontToText(frame.count, db.FontFace, COUNT_SIZE, "OUTLINE")
+    KE:ApplyFontToText(frame.label, db.FontFace, KIT_LABEL_SIZE, db.FontOutline)
+    frame.count:SetText((stacks and stacks > 0) and stacks or "")
+    frame.label:SetText(which == "kit" and db.Shape == "ROUND" and KIT_LABEL or "")
+end
+
+local function Drop(button)
+    if button.driven then
+        UnregisterStateDriver(button, "visibility")
+        button.driven = false
+    end
+    button:Hide()
+end
+
+local function Arm(button, itemId)
+    SetIcon(button, itemId)
+    if button.armedItem == itemId then return end
+    button.armedItem = itemId
+    button.cooldownEnds = nil
+    button:SetAttribute("type1", "item")
+    button:SetAttribute("item1", "item:" .. itemId)
+end
+
+local function ReadCooldown(itemId)
+    local start, duration = C_Container.GetItemCooldown(itemId)
+    if KE:IsSecretValue(start) or KE:IsSecretValue(duration) then return nil end
+    if not start or not duration or duration <= GLOBAL_COOLDOWN then return nil end
+    if start + duration <= GetTime() then return nil end
+    return start, duration
+end
+
+function Buttons.Build()
+    if bag or InCombatLockdown() then return end
+    bag = NewSecure("KE_CampfireBagButton")
+    kit = NewSecure("KE_CampfireKitButton")
+end
+
+-- Outside combat only. In combat the driver has them hidden, and the
+-- PLAYER_REGEN_ENABLED refresh brings them back to this call.
+function Buttons.Sync(wanted, kitItem, stacks, db)
+    if not bag or InCombatLockdown() then return end
+    local button = (wanted == "bag" and bag) or (wanted == "kit" and kit) or nil
+    if bag ~= button then Drop(bag) end
+    if kit ~= button then Drop(kit) end
+    active = button
+    if not button then return end
+
+    local x, y, size = SpotFor(db)
+    if not x then
+        Drop(button)
+        active = nil
+        return
+    end
+    Arm(button, wanted == "kit" and kitItem or Rules.SLEEPING_BAG)
+    Place(button, x, y, size)
+    Style(button, wanted, stacks, db)
+    if not button.driven then
+        -- No show clause: outside combat it parses to nil and does nothing, so
+        -- the module keeps the choice of when to show the button.
+        RegisterStateDriver(button, "visibility", "[combat] hide")
+        button.driven = true
+    end
+    button:Show()
+    Buttons.UpdateCooldown()
+end
+
+-- Every button sync lands here, and BAG_UPDATE_COOLDOWN fires on every global
+-- cooldown, so one cooldown end arms one one-shot.
+function Buttons.UpdateCooldown()
+    local button = active
+    if not button or InCombatLockdown() then return end
+    local start, duration = ReadCooldown(button.armedItem)
+    button.icon:SetDesaturated(start ~= nil)
+    if not start then
+        button.cooldownEnds = nil
+        button.cooldown:Hide()
+        return
+    end
+    local ends = start + duration
+    if button.cooldownEnds == ends then return end
+    button.cooldownEnds = ends
+    button.cooldown:SetCooldown(start, duration)
+    button.cooldown:Show()
+    local gen = cooldownGen
+    C_Timer.After(ends - GetTime() + COOLDOWN_PAD, function()
+        if gen ~= cooldownGen or button.cooldownEnds ~= ends then return end
+        button.cooldownEnds = nil
+        if button == active then Buttons.UpdateCooldown() end
+    end)
+end
+
+-- A secure button cannot be destroyed, so a disabled module clears the action:
+-- a click with no type does nothing.
+function Buttons.Disarm()
+    if not bag or InCombatLockdown() then return end
+    cooldownGen = cooldownGen + 1
+    active = nil
+    for _, button in ipairs({ bag, kit }) do
+        Drop(button)
+        button:SetAttribute("type1", nil)
+        button:SetAttribute("item1", nil)
+        button.armedItem = nil
+        button.cooldownEnds = nil
+    end
+end
+
+-- A plain frame in the button's spot, so a click in a preview never uses an item.
+function Buttons.ShowSample(which, db)
+    if not sample then
+        sample = CreateFrame("Frame", nil, UIParent)
+        Dress(sample)
+    end
+    local x, y, size = SpotFor(db)
+    if not x then
+        sample:Hide()
+        return
+    end
+    SetIcon(sample, which == "kit" and Rules.KITS[1] or Rules.SLEEPING_BAG)
+    Place(sample, x, y, size)
+    Style(sample, which, which == "bag" and 1 or 0, db)
+    sample:Show()
+end
+
+function Buttons.HideSample()
+    if sample then sample:Hide() end
+end
