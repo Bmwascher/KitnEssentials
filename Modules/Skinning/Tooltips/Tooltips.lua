@@ -1356,6 +1356,9 @@ function TT:OnEnable()
     self:EnsureAnchor()
     self:ApplySettings()
     S.InstallTooltipStatusBarHook()
+
+    local itemRef = _G.ItemRefTooltip
+    if itemRef then S.CloseButton(itemRef.CloseButton) end
 end
 
 -- Reassert after same-frame CVar writers, but reject callbacks from an older
