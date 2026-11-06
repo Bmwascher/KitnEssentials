@@ -143,6 +143,12 @@ function Rules.ShotTime(swingEnd, lastStop, aim, latency)
     return math_max(swingEnd, (lastStop or 0) + aim + latency)
 end
 
+-- Where the aim's drain starts from full: the stop-by line, or a stop inside
+-- the zone, which restarts the aim.
+function Rules.AimStart(stopAt, lastStop)
+    return math_max(stopAt, lastStop or 0)
+end
+
 -- A thousandth of the bar: under a pixel on any bar up to 1,000 wide.
 local NEAR_END = 0.001
 

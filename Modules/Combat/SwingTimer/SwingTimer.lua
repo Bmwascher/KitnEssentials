@@ -414,7 +414,7 @@ end
 -- record is the only way to know where the bar stands.
 function ST:RecordFill(row, start, duration, drains, timed)
     row.fillStart, row.fillDuration, row.fillDrains = start, duration, drains
-    row.fillSwing, row.holdsEnd = row.starts, timed
+    row.fillSwing, row.holdsEnd, row.redHold = row.starts, timed, nil
 end
 
 function ST:StartFill(row, start, duration, deplete)
@@ -438,6 +438,13 @@ function ST:ParkBar(row, full)
     row.spark:Hide()
 end
 
+-- The full red hold of a move that holds the shot; a stop from it starts the
+-- aim afresh.
+function ST:HoldRed(row)
+    self:ParkBar(row, true)
+    row.redHold = true
+end
+
 -- Whether the bar stands on a timed fill of the swing it shows, or holds the
 -- end of one.
 function ST:OnOwnFill(row)
@@ -459,11 +466,17 @@ function ST:HoldBar(row, now)
 end
 
 -- Moves the bar on from where it stands to reach `toward` at endAt. Off a fill
--- of this swing, such as the red hold, it starts from the far end.
+-- of this swing, the red hold starts afresh from the far end, and any other
+-- paint, such as an emptied bar or the preview, takes the drain's live position.
 function ST:FillToward(row, now, endAt, toward)
-    local fraction = 1 - toward
+    local fraction
     if self:OnOwnFill(row) then
         fraction = R.FillAt(row.fillStart, row.fillDuration, row.fillDrains, now)
+    elseif row.redHold then
+        fraction = 1 - toward
+    else
+        local from = R.AimStart(row.stopAt or now, self.lastStop)
+        fraction = R.FillAt(from, endAt - from, toward == 0, now)
     end
     local start, duration, drains = R.FillToward(fraction, now, endAt, toward)
     if start then
@@ -1061,7 +1074,7 @@ function ST:PaintReload(row, now)
         if word == "MOVE" then
             self:StartFill(row, row.starts, stopAt - row.starts, db.Deplete)
         elseif word == "STOP" then
-            self:ParkBar(row, true)
+            self:HoldRed(row)
         else
             self:FillToward(row, now, shotAt, db.Deplete and 1 or 0)
         end
@@ -1097,7 +1110,7 @@ function ST:PaintDue(row, now)
         self:SetLabel(row, GUIDE_LABEL.STOP)
         self:SetFillColor(row, GUIDE_COLOR.STOP)
         self:SetWord(row, "HELD")
-        self:ParkBar(row, true)
+        self:HoldRed(row)
     else
         self:PaintIdentity(row)
         self:SetWord(row, out and "RANGE" or "READY")

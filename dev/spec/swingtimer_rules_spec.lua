@@ -150,6 +150,16 @@ describe("swing timer bar rules", function()
         assert.is_nil(Rules.FillToward(1, 20, 20.6, 1))
         assert.is_nil(Rules.FillToward(0.4, 20, 20, 0))
     end)
+
+    it("starts the drain at the stop-by line, or at a stop inside the zone", function()
+        for _, row in ipairs({
+            { stopAt = 100, lastStop = 98, want = 100 },
+            { stopAt = 100, lastStop = 100.3, want = 100.3 },
+            { stopAt = 100, lastStop = nil, want = 100 },
+        }) do
+            assert.equals(row.want, Rules.AimStart(row.stopAt, row.lastStop))
+        end
+    end)
 end)
 
 describe("swing timer ranged rules", function()
