@@ -3643,6 +3643,13 @@ function L.loadCustomCooldownsRules(overrides)
     return helpers.loadModule("Modules/Combat/ClassTools/CustomCooldownsRules.lua", {})
 end
 
+-- Modules/QoL/Campfire/CampfireRules.lua. Pure logic: nothing to stub. Returns
+-- KE.
+function L.loadCampfireRules(overrides)
+    installMock(overrides, {})
+    return helpers.loadModule("Modules/QoL/Campfire/CampfireRules.lua", {})
+end
+
 -- Core/CDMIcons.lua. The info function is looked up at call time, so a spec
 -- passes its own C_CooldownViewer per load; viewers are plain tables the spec
 -- puts on _G. Returns KE.

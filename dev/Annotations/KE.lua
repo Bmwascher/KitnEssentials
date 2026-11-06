@@ -223,6 +223,9 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field PlateSlots table
 ---@field DoTTrackerRules table
 ---@field SwingTimerRules table
+---@field CampfireRules table
+---@field CampfireViews table
+---@field CampfireButtons table
 ---@field ShamanProcRules table
 ---@field ExecutionerRules table
 ---@field ImminentDemiseRules table
