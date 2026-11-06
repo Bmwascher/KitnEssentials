@@ -46,11 +46,9 @@ local DETAILS_MIN_WIDTH = 262
 local DETAILS_GAP = 2
 -- Half the tooltip's 2-unit line spacing, so the line sits in the gap above.
 local DIVIDER_RISE = 1
-local DIVIDER_HEIGHT = 1
 local DIVIDER_RIGHT_INSET = 9
--- The character window's stat-row fade: light gray, strongest at the center.
-local DIVIDER_GRAY, DIVIDER_ALPHA = 0.8, 0.25
-local DIVIDER_TEXTURE = "Interface\\Buttons\\WHITE8x8"
+-- White at the character window's gear and stats line strength.
+local DIVIDER_ALPHA = 0.15
 local NO_DESCRIPTION = "No description in the game's data."
 local INCOMPLETE_DATA = "a data file is missing"
 local MISSING_REASON = "MISSING"
@@ -130,20 +128,9 @@ local function ShowDivider(tooltip, index)
     local line = tooltip:GetLeftLine(index)
     if not line then return end
     if not divider then
-        divider = CreateFrame("Frame", nil, tooltip)
-        divider:SetHeight(DIVIDER_HEIGHT)
-        local solid = CreateColor(DIVIDER_GRAY, DIVIDER_GRAY, DIVIDER_GRAY, DIVIDER_ALPHA)
-        local clear = CreateColor(DIVIDER_GRAY, DIVIDER_GRAY, DIVIDER_GRAY, 0)
-        local left = divider:CreateTexture(nil, "ARTWORK")
-        left:SetTexture(DIVIDER_TEXTURE)
-        left:SetPoint("TOPLEFT")
-        left:SetPoint("BOTTOMRIGHT", divider, "BOTTOM")
-        left:SetGradient("HORIZONTAL", clear, solid)
-        local right = divider:CreateTexture(nil, "ARTWORK")
-        right:SetTexture(DIVIDER_TEXTURE)
-        right:SetPoint("TOPLEFT", divider, "TOP")
-        right:SetPoint("BOTTOMRIGHT")
-        right:SetGradient("HORIZONTAL", solid, clear)
+        divider = tooltip:CreateTexture(nil, "ARTWORK")
+        divider:SetColorTexture(1, 1, 1, DIVIDER_ALPHA)
+        divider:SetHeight(KE:GetPixelSize())
         Scout.divider = divider
     end
     divider:ClearAllPoints()
