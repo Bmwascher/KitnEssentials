@@ -59,7 +59,7 @@ local rows, barTextures = {}, {}
 local gains, requested = {}, {}
 
 local state = {
-    host = nil, alone = false, bookOpen = false, bookDismissed = false, closedAtTrainer = false,
+    host = nil, alone = false, bookOpen = false, closed = false,
     query = "", open = {},
 }
 
@@ -905,9 +905,18 @@ end
 local function HostNow()
     return Rules.PanelHost({
         atTrainer = T.atTrainer, gamepad = T.gamepad, trainerWindow = _G.ClassTrainerFrame ~= nil,
-        closedAtTrainer = state.closedAtTrainer, bookOpen = state.bookOpen, openWithBook = T.db.OpenWithBook,
-        bookDismissed = state.bookDismissed, alone = state.alone,
+        closed = state.closed, bookOpen = state.bookOpen, openWithBook = T.db.OpenWithBook,
+        alone = state.alone,
     })
+end
+
+-- The whole window, where state.bookOpen is its spell tab. Unhooked or not visible, its
+-- OnHide would never come, and a closing it held could not end.
+local function BookWindowOpen()
+    local window = _G.PlayerSpellsFrame
+    if not (bookHooked and window) then return false end
+    local visible = window:IsVisible()
+    return not issecretvalue(visible) and visible == true
 end
 
 local function WaitForCombat()
@@ -986,14 +995,12 @@ end
 
 function Panel.Open()
     state.alone = true
-    state.closedAtTrainer = false
-    state.bookDismissed = false
+    state.closed = false
     Panel.Refresh()
 end
 
 function Panel.Close()
-    if state.host == "trainer" then state.closedAtTrainer = true end
-    if state.host == "book" then state.bookDismissed = true end
+    state.closed = Rules.StaysClosed(true, T.atTrainer, BookWindowOpen())
     state.alone = false
     Panel.Refresh()
 end
@@ -1012,22 +1019,21 @@ end
 
 function Panel.HideAll()
     state.alone = false
-    state.bookDismissed = false
+    state.closed = false
     state.host = nil
     if frame then frame:Hide() end
     if bookButton then bookButton:Hide() end
 end
 
 function Panel.OnTrainerShow()
-    state.closedAtTrainer = false
+    state.closed = false
     Panel.Refresh()
 end
 
 function Panel.OnTrainerClosed(staysOpen)
-    local dismiss, stayAlone = Rules.AfterTrainer(state.closedAtTrainer, staysOpen)
-    if dismiss and state.bookOpen then state.bookDismissed = true end
+    local closed, stayAlone = Rules.AfterTrainer(state.closed, staysOpen, BookWindowOpen())
+    state.closed = closed
     if stayAlone then state.alone = true end
-    state.closedAtTrainer = false
     Panel.Refresh()
 end
 
@@ -1037,8 +1043,8 @@ end
 local function ShowBookButton(book)
     if not bookButton then
         bookButton = Panel.MakeButton(UIParent, "Training (0)", BOOK_BUTTON_WIDTH, BOOK_BUTTON_HEIGHT, function()
-            T.db.OpenWithBook = not T.db.OpenWithBook
-            state.bookDismissed = false
+            T.db.OpenWithBook = Rules.BookButtonSetting(Panel.IsShown(), T.db.OpenWithBook)
+            state.closed = false
             Panel.Refresh()
         end)
         bookButton:SetFrameStrata("DIALOG")
@@ -1091,7 +1097,7 @@ function Panel.InstallBook()
         book:HookScript("OnHide", OnBookHidden)
         -- The book's frame also hides at a tab change, which is not a new opening.
         host:HookScript("OnHide", function()
-            if T.active then state.bookDismissed = false end
+            if T.active then state.closed = Rules.StaysClosed(state.closed, T.atTrainer, false) end
         end)
         host:HookScript("OnSizeChanged", function()
             if T.active and state.bookOpen then C_Timer.After(0, Panel.Refresh) end

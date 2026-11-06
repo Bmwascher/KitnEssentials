@@ -529,22 +529,31 @@ function Rules.PanelSide(roomL, roomR, need)
     return "pinLeft"
 end
 
--- Closed at a trainer, the panel stays hidden for that visit, whatever else could host it.
+-- Closed, the panel stays hidden, whatever else could host it.
 function Rules.PanelHost(s)
-    if s.atTrainer and not s.gamepad and s.trainerWindow then
-        if s.closedAtTrainer then return nil end
-        return "trainer"
-    end
-    if s.bookOpen and not s.gamepad and s.openWithBook and not s.bookDismissed then return "book" end
+    if s.closed then return nil end
+    if s.atTrainer and not s.gamepad and s.trainerWindow then return "trainer" end
+    if s.bookOpen and not s.gamepad and s.openWithBook then return "book" end
     if s.alone then return "alone" end
     return nil
 end
 
--- What a trainer's closing leaves: whether to dismiss a book left open, and whether
--- the panel stays open alone to show the bar line.
-function Rules.AfterTrainer(closedAtTrainer, staysOpen)
-    if closedAtTrainer then return true, false end
-    return false, staysOpen == true
+-- A closing holds only while a trainer visit or the book window lasts.
+function Rules.StaysClosed(closed, atTrainer, bookWindow)
+    return closed == true and (atTrainer == true or bookWindow == true)
+end
+
+-- What a trainer's closing leaves: whether the panel stays closed for a book window
+-- left open, and whether it stays open alone to show the bar line.
+function Rules.AfterTrainer(closed, staysOpen, bookWindow)
+    return Rules.StaysClosed(closed, false, bookWindow), closed ~= true and staysOpen == true
+end
+
+-- A click on the Training button shows a hidden panel with the setting on, and otherwise
+-- toggles the setting.
+function Rules.BookButtonSetting(shown, openWithBook)
+    if not shown then return true end
+    return not openWithBook
 end
 
 -- In combat a panel on the book keeps that anchor, wherever it is wanted next.

@@ -384,32 +384,91 @@ describe("What's Training rules", function()
         end
     end)
 
-    it("AfterTrainer keeps a panel closed at the trainer closed, and otherwise keeps one with a bar line open", function()
+    it("StaysClosed holds a closing only while a trainer visit or the book window lasts", function()
         for _, row in ipairs({
-            { name = "closed, with a bar line", closed = true, staysOpen = true, dismiss = true, alone = false },
-            { name = "closed, no bar line", closed = true, staysOpen = false, dismiss = true, alone = false },
-            { name = "open, with a bar line", closed = false, staysOpen = true, dismiss = false, alone = true },
-            { name = "open, no bar line", closed = false, staysOpen = false, dismiss = false, alone = false },
+            { name = "not closed", closed = false, atTrainer = true, bookWindow = true, want = false },
+            { name = "at a trainer", closed = true, atTrainer = true, bookWindow = false, want = true },
+            { name = "with the book window", closed = true, atTrainer = false, bookWindow = true, want = true },
+            { name = "with both", closed = true, atTrainer = true, bookWindow = true, want = true },
+            { name = "with neither", closed = true, atTrainer = false, bookWindow = false, want = false },
         }) do
-            local dismiss, alone = Rules.AfterTrainer(row.closed, row.staysOpen)
-            assert.equals(row.dismiss, dismiss, row.name)
+            assert.equals(row.want, Rules.StaysClosed(row.closed, row.atTrainer, row.bookWindow), row.name)
+        end
+    end)
+
+    it("AfterTrainer keeps a closing only for a book window left open, and otherwise keeps a panel with a bar line open", function()
+        for _, row in ipairs({
+            { name = "closed, book window, bar line", closed = true, staysOpen = true, bookWindow = true, keep = true, alone = false },
+            { name = "closed, book window, no bar line", closed = true, staysOpen = false, bookWindow = true, keep = true, alone = false },
+            { name = "closed, no book window, bar line", closed = true, staysOpen = true, bookWindow = false, keep = false, alone = false },
+            { name = "closed, no book window, no bar line", closed = true, staysOpen = false, bookWindow = false, keep = false, alone = false },
+            { name = "open, book window, bar line", closed = false, staysOpen = true, bookWindow = true, keep = false, alone = true },
+            { name = "open, no book window, bar line", closed = false, staysOpen = true, bookWindow = false, keep = false, alone = true },
+            { name = "open, no bar line", closed = false, staysOpen = false, bookWindow = true, keep = false, alone = false },
+        }) do
+            local keep, alone = Rules.AfterTrainer(row.closed, row.staysOpen, row.bookWindow)
+            assert.equals(row.keep, keep, row.name)
             assert.equals(row.alone, alone, row.name)
         end
     end)
 
-    it("PanelHost keeps a panel closed at a trainer hidden for the visit", function()
+    it("PanelHost keeps a closed panel hidden, whatever else could host it", function()
         for _, row in ipairs({
             { name = "at a trainer", s = { atTrainer = true, trainerWindow = true }, want = "trainer" },
-            { name = "closed at a trainer", s = { atTrainer = true, trainerWindow = true, closedAtTrainer = true } },
-            { name = "closed, with the book open", s = { atTrainer = true, trainerWindow = true, closedAtTrainer = true, bookOpen = true, openWithBook = true } },
-            { name = "after that visit, the book left open and dismissed", s = { bookOpen = true, openWithBook = true, bookDismissed = true } },
+            { name = "closed at a trainer", s = { atTrainer = true, trainerWindow = true, closed = true } },
+            { name = "closed at a trainer, with the book open", s = { atTrainer = true, trainerWindow = true, closed = true, bookOpen = true, openWithBook = true } },
+            { name = "closed beside the book", s = { closed = true, bookOpen = true, openWithBook = true } },
+            { name = "closed, the book on another tab", s = { closed = true, openWithBook = true } },
             { name = "under the gamepad interface", s = { atTrainer = true, trainerWindow = true, gamepad = true, alone = true }, want = "alone" },
             { name = "the book", s = { bookOpen = true, openWithBook = true }, want = "book" },
             { name = "the book, setting off", s = { bookOpen = true } },
-            { name = "the book, dismissed", s = { bookOpen = true, openWithBook = true, bookDismissed = true } },
             { name = "alone", s = { alone = true }, want = "alone" },
             { name = "nothing", s = {} },
         }) do
+            assert.equals(row.want, Rules.PanelHost(row.s), row.name)
+        end
+    end)
+
+    it("a closing outlives the book's tabs and ends with the book window or the visit", function()
+        local function host(closed, spellTab)
+            return Rules.PanelHost({ closed = closed, bookOpen = spellTab, openWithBook = true })
+        end
+        -- Closed at a trainer with the book open, the tab changed, then the trainer closed.
+        local closed = Rules.StaysClosed(true, true, true)
+        closed = Rules.AfterTrainer(closed, false, true)
+        assert.is_nil(host(closed, false))
+        assert.is_nil(host(closed, true))
+        closed = Rules.StaysClosed(closed, false, false)
+        assert.equals("book", host(closed, true))
+        -- The book window closed during the visit: only the trainer's closing ends it.
+        closed = Rules.StaysClosed(true, true, true)
+        closed = Rules.StaysClosed(closed, true, false)
+        assert.is_true(closed)
+        closed = Rules.AfterTrainer(closed, true, false)
+        assert.is_false(closed)
+    end)
+
+    it("BookButtonSetting turns the setting on for a hidden panel and flips it for a shown one", function()
+        for _, row in ipairs({
+            { name = "hidden, setting on", shown = false, setting = true, want = true },
+            { name = "hidden, setting off", shown = false, setting = false, want = true },
+            { name = "shown, setting on", shown = true, setting = true, want = false },
+            { name = "shown, setting off", shown = true, setting = false, want = true },
+        }) do
+            assert.equals(row.want, Rules.BookButtonSetting(row.shown, row.setting), row.name)
+        end
+    end)
+
+    it("one click on the Training button shows a hidden panel, whatever hid it", function()
+        for _, row in ipairs({
+            { name = "closed beside the book", s = { bookOpen = true, openWithBook = true, closed = true }, want = "book" },
+            { name = "closed beside the book, setting off", s = { bookOpen = true, openWithBook = false, closed = true }, want = "book" },
+            { name = "setting off", s = { bookOpen = true, openWithBook = false }, want = "book" },
+            { name = "closed at a trainer", s = { atTrainer = true, trainerWindow = true, bookOpen = true, openWithBook = true, closed = true }, want = "trainer" },
+            { name = "closed at a trainer, setting off", s = { atTrainer = true, trainerWindow = true, bookOpen = true, openWithBook = false, closed = true }, want = "trainer" },
+        }) do
+            row.s.openWithBook = Rules.BookButtonSetting(false, row.s.openWithBook)
+            row.s.closed = false
             assert.equals(row.want, Rules.PanelHost(row.s), row.name)
         end
     end)
