@@ -143,6 +143,7 @@ local STYLE_LIST = {
     "SettingsTooltip",
     "GameSmallHeaderTooltip",
     "KitnEssentialsScoutDetails",
+    "LibDBIconTooltip",
 }
 
 function TT:UpdateDB()
