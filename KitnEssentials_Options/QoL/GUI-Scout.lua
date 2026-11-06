@@ -56,7 +56,7 @@ GUIFrame:RegisterContent("Scout", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 1: Enable
     ----------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Scout", yOffset)
+    local card1 = GUIFrame:CreateCard(scrollChild, "Mob Scout", yOffset)
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
         ApplyState(checked)
@@ -82,7 +82,7 @@ GUIFrame:RegisterContent("Scout", function(scrollChild, yOffset)
         showPicks[i] = BoxPick(box.label, box.key)
     end
     manager:RegisterGroup(cardShow:AddCheckboxGrid(showPicks, { columns = 2 }), "all")
-    cardShow:AddNote("Scout works in the open world only. In dungeons and raids the game keeps a mob's identity secret, so Scout has nothing to look up and shows no lines.")
+    cardShow:AddNote("Mob Scout works in the open world only. In dungeons and raids the game keeps a mob's identity secret, so Mob Scout has nothing to look up and shows no lines.")
     yOffset = cardShow:GetNextOffset()
 
     ----------------------------------------------------------------
@@ -100,7 +100,7 @@ GUIFrame:RegisterContent("Scout", function(scrollChild, yOffset)
         BoxPick("Armor and Your Damage", "Armor"),
         BoxPick("Immunities and Resists", "Immunities"),
         BoxPick("Pet Family (Hunters)", "PetFamily", familyTip),
-        BoxPick("Divider Line", "Divider", "A thin line between the game's lines and Scout's."),
+        BoxPick("Divider Line", "Divider", "A thin line between the game's lines and Mob Scout's."),
     }, { columns = 2, isLast = true })
     manager:Register(lineCells[1], "all")
     manager:Register(lineCells[2], "abilities")

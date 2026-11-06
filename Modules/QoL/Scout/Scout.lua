@@ -462,7 +462,7 @@ function Scout:LoadData()
         end
     end
     C_Timer.After(FAILURE_PRINT_DELAY, function()
-        KE:Print("Scout could not load its mob table: " .. text)
+        KE:Print("Mob Scout could not load its mob table: " .. text)
     end)
 end
 
