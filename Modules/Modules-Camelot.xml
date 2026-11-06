@@ -82,6 +82,10 @@
     <Script file="QoL\SecondaryStats\SecondaryStatsFormat.lua" />
     <Script file="QoL\SecondaryStats\SecondaryStatsForever.lua" />
     <Script file="QoL\SecondaryStats\SecondaryStats.lua" />
+    <Script file="QoL\Campfire\CampfireRules.lua" />
+    <Script file="QoL\Campfire\CampfireViews.lua" />
+    <Script file="QoL\Campfire\CampfireButtons.lua" />
+    <Script file="QoL\Campfire\Campfire.lua" />
     <Script file="QoL\Scout\ScoutRules.lua" />
     <Script file="QoL\Scout\Scout.lua" />
     <Script file="Skinning\SkinAPI.lua" />

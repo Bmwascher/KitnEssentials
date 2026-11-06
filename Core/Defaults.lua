@@ -772,6 +772,53 @@ local Defaults = {
             addonChallengeModeRestrictionsForced = nil,
         },
 
+        Campfire = {
+            Enabled = false,
+            Shape = "ROUND", -- ROUND | SIMPLE
+
+            GrayInRestAreas = false,
+            GrayWhileMounted = true,
+            TimerInRestAreas = true,
+            TimerWhileMounted = true,
+            TimerInCombat = true,
+
+            ShowAlways = false,
+            ShowUnderMinutes = 5,
+            ShowMissing = true,
+            ClickToSit = true,
+            DimCovered = true,
+
+            AlertEnabled = true,
+            AlertUnderMinutes = 15,
+
+            Checklist = true,
+            BagButton = true,
+            KitButton = true,
+
+            RoundSize = 84,
+            ListSide = "RIGHT", -- RIGHT | LEFT
+            SimpleWidth = 360,
+            SimpleHeight = 26,
+            SimpleTextSize = 12,
+            AlertTextSize = 17,
+
+            FontFace = nil, -- nil: the global font
+            FontOutline = "OUTLINE",
+            ListTextSize = 15,
+
+            LapseSoundEnabled = false,
+            LapseSound = "None",
+            LandSoundEnabled = false,
+            LandSound = "None",
+
+            Strata = "MEDIUM",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            RoundPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -680, YOffset = -201 },
+            SimplePosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = -375 },
+            AlertPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 150 },
+        },
+
         BonusRoll = {
             Enabled = true,
             Confirm = true,

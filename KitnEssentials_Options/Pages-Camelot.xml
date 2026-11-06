@@ -57,6 +57,7 @@
     <Script file="QoL\QualityOfLife\GUI-QualityOfLife.lua" />
     <Script file="QoL\GroupTools\GUI-GroupTools.lua" />
     <Script file="QoL\GUI-SecondaryStats.lua" />
+    <Script file="QoL\GUI-Campfire.lua" />
     <Script file="QoL\GUI-Scout.lua" />
     <Script file="Skinning\GUI-Tooltips.lua" />
     <Script file="Skinning\DarkTheme\GUI-BlizzardMessages.lua" />

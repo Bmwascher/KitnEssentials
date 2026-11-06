@@ -140,6 +140,7 @@ local FOREVER_ALLOWED = {
     SecondaryStats = true,
     GroupTools = true,
     ReadyCheckConsumables = true,
+    Campfire = true,
     WorldMarkerCycler = true,
     RareAlert = true,
     -- Combat: Combat Timer, Combat Texts, Cursor Effects with its Cursor and
@@ -197,6 +198,7 @@ local FOREVER_ALLOWED = {
 -- id ForeverOnlyProbe has no module, page or row.
 local FOREVER_ONLY = {
     ForeverOnlyProbe = true,
+    Campfire = true,
     Scout = true,
     RareAlert = true,
     SwingTimer = true,
