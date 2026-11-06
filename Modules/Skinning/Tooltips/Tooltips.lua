@@ -1356,6 +1356,9 @@ function TT:OnEnable()
     self:EnsureAnchor()
     self:ApplySettings()
     S.InstallTooltipStatusBarHook()
+
+    local itemRef = _G.ItemRefTooltip
+    if itemRef then S.CloseButton(itemRef.CloseButton) end
 end
 
 -- Reassert after same-frame CVar writers, but reject callbacks from an older
@@ -1437,8 +1440,8 @@ function TT:OnDisable()
     self.editModeRegistered = nil
     -- Hooks stay installed (hooksecurefunc/HookScript cannot be removed)
     -- but every handler gates on IsEnabled, so disabled = inert. Undo
-    -- the visual state; fonts and bar height need a reload to fully
-    -- revert to stock (the GUI prompts for it).
+    -- the visual state; fonts, bar height and the item tooltip's close
+    -- button need a reload to fully revert to stock (the GUI prompts for it).
     for _, name in pairs(STYLE_LIST) do
         local tt = _G[name]
         if tt then UnstyleTooltip(tt) end
