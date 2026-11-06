@@ -188,6 +188,11 @@ local FOREVER_ALLOWED = {
     CombatLogger = true,
     MerchantPages = true,
     Scout = true,
+    -- Skinning: RestedXP Look, its three tabs, Forever only.
+    SkinRestedXP = true,
+    SkinRestedXPGeneral = true,
+    SkinRestedXPArrow = true,
+    SkinRestedXPWindow = true,
     -- The Forever-only check id; see FOREVER_ONLY.
     ForeverOnlyProbe = true,
     SwingTimer = true,
@@ -197,6 +202,10 @@ local FOREVER_ALLOWED = {
 -- only in the two camelot lists, and a row in its matching section. The check
 -- id ForeverOnlyProbe has no module, page or row.
 local FOREVER_ONLY = {
+    SkinRestedXP = true,
+    SkinRestedXPGeneral = true,
+    SkinRestedXPArrow = true,
+    SkinRestedXPWindow = true,
     ForeverOnlyProbe = true,
     Campfire = true,
     Scout = true,

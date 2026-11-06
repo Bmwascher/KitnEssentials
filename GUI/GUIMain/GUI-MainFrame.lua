@@ -166,6 +166,7 @@ GUIFrame.sidebarConfig = {
             { id = "Chat",               text = "Chat", alwaysEnabled = true, keywords = { "chat", "channel", "whisper", "tab", "timestamp", "copy", "guild", "message", "panel" } },
             { id = "DamageMeter",        text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" }, alwaysEnabled = true },
             { id = "MythicPlusTimer",    text = "Mythic+ Timer", keywords = { "mythic plus", "m+", "keystone", "timer", "forces", "deaths", "splits", "objective", "personal best", "affix", "warpdeplete" }, alwaysEnabled = true },
+            { id = "SkinRestedXP",       text = "RestedXP", keywords = { "restedxp", "rxp", "guide", "guides", "leveling", "arrow", "step", "steps", "step icons", "theme" } },
             { id = "DragonRiding",       text = "Skyriding UI", alwaysEnabled = true, keywords = { "skyriding", "dragonriding", "dragon riding", "vigor", "speed", "fly" } },
             { id = "SkinTooltips",       text = "Tooltips", alwaysEnabled = true, keywords = { "tooltip", "tooltips", "blizzard", "mouseover", "skin", "anchor", "cursor", "spell id", "item id", "aura id", "guild rank", "target", "health bar", "class color", "hide in combat" },
                 gatedKeywords = { TooltipMythicPlus = { "mythic rating" } } },
