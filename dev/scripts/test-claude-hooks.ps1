@@ -630,11 +630,11 @@ try {
     DGit $dproj commit -q --allow-empty --no-verify -m init
     foreach ($n in @('empty', 'along', 'ff', 'noff', 'reset', 'open', 'noffnolog')) { DBranch $n }
     foreach ($n in @('ff', 'noff', 'reset', 'open', 'noffnolog')) { DGit $dwt[$n] commit -q --allow-empty --no-verify -m "work $n" }
-    DBranch 'stacked' 'd-noff'
+    foreach ($n in @('stacked', 'stackednolog')) { DBranch $n 'd-noff' }
     DGit $dproj merge -q --ff-only d-ff
     DGit $dproj merge -q --no-ff --no-verify -m 'merge d-noff' d-noff
     DGit $dproj merge -q --no-ff --no-verify -m 'merge d-noffnolog' d-noffnolog
-    DExpire 'noffnolog'
+    foreach ($n in @('noffnolog', 'stackednolog')) { DExpire $n }
     DBranch 'nolog'
     DGit $dwt['nolog'] commit -q --allow-empty --no-verify -m 'work nolog'
     DGit $dproj merge -q --ff-only d-nolog
@@ -645,13 +645,15 @@ try {
     $odOk = $LASTEXITCODE -eq 0 -and $od -notmatch 'FAIL \[(script|B/C/D)\]'
     $dMain = "$(git -C $dproj rev-parse main)"
     foreach ($n in @('reset', 'along')) { $odOk = $odOk -and "$(git -C $dproj rev-parse "d-$n")" -eq $dMain }
-    $odOk = $odOk -and "$(git -C $dproj rev-parse d-stacked)" -eq "$(git -C $dproj rev-parse d-noff)" -and
-            -not "$(git -C $dproj reflog show refs/heads/d-noffnolog)" -and -not "$(git -C $dproj reflog show refs/heads/d-nolog)"
+    $dNoff = "$(git -C $dproj rev-parse d-noff)"
+    foreach ($n in @('stacked', 'stackednolog')) { $odOk = $odOk -and "$(git -C $dproj rev-parse "d-$n")" -eq $dNoff }
+    foreach ($n in @('noffnolog', 'stackednolog', 'nolog')) { $odOk = $odOk -and -not "$(git -C $dproj reflog show "refs/heads/d-$n")" }
     $dRows = @(
         @{ name = 'a branch merged with a merge commit is listed'; b = 'noff'; listed = $true },
         @{ name = 'a fast-forward merged branch is listed'; b = 'ff'; listed = $true },
-        @{ name = 'a merge-commit merged branch with no reflog is listed'; b = 'noffnolog'; listed = $true },
+        @{ name = 'a merge-commit merged branch with no reflog is not listed'; b = 'noffnolog'; listed = $false },
         @{ name = 'a branch stacked on a merged branch, with no commits, is not listed'; b = 'stacked'; listed = $false },
+        @{ name = 'a stacked branch with no commits and no reflog is not listed'; b = 'stackednolog'; listed = $false },
         @{ name = 'a branch with no commits is not listed'; b = 'empty'; listed = $false },
         @{ name = 'a branch fast-forwarded along main is not listed'; b = 'along'; listed = $false },
         @{ name = 'a branch reset off its only commit is not listed'; b = 'reset'; listed = $false },
