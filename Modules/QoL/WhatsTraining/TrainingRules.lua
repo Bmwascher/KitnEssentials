@@ -574,6 +574,17 @@ function Rules.Offers(services, ctx)
     return open, waiting
 end
 
+-- A weapon master's and a pet trainer's services never match a class row.
+function Rules.HasClassOffer(open, waiting)
+    for _, offer in ipairs(open) do
+        if offer.id then return true end
+    end
+    for _, offer in ipairs(waiting) do
+        if offer.id then return true end
+    end
+    return false
+end
+
 function Rules.DefaultTick(offer, skipped)
     if offer.isProfession then return false end
     if offer.id and skipped[offer.id] then return false end

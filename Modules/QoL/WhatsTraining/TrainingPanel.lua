@@ -518,7 +518,7 @@ local function BuildTrainerItems()
         end
     end
     local plan = T.plan
-    if plan and not T.atProfession and #plan.quest.rows > 0 then
+    if plan and not T.atProfession and #plan.quest.rows > 0 and Rules.HasClassOffer(open, waiting) then
         AddSection(items, "quest", ("NOT SOLD HERE (%d)"):format(#plan.quest.rows))
         AddEntries(items, plan, plan.quest, true)
     end

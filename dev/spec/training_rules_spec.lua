@@ -483,6 +483,13 @@ describe("What's Training rules", function()
         assert.is_false(Rules.OfferStands({ name = "Rend", kind = "available", level = 4 }, "Rend", "available", 4, nil))
     end)
 
+    it("HasClassOffer finds a service that matched a class row, in either list", function()
+        assert.is_true(Rules.HasClassOffer({ { id = 1 } }, {}))
+        assert.is_true(Rules.HasClassOffer({ {} }, { { id = 1 } }))
+        assert.is_false(Rules.HasClassOffer({ {} }, { {} }))
+        assert.is_false(Rules.HasClassOffer({}, {}))
+    end)
+
     it("WaitingText says what a waiting row needs, and invents no rank", function()
         local function isKnown(id) return id == 7 end
         for _, row in ipairs({
