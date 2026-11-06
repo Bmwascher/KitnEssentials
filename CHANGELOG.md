@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.4-beta1
+
+> **Beta:** This build combines Season 2 Dungeon Trash with the fixes in v4.16.3.
+
+### Dungeon Trash
+
+- Test trash timers and cast alerts across all eight Season 2 dungeons with your existing settings.
+- The Lindormi's Guidance warning has been removed.
+
+---
+
 ## v4.16.3
 
 ### Both clients
