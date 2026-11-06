@@ -537,8 +537,13 @@ local function DressBookSpell(button)
     button:SetPushedTexture(WHITE)
     button:GetPushedTexture():SetColorTexture(1, 1, 1, 0.5)
 
+    -- Alpha, not Hide: Blizzard re-shows the overlay on every update.
+    if button.IconBorder then button.IconBorder:SetAlpha(0) end
+    if button.IconTextureOverlay then button.IconTextureOverlay:SetAlpha(0) end
+
     local icon = button.IconTexture
     if not icon then return end
+    if button.OutlineMask then icon:RemoveMaskTexture(button.OutlineMask) end
     icon:ClearAllPoints()
     icon:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
     icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
