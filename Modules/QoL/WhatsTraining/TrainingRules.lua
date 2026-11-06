@@ -659,21 +659,15 @@ function Rules.RankSwaps(best, slots, kept)
             top[slot.name] = slot.rank
         end
     end
-    local swaps, keptNames, seenKept = {}, {}, {}
+    local swaps = {}
     for _, slot in ipairs(slots) do
         local spell = best[slot.name]
-        if slot.kind == "spell" and spell and slot.rank and slot.rank < spell.rank and slot.rank == top[slot.name] then
-            if kept[slot.name] then
-                if not seenKept[slot.name] then
-                    seenKept[slot.name] = true
-                    keptNames[#keptNames + 1] = slot.name
-                end
-            else
-                swaps[#swaps + 1] = { slot = slot.slot, id = spell.id, name = slot.name }
-            end
+        if slot.kind == "spell" and spell and slot.rank and slot.rank < spell.rank
+            and slot.rank == top[slot.name] and not kept[slot.name] then
+            swaps[#swaps + 1] = { slot = slot.slot, id = spell.id, name = slot.name }
         end
     end
-    return swaps, keptNames
+    return swaps
 end
 
 ---------------------------------------------------------------------------------

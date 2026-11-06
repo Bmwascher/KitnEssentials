@@ -566,7 +566,7 @@ describe("What's Training rules", function()
         assert.equals(3, Rules.RankNumber("Rank 3"))
         assert.is_nil(Rules.RankNumber(""))
         assert.is_nil(Rules.RankNumber(nil))
-        local swaps, kept = Rules.RankSwaps({
+        local swaps = Rules.RankSwaps({
             Rend = { id = 3, rank = 3 }, Cleave = { id = 12, rank = 2 }, Shout = { id = 21, rank = 2 },
         }, {
             { slot = 1, kind = "spell", name = "Rend", rank = 1 },
@@ -579,8 +579,6 @@ describe("What's Training rules", function()
         assert.equals(1, swaps[1].slot)
         assert.equals(3, swaps[1].id)
         assert.equals("Rend", swaps[1].name)
-        assert.equals(1, #kept)
-        assert.equals("Shout", kept[1])
     end)
 
     it("NearestStop goes same continent, own capital, shared capital, elsewhere, with ties by name", function()
