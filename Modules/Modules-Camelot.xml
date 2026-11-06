@@ -95,6 +95,7 @@
     <Script file="QoL\WhatsTraining\TrainingLearn.lua" />
     <Script file="QoL\WhatsTraining\TrainingPanel.lua" />
     <Script file="QoL\WhatsTraining\TrainingToast.lua" />
+    <Script file="QoL\WhatsTraining\WhatsTraining.lua" />
     <Script file="Skinning\SkinAPI.lua" />
     <Script file="Skinning\DarkTheme\EUIWindows.lua" />
     <Script file="Skinning\DarkTheme\Dialogs.lua" />
