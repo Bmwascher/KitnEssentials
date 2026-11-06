@@ -875,10 +875,11 @@ end
 -- Hosts
 ---------------------------------------------------------------------------------
 local function HostNow()
-    if T.atTrainer and not T.gamepad and not state.closedAtTrainer and _G.ClassTrainerFrame then return "trainer" end
-    if state.bookOpen and not T.gamepad and T.db.OpenWithBook and not state.bookDismissed then return "book" end
-    if state.alone then return "alone" end
-    return nil
+    return Rules.PanelHost({
+        atTrainer = T.atTrainer, gamepad = T.gamepad, trainerWindow = _G.ClassTrainerFrame ~= nil,
+        closedAtTrainer = state.closedAtTrainer, bookOpen = state.bookOpen, openWithBook = T.db.OpenWithBook,
+        bookDismissed = state.bookDismissed, alone = state.alone,
+    })
 end
 
 local function WaitForCombat()
@@ -989,7 +990,7 @@ function Panel.OnTrainerShow()
 end
 
 function Panel.OnTrainerClosed(staysOpen)
-    if staysOpen then state.alone = true end
+    if staysOpen and not state.closedAtTrainer then state.alone = true end
     Panel.Refresh()
 end
 

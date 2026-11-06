@@ -529,6 +529,17 @@ function Rules.PanelSide(roomL, roomR, need)
     return "pinLeft"
 end
 
+-- Closed at a trainer, the panel stays hidden for that visit, whatever else could host it.
+function Rules.PanelHost(s)
+    if s.atTrainer and not s.gamepad and s.trainerWindow then
+        if s.closedAtTrainer then return nil end
+        return "trainer"
+    end
+    if s.bookOpen and not s.gamepad and s.openWithBook and not s.bookDismissed then return "book" end
+    if s.alone then return "alone" end
+    return nil
+end
+
 -- In combat the book takes no new anchor: a panel on it stays, any other sits alone.
 function Rules.PlaceStep(host, inCombat, onHost)
     if host ~= "book" or not inCombat then return "place" end

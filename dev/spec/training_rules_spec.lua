@@ -384,6 +384,23 @@ describe("What's Training rules", function()
         end
     end)
 
+    it("PanelHost keeps a panel closed at a trainer hidden for the visit", function()
+        for _, row in ipairs({
+            { name = "at a trainer", s = { atTrainer = true, trainerWindow = true }, want = "trainer" },
+            { name = "closed at a trainer", s = { atTrainer = true, trainerWindow = true, closedAtTrainer = true } },
+            { name = "closed, with the book open", s = { atTrainer = true, trainerWindow = true, closedAtTrainer = true, bookOpen = true, openWithBook = true } },
+            { name = "after that visit, with the book open", s = { closedAtTrainer = true, bookOpen = true, openWithBook = true }, want = "book" },
+            { name = "under the gamepad interface", s = { atTrainer = true, trainerWindow = true, gamepad = true, alone = true }, want = "alone" },
+            { name = "the book", s = { bookOpen = true, openWithBook = true }, want = "book" },
+            { name = "the book, setting off", s = { bookOpen = true } },
+            { name = "the book, dismissed", s = { bookOpen = true, openWithBook = true, bookDismissed = true } },
+            { name = "alone", s = { alone = true }, want = "alone" },
+            { name = "nothing", s = {} },
+        }) do
+            assert.equals(row.want, Rules.PanelHost(row.s), row.name)
+        end
+    end)
+
     it("PlaceStep gives the book no new anchor in combat", function()
         for _, row in ipairs({
             { host = "trainer", combat = true, onHost = false, want = "place" },
