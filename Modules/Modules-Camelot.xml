@@ -6,6 +6,7 @@
          (Modules.xml). -->
     <Script file="Combat\CombatDataForever.lua" />
     <Script file="Combat\StatusTexts\NoMovementAlert.lua" />
+    <Script file="QoL\GroupTools\WorldMarkerCycler.lua" />
     <Script file="Combat\StatusTexts\PotionReady.lua" />
     <Script file="QoL\GroupTools\ReadyCheckConsumablesForever.lua" />
     <Script file="QoL\GroupTools\ReadyCheckConsumables.lua" />

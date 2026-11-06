@@ -47,7 +47,7 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "GroupTools",            want = true },
             { load = "baseline",            seed = BASELINE,             id = "ReadyCheckConsumables", want = true },
             { load = "baseline",            seed = BASELINE,             id = "RaidNotifications",     want = false },
-            { load = "baseline",            seed = BASELINE,             id = "WorldMarkerCycler",     want = false },
+            { load = "baseline",            seed = BASELINE,             id = "WorldMarkerCycler",     want = true },
             -- Combat: every row, the Cursor tabs but Dispel, Class Tools with
             -- its All Classes tab and tools, and Status Texts with all its tabs
             -- are admitted; Dispel and the Class Tools class tabs are not.
