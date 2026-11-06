@@ -152,8 +152,8 @@ describe("Scout rules", function()
             { max = 0, want = "Self" },
             { max = 0, scope = "Cone", want = "Cone" },
             { max = 5, want = "Melee" },
-            { max = 100, want = "Any range" },
-            { max = 50000, want = "Any range" },
+            { max = 100, want = "Any Range" },
+            { max = 50000, want = "Any Range" },
             { min = 8, max = 30, want = "8-30 yd" },
             { min = 0, max = 30, want = "30 yd" },
         }) do
@@ -198,8 +198,8 @@ describe("Scout rules", function()
 
     it("ArmorLine formats the game's effectiveness, and leaves the right side off without a number", function()
         for _, row in ipairs({
-            { estimated = false, value = 0.255, left = "<accent:Armor> <gold:544>", right = "Your physical <gold:-25.5%>" },
-            { estimated = true, value = 0.255, left = "<accent:Armor> <gold:~544>", right = "Your physical <gold:-25.5%>" },
+            { estimated = false, value = 0.255, left = "<accent:Armor> <gold:544>", right = "Your Physical <gold:-25.5%>" },
+            { estimated = true, value = 0.255, left = "<accent:Armor> <gold:~544>", right = "Your Physical <gold:-25.5%>" },
             { estimated = false, left = "<accent:Armor> <gold:544>" },
         }) do
             local left, right = Rules.ArmorLine(544, row.estimated, row.value, paint)
@@ -235,7 +235,7 @@ describe("Scout rules", function()
     end)
 
     describe("BuildLines", function()
-        local FAMILY, HEADER, ROW = "Pet family", "<accent:Abilities>", "<white:Bite>"
+        local FAMILY, HEADER, ROW = "Pet Family", "<accent:Abilities>", "<white:Bite>"
         local ARMOR, IMMUNE, RESIST = "<accent:Armor> <gold:544>", "Immune: Fire, Stun", "Resists: Fire 30"
 
         local function baseView(change)
@@ -306,7 +306,7 @@ describe("Scout rules", function()
 
         it("writes the hint, the word and the icon on the ability lines", function()
             for _, row in ipairs({
-                { opts = {}, hint = "Ctrl: details", meta = "Melee" .. DOT .. "<amber:Stun>" },
+                { opts = {}, hint = "Ctrl: Details", meta = "Melee" .. DOT .. "<amber:Stun>" },
                 { opts = { keyHint = false, controlWords = false }, meta = "Melee" },
             }) do
                 local lines = Rules.BuildLines(baseView(), baseOpts(row.opts), paint)

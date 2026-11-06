@@ -166,7 +166,7 @@ end
 function Rules.ArmorLine(armor, estimated, effectiveness, paint)
     local left = paint("accent", "Armor") .. " " .. paint("gold", (estimated and "~" or "") .. armor)
     if type(effectiveness) ~= "number" then return left, nil end
-    return left, paint("muted", "Your physical") .. " " .. paint("gold", format("-%.1f%%", effectiveness * 100))
+    return left, paint("muted", "Your Physical") .. " " .. paint("gold", format("-%.1f%%", effectiveness * 100))
 end
 
 function Rules.ImmunityWords(schoolMask, mechanicMask)
@@ -220,7 +220,7 @@ function Rules.RangeLabel(minRange, maxRange, scope)
     local maxYards = maxRange or 0
     if maxYards == 0 then return scope or "Self" end
     if maxYards <= 5 then return "Melee" end
-    if maxYards >= 100 then return "Any range" end
+    if maxYards >= 100 then return "Any Range" end
     if minRange and minRange > 0 then return format("%d-%d yd", minRange, maxYards) end
     return format("%d yd", maxYards)
 end
@@ -270,7 +270,7 @@ end
 
 local function addAbilities(lines, view, opts, paint)
     if #view.abilities == 0 then return end
-    local hint = opts.keyHint and paint("muted", opts.keyName .. ": details") or nil
+    local hint = opts.keyHint and paint("muted", opts.keyName .. ": Details") or nil
     addLine(lines, paint("accent", "Abilities"), hint)
     for i = 1, min(#view.abilities, Rules.MAX_ABILITY_ROWS) do
         local ability = view.abilities[i]
@@ -285,7 +285,7 @@ function Rules.BuildLines(view, opts, paint)
 
     if opts.petFamily and opts.class == "HUNTER" and view.tameKnown and view.family then
         local text, color = Rules.FamilyLine(view.family, view.tameable, view.mobLevel, view.playerLevel)
-        if text then addLine(lines, paint("muted", "Pet family"), paint(color, text)) end
+        if text then addLine(lines, paint("muted", "Pet Family"), paint(color, text)) end
     end
 
     if opts.abilities then addAbilities(lines, view, opts, paint) end
