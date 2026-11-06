@@ -31,7 +31,7 @@ local BLOCK_HEIGHT, BARS_HEIGHT = 124, 26
 local MAX_STOPS, STOPS_TOP, STOP_HEIGHT, READ_HEIGHT = 3, 88, 14, 18
 local ROW_HEIGHT, SECTION_HEIGHT, ICON_SIZE = 30, 20, 22
 local NEED, GAP, PIN_INSET = 308, 8, 66
-local SCROLLBAR_ROOM = 8
+local SCROLLBAR_ROOM, SWAP_NAMES_ROOM = 8, 30
 local BOOK_BUTTON_WIDTH, BOOK_BUTTON_HEIGHT = 150, 26
 local DATA_DELAY = 0.1
 local WHITE = "Interface\\Buttons\\WHITE8X8"
@@ -645,7 +645,9 @@ local function DrawAwayFooter()
         footer.swapNames:ClearAllPoints()
         footer.swapNames:SetPoint("BOTTOMLEFT", footer, "BOTTOMLEFT", PAD, y)
         footer.swapNames:SetPoint("BOTTOMRIGHT", footer, "BOTTOMRIGHT", -PAD, y)
-        y = y + 30
+        local height = footer.swapNames:GetStringHeight()
+        local room = (issecretvalue(height) or not height) and SWAP_NAMES_ROOM or height + 4
+        y = y + (room > SWAP_NAMES_ROOM and room or SWAP_NAMES_ROOM)
         footer.swapTitle:SetText(("%d bar %s a lower rank"):format(count, count == 1 and "slot holds" or "slots hold"))
         footer.swapTitle:ClearAllPoints()
         footer.swapTitle:SetPoint("BOTTOMLEFT", footer, "BOTTOMLEFT", PAD, y + 4)

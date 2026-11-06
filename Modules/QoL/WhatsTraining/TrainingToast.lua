@@ -20,7 +20,7 @@ local min = math.min
 local Toast = {}
 T.Toast = Toast
 
-local WIDTH, HEIGHT, PAD = 440, 116, 10
+local WIDTH, HEIGHT, PAD = 440, 130, 10
 local ICON_SIZE, ICON_GAP, MAX_ICONS = 24, 4, 10
 local BUTTON_WIDTH, BUTTON_HEIGHT = 120, 22
 local HOLD_SECONDS = 20
@@ -77,6 +77,7 @@ local function Build()
     frame.line:SetPoint("TOPLEFT", frame.title, "BOTTOMLEFT", 0, -4)
     frame.line:SetPoint("RIGHT", frame, "RIGHT", -PAD, 0)
     frame.line:SetJustifyH("LEFT")
+    frame.line:SetJustifyV("TOP")
 
     local MakeButton = T.Panel.MakeButton
     frame.planner = MakeButton(frame, "Open Planner", BUTTON_WIDTH, BUTTON_HEIGHT, function()
