@@ -142,6 +142,7 @@ local STYLE_LIST = {
     "QuickKeybindTooltip",
     "SettingsTooltip",
     "GameSmallHeaderTooltip",
+    "KitnEssentialsScoutDetails",
 }
 
 function TT:UpdateDB()

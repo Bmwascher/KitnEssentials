@@ -120,7 +120,7 @@ KitnEssentials also runs on WoW Forever, with the parts that work there: Home an
 
 ## Installing by Hand
 
-The download holds two folders, `KitnEssentials` and `KitnEssentials_Options`. Copy both into `Interface/AddOns`; the second one holds the settings pages.
+The download holds three folders, `KitnEssentials`, `KitnEssentials_Options` and `KitnEssentials_Data`. Copy all three into `Interface/AddOns`; the second one holds the settings pages, and the third holds data tables for WoW Forever, which retail never loads.
 
 ## Troubleshooting
 

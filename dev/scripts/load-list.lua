@@ -3,8 +3,9 @@
 -- Run from the repo root with the local Lua interpreter:
 --   lua dev/scripts/load-list.lua [--client standard|camelot] [toc ...]
 --
--- With no toc arguments it walks KitnEssentials.toc, then
--- KitnEssentials_Options/KitnEssentials_Options.toc. Every toc line, then
+-- With no toc arguments it walks KitnEssentials.toc,
+-- KitnEssentials_Options/KitnEssentials_Options.toc, then
+-- KitnEssentials_Data/KitnEssentials_Data_Forever.toc. Every toc line, then
 -- every <Script file> and <Include file> inside each manifest, is expanded in
 -- load order. A toc line tagged [AllowLoadGameType a, b] is kept only when
 -- --client (default standard) is in its list. Output: one repo-relative path
@@ -26,7 +27,11 @@ while i <= #arg do
     i = i + 1
 end
 if #tocs == 0 then
-    tocs = { "KitnEssentials.toc", "KitnEssentials_Options/KitnEssentials_Options.toc" }
+    tocs = {
+        "KitnEssentials.toc",
+        "KitnEssentials_Options/KitnEssentials_Options.toc",
+        "KitnEssentials_Data/KitnEssentials_Data_Forever.toc",
+    }
 end
 
 local missing = 0

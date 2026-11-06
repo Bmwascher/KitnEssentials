@@ -1,0 +1,14 @@
+## Title: |cffFF008CKitn|r|cffffffffEssentials Data|r
+## Notes: Data tables for WoW Forever. Loads only when a module that needs one is turned on.
+## Author: Bitebtw
+## Version: @project-version@
+## Interface: 120105, 16001
+## Dependencies: KitnEssentials
+## LoadOnDemand: 1
+## IconTexture: Interface\AddOns\KitnEssentials\Media\Icon\KES
+## Category-enUS: |cffFF008CKitn|r |cffffffffSuite|r
+## Group: KitnEssentials
+
+DataBuild.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
+ScoutMobs.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
+ScoutSpells.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]

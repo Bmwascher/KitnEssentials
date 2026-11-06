@@ -5,7 +5,7 @@
 -- the full WoW environment); static correctness of globals is luacheck's job.
 local lfs = require("lfs")
 
-local ROOTS = { "Core", "Modules", "GUI", "KitnEssentials_Options" }
+local ROOTS = { "Core", "Modules", "GUI", "KitnEssentials_Options", "KitnEssentials_Data" }
 
 local function walk(dir, acc)
     for entry in lfs.dir(dir) do

@@ -74,6 +74,8 @@
     <Script file="QoL\SecondaryStats\SecondaryStatsFormat.lua" />
     <Script file="QoL\SecondaryStats\SecondaryStatsForever.lua" />
     <Script file="QoL\SecondaryStats\SecondaryStats.lua" />
+    <Script file="QoL\Scout\ScoutRules.lua" />
+    <Script file="QoL\Scout\Scout.lua" />
     <Script file="Skinning\SkinAPI.lua" />
     <Script file="Skinning\DarkTheme\EUIWindows.lua" />
     <Script file="Skinning\DarkTheme\Dialogs.lua" />

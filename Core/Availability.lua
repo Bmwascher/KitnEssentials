@@ -181,6 +181,7 @@ local FOREVER_ALLOWED = {
     AutomationDruidStayInForm = true,
     CombatLogger = true,
     MerchantPages = true,
+    Scout = true,
     -- The Forever-only check id; see FOREVER_ONLY.
     ForeverOnlyProbe = true,
 }
@@ -190,6 +191,7 @@ local FOREVER_ALLOWED = {
 -- id ForeverOnlyProbe has no module, page or row.
 local FOREVER_ONLY = {
     ForeverOnlyProbe = true,
+    Scout = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.
