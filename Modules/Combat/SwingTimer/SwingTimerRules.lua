@@ -143,6 +143,29 @@ function Rules.ShotTime(swingEnd, lastStop, aim, latency)
     return math_max(swingEnd, (lastStop or 0) + aim + latency)
 end
 
+-- A thousandth of the bar: under a pixel on any bar up to 1,000 wide.
+local NEAR_END = 0.001
+
+-- The fraction of the bar a timer fill draws at a time, rising or draining.
+-- No fill armed yet reads empty, as a bar is built.
+function Rules.FillAt(start, duration, drains, now)
+    if not start or not Rules.ValidDuration(duration) then return 0 end
+    local elapsed = math_min(math_max((now - start) / duration, 0), 1)
+    if drains then return 1 - elapsed end
+    return elapsed
+end
+
+-- The start, length and direction of a fill that draws `fraction` now and
+-- reaches `toward`, 0 or 1, at endAt, so a re-timed bar moves on from where it
+-- stands. Nil when it is already there or endAt has passed.
+function Rules.FillToward(fraction, now, endAt, toward)
+    local left = endAt - now
+    local gap = (toward == 1) and (1 - fraction) or fraction
+    if left <= 0 or gap < NEAR_END then return nil end
+    local duration = left / gap
+    return endAt - duration, duration, toward == 0
+end
+
 function Rules.RangedAtEnd(moving, casting, outOfRange, now, shotAt)
     if moving then return "held" end
     if casting or outOfRange then return "wait" end

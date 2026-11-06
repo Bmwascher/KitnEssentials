@@ -117,6 +117,39 @@ describe("swing timer bar rules", function()
             assert.equals(row.want, Rules.RowHeightFor(row.stack, row.rows, row.spacing, 4))
         end
     end)
+
+    it("reads a fill rising or draining, clamped at both ends, and no fill as empty", function()
+        for _, row in ipairs({
+            { start = 10, duration = 4, drains = false, now = 11, want = 0.25 },
+            { start = 10, duration = 4, drains = true, now = 11, want = 0.75 },
+            { start = 10, duration = 4, drains = false, now = 9, want = 0 },
+            { start = 10, duration = 4, drains = true, now = 15, want = 0 },
+            { start = 10, duration = 4, drains = false, now = 15, want = 1 },
+            { start = nil, duration = nil, drains = false, now = 15, want = 0 },
+        }) do
+            assert.near(row.want, Rules.FillAt(row.start, row.duration, row.drains, row.now), 1e-9)
+        end
+    end)
+
+    it("re-times a fill from where the bar stands to its end, and gives none when it is there or the end has passed", function()
+        for _, row in ipairs({
+            { fraction = 1, toward = 0 },
+            { fraction = 0.4, toward = 0 },
+            { fraction = 0, toward = 1 },
+            { fraction = 0.4, toward = 1 },
+        }) do
+            local start, duration, drains = Rules.FillToward(row.fraction, 20, 20.6, row.toward)
+            assert.near(row.fraction, Rules.FillAt(start, duration, drains, 20), 1e-9)
+            assert.near(row.toward, Rules.FillAt(start, duration, drains, 20.6), 1e-9)
+        end
+        local start, duration, drains = Rules.FillToward(1, 20, 20.6, 0)
+        assert.near(20, start, 1e-9)
+        assert.near(0.6, duration, 1e-9)
+        assert.is_true(drains)
+        assert.is_nil(Rules.FillToward(0, 20, 20.6, 0))
+        assert.is_nil(Rules.FillToward(1, 20, 20.6, 1))
+        assert.is_nil(Rules.FillToward(0.4, 20, 20, 0))
+    end)
 end)
 
 describe("swing timer ranged rules", function()
