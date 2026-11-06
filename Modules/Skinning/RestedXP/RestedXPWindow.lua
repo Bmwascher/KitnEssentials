@@ -292,12 +292,33 @@ local function OnPartyTabs()
     if active then SilenceNew() end
 end
 
-local function Release()
+local releaseQueued
+
+-- A frame that became protected after it was silenced cannot change in combat, so
+-- it comes back when combat ends; every other frame comes back at once.
+local function ReleaseFrames()
+    if active then return end
+    local locked, held = InCombatLockdown(), false
     for frame, home in pairs(silenced) do
-        silenced[frame] = nil
-        if home.alpha then frame:SetAlpha(home.alpha) end
-        frame:EnableMouse(home.mouse)
+        if locked and frame:IsProtected() then
+            held = true
+        else
+            silenced[frame] = nil
+            if home.alpha then frame:SetAlpha(home.alpha) end
+            frame:EnableMouse(home.mouse)
+        end
     end
+    if held and not releaseQueued then
+        releaseQueued = true
+        KE:RunAfterCombat(function()
+            releaseQueued = false
+            ReleaseFrames()
+        end)
+    end
+end
+
+local function Release()
+    ReleaseFrames()
     for item in pairs(rowsSeen) do rowsSeen[item] = nil end
     guideTaken, guideGrew, stepsChildren = false, false, nil
     retake = true

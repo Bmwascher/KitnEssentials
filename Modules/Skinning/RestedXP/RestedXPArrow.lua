@@ -84,7 +84,11 @@ end
 ---------------------------------------------------------------------------------
 local function MoveText(af, down)
     local text = af.text
-    textHome = textHome or { text:GetPoint() }
+    if not textHome then
+        local point, relativeTo, relativePoint, x, y = text:GetPoint()
+        if not point then return end
+        textHome = { point, relativeTo, relativePoint, x, y }
+    end
     local point, relativeTo, relativePoint, x, y = unpack(textHome)
     text:SetPoint(point, relativeTo, relativePoint, x, y - down)
 end
