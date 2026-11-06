@@ -1203,12 +1203,15 @@ end
 ---------------------------------------------------------------------------------
 -- Frames parked here are hidden for the session: Hide, mouse off, events off,
 -- statehidden for secure templates, and reparented so nothing re-shows them.
-local hiddenParent = CreateFrame("Frame")
-hiddenParent:Hide()
+local hiddenParent
 
 local function HideFrame(object)
     if type(object) == "string" then object = _G[object] end
     if not object then return end
+    if not hiddenParent then
+        hiddenParent = CreateFrame("Frame")
+        hiddenParent:Hide()
+    end
 
     if object.HideBase then
         object:HideBase(true) -- Edit Mode adds this fallback when it overrides Hide
