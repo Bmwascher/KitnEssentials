@@ -2313,9 +2313,11 @@ function S.SlotIcon(icon, border, withBackdrop)
     if border then S.IconBorder(border, S.GetBackdrop(icon)) end
 end
 
+local ICON_CROP = 0.08
+
 function S.Icon(icon, withBackdrop)
     if not icon or S.data(icon).keIconSkinned then return end
-    if icon.SetTexCoord then icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    if icon.SetTexCoord then icon:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP) end
 
     S.PixelSnap(icon)
     if withBackdrop then
@@ -2523,7 +2525,6 @@ end
 -- Tabs whose icons are textures (spell, profession, portrait) instead of
 -- atlas glyphs: KE's crop and border, grown to fill the 30-wide tab.
 local FILL_ICON = 28
-local ICON_CROP = 0.08
 -- Gap between such a column and its window's border.
 S.sideTabGap = 1
 
