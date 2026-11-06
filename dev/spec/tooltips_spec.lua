@@ -473,3 +473,48 @@ describe("Tooltips EffectiveLineOptions", function()
         end
     end)
 end)
+
+-- The NPC level row keeps Blizzard's wording; only the number is wrapped,
+-- and a row that already carries a color is left alone on a re-run.
+describe("Tooltips ColorLevelToken", function()
+    local RED = { r = 1, g = 0, b = 0 }
+    local TT
+    before_each(function() TT = L.loadTooltips() end)
+
+    it("wraps the first occurrence of the level and keeps the rest of the row", function()
+        for _, row in ipairs({
+            { text = "Level 12 Beast (Elite) 12", token = "12", want = "Level |cffff000012|r Beast (Elite) 12" },
+            { text = "Level ?? Humanoid (Boss)", token = "??", want = "Level |cffff0000??|r Humanoid (Boss)" },
+        }) do
+            assert.equal(row.want, TT._ColorLevelToken(row.text, row.token, RED), row.token)
+        end
+    end)
+
+    it("leaves a row that is already colored", function()
+        assert.is_nil(TT._ColorLevelToken("Level |cffff000012|r Beast", "12", RED))
+    end)
+
+    it("leaves a row that does not show the level", function()
+        assert.is_nil(TT._ColorLevelToken("Level 13 Beast", "12", RED))
+    end)
+end)
+
+-- The difficulty color reads a skull's level of -1 as trivial gray.
+describe("Tooltips LevelConColor", function()
+    it("gives a skull level the impossible color without asking for a difficulty", function()
+        local asked = false
+        local impossible = { r = 1, g = 0.1, b = 0.1 }
+        local TT = L.loadTooltips({
+            GetCreatureDifficultyColor = function() asked = true; return { r = 0.5, g = 0.5, b = 0.5 } end,
+            QuestDifficultyColors = { impossible = impossible },
+        })
+        assert.equal(impossible, TT._LevelConColor(-1))
+        assert.is_false(asked)
+    end)
+
+    it("takes the difficulty color for a known level", function()
+        local yellow = { r = 1, g = 1, b = 0 }
+        local TT = L.loadTooltips({ GetCreatureDifficultyColor = function() return yellow end })
+        assert.equal(yellow, TT._LevelConColor(20))
+    end)
+end)

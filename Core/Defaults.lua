@@ -2690,6 +2690,7 @@ local Defaults = {
                 GuildRankLine = false,
                 HideGuildRealm = false,
                 HideFactionLine = true,
+                LevelColors = true,
                 AlwaysShowRealm = false,
                 MythicPlusLine = false,
                 HideInCombat = false,

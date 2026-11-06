@@ -636,6 +636,9 @@ function L.loadTooltips(opts, overrides)
     _G.UnitClass = opts.UnitClass or function() return "Evoker", "EVOKER" end
     _G.GetPlayerInfoByGUID = opts.GetPlayerInfoByGUID or function() return "Evoker", "EVOKER" end
     _G.C_ClassColor = opts.C_ClassColor or nil
+    -- The level color's inputs; the module caches the function at load.
+    _G.GetCreatureDifficultyColor = opts.GetCreatureDifficultyColor or function() return nil end
+    _G.QuestDifficultyColors = opts.QuestDifficultyColors
     -- Specs drive helpers, module methods and PLAYER_ENTERING_WORLD directly;
     -- OnEnable remains outside this fixture.
     local KE = {

@@ -526,6 +526,49 @@ local function FindLevelLine(tt, offset)
     end
 end
 
+-- A skull unit reports level -1, which the difficulty color reads as
+-- trivial gray.
+local SKULL_RED = { r = 1, g = 0.1, b = 0.1 }
+local function LevelConColor(level)
+    if level <= 0 then
+        local colors = _G.QuestDifficultyColors
+        return colors and colors.impossible or SKULL_RED
+    end
+    return GetCreatureDifficultyColor(level)
+end
+
+-- Wraps the first plain occurrence of `token` in a color code. Nil when the
+-- token is missing or the row already carries a color, so a re-run on the
+-- same tooltip leaves the row alone.
+local function ColorLevelToken(text, token, color)
+    if not color or text:find("|c", 1, true) then return nil end
+    local s, e = text:find(token, 1, true)
+    if not s then return nil end
+    return text:sub(1, s - 1) .. KE:WrapColor(token, color.r, color.g, color.b) .. text:sub(e + 1)
+end
+
+-- An NPC's row keeps Blizzard's wording ("Level 12 Beast (Elite)"); only
+-- the number is recolored, so the creature type needs no rebuild.
+local function ColorNpcLevel(tt, unit)
+    local levelLine = FindLevelLine(tt, 1)
+    local text = levelLine and levelLine:GetText()
+    if not text or KE:IsSecretValue(text) then return end
+
+    local level = UnitEffectiveLevel(unit)
+    if KE:IsSecretValue(level) or type(level) ~= "number" then return end
+    local color = LevelConColor(level)
+
+    local colored = ColorLevelToken(text, level > 0 and tostring(level) or "??", color)
+    -- A scaled NPC can show its real level rather than the effective one.
+    if not colored and level > 0 then
+        local real = UnitLevel(unit)
+        if not KE:IsSecretValue(real) and type(real) == "number" and real > 0 then
+            colored = ColorLevelToken(text, tostring(real), color)
+        end
+    end
+    if colored then levelLine:SetText(colored) end
+end
+
 -- Reading a unit's name is only safe when its identity is not restricted.
 -- UnitName and UnitPVPName are both SecretWhenUnitIdentityRestricted, and
 -- C_Secrets.ShouldUnitIdentityBeSecret is the predicate that matches them
@@ -854,7 +897,9 @@ function TT:OnTooltipSetUnit(tt, data)
             local level = UnitEffectiveLevel(unit)
             local realLevel = UnitLevel(unit)
             local race = UnitRace(unit)
-            local diff = GetCreatureDifficultyColor(level)
+            -- No color leaves the number white.
+            local diff
+            if db.LevelColors ~= false and level then diff = LevelConColor(level) end
             local r = diff and diff.r
             local g = diff and diff.g
             local b = diff and diff.b
@@ -877,6 +922,10 @@ function TT:OnTooltipSetUnit(tt, data)
         if specLine and db.ClassColorNames and unitColor then
             specLine:SetTextColor(unitColor:GetRGB())
         end
+    end
+
+    if db.LevelColors ~= false and not UnitIsPlayer(unit) then
+        ColorNpcLevel(tt, unit)
     end
 
     -- Faction row. "Alliance" / "Horde" duplicates what the name and level
@@ -1388,3 +1437,5 @@ TT._EngineDrawsAuraIDs = EngineDrawsAuraIDs
 TT._GetAuraIDCVarLifecycleToken = function() return auraIDCVarLifecycleToken, "petaction-setter" end
 TT._ComposeNameLine = ComposeNameLine
 TT._EffectiveLineOptions = EffectiveLineOptions
+TT._LevelConColor = LevelConColor
+TT._ColorLevelToken = ColorLevelToken
