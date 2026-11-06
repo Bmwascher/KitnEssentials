@@ -17,7 +17,8 @@
 --      not stored.
 -- A row the stored form cannot hold, or the module cannot read, raises
 -- error(msg, 0) naming its creature: a field of the wrong type, a number that
--- is not finite, or spots that are not x, y pairs of numbers.
+-- is not finite, spots that are not x, y pairs of numbers, a list with a named
+-- key or a gap, or a row or drop with a field past its last known position.
 -- Lines returns the data file's lines in the stored form `wrap` gives them, one
 -- creature per line in id order, each field in a fixed order and an absent one
 -- not written. FileMatches says whether a file's text is exactly those lines.
@@ -28,6 +29,8 @@ local NAME = "RareAlertTable"
 local GENERATED_BY = "dev/scripts/convert-rare-data.lua"
 local CHANCE_MAX = 100
 local QUALITY_OF = { [286749] = 2, [286746] = 2 }
+local RARE_FIELDS = 9
+local DROP_FIELDS = 5
 local RARE_ORDER = { "name", "low", "high", "elite", "reactA", "reactH", "map" }
 local DROP_ORDER = { "id", "quality", "chance", "name", "new" }
 
@@ -53,18 +56,47 @@ local function checkId(npc)
     if not isNumber(npc) or npc % 1 ~= 0 then refuse(npc, "a creature id that is not a whole number") end
 end
 
+local function isPosition(key)
+    return type(key) == "number" and key >= 1 and key % 1 == 0
+end
+
+-- The entry count of a list read by #, or nil for a named key or a gap, which
+-- # would skip. `allowed` is the one other key the list may carry.
+local function listLength(list, allowed)
+    local count, last = 0, 0
+    for key in pairs(list) do
+        if key ~= allowed then
+            if not isPosition(key) then return nil end
+            count = count + 1
+            if key > last then last = key end
+        end
+    end
+    if count ~= last then return nil end
+    return last
+end
+
+-- A row read at fixed positions would drop any other field unseen.
+local function checkFields(npc, row, fields, what)
+    for key in pairs(row) do
+        if not isPosition(key) or key > fields then
+            refuse(npc, what .. " with a field the converter does not know")
+        end
+    end
+end
+
 local function checkName(npc, name)
     if type(name) ~= "string" then refuse(npc, "no name") end
     if name:find("%c") then refuse(npc, "a name holding a control character") end
 end
 
--- The module reads spots two numbers at a time. The copy keeps the array part only.
+-- The module reads spots two numbers at a time.
 local function convertSpots(npc, spots)
     if spots == nil then return nil end
-    if type(spots) ~= "table" then refuse(npc, "spots that are not a list") end
-    if #spots % 2 ~= 0 then refuse(npc, "spots that are not x, y pairs") end
+    local count = type(spots) == "table" and listLength(spots)
+    if not count then refuse(npc, "spots that are not a list") end
+    if count % 2 ~= 0 then refuse(npc, "spots that are not x, y pairs") end
     local copy = {}
-    for i = 1, #spots do
+    for i = 1, count do
         if not isNumber(spots[i]) then refuse(npc, "a spot that is not a number") end
         copy[i] = spots[i]
     end
@@ -73,6 +105,7 @@ end
 
 local function convertRare(npc, row)
     checkTable(npc, row, "a rare row")
+    checkFields(npc, row, RARE_FIELDS, "a rare row")
     checkName(npc, row[1])
     checkNumber(npc, row[2], "a level")
     checkNumber(npc, row[3], "a level")
@@ -96,6 +129,7 @@ end
 
 local function convertDrop(npc, item)
     checkTable(npc, item, "a drop")
+    checkFields(npc, item, DROP_FIELDS, "a drop")
     if not isNumber(item[1]) then refuse(npc, "a drop with no id") end
     checkNumber(npc, item[2], "a drop quality")
     checkNumber(npc, item[3], "a drop chance")
@@ -120,9 +154,11 @@ function M.Convert(rawRares, rawLoot)
     for npc, items in pairs(rawLoot) do
         checkId(npc)
         checkTable(npc, items, "a drop list")
+        -- A `more` count is allowed and not stored.
+        local count = listLength(items, "more")
+        if not count then refuse(npc, "a drop list with a named key or a gap") end
         local list = {}
-        -- The array part only, so a `more` count is not stored.
-        for i = 1, #items do list[i] = convertDrop(npc, items[i]) end
+        for i = 1, count do list[i] = convertDrop(npc, items[i]) end
         loot[npc] = list
     end
     return rares, loot

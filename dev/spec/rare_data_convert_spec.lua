@@ -110,6 +110,13 @@ describe("Rare table conversion", function()
             { name = "drop not a table", loot = { [3] = { 5 } } },
             { name = "quality not a number", loot = { [3] = { { 1, "2", 1, "Drop" } } } },
             { name = "chance not finite", loot = { [3] = { { 1, 2, 1 / 0, "Drop" } } } },
+            { name = "spots with named keys", rares = { [3] = rareRow({ [8] = { x = 50.0, y = 50.0 } }) } },
+            { name = "spots with a gap", rares = { [3] = rareRow({ [8] = { [1] = 50.0, [2] = 50.0, [4] = 50.0, [5] = 50.0 } }) } },
+            { name = "drop list with a named key", loot = { [3] = { { 1, 2, 1, "Drop" }, extra = { 2, 2, 1, "Lost" } } } },
+            { name = "drop list with a gap", loot = { [3] = { [1] = { 1, 2, 1, "Drop" }, [3] = { 2, 2, 1, "Lost" } } } },
+            { name = "row with a field past the trail", rares = { [3] = rareRow({ [10] = 5 }) } },
+            { name = "row with a named field", rares = { [3] = rareRow({ zone = 1 }) } },
+            { name = "drop with a sixth field", loot = { [3] = { { 1, 2, 1, "Drop", 1, 9 } } } },
         }) do
             local ok, err = pcall(Convert.Convert, row.rares or {}, row.loot or {})
             assert.is_false(ok, row.name)
