@@ -498,6 +498,7 @@ describe("Tooltips ColorLevelToken", function()
         for _, row in ipairs({
             { text = "Level 13 Beast", token = "12" },
             { text = "Level 18 Beast", token = "8" },
+            { text = "Level 123 Beast", token = "12" },
         }) do
             assert.is_nil(TT._ColorLevelToken(row.text, row.token, RED), row.token)
         end
