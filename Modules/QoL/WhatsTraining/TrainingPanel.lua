@@ -1012,6 +1012,7 @@ end
 
 function Panel.HideAll()
     state.alone = false
+    state.bookDismissed = false
     state.host = nil
     if frame then frame:Hide() end
     if bookButton then bookButton:Hide() end
@@ -1023,7 +1024,10 @@ function Panel.OnTrainerShow()
 end
 
 function Panel.OnTrainerClosed(staysOpen)
-    if staysOpen and not state.closedAtTrainer then state.alone = true end
+    local dismiss, stayAlone = Rules.AfterTrainer(state.closedAtTrainer, staysOpen)
+    if dismiss and state.bookOpen then state.bookDismissed = true end
+    if stayAlone then state.alone = true end
+    state.closedAtTrainer = false
     Panel.Refresh()
 end
 
@@ -1056,7 +1060,6 @@ local function OnBookShown()
     local book = _G.PlayerSpellsFrame
     if not book then return end
     state.bookOpen = true
-    state.bookDismissed = false
     ShowBookButton(book)
     C_Timer.After(0, Panel.Refresh)
 end
@@ -1086,6 +1089,10 @@ function Panel.InstallBook()
         bookHooked = true
         book:HookScript("OnShow", OnBookShown)
         book:HookScript("OnHide", OnBookHidden)
+        -- The book's frame also hides at a tab change, which is not a new opening.
+        host:HookScript("OnHide", function()
+            if T.active then state.bookDismissed = false end
+        end)
         host:HookScript("OnSizeChanged", function()
             if T.active and state.bookOpen then C_Timer.After(0, Panel.Refresh) end
         end)

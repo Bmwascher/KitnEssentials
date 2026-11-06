@@ -384,12 +384,25 @@ describe("What's Training rules", function()
         end
     end)
 
+    it("AfterTrainer keeps a panel closed at the trainer closed, and otherwise keeps one with a bar line open", function()
+        for _, row in ipairs({
+            { name = "closed, with a bar line", closed = true, staysOpen = true, dismiss = true, alone = false },
+            { name = "closed, no bar line", closed = true, staysOpen = false, dismiss = true, alone = false },
+            { name = "open, with a bar line", closed = false, staysOpen = true, dismiss = false, alone = true },
+            { name = "open, no bar line", closed = false, staysOpen = false, dismiss = false, alone = false },
+        }) do
+            local dismiss, alone = Rules.AfterTrainer(row.closed, row.staysOpen)
+            assert.equals(row.dismiss, dismiss, row.name)
+            assert.equals(row.alone, alone, row.name)
+        end
+    end)
+
     it("PanelHost keeps a panel closed at a trainer hidden for the visit", function()
         for _, row in ipairs({
             { name = "at a trainer", s = { atTrainer = true, trainerWindow = true }, want = "trainer" },
             { name = "closed at a trainer", s = { atTrainer = true, trainerWindow = true, closedAtTrainer = true } },
             { name = "closed, with the book open", s = { atTrainer = true, trainerWindow = true, closedAtTrainer = true, bookOpen = true, openWithBook = true } },
-            { name = "after that visit, with the book open", s = { closedAtTrainer = true, bookOpen = true, openWithBook = true }, want = "book" },
+            { name = "after that visit, the book left open and dismissed", s = { bookOpen = true, openWithBook = true, bookDismissed = true } },
             { name = "under the gamepad interface", s = { atTrainer = true, trainerWindow = true, gamepad = true, alone = true }, want = "alone" },
             { name = "the book", s = { bookOpen = true, openWithBook = true }, want = "book" },
             { name = "the book, setting off", s = { bookOpen = true } },

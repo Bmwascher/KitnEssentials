@@ -540,6 +540,13 @@ function Rules.PanelHost(s)
     return nil
 end
 
+-- What a trainer's closing leaves: whether to dismiss a book left open, and whether
+-- the panel stays open alone to show the bar line.
+function Rules.AfterTrainer(closedAtTrainer, staysOpen)
+    if closedAtTrainer then return true, false end
+    return false, staysOpen == true
+end
+
 -- In combat a panel on the book keeps that anchor, wherever it is wanted next.
 -- A panel wanted on the book and not yet on it sits alone.
 function Rules.PlaceStep(host, inCombat, onBook)
