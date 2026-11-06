@@ -28,6 +28,7 @@ local IsInInstance = IsInInstance
 local IsMounted = IsMounted
 local IsResting = IsResting
 local PlaySoundFile = PlaySoundFile
+local UIParent = UIParent
 local UnitAffectingCombat = UnitAffectingCombat
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local UnitOnTaxi = UnitOnTaxi
@@ -107,7 +108,8 @@ local function ReadCampAura(spellId)
     if KE:IsAuraHiddenForSpell(spellId) then return nil, true end
     local aura = C_UnitAuras.GetPlayerAuraBySpellID(spellId)
     if KE:IsSecretValue(aura) then return nil, true end
-    if not aura then return nil, false end
+    -- A secret aura reads as nothing, so under a restriction nothing means hidden.
+    if not aura then return nil, KE:AreAuraIdentitiesHidden() end
     if KE:IsSecretTable(aura) then return nil, true end
     return aura, false
 end
@@ -243,6 +245,8 @@ function CF:ReadDots(c)
 end
 
 function CF:ReadCovers()
+    -- A hidden read says nothing: the last result holds and coverDirty stays set.
+    if KE:AreAuraIdentitiesHidden() then return end
     local onYou = {}
     for _, id in ipairs(Rules.COVER_IDS) do
         local name = self.coverNames[id]
@@ -884,9 +888,7 @@ function CF:ElementConfig(key, displayName, frame, positionKey, eligible)
             position.YOffset = pos.YOffset
             self:ApplySettings()
         end,
-        getParentFrame = function()
-            return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
-        end,
+        getParentFrame = function() return UIParent end,
         isEligible = eligible,
         guiPath = "Campfire",
     }

@@ -73,14 +73,14 @@ end
 local function SpotFor(db)
     if db.Shape == "ROUND" then
         local x, y = Views.round:GetCenter()
-        if not x then return nil end
+        if KE:IsSecretValue(x) or KE:IsSecretValue(y) or not x then return nil end
         local size = db.RoundSize * ROUND_SCALE
         local half = db.RoundSize / 2 + Views.TRACK_OUT
         local side = db.ListSide == "LEFT" and 1 or -1
         return x + side * (half + ROUND_GAP + size / 2), y - half + size / 2, size
     end
     local x, y = Views.simple:GetCenter()
-    if not x then return nil end
+    if KE:IsSecretValue(x) or KE:IsSecretValue(y) or not x then return nil end
     return x - db.SimpleWidth / 2 - SIMPLE_GAP - SIMPLE_SIZE / 2, y, SIMPLE_SIZE
 end
 

@@ -25,6 +25,10 @@ local ipairs = ipairs
 local Views = {}
 KE.CampfireViews = Views
 
+-- Every frame sits on UIParent whatever a profile says: the buttons compute
+-- coordinates from these frames, and UIParent's anchoring is never secret.
+local PLACEMENT = { anchorFrameType = "UIPARENT", ParentFrame = "UIParent" }
+
 local MEDIA = "Interface\\AddOns\\KitnEssentials\\Media\\Campfire\\"
 local ART, RING, MASK = MEDIA .. "campfire.tga", MEDIA .. "ring.tga", MEDIA .. "mask.tga"
 local CLAMP = "CLAMPTOBLACKADDITIVE"
@@ -755,7 +759,7 @@ local function BuildAlert()
     f.catcher = CreateFrame("Frame", nil, f)
     f.catcher:SetAllPoints(f)
     f.catcher:SetFrameLevel(level + 1)
-    f.catcher:EnableMouse(true)
+    f.catcher:EnableMouse(false)
     f.catcher:SetScript("OnMouseUp", function(_, button)
         if button == "RightButton" and Views.owner then Views.owner:DismissAlert() end
     end)
@@ -800,8 +804,18 @@ local function AlertOff()
     f.fadeOut:Play()
 end
 
+-- Protected, so out of combat only: at build, or at the next render out of
+-- combat. Until then the catcher takes no mouse, so no left click is lost.
+local function PassLeftThrough(f)
+    if f.passThrough or InCombatLockdown() then return end
+    f.catcher:SetPassThroughButtons("LeftButton")
+    f.catcher:EnableMouse(true)
+    f.passThrough = true
+end
+
 local function RenderAlert(r)
     local f = Views.alert
+    PassLeftThrough(f)
     if not r.alertText then
         AlertOff()
         return
@@ -811,11 +825,6 @@ local function RenderAlert(r)
     f.sit:SetShown(r.clickable)
     if f.active then return end
     f.active = true
-    -- Protected, so it waits for a first show, and the alert never shows in combat.
-    if not f.passThrough and not InCombatLockdown() then
-        f.catcher:SetPassThroughButtons("LeftButton")
-        f.passThrough = true
-    end
     f.fadeOut:Stop()
     f:Show()
     f.fadeIn:Play()
@@ -844,17 +853,19 @@ function Views.Build(owner)
     Views.round = BuildRound()
     Views.simple = BuildSimple()
     Views.alert = BuildAlert()
+    PassLeftThrough(Views.alert)
 end
 
 function Views.ApplySettings(db)
     fontVersion = fontVersion + 1
+    PLACEMENT.Strata = db.Strata
 
     local round = Views.round
     local size = db.RoundSize
     round:SetSize(size, size)
     KE:ApplyFontToText(round.time, db.FontFace, size * 0.31, db.FontOutline)
     KE:ApplyFontToText(round.label, db.FontFace, 11 + size / 22, db.FontOutline)
-    KE:ApplyFramePosition(round, db.RoundPosition, db)
+    KE:ApplyFramePosition(round, db.RoundPosition, PLACEMENT)
 
     local simple = Views.simple
     simple:SetSize(db.SimpleWidth, db.SimpleHeight)
@@ -863,11 +874,11 @@ function Views.ApplySettings(db)
     for _, fs in ipairs({ simple.time, simple.measure, simple.more, simple.panel.head }) do
         KE:ApplyFontToText(fs, db.FontFace, db.SimpleTextSize, db.FontOutline)
     end
-    KE:ApplyFramePosition(simple, db.SimplePosition, db)
+    KE:ApplyFramePosition(simple, db.SimplePosition, PLACEMENT)
 
     local alert = Views.alert
     KE:ApplyFontToText(alert.text, db.FontFace, db.AlertTextSize, "OUTLINE")
-    KE:ApplyFramePosition(alert, db.AlertPosition, db)
+    KE:ApplyFramePosition(alert, db.AlertPosition, PLACEMENT)
 end
 
 function Views.Render(r, db)
