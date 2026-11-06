@@ -1,5 +1,13 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.16
+
+### Both clients
+
+- Tooltips now skins the close button on the item tooltip you open from a chat link
+
+---
+
 ## v4.16.15
 
 ### WoW Forever only
