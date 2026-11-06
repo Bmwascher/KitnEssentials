@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.12
+
+### Both clients
+
+- Raid Control's panel text is one point smaller
+
+### WoW Forever only
+
+- Raid Control is now available (Dark Theme, General tab): ready check,
+  countdowns, Everyone Assist, world markers and role counts; the
+  difficulty, group arrangement, Vantus Rune and raid buff rows are left
+  out because Forever has no use for them
+
+---
+
 ## v4.16.11
 
 ### Both clients
