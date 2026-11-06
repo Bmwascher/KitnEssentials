@@ -699,12 +699,16 @@ function CF:BumpGenerations()
     self.previewGen = self.previewGen + 1
     self.alertBoundary, self.alertTextLive = nil, false
     self:NewLife()
+    Buttons.StopCooldowns()
 end
 
 function CF:EnterInstance()
     self:StopEvents()
     self:BumpGenerations()
     self.lastExpiry, self.sat = nil, false
+    -- No aura event arrives in here and no fire is in range, so the covers are
+    -- read again on the way out and a dismissal ends here.
+    self.coverDirty, self.dismissed = true, false
     self:DrawNothing("Nothing")
     KE:RunAfterCombat(function()
         if self:IsEnabled() and self.inInstance then Buttons.Sync(nil, nil, nil, self.db) end

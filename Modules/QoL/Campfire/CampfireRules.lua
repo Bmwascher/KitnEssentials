@@ -29,9 +29,9 @@ Rules.REFILL_PROVEN = false
 local COLOR_GOOD_ABOVE, COLOR_WARN_ABOVE = 1800, 300
 local EXPIRY_SLACK = 1
 
--- points: how many numbers aura.points carries, default 1. numbers: how many
--- the amount text takes, default points. period: the fixed second number of a
--- per-period bonus.
+-- points: how many numbers the bonus carries, default 1; 0 shows the label with
+-- no amount. numbers: how many the amount text takes, default points. period:
+-- the fixed second number of a per-period bonus.
 Rules.FEATURES = {
     { id = 1229451, short = "Rested", name = "Camp Tent", stat = "Rested experience", points = 0,
         aliases = { "Tent", "Camp Tent", "Tanning Rack", "Sewing Machine" } },

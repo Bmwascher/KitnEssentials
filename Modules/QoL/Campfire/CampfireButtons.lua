@@ -184,18 +184,24 @@ function Buttons.UpdateCooldown()
     end)
 end
 
+-- Plain Lua, so it runs at once, in combat too: a queued cooldown one-shot does
+-- nothing, and the next UpdateCooldown arms a fresh one.
+function Buttons.StopCooldowns()
+    cooldownGen = cooldownGen + 1
+    if not bag then return end
+    bag.cooldownEnds, kit.cooldownEnds = nil, nil
+end
+
 -- A secure button cannot be destroyed, so a disabled module clears the action:
 -- a click with no type does nothing.
 function Buttons.Disarm()
     if not bag or InCombatLockdown() then return end
-    cooldownGen = cooldownGen + 1
     active = nil
     for _, button in ipairs({ bag, kit }) do
         Drop(button)
         button:SetAttribute("type1", nil)
         button:SetAttribute("item1", nil)
         button.armedItem = nil
-        button.cooldownEnds = nil
     end
 end
 
