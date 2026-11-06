@@ -110,7 +110,7 @@ local function TalentFlag(a, b, names)
         local root = b.requiredTalentId
         if a.talent == root then return a.talent end
         -- A root the client has no name for cannot be learned, so it decides nothing.
-        if a.talent and root and not names[root] then return a.talent end
+        if root and not names[root] then return a.talent end
         return "maybe"
     end
     if a then return a.talent end
