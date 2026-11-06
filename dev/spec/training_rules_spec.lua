@@ -409,6 +409,9 @@ describe("What's Training rules", function()
             { host = "book", combat = false, onHost = true, want = "place" },
             { host = "book", combat = true, onHost = true, want = "keep" },
             { host = "book", combat = true, onHost = false, want = "alone" },
+            { host = "alone", combat = true, onHost = true, want = "keep" },
+            { host = "trainer", combat = true, onHost = true, want = "keep" },
+            { host = "alone", combat = false, onHost = true, want = "place" },
         }) do
             assert.equals(row.want, Rules.PlaceStep(row.host, row.combat, row.onHost))
         end

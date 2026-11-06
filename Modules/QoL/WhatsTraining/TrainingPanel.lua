@@ -839,10 +839,10 @@ local function Build()
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function()
-        if state.host == "alone" then frame:StartMoving() end
+        if state.host == "alone" and not anchoredTo then frame:StartMoving() end
     end)
     header:SetScript("OnDragStop", function()
-        if state.host == "alone" then
+        if state.host == "alone" and not anchoredTo then
             frame:StopMovingOrSizing()
             SaveAlonePosition()
         end
@@ -955,7 +955,8 @@ local function Place(host)
     elseif host == "book" then
         target = _G.PlayerSpellsFrame
     end
-    local step = Rules.PlaceStep(host, InCombatLockdown(), target ~= nil and anchoredTo == target)
+    local book = _G.PlayerSpellsFrame
+    local step = Rules.PlaceStep(host, InCombatLockdown(), book ~= nil and anchoredTo == book)
     if step ~= "place" then WaitForCombat() end
     if step == "keep" then return end
     if step == "place" and target and PlaceBeside(target) then

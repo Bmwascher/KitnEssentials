@@ -540,10 +540,13 @@ function Rules.PanelHost(s)
     return nil
 end
 
--- In combat the book takes no new anchor: a panel on it stays, any other sits alone.
-function Rules.PlaceStep(host, inCombat, onHost)
-    if host ~= "book" or not inCombat then return "place" end
-    return onHost and "keep" or "alone"
+-- In combat a panel on the book keeps that anchor, wherever it is wanted next.
+-- A panel wanted on the book and not yet on it sits alone.
+function Rules.PlaceStep(host, inCombat, onBook)
+    if not inCombat then return "place" end
+    if onBook then return "keep" end
+    if host == "book" then return "alone" end
+    return "place"
 end
 
 ---------------------------------------------------------------------------------
