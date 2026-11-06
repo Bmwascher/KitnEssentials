@@ -623,11 +623,15 @@ function Rules.LearnLabel(count, costText, ticked, unknown)
     return "Nothing you can afford"
 end
 
-function Rules.WaitingText(offer, playerLevel, isKnown, rankText)
+-- earlier: "quest" or "elsewhere" when this window does not list the earlier rank.
+function Rules.WaitingText(offer, playerLevel, isKnown, rankText, earlier)
     if offer.level > playerLevel then return "From level " .. offer.level end
     if type(offer.talent) == "number" and not isKnown(offer.talent) then return "Needs a talent" end
     if offer.needs and not isKnown(offer.needs) then
-        if rankText and rankText ~= "" then return "after " .. rankText .. " above" end
+        local rank = rankText ~= "" and rankText or nil
+        if earlier == "quest" then return "after " .. (rank or "a rank") .. ", taught by a quest" end
+        if earlier == "elsewhere" then return "after " .. (rank or "an earlier rank") end
+        if rank then return "after " .. rank .. " above" end
         return "after the rank above"
     end
     return "Not available yet"

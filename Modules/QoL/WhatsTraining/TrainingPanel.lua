@@ -492,6 +492,12 @@ local function BuildAwayItems(plan)
     return items
 end
 
+local function EarlierRank(offer, listed)
+    if not offer.needs or listed[offer.needs] then return nil end
+    local entry = T.plan and T.plan.entry[offer.needs]
+    return entry and entry.state == "quest" and "quest" or "elsewhere"
+end
+
 local function BuildTrainerItems()
     local items = {}
     local open, waiting = T.Learn.Offers()
@@ -509,9 +515,16 @@ local function BuildTrainerItems()
     end
     if #waiting > 0 then
         AddSection(items, "waiting", ("WAITING (%d)"):format(#waiting))
+        local listed = {}
+        for _, offer in ipairs(open) do
+            if offer.id then listed[offer.id] = true end
+        end
+        for _, offer in ipairs(waiting) do
+            if offer.id then listed[offer.id] = true end
+        end
         for _, offer in ipairs(waiting) do
             local above = offer.needs and C_Spell.GetSpellSubtext(offer.needs)
-            local sub = Rules.WaitingText(offer, T.level, T.IsKnown, above)
+            local sub = Rules.WaitingText(offer, T.level, T.IsKnown, above, EarlierRank(offer, listed))
             items[#items + 1] = {
                 kind = "offer", offer = offer, dim = true, sub = sub, right = T.Learn.CostText(offer.cost),
             }

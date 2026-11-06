@@ -499,8 +499,12 @@ describe("What's Training rules", function()
             { name = "rank with no text", offer = { level = 4, needs = 8 }, want = "after the rank above" },
             { name = "rank known", offer = { level = 4, needs = 7 }, want = "Not available yet" },
             { name = "no class row", offer = { level = 4 }, want = "Not available yet" },
+            { name = "taught by a quest", offer = { level = 4, needs = 8 }, rank = "Rank 1", earlier = "quest", want = "after Rank 1, taught by a quest" },
+            { name = "a quest, no text", offer = { level = 4, needs = 8 }, earlier = "quest", want = "after a rank, taught by a quest" },
+            { name = "not in this window", offer = { level = 4, needs = 8 }, rank = "Rank 1", earlier = "elsewhere", want = "after Rank 1" },
+            { name = "not in this window, no text", offer = { level = 4, needs = 8 }, earlier = "elsewhere", want = "after an earlier rank" },
         }) do
-            assert.equals(row.want, Rules.WaitingText(row.offer, 10, isKnown, row.rank), row.name)
+            assert.equals(row.want, Rules.WaitingText(row.offer, 10, isKnown, row.rank, row.earlier), row.name)
         end
     end)
 
