@@ -122,6 +122,7 @@ function ST:OnTargetHit()
     local duration = self.targetLearned
     if not duration then return end
     row.starts, row.ends, row.swingDuration = now, now + duration, duration
+    self:MarkRestart(row)
     self:RefreshBar(row)
 end
 

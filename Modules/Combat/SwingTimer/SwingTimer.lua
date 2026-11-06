@@ -419,8 +419,11 @@ end
 
 function ST:StartFill(row, start, duration, deplete)
     self:RecordFill(row, start, duration, deplete, true)
+    local interpolation = Enum.StatusBarInterpolation
+    local how = row.easeNext and interpolation.ExponentialEaseOut or interpolation.Immediate
+    row.easeNext = nil
     row.duration:SetTimeFromStart(start, duration)
-    row.bar:SetTimerDuration(row.duration, Enum.StatusBarInterpolation.Immediate, FillDirection(deplete))
+    row.bar:SetTimerDuration(row.duration, how, FillDirection(deplete))
     row.spark:Show()
 end
 
@@ -613,7 +616,10 @@ end
 function ST:RefreshBar(row)
     -- Above the preview's return: the listeners follow the state, not the painting.
     if row.key == "R" then self:SyncMovement() end
-    if self.isPreview then return end
+    if self.isPreview then
+        row.easeNext = nil
+        return
+    end
     if row.isTarget then
         self:RefreshTarget(row)
     elseif self:IsGuided(row) then
@@ -621,8 +627,15 @@ function ST:RefreshBar(row)
     else
         self:RefreshMelee(row)
     end
+    -- A repaint that parked leaves the mark unspent; it never carries over.
+    row.easeNext = nil
     self:PlaceTick(row)
     self:UpdateHolder()
+end
+
+-- A restart on a shown bar slides to its new fill; every other paint is at once.
+function ST:MarkRestart(row)
+    row.easeNext = not self.isPreview and row.frame:IsVisible()
 end
 
 function ST:RefreshAll()
@@ -811,6 +824,8 @@ function ST:PLAYER_SWING(_, duration, swingType)
     if not key or not R.ValidDuration(duration) then return end
     local row = self.bars[key]
     local now = GetTime()
+    -- Read before NoteSwing shows a bar, so one that appears with its swing paints at once.
+    self:MarkRestart(row)
     row.starts, row.ends, row.swingDuration = now, now + duration, duration
     self:TakeLatency(row)
     self:NoteSwing(row)
@@ -851,6 +866,7 @@ function ST:WEAPON_SLOT_CHANGED()
         local restart = R.SwapRestartSpeed(readable, read)
         row.known = R.WeaponKnown(readable, read, row.known)
         if restart and self:SwingRunning(row, now) then
+            self:MarkRestart(row)
             row.starts, row.ends, row.swingDuration = now, now + restart, restart
             self:TakeLatency(row)
             self:RefreshBar(row)
@@ -1326,6 +1342,7 @@ function ST:ShortenSwing(row)
     if not self:SwingRunning(row, now) then return end
     row.ends = now + R.ParryHastened(row.ends - now, row.swingDuration)
     row.starts = row.ends - row.swingDuration
+    self:MarkRestart(row)
     self:RefreshBar(row)
 end
 
