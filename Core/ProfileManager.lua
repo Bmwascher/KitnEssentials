@@ -624,6 +624,7 @@ local function RefreshAll()
     -- live — skinning applies destructively at enable and OnDisable has no
     -- frame teardown — a mismatch prompts for the /reload that lets startup
     -- apply the new flags (silently skipped when ElvUI handles skinning).
+    -- A module that sets keLiveSkin has a full teardown, so it flips live.
     local skipSkinning = KE.ShouldNotLoadModule and KE:ShouldNotLoadModule()
     local skinningChanged = false
     local reloadNeeded = false
@@ -657,7 +658,8 @@ local function RefreshAll()
         local skinDeferred = false
         local reloadDeferred = false
         if stateMismatch then
-            if name:find("^Skin") or module.keDeferToReload then
+            local liveSkin = module.keLiveSkin and not skipSkinning
+            if (name:find("^Skin") and not liveSkin) or module.keDeferToReload then
                 skinDeferred = true
                 if not skipSkinning then skinningChanged = true end
             elseif wantEnabled then

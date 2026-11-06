@@ -199,6 +199,21 @@ describe("RefreshAllModules enabled-state sync", function()
         assert.is_true(noFlag.enabled)
     end)
 
+    it("live-flips a Skin module with a full teardown, unless ElvUI handles skinning", function()
+        local live = fakeModule("SkinLive", { Enabled = false })
+        live.enabled, live.keLiveSkin = true, true
+        local PM = harness({ live })
+        PM:RefreshAllModules()
+        assert.is_false(live.enabled)
+
+        local held = fakeModule("SkinLive", { Enabled = false })
+        held.enabled, held.keLiveSkin = true, true
+        local elvPM, _, elvKE = harness({ held })
+        elvKE.ShouldNotLoadModule = function() return true end
+        elvPM:RefreshAllModules()
+        assert.is_true(held.enabled)
+    end)
+
     it("never live-flips Skin modules; prompts once and skips their ApplySettings", function()
         local skinA = fakeModule("SkinActionBars", { Enabled = false })
         skinA.enabled = true

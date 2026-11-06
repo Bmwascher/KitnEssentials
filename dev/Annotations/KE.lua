@@ -1368,6 +1368,10 @@ function KE:GetModuleConflict(moduleName, env) end
 --- Rescans and raises any outstanding conflict prompts.
 function KE:ScanAddonConflicts() end
 
+--- The saved table of the other addon that dresses RestedXP, or nil.
+---@return table|nil
+function KE:RestedXPRivalSettings() end
+
 -- Core/Defaults.lua
 ---@return table Defaults
 function KE:GetDefaultDB() end

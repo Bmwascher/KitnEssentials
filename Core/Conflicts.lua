@@ -248,6 +248,35 @@ local CONFLICTS = {
             },
         },
     },
+    -- A resolver, because the whole-addon disable would take unrelated features.
+    -- All three of its RestedXP parts collide: both windows silence the same
+    -- frames, and both arrows post-hook the same text.
+    {
+        module = "SkinRestedXP",
+        label = "RestedXP Look",
+        dbPath = { "SkinRestedXP" },
+        skinGated = true,
+        addons = { "NaowhForever" },
+        resolvers = {
+            NaowhForever = {
+                label = "Naowh Forever's RestedXP look",
+                apply = function()
+                    local settings = KE:RestedXPRivalSettings()
+                    if not settings then return false end
+                    settings.rxpWindow, settings.rxpThemes, settings.rxpArrowOn = false, false, false
+                    return true
+                end,
+                -- It reads each of the three for truth; an unreadable table
+                -- means nothing of it is on.
+                isActive = function()
+                    local settings = KE:RestedXPRivalSettings()
+                    if not settings then return false end
+                    return settings.rxpWindow == true or settings.rxpThemes == true
+                        or settings.rxpArrowOn == true
+                end,
+            },
+        },
+    },
     -- The next two rows carry no resolver, and that is deliberate.
     -- EllesmereUI ships each of these as its own single-purpose addon --
     -- own .toc, own SavedVariables, one feature -- so the whole-addon
@@ -467,6 +496,14 @@ end
 -- Prompt queue
 ---------------------------------------------------------------------------------
 
+-- The saved table of the other addon that dresses RestedXP, or nil. The guide
+-- window also refuses to start while that addon's window is on.
+function KE:RestedXPRivalSettings()
+    local db = _G.NaowhForeverDB
+    local settings = type(db) == "table" and db.account
+    return type(settings) == "table" and settings or nil
+end
+
 -- Folder names read badly in a prompt; show what the user calls them.
 local ADDON_LABELS = {
     ["EllesmereUIBlizzardSkin"] = "EllesmereUI BlizzUI Enhanced",
@@ -478,6 +515,7 @@ local ADDON_LABELS = {
     ["BasicChatMods"] = "Basic Chat Mods",
     ["NorthernSkyRaidTools"] = "Northern Sky Raid Tools",
     ["MythicPlusTweaks"] = "Mythic+ Tweaks",
+    ["NaowhForever"] = "Naowh Forever",
 }
 
 local promptQueue = {}
