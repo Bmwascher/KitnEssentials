@@ -15,7 +15,9 @@
 --   4. An elite or new of 1 stores true; any other value stores nothing.
 --   5. Every other field stands as it is. The trail and the `more` count are
 --      not stored.
--- A row the stored form cannot hold raises error(msg, 0) naming its creature.
+-- A row the stored form cannot hold, or the module cannot read, raises
+-- error(msg, 0) naming its creature: a field of the wrong type, a number that
+-- is not finite, or spots that are not x, y pairs of numbers.
 -- Lines returns the data file's lines in the stored form `wrap` gives them, one
 -- creature per line in id order, each field in a fixed order and an absent one
 -- not written. FileMatches says whether a file's text is exactly those lines.
@@ -33,15 +35,51 @@ local function refuse(npc, what)
     error(("rare %s: %s"):format(tostring(npc), what), 0)
 end
 
+-- value() writes NaN and infinity as names, which build back as nil.
+local function isNumber(v)
+    return type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge
+end
+
+local function checkNumber(npc, v, what)
+    if v ~= nil and not isNumber(v) then refuse(npc, what .. " that is not a number") end
+end
+
+local function checkTable(npc, v, what)
+    if type(v) ~= "table" then refuse(npc, what .. " that is not a table") end
+end
+
+-- Lines writes the id with %d, which would cut a fraction and join two rows.
+local function checkId(npc)
+    if not isNumber(npc) or npc % 1 ~= 0 then refuse(npc, "a creature id that is not a whole number") end
+end
+
 local function checkName(npc, name)
     if type(name) ~= "string" then refuse(npc, "no name") end
     if name:find("%c") then refuse(npc, "a name holding a control character") end
 end
 
+-- The module reads spots two numbers at a time. The copy keeps the array part only.
+local function convertSpots(npc, spots)
+    if spots == nil then return nil end
+    if type(spots) ~= "table" then refuse(npc, "spots that are not a list") end
+    if #spots % 2 ~= 0 then refuse(npc, "spots that are not x, y pairs") end
+    local copy = {}
+    for i = 1, #spots do
+        if not isNumber(spots[i]) then refuse(npc, "a spot that is not a number") end
+        copy[i] = spots[i]
+    end
+    return copy
+end
+
 local function convertRare(npc, row)
+    checkTable(npc, row, "a rare row")
     checkName(npc, row[1])
-    if type(row[7]) ~= "number" then refuse(npc, "no map") end
-    if row[8] ~= nil and type(row[8]) ~= "table" then refuse(npc, "spots that are not a list") end
+    checkNumber(npc, row[2], "a level")
+    checkNumber(npc, row[3], "a level")
+    checkNumber(npc, row[5], "a reaction")
+    checkNumber(npc, row[6], "a reaction")
+    if not isNumber(row[7]) then refuse(npc, "no map") end
+    local spots = convertSpots(npc, row[8])
     local low, high = row[2], row[3]
     if (low and low <= 0) or (high and high <= 0) then low, high = nil, nil end
     return {
@@ -52,12 +90,15 @@ local function convertRare(npc, row)
         reactA = row[5],
         reactH = row[6],
         map = row[7],
-        spots = row[8],
+        spots = spots,
     }
 end
 
 local function convertDrop(npc, item)
-    if type(item[1]) ~= "number" then refuse(npc, "a drop with no id") end
+    checkTable(npc, item, "a drop")
+    if not isNumber(item[1]) then refuse(npc, "a drop with no id") end
+    checkNumber(npc, item[2], "a drop quality")
+    checkNumber(npc, item[3], "a drop chance")
     checkName(npc, item[4])
     local chance = item[3]
     if chance and chance > CHANCE_MAX then chance = CHANCE_MAX end
@@ -72,8 +113,13 @@ end
 
 function M.Convert(rawRares, rawLoot)
     local rares, loot = {}, {}
-    for npc, row in pairs(rawRares) do rares[npc] = convertRare(npc, row) end
+    for npc, row in pairs(rawRares) do
+        checkId(npc)
+        rares[npc] = convertRare(npc, row)
+    end
     for npc, items in pairs(rawLoot) do
+        checkId(npc)
+        checkTable(npc, items, "a drop list")
         local list = {}
         -- The array part only, so a `more` count is not stored.
         for i = 1, #items do list[i] = convertDrop(npc, items[i]) end

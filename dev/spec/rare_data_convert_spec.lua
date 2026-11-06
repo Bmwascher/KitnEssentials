@@ -89,13 +89,25 @@ describe("Rare table conversion", function()
         assert.same(loot, built.loot)
     end)
 
-    it("refuses a row the stored form cannot hold, naming its creature", function()
+    it("refuses a row the stored form cannot hold or the module cannot read, naming its creature", function()
         for _, row in ipairs({
             { name = "no name", rares = { [3] = rareRow({ [1] = false }) } },
             { name = "control character", rares = { [3] = rareRow({ [1] = "Two\nlines" }) } },
             { name = "no map", rares = { [3] = rareRow({ [7] = "1429" }) } },
             { name = "spots not a list", rares = { [3] = rareRow({ [8] = 50 }) } },
             { name = "drop with no id", loot = { [3] = { { nil, 2, 1, "Drop" } } } },
+            { name = "row not a table", rares = { [3] = 5 } },
+            { name = "id with a fraction", rares = { [3.5] = rareRow() } },
+            { name = "id not a number", rares = { ["3"] = rareRow() } },
+            { name = "level not a number", rares = { [3] = rareRow({ [2] = "10" }) } },
+            { name = "level not finite", rares = { [3] = rareRow({ [3] = 0 / 0 }) } },
+            { name = "reaction not a number", rares = { [3] = rareRow({ [5] = true }) } },
+            { name = "odd spot count", rares = { [3] = rareRow({ [8] = { 50.0 } }) } },
+            { name = "spot not a number", rares = { [3] = rareRow({ [8] = { 50.0, "50" } }) } },
+            { name = "drop list not a table", loot = { [3] = 5 } },
+            { name = "drop not a table", loot = { [3] = { 5 } } },
+            { name = "quality not a number", loot = { [3] = { { 1, "2", 1, "Drop" } } } },
+            { name = "chance not finite", loot = { [3] = { { 1, 2, 1 / 0, "Drop" } } } },
         }) do
             local ok, err = pcall(Convert.Convert, row.rares or {}, row.loot or {})
             assert.is_false(ok, row.name)
