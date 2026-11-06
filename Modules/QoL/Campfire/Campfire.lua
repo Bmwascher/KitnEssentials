@@ -31,16 +31,14 @@ local PlaySoundFile = PlaySoundFile
 local UnitAffectingCombat = UnitAffectingCombat
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local UnitOnTaxi = UnitOnTaxi
-local floor, huge, max, min = math.floor, math.huge, math.max, math.min
-local concat = table.concat
-local ipairs, pairs, pcall, type = ipairs, pairs, pcall, type
+local floor, huge, max = math.floor, math.huge, math.max
+local ipairs, pairs, pcall = ipairs, pairs, pcall
 
 local FEATURES = Rules.FEATURES
 local EMPTY = {}
 
 local TIP_RETRY = 5
 local THRESHOLD_PAD = 0.1
-local ALERT_NEW_MAX = 3
 
 local WORLD_EVENTS = {
     "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "ADDON_RESTRICTION_STATE_CHANGED",
@@ -75,23 +73,25 @@ CF.PREVIEW_CHOICES = {
 local DEFAULT_PREVIEW = "Low"
 CF.previewChoice = DEFAULT_PREVIEW
 
--- have: bonuses already held. fresh: new ones. worst: all 12. cover: one line
--- dims and one dot is half, so the dim look can be judged in game.
+-- have: bonuses already held. fresh: new ones, which only a landing shows,
+-- since a fire's bonuses read only once the buff lands. worst: all 12 held.
+-- cover: one line dims and one dot is half, so the dim look can be judged.
 local PREVIEW_SAMPLES = {
     Low = { moment = "Low", left = 240, duration = 3600, have = true },
-    Passing = { moment = "Passing", left = 720, duration = 3600, have = true, fresh = true, near = true, cover = true },
+    Passing = { moment = "Passing", left = 720, duration = 3600, have = true, near = true, cover = true },
     Spare = { moment = "Spare", left = 2400, duration = 3600, have = true, near = true },
     NoCamp = { moment = "NoCamp" },
-    FireHere = { moment = "FireHere", fresh = true, near = true },
+    FireHere = { moment = "FireHere", near = true },
     Sitting = { moment = "Sitting", seat = 44, seatDuration = 60, left = 720, duration = 3600,
-        have = true, fresh = true, near = true, cover = true },
-    Sitting12 = { moment = "Sitting", seat = 44, seatDuration = 60, worst = true, near = true },
+        have = true, near = true, cover = true },
+    Sitting12 = { moment = "Sitting", seat = 44, seatDuration = 60, left = 720, duration = 3600,
+        worst = true, near = true },
     Landing = { moment = "Landing", left = 3600, duration = 3600, have = true, fresh = true },
     Combat = { moment = "Low", left = 240, duration = 3600, have = true, combat = true },
 }
 
 local SAMPLE_HAVE = { { "Sta", 56 }, { "Int", 25 } }
-local SAMPLE_FRESH = { { "Crit", 2 }, { "MP5", 29 }, { "Rested" } }
+local SAMPLE_FRESH = { { "Crit", 2 }, { "MP5", 29 }, { "AP", 20 } }
 local SAMPLE_WORST = {
     { "Rested" }, { "Str", 34 }, { "Sta", 56 }, { "Int", 25 }, { "Spi", 32 }, { "Stats", 8 },
     { "Armor", 260 }, { "AP", 60 }, { "SP", 40 }, { "Crit", 2 }, { "MP5", 29 }, { "Disenchant" },
@@ -118,27 +118,6 @@ local function TimesOf(aura)
     if KE:IsSecretValue(expiry) or KE:IsSecretValue(duration) then return nil, nil, true end
     if not expiry or not duration or expiry <= 0 or duration <= 0 then return nil, nil, false end
     return expiry, duration, false
-end
-
-local function ReadPoints(aura, wanted)
-    local list = {}
-    local points = aura.points
-    if KE:IsSecretValue(points) or not points or KE:IsSecretTable(points) then return list end
-    for n = 1, wanted do
-        local value = points[n]
-        if KE:IsSecretValue(value) or value == nil or type(value) ~= "number" then break end
-        list[n] = value
-    end
-    return list
-end
-
-local function ReadBonusAuras()
-    local read = {}
-    for _, feature in ipairs(FEATURES) do
-        local aura = ReadCampAura(feature.id)
-        if aura then read[feature.id] = ReadPoints(aura, feature.points or 1) end
-    end
-    return read
 end
 
 local function PlayNamed(name)
@@ -291,7 +270,7 @@ end
 function CF:ReadHeldSet(c, landed, key)
     if landed then self.heldBefore = self.held end
     local tipLines, tipComplete = self:ReadTipLines(c.instance)
-    local rows = Rules.MergeBonuses(FEATURES, ReadBonusAuras(), tipLines)
+    local rows = Rules.MergeBonuses(FEATURES, EMPTY, tipLines)
     if self.heldBefore then
         self.landedNew, self.landedKept = Rules.NewBonuses(self.heldBefore, rows)
         -- Kept until the tooltip has answered, so the retry can compute new again.
@@ -411,33 +390,16 @@ function CF:TrackBuff(c)
     end
 end
 
-function CF:HasOffer(newRows)
-    return #Rules.FreshRows(newRows, self.db.DimCovered, self.onYou) > 0
-end
-
 ---------------------------------------------------------------------------------
 -- Drawing
 ---------------------------------------------------------------------------------
 
 function CF:AlertText(s)
-    local db, c = self.db, s.c
-    local text
+    local c = s.c
     if c.buffUp and c.expiry then
-        text = Rules.AlertLine(c.expiry - GetTime(), c.duration, s.refill)
-    else
-        text = db.ClickToSit and "click to sit" or "Sit here"
+        return (Rules.AlertLine(c.expiry - GetTime(), c.duration, s.refill))
     end
-    local fresh = Rules.FreshRows(s.newRows, db.DimCovered, s.onYou)
-    local count = #fresh
-    if count > 0 then
-        local labels = {}
-        for index = 1, min(count, ALERT_NEW_MAX) do
-            labels[index] = (Rules.Label(fresh[index].feature, fresh[index].amounts[1]))
-        end
-        text = text .. ", new: " .. concat(labels, ", ")
-        if count > ALERT_NEW_MAX then text = text .. " +" .. (count - ALERT_NEW_MAX) .. " more" end
-    end
-    return text
+    return self.db.ClickToSit and "click to sit" or "Sit here"
 end
 
 function CF:FillRenderLook(r, s, look)
@@ -473,9 +435,7 @@ function CF:FillRenderLook(r, s, look)
     end
 
     local lines = Rules.BuildLines(s.newRows, s.keptRows, db.DimCovered, s.onYou, seated and "kept" or "plain")
-    local fresh = Rules.HasFreshLine(lines)
     r.lines = lines
-    r.head = (seated and fresh) and "You'll get" or nil
     r.dots = s.dots
     r.showList = (look.list and not s.inCombat and (#lines > 0 or s.dots ~= nil)) and true or false
 
@@ -486,7 +446,7 @@ function CF:FillRenderLook(r, s, look)
         r.simpleHead = KE:ColorTextByTheme("Camp Nearby") .. " " .. Views.White(words)
     elseif moment == "NoCamp" then
         r.simpleHead = Views.Muted("No camp")
-    elseif seated and not fresh then
+    elseif seated then
         r.simpleHead = Views.Muted("Resting")
     elseif moment == "Landing" and #lines == 0 then
         r.simpleHead = Views.Green("Camp Benefits")
@@ -649,15 +609,10 @@ function CF:RefreshNow()
     -- A preview or a new sit can stop the animation, which then never reports its end.
     if self.landing and not Rules.LandingActive(self.landingEnds, GetTime()) then self.landing = false end
 
-    local read = EMPTY
-    if c.seated or c.inRange then read = Rules.MergeBonuses(FEATURES, ReadBonusAuras(), EMPTY) end
-    local newRows, keptRows = Rules.NewBonuses(self.held, read)
-
-    -- The covers decide whether a new row counts, so they come before the moment.
-    -- With no new row the offer is false whatever they say, and they wait for a list.
-    if #newRows > 0 then self:ReadCoversIfDirty() end
+    -- A fire's bonuses read only from the tooltip once the buff lands, so between
+    -- landings every row shown is a held one.
+    local newRows, keptRows = EMPTY, self.held
     local i = self:FillInputs(c)
-    i.offersNew = self:HasOffer(newRows)
     local moment, showShape, showAlert, near = Rules.SelectMoment(i)
 
     local look = LOOK[moment]
@@ -849,7 +804,7 @@ function CF:RenderPreview()
 
     local newRows, keptRows = EMPTY, EMPTY
     if sample.worst then
-        newRows = SampleRows(SAMPLE_WORST)
+        keptRows = SampleRows(SAMPLE_WORST)
     else
         if sample.fresh then newRows = SampleRows(SAMPLE_FRESH) end
         if sample.have then keptRows = SampleRows(SAMPLE_HAVE) end

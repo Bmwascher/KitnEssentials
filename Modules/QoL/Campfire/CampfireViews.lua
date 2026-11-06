@@ -149,7 +149,7 @@ local function ShowTip(owner)
     end
     GameTooltip:SetText("Camp Benefits", 1, 1, 1)
     if r.seated and r.expiry then
-        GameTooltip:AddDoubleLine(r.head or "Resting", "in " .. ShortTime(max(r.expiry - GetTime(), 0)),
+        GameTooltip:AddDoubleLine("Resting", "in " .. ShortTime(max(r.expiry - GetTime(), 0)),
             1, 1, 1, MUTED[1], MUTED[2], MUTED[3])
     end
     for _, line in ipairs(r.lines or {}) do
@@ -423,17 +423,6 @@ local function LayoutRoundList(f, r, db)
     end
 
     local used, y, width = 0, 0, 0
-    if r.head then
-        used = 1
-        local fs = AcquireText(list, list.lines, used, db, size)
-        fs:ClearAllPoints()
-        fs:SetPoint(point, list, point, 0, 0)
-        fs:SetJustifyH(justify)
-        fs:SetAlpha(1)
-        fs:SetText(Colored(WHITE_CODE, r.head))
-        width = max(width, fs:GetStringWidth())
-        y = LINE_HEIGHT
-    end
     for _, line in ipairs(r.lines) do
         used = used + 1
         local fs = AcquireText(list, list.lines, used, db, size)
