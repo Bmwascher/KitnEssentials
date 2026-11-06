@@ -591,7 +591,8 @@ end
 -- 28 fills the 30-wide tab inside its border.
 local SIDE_TAB_ICON = 28
 local ICON_CROP = 0.08
--- Clears the column off the window's border; Blizzard's y is kept.
+-- Clears the column off the window's border. The y it is placed at, -60,
+-- is the XML's own.
 local SIDE_TAB_GAP = 1
 
 -- Blizzard re-crops each tab icon to its own baked frame on every check
