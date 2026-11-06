@@ -9,6 +9,7 @@
     <Script file="Combat\GUI-CombatTexts.lua" />
     <Script file="Combat\GUI-Cursor.lua" />
     <Script file="Combat\GUI-FocusCastbar.lua" />
+    <Script file="Combat\GUI-SwingTimer.lua" />
     <Script file="Combat\GUI-RangeChecker.lua" />
     <Script file="Combat\StatusTexts\GUI-StatusTexts.lua" />
     <Script file="Combat\StatusTexts\GUI-HealerMana.lua" />

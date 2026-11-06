@@ -58,6 +58,11 @@ local Defaults = {
         -- restore, leaving a restrictive filter behind with the module off.
         GroupFinderPanelOwnsFilter = false,
 
+        -- Blizzard's swing bar setting is not per profile, so the record that
+        -- the Swing Timer page turned it off cannot be either: after a profile
+        -- switch a profile-scoped flag would read from the wrong profile.
+        SwingTimerHidBlizzard = false,
+
         -- Keyed by EllesmereUI profile name. Its profiles are account-level,
         -- and the reasoning above applies unchanged.
         EUITickMarkersHiddenIn = {},
@@ -469,6 +474,56 @@ local Defaults = {
                 YOffset = 0,
                 Anchor = "LEFT",
             },
+        },
+
+        SwingTimer = {
+            Enabled = false,
+            Width = 240,
+            Height = 16,
+            Spacing = 2,
+            FontSize = 12,
+            FontOutline = "OUTLINE",
+            StatusBarTexture = "KitnUI",
+            Strata = "HIGH",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            -- A top anchor keeps the first row still when the slot count changes.
+            Position = { AnchorFrom = "TOP", AnchorTo = "CENTER", XOffset = 0, YOffset = -180 },
+            Visibility = "combat",
+            Deplete = false,
+            ShowTime = true,
+            RangeCheck = true,
+            ShowWhenSwings = true,
+            EndWindow = true,
+            EndWindowSeconds = 0.4,
+            AddLatency = false,
+            CastTickMelee = true,
+            CastTickRanged = true,
+            RangedGuide = true,
+            HunterStyle = "zones",
+            QueueColors = true,
+            SealColors = true,
+            TargetEstimate = false,
+            TextColor = { 1, 1, 1, 1 },
+            BackdropColor = { 0, 0, 0, 0.8 },
+            BorderColor = { 0, 0, 0, 1 },
+            ColorMH = { 0.624, 0.749, 1, 1 },
+            ColorOH = { 0.475, 0.586, 0.812, 1 },
+            ColorR = { 0.624, 0.749, 1, 1 },
+            ColorWindow = { 1, 1, 1, 0.34 },
+            ColorStill = { 1, 0.82, 0.25, 1 },
+            ColorStop = { 0.95, 0.20, 0.20, 1 },
+            ColorQueue = { 1, 0.70, 0.20, 1 },
+            ColorCleave = { 0.95, 0.35, 0.25, 1 },
+            ColorTarget = { 0.76, 0.33, 0.33, 1 },
+            ColorSealRighteousness = { 0.95, 0.85, 0.40, 1 },
+            ColorSealCrusader = { 0.95, 0.55, 0.20, 1 },
+            ColorSealCommand = { 0.75, 0.35, 0.95, 1 },
+            ColorSealJustice = { 0.60, 0.65, 0.75, 1 },
+            ColorSealLight = { 1, 0.95, 0.70, 1 },
+            ColorSealWisdom = { 0.35, 0.65, 1, 1 },
+            ColorSealFury = { 0.95, 0.25, 0.20, 1 },
+            ColorSealMartyrdom = { 0.90, 0.40, 0.70, 1 },
         },
 
         RangeChecker = {

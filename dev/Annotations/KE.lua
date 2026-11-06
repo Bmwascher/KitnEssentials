@@ -222,6 +222,7 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field PartyStopsData table
 ---@field PlateSlots table
 ---@field DoTTrackerRules table
+---@field SwingTimerRules table
 ---@field ShamanProcRules table
 ---@field ExecutionerRules table
 ---@field ImminentDemiseRules table
