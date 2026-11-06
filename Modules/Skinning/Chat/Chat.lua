@@ -492,6 +492,8 @@ function CHAT:OnDisable()
     self:UnregisterEvent("UPDATE_CHAT_WINDOWS")
     self:UnregisterEvent("UPDATE_FLOATING_CHAT_WINDOWS")
     self:UnregisterEvent("CVAR_UPDATE")
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    self.pendingChats = nil
     self:UnregisterEvent("CHAT_MSG_WHISPER")
     self:UnregisterEvent("CHAT_MSG_BN_WHISPER")
     self.whisperSoundsRegistered = false
@@ -2341,11 +2343,13 @@ function CHAT:PositionChat(chat)
     if not chat or not self.panel then return end
     if self.isPositioning then return end
 
+    -- One handler per event, so each deferred window joins a set rather than
+    -- registering its own: a per-window handler replaces the previous one and
+    -- leaves every window but the last off the panel after combat.
     if InCombatLockdown() then
-        self:RegisterEvent("PLAYER_REGEN_ENABLED", function()
-            self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-            self:PositionChat(chat)
-        end)
+        self.pendingChats = self.pendingChats or {}
+        self.pendingChats[chat] = true
+        self:RegisterEvent("PLAYER_REGEN_ENABLED", "FlushPendingChats")
         return
     end
 
@@ -2413,6 +2417,21 @@ function CHAT:PositionChat(chat)
     end
 
     self.isPositioning = false
+end
+
+-- The dock's primary window goes first, as in CHAT:PositionChats.
+function CHAT:FlushPendingChats()
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    local pending = self.pendingChats
+    if not pending then return end
+    self.pendingChats = nil
+
+    local docker = _G.GeneralDockManager and _G.GeneralDockManager.primary
+    if docker and pending[docker] then
+        pending[docker] = nil
+        self:PositionChat(docker)
+    end
+    for chat in pairs(pending) do self:PositionChat(chat) end
 end
 
 function CHAT:StyleCombatLog()
