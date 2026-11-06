@@ -1254,10 +1254,10 @@ function RC:Setup()
     -- Panel (secure base so the show button's snippet can drive it in combat)
     local panel = CreateFrame("Frame", "KE_RaidControlPanel", UIParent, "SecureHandlerBaseTemplate")
     S.Backdrop(panel)
-    -- Two blocks are conditional. Resize the panel by each absent or present
-    -- block (BUTTON_HEIGHT + a 3px gap per row) instead of leaving dead space.
-    -- PANEL_HEIGHT already includes the two Group Sort rows and excludes the
-    -- Shared Notes row -- see the comment on PANEL_HEIGHT itself.
+    -- Resize the panel by each conditional row instead of leaving dead space:
+    -- Group Sort, Shared Notes and Vantus rows are BUTTON_HEIGHT + a 3px gap,
+    -- the difficulty row DIFFICULTY_ROW_HEIGHT. PANEL_HEIGHT includes the two
+    -- Group Sort rows and the difficulty row, and excludes the other two.
     local hasGroupSort = KE.GroupSort ~= nil
     local hasSharedNotes = _G.C_AddOns and _G.C_AddOns.IsAddOnLoaded("NorthernSkyRaidTools")
     local panelHeight = PANEL_HEIGHT
