@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.7
+
+### WoW Forever only
+
+- New Mob Scout setting under QoL, off by default: in the open world, a
+  hostile mob's tooltip lists its abilities with one control word each, how
+  much of your physical damage its armor takes, and what it is immune to or
+  resists. Hold a key to read what each ability does, below or above the
+  tooltip as you choose, and a faint line marks where its lines start. It
+  shows nothing in dungeons and raids, where the game keeps a mob's identity
+  secret. Much of the table is older game data not checked against Forever, so
+  a mob can differ from its lines. A manual install copies one more folder,
+  KitnEssentials_Data, which retail never loads.
+
+---
+
 ## v4.16.6
 
 ### WoW Forever only
