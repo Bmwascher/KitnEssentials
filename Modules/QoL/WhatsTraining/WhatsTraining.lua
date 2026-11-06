@@ -194,7 +194,7 @@ end
 ---------------------------------------------------------------------------------
 function WT:ApplySettings()
     if not T.active then return end
-    T.Swap.Scan()
+    if T.Panel.IsShown() then T.Swap.Scan() end
     T.Panel.Refresh()
 end
 

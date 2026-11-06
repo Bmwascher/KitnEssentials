@@ -1003,6 +1003,10 @@ function Panel.Toggle()
     end
 end
 
+function Panel.IsShown()
+    return frame ~= nil and frame:IsShown()
+end
+
 function Panel.HideAll()
     state.alone = false
     state.host = nil
