@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.9
+
+### WoW Forever only
+
+- The Character and Inspect windows' side tabs match the Professions
+  window: cropped, bordered icons that fill each tab, with the column just
+  off the window
+- The guild window's Preferred Play Settings tab is now skinned like the
+  other guild tabs
+
+---
+
 ## v4.16.8
 
 ### Both clients
