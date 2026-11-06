@@ -534,6 +534,17 @@ local function LevelConColor(level)
         local colors = _G.QuestDifficultyColors
         return colors and colors.impossible or SKULL_RED
     end
+    -- Forever's nameplates band levels tighter than the quest log does, so
+    -- the tooltip asks the nameplate's own rule there and the two agree.
+    -- Retail's nameplates already use the quest log's bands.
+    local plate = KE.IS_FOREVER and _G.NameplateLevelFrameMixin
+    if plate and plate.GetDifficultyColor then
+        local mine = UnitEffectiveLevel("player")
+        if not KE:IsSecretValue(mine) and type(mine) == "number" then
+            local color = plate.GetDifficultyColor(plate, level - mine)
+            if color then return color end
+        end
+    end
     return GetCreatureDifficultyColor(level)
 end
 

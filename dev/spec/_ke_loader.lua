@@ -639,6 +639,8 @@ function L.loadTooltips(opts, overrides)
     -- The level color's inputs; the module caches the function at load.
     _G.GetCreatureDifficultyColor = opts.GetCreatureDifficultyColor or function() return nil end
     _G.QuestDifficultyColors = opts.QuestDifficultyColors
+    _G.NameplateLevelFrameMixin = opts.NameplateLevelFrameMixin
+    _G.UnitEffectiveLevel = opts.UnitEffectiveLevel or function() return 1 end
     -- Specs drive helpers, module methods and PLAYER_ENTERING_WORLD directly;
     -- OnEnable remains outside this fixture.
     local KE = {

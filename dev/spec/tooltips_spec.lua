@@ -518,9 +518,26 @@ describe("Tooltips LevelConColor", function()
         assert.is_false(asked)
     end)
 
-    it("takes the difficulty color for a known level", function()
-        local yellow = { r = 1, g = 1, b = 0 }
-        local TT = L.loadTooltips({ GetCreatureDifficultyColor = function() return yellow end })
-        assert.equal(yellow, TT._LevelConColor(20))
+    -- Forever asks its nameplate's rule with the level difference; retail
+    -- ignores that rule and keeps the quest-log color.
+    it("takes the nameplate rule on Forever and the difficulty color on retail", function()
+        local questLog = { r = 1, g = 1, b = 0 }
+        local plateColor = { r = 0, g = 1, b = 0 }
+        for _, row in ipairs({
+            { forever = true, want = plateColor, wantDiff = -3 },
+            { forever = false, want = questLog },
+        }) do
+            local gotDiff
+            local TT = L.loadTooltips({
+                forever = row.forever,
+                UnitEffectiveLevel = function() return 20 end,
+                GetCreatureDifficultyColor = function() return questLog end,
+                NameplateLevelFrameMixin = {
+                    GetDifficultyColor = function(_, diff) gotDiff = diff; return plateColor end,
+                },
+            })
+            assert.equal(row.want, TT._LevelConColor(17), tostring(row.forever))
+            assert.equal(row.wantDiff, gotDiff, tostring(row.forever))
+        end
     end)
 end)
