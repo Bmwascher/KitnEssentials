@@ -63,7 +63,6 @@ local LOOK = {
 CF.PREVIEW_CHOICES = {
     { key = "Low", text = "Running low" },
     { key = "Passing", text = "Passing a fire" },
-    { key = "Spare", text = "Time to spare" },
     { key = "NoCamp", text = "Buff gone, no fire" },
     { key = "FireHere", text = "Buff gone, fire here" },
     { key = "Sitting", text = "Sitting" },
@@ -71,6 +70,10 @@ CF.PREVIEW_CHOICES = {
     { key = "Landing", text = "Buff lands" },
     { key = "Combat", text = "In combat" },
 }
+-- Live play reaches Time to spare only once the refill is proven.
+if Rules.REFILL_PROVEN then
+    table.insert(CF.PREVIEW_CHOICES, 3, { key = "Spare", text = "Time to spare" })
+end
 local DEFAULT_PREVIEW = "Low"
 CF.previewChoice = DEFAULT_PREVIEW
 
@@ -108,8 +111,7 @@ local function ReadCampAura(spellId)
     if KE:IsAuraHiddenForSpell(spellId) then return nil, true end
     local aura = C_UnitAuras.GetPlayerAuraBySpellID(spellId)
     if KE:IsSecretValue(aura) then return nil, true end
-    -- A secret aura reads as nothing, so under a restriction nothing means hidden.
-    if not aura then return nil, KE:AreAuraIdentitiesHidden() end
+    if not aura then return nil, false end
     if KE:IsSecretTable(aura) then return nil, true end
     return aura, false
 end
@@ -196,6 +198,9 @@ function CF:ReadTipLines(instanceId)
 end
 
 function CF:ReadCamp()
+    -- A secret aura reads as nothing, so while auras are secret no read can
+    -- tell a buff that is up from one that is gone.
+    if KE:AreAuraIdentitiesHidden() then return false end
     local benefits, hidden = ReadCampAura(Rules.CAMP_BENEFITS)
     if hidden then return false end
     local inRange
@@ -274,7 +279,7 @@ end
 function CF:ReadHeldSet(c, landed, key)
     if landed then self.heldBefore = self.held end
     local tipLines, tipComplete = self:ReadTipLines(c.instance)
-    local rows = Rules.MergeBonuses(FEATURES, EMPTY, tipLines)
+    local rows = Rules.TipRows(FEATURES, tipLines)
     if self.heldBefore then
         self.landedNew, self.landedKept = Rules.NewBonuses(self.heldBefore, rows)
         -- Kept until the tooltip has answered, so the retry can compute new again.
@@ -285,7 +290,7 @@ function CF:ReadHeldSet(c, landed, key)
     self.tipEmpty = not tipComplete
 end
 
--- One armed per lifecycle. A callback from an earlier lifecycle touches nothing.
+-- One armed at a time. A callback from an earlier lifecycle touches nothing.
 function CF:ArmTipRetry()
     if self.tipRetryGen == self.lifeGen then return end
     self.tipRetryGen = self.lifeGen
@@ -398,12 +403,19 @@ end
 -- Drawing
 ---------------------------------------------------------------------------------
 
+-- The fire's call to act: capitalized to open a label, lower case after
+-- "Camp Nearby".
+local function SitWords(db, capital)
+    if not db.ClickToSit then return "Sit here" end
+    return capital and "Click to sit" or "click to sit"
+end
+
 function CF:AlertText(s)
     local c = s.c
     if c.buffUp and c.expiry then
         return (Rules.AlertLine(c.expiry - GetTime(), c.duration, s.refill))
     end
-    return self.db.ClickToSit and "click to sit" or "Sit here"
+    return SitWords(self.db, false)
 end
 
 function CF:FillRenderLook(r, s, look)
@@ -426,7 +438,7 @@ function CF:FillRenderLook(r, s, look)
     r.fire = (seated and not r.expiry) and "lit" or look.fire
     r.share = (seated and r.expiry) and (1 - r.left / r.duration) or nil
 
-    local sitText = db.ClickToSit and "Click to sit" or "Sit here"
+    local sitText = SitWords(db, true)
     r.label, r.labelColor = nil, "soft"
     if seated then
         r.label = "Resting"
@@ -446,7 +458,7 @@ function CF:FillRenderLook(r, s, look)
     r.simpleLines = moment == "FireHere" and EMPTY or lines
     r.simpleHead = nil
     if moment == "FireHere" then
-        local words = db.ClickToSit and "click to sit" or "Sit here"
+        local words = SitWords(db, false)
         r.simpleHead = KE:ColorTextByTheme("Camp Nearby") .. " " .. Views.White(words)
     elseif moment == "NoCamp" then
         r.simpleHead = Views.Muted("No camp")
@@ -559,7 +571,6 @@ function CF:FillInputs(c)
     i.seated, i.inRange = c.seated, c.inRange
     i.dismissed = self.dismissed
     i.landing = self.landing
-    i.offersNew = false
     i.refillProven = Rules.REFILL_PROVEN
     i.settings = self.db
     return i
@@ -817,7 +828,7 @@ function CF:RenderPreview()
     local s = self.scene
     s.moment, s.showShape, s.showAlert, s.near = sample.moment, true, showAlert, sample.near or false
     s.c, s.newRows, s.keptRows, s.onYou = c, newRows, keptRows, onYou
-    s.inCombat, s.refill = sample.combat or false, true
+    s.inCombat, s.refill = sample.combat or false, Rules.REFILL_PROVEN
     s.dots = nil
     if LOOK[sample.moment].dots and db.Checklist then
         s.dots = {

@@ -804,18 +804,20 @@ local function AlertOff()
     f.fadeOut:Play()
 end
 
--- Protected, so out of combat only: at build, or at the next render out of
--- combat. Until then the catcher takes no mouse, so no left click is lost.
-local function PassLeftThrough(f)
+-- The catcher keeps the right click, which dismisses, and nothing else: every
+-- other button passes through, and motion reaches the world. Protected, so out
+-- of combat only: at build, or at the next render out of combat. Until then the
+-- catcher takes no mouse at all, so no click is lost.
+local function PassClicksThrough(f)
     if f.passThrough or InCombatLockdown() then return end
-    f.catcher:SetPassThroughButtons("LeftButton")
-    f.catcher:EnableMouse(true)
+    f.catcher:SetPassThroughButtons("LeftButton", "MiddleButton", "Button4", "Button5")
+    f.catcher:SetMouseClickEnabled(true)
     f.passThrough = true
 end
 
 local function RenderAlert(r)
     local f = Views.alert
-    PassLeftThrough(f)
+    PassClicksThrough(f)
     if not r.alertText then
         AlertOff()
         return
@@ -853,7 +855,7 @@ function Views.Build(owner)
     Views.round = BuildRound()
     Views.simple = BuildSimple()
     Views.alert = BuildAlert()
-    PassLeftThrough(Views.alert)
+    PassClicksThrough(Views.alert)
 end
 
 function Views.ApplySettings(db)

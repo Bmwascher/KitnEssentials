@@ -80,7 +80,6 @@ describe("campfire rules", function()
             { "alert off, passing", up({ inRange = true, left = 240, settings = { AlertEnabled = false } }),
                 "Passing", true, false, true },
             { "combat, passing", up({ inRange = true, left = 240, inCombat = true }), "Passing", true, false, true },
-            { "new on offer", up({ inRange = true, offersNew = true }), "Passing", true, true, true },
             { "dismissed, fire here", { inRange = true, dismissed = true }, "FireHere", true, false, true },
             { "simple, fire here", { inRange = true, settings = SIMPLE }, "FireHere", true, false, true },
             { "simple, passing", up({ inRange = true, left = 240, settings = SIMPLE }), "Passing", true, true, true },
@@ -173,7 +172,7 @@ describe("campfire rules", function()
             { "Passing", up({ inRange = true, left = 240 }) },
             { "Spare", up({ inRange = true }) },
             { "Low", up({ left = 240 }) },
-            { "Low", up({ left = 240, inRange = true, offersNew = false, dead = true }) },
+            { "Low", up({ left = 240, inRange = true, dead = true }) },
             { "Shown", up({ settings = { ShowAlways = true } }) },
         }
         for index, case in ipairs(timerMoments) do
@@ -204,7 +203,7 @@ describe("campfire rules", function()
         assert.equals("seated", Rules.RingColorKey(10, true))
     end)
 
-    it("reads bonus lines and merges them with aura amounts, each feature once", function()
+    it("reads bonus lines and builds one row per feature from them", function()
         local thing = { id = 1, short = "Thing" }
         local well = { id = 2, short = "Well", period = 5, numbers = 2 }
         local index = { thing = thing, well = well }
@@ -238,11 +237,9 @@ describe("campfire rules", function()
             for i, row in ipairs(rows) do out[i] = { row.id, row.amounts } end
             return out
         end
-        assert.same({ { 1, { 60 } }, { 2, { 29, 5 } } },
-            summary(Rules.MergeBonuses({ thing, well }, { [1] = { 60 } }, tip)), "aura beats tooltip")
         assert.same({ { 1, { 56 } }, { 2, { 29, 5 } } },
-            summary(Rules.MergeBonuses({ thing, well }, { [1] = {} }, tip)), "an aura with no amounts takes the tooltip's")
-        assert.same({}, summary(Rules.MergeBonuses({ thing, well }, {}, {})), "nothing read")
+            summary(Rules.TipRows({ thing, well }, tip)), "first line of a feature wins, an unknown feature drops")
+        assert.same({}, summary(Rules.TipRows({ thing, well }, {})), "nothing read")
     end)
 
     it("finds new and kept rows against the held set", function()
@@ -282,28 +279,12 @@ describe("campfire rules", function()
         return { id = id, amounts = { 1 } }
     end
 
-    it("names what covers a feature, and a covered new row counts only with dimming off", function()
+    it("names what covers a feature, and nothing when it is not on you or nothing can", function()
         local covered, never = coverIds()
         local onYou = { [Rules.COVERED_BY[covered][1]] = "Cover Name" }
         assert.equals("Cover Name", Rules.Coverer(covered, onYou))
         assert.is_nil(Rules.Coverer(covered, {}))
         assert.is_nil(Rules.Coverer(never, onYou))
-
-        -- new row ids, dimming on, on you, the ids that still count
-        local cases = {
-            { { covered }, true, onYou, {} },
-            { { covered }, false, onYou, { covered } },
-            { { covered }, true, {}, { covered } },
-            { { never, covered }, true, onYou, { never } },
-            { {}, true, onYou, {} },
-        }
-        for index, case in ipairs(cases) do
-            local rows = {}
-            for i, id in ipairs(case[1]) do rows[i] = plainRow(id) end
-            local ids = {}
-            for i, row in ipairs(Rules.FreshRows(rows, case[2], case[3])) do ids[i] = row.id end
-            assert.same(case[4], ids, "case " .. index)
-        end
     end)
 
     it("orders lines new, then plain, then covered, a covered new row as covered and dim", function()
@@ -330,12 +311,6 @@ describe("campfire rules", function()
         end
         assert.same({ "new", "kept", "dim", "dim" }, styles(true))
         assert.same({ "new", "new", "kept", "kept" }, styles(false))
-
-        local function coveredNewIsFresh(dim)
-            return Rules.HasFreshLine(Rules.BuildLines({ plainRow(covered) }, {}, dim, onYou, "kept"))
-        end
-        assert.is_false(coveredNewIsFresh(true))
-        assert.is_true(coveredNewIsFresh(false))
     end)
 
     it("words the alert so left and added sum to the duration", function()

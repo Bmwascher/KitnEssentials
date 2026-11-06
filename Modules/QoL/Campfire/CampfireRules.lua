@@ -139,7 +139,7 @@ function Rules.SelectMoment(i)
         if i.landing then return "Landing", true, false, near end
         local alertUnder = s.AlertUnderMinutes * 60
         local underAlert = i.left <= alertUnder
-        if near and (underAlert or i.offersNew) then
+        if near and underAlert then
             local alert = (s.AlertEnabled and not i.dismissed and not i.inCombat) and true or false
             return "Passing", true, alert, near
         end
@@ -248,7 +248,9 @@ function Rules.ParseBonusLine(text, nameIndex)
     return feature, amounts
 end
 
-function Rules.MergeBonuses(features, auraPoints, tipLines)
+-- One row per feature the tooltip names, in the features' order. A feature
+-- named twice keeps its first line.
+function Rules.TipRows(features, tipLines)
     local fromTip = {}
     for _, line in ipairs(tipLines) do
         local id = line.feature.id
@@ -256,11 +258,8 @@ function Rules.MergeBonuses(features, auraPoints, tipLines)
     end
     local rows = {}
     for _, feature in ipairs(features) do
-        local aura, tip = auraPoints[feature.id], fromTip[feature.id]
-        if aura or tip then
-            local amounts = (aura and aura[1]) and aura or tip or aura
-            rows[#rows + 1] = { id = feature.id, feature = feature, amounts = amounts }
-        end
+        local amounts = fromTip[feature.id]
+        if amounts then rows[#rows + 1] = { id = feature.id, feature = feature, amounts = amounts } end
     end
     return rows
 end
@@ -336,16 +335,8 @@ function Rules.OrderLines(rows)
     return out
 end
 
--- A covered new row does not count right now, so it offers nothing and takes
--- the dim look. With dimming off, nothing is treated as covered.
-function Rules.FreshRows(newRows, dim, onYou)
-    local fresh = {}
-    for _, row in ipairs(newRows) do
-        if not (dim and Rules.Coverer(row.id, onYou)) then fresh[#fresh + 1] = row end
-    end
-    return fresh
-end
-
+-- A covered row takes the dim look, new or kept, since it does not count right
+-- now. With dimming off, nothing is treated as covered.
 function Rules.BuildLines(newRows, keptRows, dim, onYou, keptStyle)
     local lines = {}
     for _, row in ipairs(newRows) do
@@ -357,13 +348,6 @@ function Rules.BuildLines(newRows, keptRows, dim, onYou, keptStyle)
         lines[#lines + 1] = { row = row, coverer = coverer, style = coverer and "dim" or keptStyle }
     end
     return Rules.OrderLines(lines)
-end
-
-function Rules.HasFreshLine(lines)
-    for _, line in ipairs(lines) do
-        if line.isNew and not line.coverer then return true end
-    end
-    return false
 end
 
 -- Returns the text, the minutes left, and the minutes added or nil.

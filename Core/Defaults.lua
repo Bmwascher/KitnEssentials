@@ -812,8 +812,6 @@ local Defaults = {
             LandSound = "None",
 
             Strata = "MEDIUM",
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
             RoundPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -680, YOffset = -201 },
             SimplePosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = -375 },
             AlertPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 150 },
