@@ -226,11 +226,23 @@ local function OnRowClick(self, button)
     end
 end
 
+local function IsCut(text)
+    local cut = text:IsTruncated()
+    return not issecretvalue(cut) and cut
+end
+
 local function OnRowEnter(self)
     self.hover:Show()
     local item = self.item
     if not item then return end
-    if item.kind == "section" or item.kind == "text" then return end
+    if item.kind == "section" or item.kind == "text" then
+        if IsCut(self.name) then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(self.name:GetText(), 1, 1, 1, 1, true)
+            GameTooltip:Show()
+        end
+        return
+    end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     if item.kind == "later" then
         GameTooltip:SetText("Level " .. item.group.level, 1, 1, 1)
@@ -248,6 +260,7 @@ local function OnRowEnter(self)
         end
         if entry and entry.tag then GameTooltip:AddLine(entry.tag, 0.61, 0.61, 0.61) end
     end
+    if self.sub:IsShown() and IsCut(self.sub) then GameTooltip:AddLine(self.sub:GetText(), 1, 1, 1, true) end
     GameTooltip:Show()
 end
 
@@ -271,7 +284,9 @@ local function GetRow(index)
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(ICON_SIZE, ICON_SIZE)
     row.name = MakeText(row, "normal")
+    row.name:SetJustifyV("TOP")
     row.sub = MakeText(row, "small")
+    row.sub:SetJustifyV("BOTTOM")
     row.price = MakeText(row, "small")
     row.price:SetJustifyH("RIGHT")
     row.price:SetPoint("RIGHT", row, "RIGHT", 0, 0)
@@ -311,8 +326,17 @@ local function LayoutTextRow(row)
     row.name:SetAlpha(1)
 end
 
+-- The second line takes the row's whole width, and the price moves up to the first.
+local function WidenSecondLine(row)
+    row.price:ClearAllPoints()
+    row.price:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, -4)
+    row.sub:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+end
+
 local function FillRow(row, item)
     row.item = item
+    row.price:ClearAllPoints()
+    row.price:SetPoint("RIGHT", row, "RIGHT", 0, 0)
     row.price:SetText(item.right or "")
     if item.kind == "section" or item.kind == "text" then
         LayoutTextRow(row)
@@ -330,6 +354,7 @@ local function FillRow(row, item)
     end
     if item.kind == "weapon" then
         LayoutSpellRow(row, false, C_Spell.GetSpellTexture(item.weapon[2]), false)
+        WidenSecondLine(row)
         row.name:SetText(T.NameOf(item.weapon[2]) or "")
         T.Route.Ensure()
         row.sub:SetText(T.Paint("muted", T.Route.WeaponText(item.weapon)))
