@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.18
+
+### Both clients
+
+- Tooltips now skins the tooltip on minimap icons from addons such as
+  AtlasLoot and KitnEssentials
+
+---
+
 ## v4.16.17
 
 ### WoW Forever only
