@@ -173,13 +173,10 @@ end
 ---------------------------------------------------------------------------------
 -- RestedXP reads Beta and V2 as it starts, and flipping them while it runs sends it
 -- down the other branch with the first one's frames built. A change with either is
--- kept here with what its preview showed, a reload is asked for, and the next start
--- applies it. KE's own saved table, so nothing reaches RestedXP before the reload.
--- The newest approved change replaces the one waiting, even with no profile to name.
--- The one place a change is saved, in the click that asked for the reload, which
--- checks Setup.WillLoadNext first: if this session is still running when the timer
--- fires, the client refused the reload, and the change goes, so it never waits past
--- that one reload.
+-- saved in KE's own table with what its preview showed, and the next start applies
+-- it. The newest approved change replaces the one waiting, even with no profile to
+-- name. Called only from the click that asked for the reload: if this session still
+-- runs when the timer fires, the client refused the reload and the change goes.
 function Setup.SavePending(kind, rows)
     local store, key = KE:GetCharStore(true), ProfileKey()
     NewerChange(store)
@@ -195,7 +192,7 @@ function Setup.SavePending(kind, rows)
 end
 
 -- A change saved while either addon is set not to load next time would wait for a
--- load that cannot take it (P14-Q27 A). The click asks this before it asks for the
+-- load that cannot take it. The click asks this before it asks for the
 -- reload, so it saves nothing and asks for none.
 -- The client's own per-character check where it is loaded, else the call it makes,
 -- by this character's GUID.
@@ -262,8 +259,7 @@ end
 
 -- Inside RestedXP's start-up call: its settings database exists, and it has not yet
 -- loaded its theme or built its windows. Its reward markers read V2 earlier, and
--- keep what they read for the session (spec 4.6, P14-Q26). The only place KE
--- writes Beta or V2.
+-- keep what they read for the session. The only place KE writes Beta or V2.
 function Setup.Boot()
     booted = true
     beforeBuild = _G.RXPV2GuideWindow == nil and Safe.Dig(_G.RXP, "activeTheme") == nil
@@ -287,9 +283,7 @@ end
 
 -- For the smoke: whether the call came; whether RestedXP had neither loaded its
 -- theme nor built its V2 window then; what the start did; and whether the call
--- changed V2, so that RestedXP's reward markers, made before it, show the old look
--- this session. A reader that keeps what it read in its own locals cannot be seen
--- from here, so the smoke looks at the one the source shows.
+-- changed V2, which leaves RestedXP's reward markers on the old look this session.
 function Setup.StartFacts()
     return booted == true, beforeBuild == true, Setup.StartResult(), v2Changed == true
 end

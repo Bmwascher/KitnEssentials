@@ -95,14 +95,10 @@ local function OnProfileChange()
     if KE.db.profile.SkinRestedXP.Enabled == true or Setup.StartNote() then RebuildPage() end
 end
 
--- Nothing is written that was not shown. A click may come long after the preview
--- opened, so it acts only on the profile and rows on screen. Beta and V2 are never
--- written while RestedXP runs: those rows are saved for its next start, which
--- writes them only if they still match. A client can refuse a reload asked for
--- after other work has run, so the reload is asked for before the dialog closes and
--- the rows are saved; it runs when this click's code ends. Only two addon-list reads
--- come first: with either addon set not to load next time, nothing is saved and no
--- reload is asked for.
+-- A click may come long after the preview opened, so it acts only on the profile
+-- and rows on screen. A client can refuse a reload asked for after other work has
+-- run, so the reload is asked for before the dialog closes and the rows are saved;
+-- it runs when this click's code ends. Only the addon-list check comes first.
 local function Confirm()
     local shown = dialog.shown
     local rows = shown.read()

@@ -284,10 +284,9 @@ function Rules.SetupMayWrite(running, enabled, available, elvuiInCharge)
 end
 
 -- A waiting change lives across one reload: the refused-reload timer clears it in a
--- session that goes on. A session that ends before that timer, by a crash or a quit,
--- leaves it for a later load KE may not run in, so it also keeps the server time it
--- was saved at and lasts one reload's loading screen, with room for a slow disk and
--- a long addon list.
+-- session that goes on. A crash or quit before that timer leaves it for a later
+-- load KE may not run in, so it also expires after one loading screen, with room
+-- for a slow disk and a long addon list.
 Rules.PENDING_SECONDS = 300
 
 -- A change waiting for RestedXP's start writes only what its preview showed: the
