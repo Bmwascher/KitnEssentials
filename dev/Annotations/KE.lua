@@ -230,6 +230,14 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field ExecutionerRules table
 ---@field ImminentDemiseRules table
 ---@field SpellReflectRules table
+---@field RestedXPSafe table
+---@field RestedXPRules table
+---@field RestedXPTheme table
+---@field RestedXPArrow table
+---@field RestedXPIcons table
+---@field RestedXPSetup table
+---@field RestedXPWindowModel table
+---@field RestedXPWindow table
 ---@field PositionCardRules table
 ---@field DOT_TRACKER_SEEDS table
 ---@field CDMIcons table

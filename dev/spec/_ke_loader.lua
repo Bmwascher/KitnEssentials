@@ -3636,6 +3636,16 @@ function L.loadSwingTimerRules(overrides)
     return helpers.loadModule("Modules/Combat/SwingTimer/SwingTimerRules.lua", {})
 end
 
+-- Modules/Skinning/RestedXP: the guarded calls, the rules and the window model
+-- on plain tables. Nothing to stub. Returns KE.
+function L.loadRestedXPRules(overrides)
+    installMock(overrides, {})
+    local KE = helpers.loadModule("Modules/Skinning/RestedXP/RestedXPSafe.lua", {})
+    helpers.loadModule("Modules/Skinning/RestedXP/RestedXPRules.lua", KE)
+    helpers.loadModule("Modules/Skinning/RestedXP/RestedXPWindowModel.lua", KE)
+    return KE
+end
+
 -- Modules/Combat/ClassTools/CustomCooldownsRules.lua. Pure logic: nothing to
 -- stub. Returns KE.
 function L.loadCustomCooldownsRules(overrides)
