@@ -472,11 +472,9 @@ end
 
 -- Locating the level row.
 --
--- Blizzard publishes no line type for it: TooltipDataLineType has UnitName,
--- UnitThreat and UnitOwner but nothing for level
--- (TooltipInfoSharedDocumentation.lua, 12.0.7). So the row is found
--- by matching the localized level template against each
--- line's text. The templates are GlobalStrings and are reduced to plain
+-- TooltipDataLineType declares UnitLevel on both clients, but the live level
+-- row is not confirmed to carry it, so the row is found by matching the
+-- localized level template against each line's text. The templates are GlobalStrings and are reduced to plain
 -- substrings once, on first use rather than at file scope, so load order
 -- cannot matter.
 local levelMatchA, levelMatchB
