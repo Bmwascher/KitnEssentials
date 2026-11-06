@@ -28,6 +28,7 @@ T.Panel = Panel
 local WIDTH, ALONE_HEIGHT = 300, 643
 local HEADER_HEIGHT, SEARCH_HEIGHT, PAD = 32, 22, 8
 local BLOCK_HEIGHT, BARS_HEIGHT = 124, 26
+local MAX_STOPS, STOPS_TOP, STOP_HEIGHT, READ_HEIGHT = 3, 88, 14, 18
 local ROW_HEIGHT, SECTION_HEIGHT, ICON_SIZE = 30, 20, 22
 local NEED, GAP, PIN_INSET = 308, 8, 66
 local BOOK_BUTTON_WIDTH, BOOK_BUTTON_HEIGHT = 150, 26
@@ -346,10 +347,11 @@ local function FillRow(row, item)
     if item.kind == "later" then
         LayoutSpellRow(row, false, nil, false)
         row.icon:Hide()
+        WidenSecondLine(row)
         row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -2)
         row.sub:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 2)
         row.name:SetText("Level " .. item.group.level)
-        row.sub:SetText(#item.group.rows .. (#item.group.rows == 1 and " spell" or " spells"))
+        row.sub:SetText(#item.group.rows .. (#item.group.rows == 1 and " spell" or " spells") .. item.byThen)
         return ROW_HEIGHT
     end
     if item.kind == "weapon" then
@@ -464,7 +466,8 @@ local function BuildAwayItems(plan)
             if plan.goldAt == group then AddGoldLine(items, plan) end
             items[#items + 1] = {
                 kind = "later", group = group,
-                right = SectionTotal(group) .. T.Paint("muted", ", by then ")
+                right = SectionTotal(group),
+                byThen = T.Paint("muted", ", by then ")
                     .. Rules.TotalText(group.byThen, group.byThenApprox, group.byThenUnpriced, T.Coins),
             }
         end
@@ -588,12 +591,16 @@ local function DrawBlock(plan)
     block.spare:SetText(short and (mark .. T.Coins(now.copper - gold) .. " short")
         or (mark .. T.Coins(gold - now.copper) .. " spare"))
     DrawBars(plan)
-    local stops = {}
-    for _, stop in ipairs(Rules.Milestones(plan, plan.level)) do
-        stops[#stops + 1] = T.Paint("muted", "To " .. stop.level .. " ")
-            .. Rules.TotalText(stop.copper, stop.approx, stop.unpriced, T.Coins)
+    local stops = Rules.Milestones(plan, plan.level)
+    for index, text in ipairs(block.stops) do
+        local stop = stops[index]
+        text:SetText(stop and (T.Paint("muted", "To " .. stop.level .. " ")
+            .. Rules.TotalText(stop.copper, stop.approx, stop.unpriced, T.Coins)) or "")
     end
-    block.milestones:SetText(concat(stops, "  "))
+    local readTop = STOPS_TOP + #stops * STOP_HEIGHT + 4
+    block.readCount:ClearAllPoints()
+    block.readCount:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -readTop)
+    block:SetHeight(readTop + READ_HEIGHT)
     local read, total = Rules.ReadCount(plan.priced, T.Store().prices)
     block.readCount:SetText(read < total and T.Paint("muted", ("%d of %d prices read"):format(read, total)) or "")
 end
@@ -773,10 +780,15 @@ local function BuildBlock()
     block.axisLow:SetPoint("TOPLEFT", block.bars, "BOTTOMLEFT", 0, -2)
     block.axisHigh = MakeText(block, "small")
     block.axisHigh:SetPoint("TOPRIGHT", block.bars, "BOTTOMRIGHT", 0, -2)
-    block.milestones = MakeText(block, "small")
-    block.milestones:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -88)
+    block.stops = {}
+    for index = 1, MAX_STOPS do
+        local top = -(STOPS_TOP + (index - 1) * STOP_HEIGHT)
+        local stop = MakeText(block, "small")
+        stop:SetPoint("TOPLEFT", block, "TOPLEFT", 0, top)
+        stop:SetPoint("TOPRIGHT", block, "TOPRIGHT", 0, top)
+        block.stops[index] = stop
+    end
     block.readCount = MakeText(block, "small")
-    block.readCount:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -106)
     frame.block = block
 end
 
