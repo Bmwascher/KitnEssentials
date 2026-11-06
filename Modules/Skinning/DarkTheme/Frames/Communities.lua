@@ -238,7 +238,8 @@ local function Skin()
         end
     end
 
-    for _, name in ipairs({ "ChatTab", "RosterTab", "GuildBenefitsTab", "GuildInfoTab" }) do
+    for _, name in ipairs({ "ChatTab", "RosterTab", "GuildBenefitsTab", "GuildInfoTab",
+        "GuildPreferredPlaySettingsTab" }) do
         if frame[name] then S.ItemButton(frame[name]) end
     end
 

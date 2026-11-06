@@ -588,32 +588,6 @@ local function SkinBookPage(page)
     end
 end
 
--- 28 fills the 30-wide tab inside its border.
-local SIDE_TAB_ICON = 28
-local ICON_CROP = 0.08
--- Clears the column off the window's border. The y it is placed at, -60,
--- is the XML's own.
-local SIDE_TAB_GAP = 1
-
--- Blizzard re-crops each tab icon to its own baked frame on every check
--- change, so KE's crop goes back on after it.
-local function KeepIconCrop(icon, left)
-    if left ~= ICON_CROP then
-        icon:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP)
-    end
-end
-
-local function SkinProfessionTab(tab)
-    if not tab then return end
-    S.SideTab(tab, nil, nil, SIDE_TAB_ICON)
-
-    local icon = tab.Icon
-    if not icon or S.data(icon).keCropHooked then return end
-    S.data(icon).keCropHooked = true
-    S.Icon(icon, true)
-    hooksecurefunc(icon, "SetTexCoord", KeepIconCrop)
-end
-
 local function Skin()
     local PF = _G.ProfessionsFrame
     if not PF then return S.Skip("ProfessionsFrame missing") end
@@ -622,15 +596,15 @@ local function Skin()
     if PF.MaximizeMinimize then S.MaxMinFrame(PF.MaximizeMinimize) end
     if PF.TabSystem then SkinTabRow(PF.TabSystem) end
     -- The overview tab sits outside the profession tabs' array. The others
-    -- chain below it, so moving it moves the column.
+    -- chain below it, so moving it moves the column; -60 is the XML's y.
     if PF.rightProfessionTabs then
         local overview = PF.ProfessionsOverviewTab
-        SkinProfessionTab(overview)
         if overview then
+            S.IconSideTabs({ overview })
             overview:ClearAllPoints()
-            overview:SetPoint("TOPLEFT", PF, "TOPRIGHT", SIDE_TAB_GAP, -60)
+            overview:SetPoint("TOPLEFT", PF, "TOPRIGHT", S.sideTabGap, -60)
         end
-        for _, tab in ipairs(PF.rightProfessionTabs) do SkinProfessionTab(tab) end
+        S.IconSideTabs(PF.rightProfessionTabs)
     end
     if PF.BookPage then SkinBookPage(PF.BookPage) end
 
