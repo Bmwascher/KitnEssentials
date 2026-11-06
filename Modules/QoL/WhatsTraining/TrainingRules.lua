@@ -529,6 +529,12 @@ function Rules.PanelSide(roomL, roomR, need)
     return "pinLeft"
 end
 
+-- In combat the book takes no new anchor: a panel on it stays, any other sits alone.
+function Rules.PlaceStep(host, inCombat, onHost)
+    if host ~= "book" or not inCombat then return "place" end
+    return onHost and "keep" or "alone"
+end
+
 ---------------------------------------------------------------------------------
 -- Learn
 ---------------------------------------------------------------------------------

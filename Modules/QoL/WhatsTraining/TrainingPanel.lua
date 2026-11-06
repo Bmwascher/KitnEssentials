@@ -15,10 +15,11 @@ local Rules = KE.TrainingRules
 local C_Spell, C_Timer = C_Spell, C_Timer
 local CreateFrame = CreateFrame
 local GameTooltip = GameTooltip
+local InCombatLockdown = InCombatLockdown
 local IsShiftKeyDown = IsShiftKeyDown
 local MenuUtil = MenuUtil
 local UIParent = UIParent
-local ipairs, min = ipairs, math.min
+local ipairs, issecretvalue, min = ipairs, issecretvalue, math.min
 local concat = table.concat
 
 local Panel = {}
@@ -49,6 +50,8 @@ local BACKDROP = { bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 }
 
 local frame, bookButton
 local bookHooked, trainerHooked = false, false
+local bookAnchored, placeAfterCombat = false, false
+local anchoredTo
 local drawQueued, dataQueued = false, false
 local rows, barTextures = {}, {}
 local gains, requested = {}, {}
@@ -369,7 +372,10 @@ local function DrawItems(items)
         rows[index]:Hide()
     end
     content:SetHeight(y)
-    if frame.scrollbar then frame.scrollbar:UpdateVisibility(y, frame.scroll:GetHeight() or 0) end
+    if frame.scrollbar then
+        local height = frame.scroll:GetHeight()
+        if not issecretvalue(height) then frame.scrollbar:UpdateVisibility(y, height or 0) end
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -850,12 +856,23 @@ local function HostNow()
     return nil
 end
 
+local function WaitForCombat()
+    placeAfterCombat = true
+    T.module:RegisterEvent("PLAYER_REGEN_ENABLED")
+end
+
 local function PlaceBeside(target)
     local left, right = target:GetLeft(), target:GetRight()
-    if not (left and right) then return false end
-    local scale = target:GetEffectiveScale() / UIParent:GetEffectiveScale()
-    left, right = left * scale, right * scale
+    local targetScale, baseScale = target:GetEffectiveScale(), UIParent:GetEffectiveScale()
     local screen = UIParent:GetWidth()
+    -- A window's anchors or scale can read secret, and no test of them is then allowed.
+    if issecretvalue(left) or issecretvalue(right) or issecretvalue(targetScale)
+        or issecretvalue(baseScale) or issecretvalue(screen) then
+        return false
+    end
+    if not (left and right) then return false end
+    local scale = targetScale / baseScale
+    left, right = left * scale, right * scale
     local side = Rules.PanelSide(left, screen - right, NEED)
     frame:ClearAllPoints()
     if side == "right" then
@@ -880,12 +897,20 @@ local function PlaceAlone()
 end
 
 local function Place(host)
+    local target
     if host == "trainer" then
-        if PlaceBeside(_G.ClassTrainerFrame) then return end
+        target = _G.ClassTrainerFrame
     elseif host == "book" then
-        local book = _G.PlayerSpellsFrame
-        if book and PlaceBeside(book) then return end
+        target = _G.PlayerSpellsFrame
     end
+    local step = Rules.PlaceStep(host, InCombatLockdown(), target ~= nil and anchoredTo == target)
+    if step ~= "place" then WaitForCombat() end
+    if step == "keep" then return end
+    if step == "place" and target and PlaceBeside(target) then
+        anchoredTo = target
+        return
+    end
+    anchoredTo = nil
     PlaceAlone()
 end
 
@@ -955,8 +980,14 @@ local function ShowBookButton(book)
         end)
         bookButton:SetFrameStrata("DIALOG")
     end
-    bookButton:ClearAllPoints()
-    bookButton:SetPoint("BOTTOMLEFT", book, "BOTTOMLEFT", 22, 2)
+    if not bookAnchored then
+        if InCombatLockdown() then
+            WaitForCombat()
+            return
+        end
+        bookButton:SetPoint("BOTTOMLEFT", book, "BOTTOMLEFT", 22, 2)
+        bookAnchored = true
+    end
     UpdateBookButton()
     bookButton:Show()
 end
@@ -976,6 +1007,14 @@ local function OnBookHidden()
     if not T.active then return end
     if bookButton then bookButton:Hide() end
     C_Timer.After(0, Panel.Refresh)
+end
+
+function Panel.AfterCombat()
+    if not placeAfterCombat then return end
+    placeAfterCombat = false
+    local book = _G.PlayerSpellsFrame
+    if state.bookOpen and book then ShowBookButton(book) end
+    Panel.Refresh()
 end
 
 -- Each installer can run from a load callback after the module turned off.

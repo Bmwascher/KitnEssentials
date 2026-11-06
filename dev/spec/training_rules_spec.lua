@@ -384,6 +384,19 @@ describe("What's Training rules", function()
         end
     end)
 
+    it("PlaceStep gives the book no new anchor in combat", function()
+        for _, row in ipairs({
+            { host = "trainer", combat = true, onHost = false, want = "place" },
+            { host = "alone", combat = true, onHost = false, want = "place" },
+            { host = "book", combat = false, onHost = false, want = "place" },
+            { host = "book", combat = false, onHost = true, want = "place" },
+            { host = "book", combat = true, onHost = true, want = "keep" },
+            { host = "book", combat = true, onHost = false, want = "alone" },
+        }) do
+            assert.equals(row.want, Rules.PlaceStep(row.host, row.combat, row.onHost))
+        end
+    end)
+
     it("Offers, DefaultTick and CanTick read a window with or without class rows", function()
         local byKey = Rules.SpellsByKey({ { 4, 100, 0 }, { 10, 101, 0, needs = 100 } }, function() return "Rend" end)
         local open, waiting = Rules.Offers({

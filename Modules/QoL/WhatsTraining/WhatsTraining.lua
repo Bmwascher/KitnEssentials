@@ -120,6 +120,7 @@ function WT:PLAYER_REGEN_ENABLED()
     local names = pending
     pending = {}
     if not T.active then return end
+    T.Panel.AfterCombat()
     for name in pairs(names) do self:LoadData(name) end
 end
 
@@ -266,8 +267,10 @@ end
 
 function WT:OnEnable()
     if not self.db.Enabled then return end
-    T.active = true
     CacheCharacter()
+    -- UnitClass may return nothing. The module stays inactive, and the next enable tries again.
+    if not T.classId then return end
+    T.active = true
     -- Only the chat line stays latched: a failed load tries again on each enable.
     T.loadFailure = nil
     T.Route.failed = nil
