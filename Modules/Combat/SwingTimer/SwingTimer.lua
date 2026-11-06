@@ -475,7 +475,8 @@ function ST:FillToward(row, now, endAt, toward)
     elseif row.redHold then
         fraction = 1 - toward
     else
-        local from = R.AimStart(row.stopAt or now, self.lastStop)
+        local stopBy = row.ends and self:StopBy(row)
+        local from = R.AimStart(stopBy, self.lastStop, now)
         fraction = R.FillAt(from, endAt - from, toward == 0, now)
     end
     local start, duration, drains = R.FillToward(fraction, now, endAt, toward)
@@ -1055,10 +1056,16 @@ function ST:PlaceZones(row, aim, latency, stopping)
     row.zoneGo:Show()
 end
 
+-- The stop-by line of the swing on the row, read each time so no line outlives
+-- its swing. The row must have a swing.
+function ST:StopBy(row)
+    return math.max(row.ends - R.AIM_SECONDS - (row.latency or 0), row.starts)
+end
+
 function ST:PaintReload(row, now)
     local db = self.db
     local aim, latency = R.AIM_SECONDS, row.latency or 0
-    local stopAt = math.max(row.ends - aim - latency, row.starts)
+    local stopAt = self:StopBy(row)
     local inZone = now >= stopAt
     local word = R.ReloadWord(inZone, self.moving)
     row.state, row.phase, row.stopAt = "running", "reload", stopAt

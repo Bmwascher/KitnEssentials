@@ -157,7 +157,17 @@ describe("swing timer bar rules", function()
             { stopAt = 100, lastStop = 100.3, want = 100.3 },
             { stopAt = 100, lastStop = nil, want = 100 },
         }) do
-            assert.equals(row.want, Rules.AimStart(row.stopAt, row.lastStop))
+            assert.equals(row.want, Rules.AimStart(row.stopAt, row.lastStop, 101))
+        end
+    end)
+
+    it("starts an aim with no swing at the last stop, and never after now", function()
+        for _, row in ipairs({
+            { stopAt = 103.31, lastStop = 100.3, now = 100.5, want = 100.5 },
+            { stopAt = nil, lastStop = 100.3, now = 100.5, want = 100.3 },
+            { stopAt = nil, lastStop = nil, now = 100.5, want = 100.5 },
+        }) do
+            assert.equals(row.want, Rules.AimStart(row.stopAt, row.lastStop, row.now))
         end
     end)
 end)
