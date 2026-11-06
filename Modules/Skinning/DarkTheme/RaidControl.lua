@@ -110,6 +110,8 @@ local BUTTON_HEIGHT = 20
 local BUTTON_WIDTH = PANEL_WIDTH - 20
 local TARGET_SIZE = 22
 local TEXT_SIZE = 13
+-- The dropdown template's 25px height plus the 5px gap above it.
+local DIFFICULTY_ROW_HEIGHT = 25 + 5
 
 -- Retail-only rows: the Vantus rune spell and the buff strip's spell ids do
 -- not exist on every client.
@@ -1250,6 +1252,13 @@ function RC:Setup()
     if hasSharedNotes then panelHeight = panelHeight + (BUTTON_HEIGHT + 3) end
     -- The Vantus row was not in PANEL_HEIGHT's baseline.
     if VANTUS_ADMITTED then panelHeight = panelHeight + (BUTTON_HEIGHT + 3) end
+    -- The difficulty row shows only where the client offers a difficulty the
+    -- player can pick; Blizzard's raid manager hides its own dropdown on the
+    -- same test.
+    local util = _G.DifficultyUtil
+    local hasDifficulty = not (util and util.HasAnyUserSelectableDifficulties)
+        or util.HasAnyUserSelectableDifficulties()
+    if not hasDifficulty then panelHeight = panelHeight - DIFFICULTY_ROW_HEIGHT end
     panel:SetSize(PANEL_WIDTH, panelHeight)
     -- Remembered so ApplyGroupContext subtracts from a FIXED number rather
     -- than from the live height -- reading the current size and adjusting it
@@ -1360,17 +1369,20 @@ function RC:Setup()
         "20s", nil, OnEvent_CountdownButton, CountdownClick(20))
 
     -- Row 3: Dungeon Difficulty
-    local DifficultyDropdown = CreateDropdown("KE_RaidControlDifficulty", panel, 85,
-        "TOPLEFT", Countdown5Button, "BOTTOMLEFT", 0, -5, -- rows now share x=10
-        DIFFICULTY_LABEL,
-        -- GROUP_ROSTER_UPDATE as well as the difficulty event: converting a
-        -- party to a raid changes which difficulty the control reads, and both
-        -- the closed dropdown and its "(Party)"/"(Raid)" label have to follow.
-        { "PLAYER_DIFFICULTY_CHANGED", "GROUP_ROSTER_UPDATE" }, OnEvent_Difficulty, SetupDifficulty)
+    local assistAnchor = Countdown5Button
+    if hasDifficulty then
+        assistAnchor = CreateDropdown("KE_RaidControlDifficulty", panel, 85,
+            "TOPLEFT", Countdown5Button, "BOTTOMLEFT", 0, -5, -- rows now share x=10
+            DIFFICULTY_LABEL,
+            -- GROUP_ROSTER_UPDATE as well as the difficulty event: converting a
+            -- party to a raid changes which difficulty the control reads, and both
+            -- the closed dropdown and its "(Party)"/"(Raid)" label have to follow.
+            { "PLAYER_DIFFICULTY_CHANGED", "GROUP_ROSTER_UPDATE" }, OnEvent_Difficulty, SetupDifficulty)
+    end
 
     -- Everyone Assist
     local EveryoneAssist = CreateCheckBox("KE_RaidControlEveryoneAssist", panel, BUTTON_HEIGHT + 4,
-        "TOPLEFT", DifficultyDropdown, "BOTTOMLEFT", -4, -3,
+        "TOPLEFT", assistAnchor, "BOTTOMLEFT", -4, -3,
         _G.ALL_ASSIST_LABEL_LONG or "Everyone is Assistant", buttonEvents, OnEvent_EveryoneAssist, OnClick_EveryoneAssist)
 
     -- A restriction change has no widget event; RC:FollowRestrictions hands

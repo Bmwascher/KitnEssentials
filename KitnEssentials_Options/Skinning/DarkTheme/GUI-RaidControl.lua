@@ -35,9 +35,14 @@ GUIFrame:RegisterContent("RaidControl", function(scrollChild, yOffset)
             "applies in a party, so the panel drops those rows and shrinks. Shared Notes and Personal " ..
             "Notes appear when " .. KE:Gold("Northern Sky Raid Tools") .. " is installed."
 
+    local util = _G.DifficultyUtil
+    local hasDifficulty = not (util and util.HasAnyUserSelectableDifficulties)
+        or util.HasAnyUserSelectableDifficulties()
+
     card:AddLabel("A Raid Control button sits at the top of the screen whenever you are in a group. " ..
-        "Click it for a panel with ready check, a 5, 10 or 20 second countdown, the dungeon " ..
-        "difficulty, an everyone-assist switch, world markers and a role count. Right-click and " ..
+        "Click it for a panel with ready check, a 5, 10 or 20 second countdown, " ..
+        (hasDifficulty and "the dungeon difficulty, " or "") ..
+        "an everyone-assist switch, world markers and a role count. Right-click and " ..
         "drag the button to move it." ..
         "\n\nMarker buttons place world markers; the skull-and-crossbones button clears them all. " ..
         "Hold shift and click any countdown to cancel one that is already running." ..
