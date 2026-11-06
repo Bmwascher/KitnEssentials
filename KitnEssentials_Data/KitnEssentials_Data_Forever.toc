@@ -12,3 +12,4 @@
 DataBuild.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
 ScoutMobs.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
 ScoutSpells.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
+RareAlertTable.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
