@@ -36,7 +36,7 @@ local DIAGONAL = math_sqrt(2)
 local active, installed, textHooked
 local layer, swapped, fitted, rxpImage, textHome
 local keeping, composing
-local onYards, alphaHooked, yardsAlpha
+local onYards, frameHooked, yardsAlpha
 local wordsFor, wordsRaw, wordsText, wordsPending
 
 ---------------------------------------------------------------------------------
@@ -239,10 +239,17 @@ local function OnArrowAlpha(af, alpha)
     if onYards then onYards(af) end
 end
 
-local function HookAlpha(af)
-    if alphaHooked then return end
-    alphaHooked = true
+-- RestedXP also hides and shows the frame itself, with no alpha or text write.
+local function OnArrowShown(af)
+    if onYards then onYards(af) end
+end
+
+local function HookFrame(af)
+    if frameHooked then return end
+    frameHooked = true
     hooksecurefunc(af, "SetAlpha", OnArrowAlpha)
+    af:HookScript("OnShow", OnArrowShown)
+    af:HookScript("OnHide", OnArrowShown)
 end
 
 -- The step box's yards read the same writes, with or without this part on.
@@ -251,7 +258,7 @@ function Arrow.WatchYards(fn)
     onYards = fn
     if fn and Has(af, "HookScript") and type(af.text) == "table" then
         HookText(af)
-        HookAlpha(af)
+        HookFrame(af)
     end
 end
 

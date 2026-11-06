@@ -217,8 +217,8 @@ function Setup.NotLoading()
     Setup.ProfileChanged()
 end
 
--- The click asks this before it asks for the reload, so a change with no profile
--- name to save under asks for none.
+-- The click asks this before it writes, saves or asks for a reload, so a change
+-- with no profile name to tie it to changes nothing and asks for no reload.
 function Setup.CanSave()
     return ProfileKey() ~= nil
 end

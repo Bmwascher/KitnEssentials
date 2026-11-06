@@ -96,10 +96,12 @@ local function OnProfileChange()
 end
 
 -- A click may come long after the preview opened, so it acts only on the profile
--- and rows on screen. A client can refuse a reload asked for after other work has
--- run, so the reload is asked for before the dialog closes and the rows are saved;
--- it runs when this click's code ends. Only the checks that the change can be kept
--- come first: both addons load next time, and RestedXP's profile has a name.
+-- and rows on screen, and only when RestedXP's profile has a name to tie the change
+-- to, whether it writes live or after a reload. A client can refuse a reload asked
+-- for after other work has run, so the reload is asked for before the dialog closes
+-- and the rows are saved; it runs when this click's code ends. Only the checks that
+-- the change can be kept come first: the profile's name, then both addons loading
+-- next time.
 local function Confirm()
     local shown = dialog.shown
     local rows = shown.read()
@@ -107,15 +109,15 @@ local function Confirm()
         ShowCurrentRows()
         return
     end
+    if not Setup.CanSave() then
+        dialog:Hide()
+        Setup.NoProfile()
+        return
+    end
     if rows.reload == true then
         if not Setup.WillLoadNext() then
             dialog:Hide()
             Setup.NotLoading()
-            return
-        end
-        if not Setup.CanSave() then
-            dialog:Hide()
-            Setup.NoProfile()
             return
         end
         KE:ReloadUI()
