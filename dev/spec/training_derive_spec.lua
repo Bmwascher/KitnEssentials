@@ -106,21 +106,23 @@ describe("What's Training data rules", function()
     end)
 
     it("gives maybe where both hold a row and their flags differ, and a flag where one is silent or they agree", function()
-        local c = client({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 50, 60 })
+        local c = client({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 50, 60, 70 })
         local rows = rowsById(Derive.ClassRows(1, {
             spellsA = { [1] = {
                 { 10, 1, 0, quest = true }, { 10, 2, 0, quest = true }, { 10, 3, 100 }, { 10, 5, 100 },
                 { 10, 6, 100, talent = 50 }, { 10, 7, 100, talent = 50 }, { 10, 8, 100 }, { 10, 9, 100, talent = 50 },
                 { 10, 11, 100, talent = 50 }, { 10, 12, 0, quest = true }, { 10, 13, 100 },
+                { 10, 15, 100, talent = 99 }, { 10, 16, 100, talent = 99 },
             } },
             levelsB = { [1] = { [10] = {
                 { id = 3, cost = 100 }, { id = 5, cost = 100 }, { id = 12, cost = 100 },
                 { id = 6, cost = 100, requiredTalentId = 50 }, { id = 7, cost = 100 },
                 { id = 8, cost = 100, requiredTalentId = 50 }, { id = 9, cost = 100, requiredTalentId = 60 },
                 { id = 10, cost = 100, requiredTalentId = 70 }, { id = 11, cost = 100, requiredTalentId = 99 },
-                { id = 13, cost = 100, requiredTalentId = 99 },
+                { id = 13, cost = 100, requiredTalentId = 99 }, { id = 14, cost = 100, requiredTalentId = 99 },
+                { id = 16, cost = 100, requiredTalentId = 50 },
             } } },
-            questB = { [1] = { [1] = {}, [3] = {}, [4] = {}, [10] = {} } },
+            questB = { [1] = { [1] = {}, [3] = {}, [4] = {}, [10] = {}, [14] = {} } },
         }, c, {}))
         for _, row in ipairs({
             { name = "both say quest", id = 1, quest = true },
@@ -136,6 +138,9 @@ describe("What's Training data rules", function()
             { name = "a root on a row only the second holds", id = 10, quest = true, talent = 70 },
             { name = "a second root the client cannot name", id = 11, talent = 50 },
             { name = "only an unnamed second root", id = 13 },
+            { name = "an unnamed root on a row only the second holds", id = 14, quest = true },
+            { name = "an unnamed root on a row only the first holds", id = 15 },
+            { name = "an unnamed first root beside a named second", id = 16, talent = 50 },
         }) do
             assert.equals(row.quest, rows[row.id].quest, row.name)
             assert.equals(row.talent, rows[row.id].talent, row.name)
@@ -167,7 +172,7 @@ describe("What's Training data rules", function()
     end)
 
     it("ships no untrainable id, whichever input holds it, and keeps a talent that points at one", function()
-        local c = client({ 5, 6, 7, 197 })
+        local c = client({ 1, 5, 6, 7, 197 })
         local lists = { untrainable = { 1, 2, 3, 4, 9, 196 } }
         local rows, leftOut, removed = Derive.ClassRows(1, {
             spellsA = { [1] = { { 10, 1, 100 }, { 10, 5, 100, needs = 1 }, { 10, 6, 100, talent = 1 } } },

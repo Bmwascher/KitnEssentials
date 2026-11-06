@@ -105,16 +105,14 @@ local function QuestFlag(a, b, inQuestB)
     return "maybe"
 end
 
+-- A root the client has no name for cannot be learned, so that source says nothing.
 local function TalentFlag(a, b, names)
-    if a and b then
-        local root = b.requiredTalentId
-        if a.talent == root then return a.talent end
-        -- A root the client has no name for cannot be learned, so it decides nothing.
-        if root and not names[root] then return a.talent end
-        return "maybe"
-    end
-    if a then return a.talent end
-    return b and b.requiredTalentId or nil
+    local rootA, rootB = a and a.talent or nil, b and b.requiredTalentId or nil
+    local silentA, silentB = rootA and not names[rootA], rootB and not names[rootB]
+    if silentA then rootA = nil end
+    if silentB then rootB = nil end
+    if a and b and not silentA and not silentB and rootA ~= rootB then return "maybe" end
+    return rootA or rootB
 end
 
 -- A set of the untrainable ids, a function that notes each one an input holds,
