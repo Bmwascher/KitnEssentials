@@ -1,5 +1,24 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.8
+
+### Both clients
+
+- Side tab icons stay centered after a click instead of drifting left (the
+  World Map quest log tabs on retail)
+
+### WoW Forever only
+
+- The Professions window's secondary profession bars stay inside their
+  columns instead of overlapping past the window edge
+- The unlearn buttons use the KE close X, the side tabs use cropped,
+  bordered icons that fill each tab and sit just off the window, and the
+  book's profession icons lose Blizzard's gold frames
+- The AddOns window's buttons, dropdown, search box and checkbox are now
+  skinned
+
+---
+
 ## v4.16.7
 
 ### WoW Forever only
