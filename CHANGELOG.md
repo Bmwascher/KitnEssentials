@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.11
+
+### Both clients
+
+- Fixed the chat window sliding out of the chat panel when you level up
+  in combat; every chat window now returns to the panel when combat ends
+
+---
+
 ## v4.16.10
 
 ### Both clients
