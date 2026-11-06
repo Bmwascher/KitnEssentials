@@ -27,17 +27,26 @@ GUIFrame:RegisterContent("RaidControl", function(scrollChild, yOffset)
         end
     end)
 
-    local raidRows = KE:IsBaselineLoad()
-        and "\n\nShared Notes and Personal Notes appear in a raid when " ..
-            KE:Gold("Northern Sky Raid Tools") .. " is installed."
-        or "\n\nIn a raid the panel also offers group arrangement, a check for who is missing a Vantus " ..
-            "Rune, and a strip of raid buff icons that dims the ones nobody brings. None of that " ..
-            "applies in a party, so the panel drops those rows and shrinks. Shared Notes and Personal " ..
-            "Notes appear when " .. KE:Gold("Northern Sky Raid Tools") .. " is installed."
+    local RC = KitnEssentials:GetModule("RaidControl", true) or {}
 
-    local util = _G.DifficultyUtil
-    local hasDifficulty = not (util and util.HasAnyUserSelectableDifficulties)
-        or util.HasAnyUserSelectableDifficulties()
+    local raidOnly = {}
+    if KE.GroupSort then raidOnly[#raidOnly + 1] = "group arrangement" end
+    if RC.VANTUS_ADMITTED then raidOnly[#raidOnly + 1] = "a check for who is missing a Vantus Rune" end
+    if RC.BUFFS_ADMITTED then
+        raidOnly[#raidOnly + 1] = "a strip of raid buff icons that dims the ones nobody brings"
+    end
+    local raidRows = ""
+    if #raidOnly > 0 then
+        local n = #raidOnly
+        local list = n == 1 and raidOnly[1]
+            or table.concat(raidOnly, ", ", 1, n - 1) .. (n > 2 and ", and " or " and ") .. raidOnly[n]
+        raidRows = "\n\nIn a raid the panel also offers " .. list .. ". None of that applies in a " ..
+            "party, so the panel drops those rows and shrinks."
+    end
+    raidRows = raidRows .. "\n\nShared Notes and Personal Notes appear in a raid when " ..
+        KE:Gold("Northern Sky Raid Tools") .. " is installed."
+
+    local hasDifficulty = not RC.HasDifficultyRow or RC.HasDifficultyRow()
 
     card:AddLabel("A Raid Control button sits at the top of the screen whenever you are in a group. " ..
         "Click it for a panel with ready check, a 5, 10 or 20 second countdown, " ..

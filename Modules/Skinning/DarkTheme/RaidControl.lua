@@ -117,6 +117,16 @@ local DIFFICULTY_ROW_HEIGHT = 25 + 5
 -- not exist on every client.
 local VANTUS_ADMITTED = not KE.IsFeatureAvailable or KE:IsFeatureAvailable("RaidControlVantus") == true
 local BUFFS_ADMITTED = not KE.IsFeatureAvailable or KE:IsFeatureAvailable("RaidControlBuffs") == true
+RC.VANTUS_ADMITTED, RC.BUFFS_ADMITTED = VANTUS_ADMITTED, BUFFS_ADMITTED
+
+-- The difficulty row shows only where the client offers a difficulty the
+-- player can pick; Blizzard's raid manager hides its own dropdown on the same
+-- test. A client without the predicate offers one.
+function RC.HasDifficultyRow()
+    local util = _G.DifficultyUtil
+    if not (util and util.HasAnyUserSelectableDifficulties) then return true end
+    return util.HasAnyUserSelectableDifficulties() and true or false
+end
 
 -- Bottom row: role-count plate on the left, Close filling the rest. Both
 -- widths come from these numbers, so the two always abut.
@@ -1252,12 +1262,7 @@ function RC:Setup()
     if hasSharedNotes then panelHeight = panelHeight + (BUTTON_HEIGHT + 3) end
     -- The Vantus row was not in PANEL_HEIGHT's baseline.
     if VANTUS_ADMITTED then panelHeight = panelHeight + (BUTTON_HEIGHT + 3) end
-    -- The difficulty row shows only where the client offers a difficulty the
-    -- player can pick; Blizzard's raid manager hides its own dropdown on the
-    -- same test.
-    local util = _G.DifficultyUtil
-    local hasDifficulty = not (util and util.HasAnyUserSelectableDifficulties)
-        or util.HasAnyUserSelectableDifficulties()
+    local hasDifficulty = RC.HasDifficultyRow()
     if not hasDifficulty then panelHeight = panelHeight - DIFFICULTY_ROW_HEIGHT end
     panel:SetSize(PANEL_WIDTH, panelHeight)
     -- Remembered so ApplyGroupContext subtracts from a FIXED number rather
