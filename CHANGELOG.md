@@ -1,5 +1,13 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.15
+
+### WoW Forever only
+
+- Dark Theme now skins the Prev and Next page arrows in the mailbox inbox
+
+---
+
 ## v4.16.14
 
 ### WoW Forever only
