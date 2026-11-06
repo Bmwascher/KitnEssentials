@@ -92,6 +92,7 @@
     <Script file="QoL\WhatsTraining\TrainingRead.lua" />
     <Script file="QoL\WhatsTraining\TrainingWaypoints.lua" />
     <Script file="QoL\WhatsTraining\TrainingRankSwap.lua" />
+    <Script file="QoL\WhatsTraining\TrainingLearn.lua" />
     <Script file="Skinning\SkinAPI.lua" />
     <Script file="Skinning\DarkTheme\EUIWindows.lua" />
     <Script file="Skinning\DarkTheme\Dialogs.lua" />
