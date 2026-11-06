@@ -586,6 +586,8 @@ end
 -- 28 fills the 30-wide tab inside its border.
 local SIDE_TAB_ICON = 28
 local ICON_CROP = 0.08
+-- Clears the column off the window's border; Blizzard's y is kept.
+local SIDE_TAB_GAP = 2
 
 -- Blizzard re-crops each tab icon to its own baked frame on every check
 -- change, so KE's crop goes back on after it.
@@ -613,9 +615,15 @@ local function Skin()
     S.Frame(PF)
     if PF.MaximizeMinimize then S.MaxMinFrame(PF.MaximizeMinimize) end
     if PF.TabSystem then SkinTabRow(PF.TabSystem) end
-    -- The overview tab sits outside the profession tabs' array.
+    -- The overview tab sits outside the profession tabs' array. The others
+    -- chain below it, so moving it moves the column.
     if PF.rightProfessionTabs then
-        SkinProfessionTab(PF.ProfessionsOverviewTab)
+        local overview = PF.ProfessionsOverviewTab
+        SkinProfessionTab(overview)
+        if overview then
+            overview:ClearAllPoints()
+            overview:SetPoint("TOPLEFT", PF, "TOPRIGHT", SIDE_TAB_GAP, -60)
+        end
         for _, tab in ipairs(PF.rightProfessionTabs) do SkinProfessionTab(tab) end
     end
     if PF.BookPage then SkinBookPage(PF.BookPage) end
