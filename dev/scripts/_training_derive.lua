@@ -8,7 +8,7 @@
 --   Weapons(id, inputs, client, lists)    one class's weapon rows, and the ids removed
 --   Replaced(id, rows, client)    each row or outside needs rank with the spells the
 --       client says replace it
---   ReplacedCheck(spellsA, rows, replaced)    lines where the first source's
+--   ReplacedCheck(spellsA, rows, replaced)    lines where spellsA's
 --       replacedBy and the client disagree
 --   ClassSource, RouteSource    the source lines for a stored table
 --   Check(files, read, matches)    the paths whose text is not their lines
@@ -252,7 +252,7 @@ function M.Replaced(classId, rows, client)
 end
 
 -- A replacement that is itself a row belongs to the rank chain, so only one outside
--- the rows is expected in the first source's replacedBy.
+-- the rows is expected in spellsA's replacedBy.
 function M.ReplacedCheck(spellsA, rows, replaced)
     local inRows = {}
     for _, row in ipairs(rows) do inRows[row[2]] = true end
