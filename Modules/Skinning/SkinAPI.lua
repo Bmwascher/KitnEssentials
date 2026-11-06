@@ -2313,9 +2313,11 @@ function S.SlotIcon(icon, border, withBackdrop)
     if border then S.IconBorder(border, S.GetBackdrop(icon)) end
 end
 
+local ICON_CROP = 0.08
+
 function S.Icon(icon, withBackdrop)
     if not icon or S.data(icon).keIconSkinned then return end
-    if icon.SetTexCoord then icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    if icon.SetTexCoord then icon:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP) end
 
     S.PixelSnap(icon)
     if withBackdrop then
@@ -2518,6 +2520,33 @@ local IN_PLACE_ICON = 22
 function S.SideTabsInPlace(tabs)
     if not tabs then return end
     for _, tab in ipairs(tabs) do S.SideTab(tab, nil, nil, IN_PLACE_ICON) end
+end
+
+-- Tabs whose icons are textures (spell, profession, portrait) instead of
+-- atlas glyphs: KE's crop and border, grown to fill the 30-wide tab.
+local FILL_ICON = 28
+-- Gap between such a column and its window's border.
+S.sideTabGap = 1
+
+-- Blizzard re-crops these icons to their baked frame on every check change,
+-- so KE's crop goes back on after it.
+local function KeepIconCrop(icon, left)
+    if left ~= ICON_CROP then
+        icon:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP)
+    end
+end
+
+function S.IconSideTabs(tabs)
+    if not tabs then return end
+    for _, tab in ipairs(tabs) do
+        S.SideTab(tab, nil, nil, FILL_ICON)
+        local icon = tab.Icon
+        if icon and not S.data(icon).keCropHooked then
+            S.data(icon).keCropHooked = true
+            S.Icon(icon, true)
+            hooksecurefunc(icon, "SetTexCoord", KeepIconCrop)
+        end
+    end
 end
 
 function S.NavCrumb(btn)

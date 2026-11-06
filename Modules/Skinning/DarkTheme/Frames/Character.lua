@@ -723,7 +723,14 @@ local function Skin()
 
     SkinStatsPane()
     SkinSidebarTabs()
-    if frame.ModeTabs then S.SideTabsInPlace(frame.ModeTabs.Tabs) end
+    -- The tabs chain inside ModeTabs, so moving it moves the column; -30 is
+    -- the XML's y.
+    local modeTabs = frame.ModeTabs
+    if modeTabs then
+        S.IconSideTabs(modeTabs.Tabs)
+        modeTabs:ClearAllPoints()
+        modeTabs:SetPoint("TOPLEFT", frame, "TOPRIGHT", S.sideTabGap, -30)
+    end
     if frame.LeftPaneHost then S.StripTextures(frame.LeftPaneHost) end
     if frame.RightPaneHost then
         S.StripTextures(frame.RightPaneHost)
