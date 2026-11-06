@@ -537,12 +537,18 @@ local function LevelConColor(level)
     return GetCreatureDifficultyColor(level)
 end
 
--- Wraps the first plain occurrence of `token` in a color code. Nil when the
--- token is missing or the row already carries a color, so a re-run on the
--- same tooltip leaves the row alone.
+-- Wraps the first occurrence of `token` in a color code; a number matches
+-- only whole, so "8" never colors part of "18". Nil when the token is
+-- missing or the row already carries a color, so a re-run on the same
+-- tooltip leaves the row alone.
 local function ColorLevelToken(text, token, color)
     if not color or text:find("|c", 1, true) then return nil end
-    local s, e = text:find(token, 1, true)
+    local s, e
+    if token:find("^%d+$") then
+        s, e = text:find("%f[%d]" .. token .. "%f[%D]")
+    else
+        s, e = text:find(token, 1, true)
+    end
     if not s then return nil end
     return text:sub(1, s - 1) .. KE:WrapColor(token, color.r, color.g, color.b) .. text:sub(e + 1)
 end

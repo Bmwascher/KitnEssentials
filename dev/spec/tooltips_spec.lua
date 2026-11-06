@@ -494,8 +494,13 @@ describe("Tooltips ColorLevelToken", function()
         assert.is_nil(TT._ColorLevelToken("Level |cffff000012|r Beast", "12", RED))
     end)
 
-    it("leaves a row that does not show the level", function()
-        assert.is_nil(TT._ColorLevelToken("Level 13 Beast", "12", RED))
+    it("leaves a row that does not show the level as a whole number", function()
+        for _, row in ipairs({
+            { text = "Level 13 Beast", token = "12" },
+            { text = "Level 18 Beast", token = "8" },
+        }) do
+            assert.is_nil(TT._ColorLevelToken(row.text, row.token, RED), row.token)
+        end
     end)
 end)
 
