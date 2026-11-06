@@ -15,6 +15,13 @@ local RA = KitnEssentials:NewModule("RareAlert", "AceEvent-3.0")
 local TICK_INTERVAL = 0.1
 local CLOSE_AFTER = 3
 local HORN_FILE = 598196
+local DATA_ADDON = "KitnEssentials_Data"
+local TABLE_SOURCE = "RareAlertTable"
+local MISSING_DATA = "a data file is missing"
+local UNREADABLE_DATA = "a data file could not be read"
+local MISSING_REASON = "MISSING"
+-- The chat history replay lands just after login and would bury an earlier line.
+local FAILURE_PRINT_DELAY = 2
 
 RA.HORN_SOUND = "Gruntling Horn"
 
@@ -61,6 +68,10 @@ RA.editModeRegistered = false
 RA.seen = {}
 -- When a live unit last proved a creature friendly or not a rare.
 RA.proved = {}
+-- The rare table once built. It stays for the session, as the folder cannot unload.
+local rareData
+local loadQueued = false
+local loadFailureSaid = false
 
 function RA:UpdateDB()
     self.db = KE.db.profile.RareAlert
@@ -98,13 +109,61 @@ end
 -- Rare table
 ---------------------------------------------------------------------------------
 
--- Both return nil until the rare table exists.
-function RA:RareRecord(_)
-    return nil
+-- Both return nil until the rare table has loaded.
+function RA:RareRecord(npc)
+    return rareData and rareData.rares[npc]
 end
 
-function RA:RareLoot(_)
-    return nil
+function RA:RareLoot(npc)
+    return rareData and rareData.loot[npc]
+end
+
+local function BuildRareData()
+    if not KE.BuildData then return nil, MISSING_DATA end
+    local data, reason = KE.BuildData(TABLE_SOURCE)
+    if not data then return nil, reason end
+    if type(data.rares) ~= "table" or type(data.loot) ~= "table" then return nil, UNREADABLE_DATA end
+    return data
+end
+
+-- Out of combat only. A card already up takes the table at its next read.
+function RA:LoadData()
+    if rareData or not self.db.Enabled then return end
+    if InCombatLockdown() then
+        -- Not PLAYER_REGEN_ENABLED: on this module it belongs to the card, and
+        -- SyncEvents drops it whenever no card is up.
+        if loadQueued then return end
+        loadQueued = true
+        KE:RunAfterCombat(function()
+            loadQueued = false
+            if self:IsEnabled() then self:LoadData() end
+        end)
+        return
+    end
+    local start = debugprofilestop()
+    local loaded, reason
+    if C_AddOns.DoesAddOnExist(DATA_ADDON) then
+        loaded, reason = C_AddOns.LoadAddOn(DATA_ADDON)
+    else
+        reason = MISSING_REASON
+    end
+    local data, buildReason
+    if loaded then data, buildReason = BuildRareData() end
+    self.loadMs = debugprofilestop() - start
+    if data then
+        rareData = data
+        return
+    end
+    if loadFailureSaid then return end
+    loadFailureSaid = true
+    local text = buildReason
+    if not loaded then
+        text = reason and _G["ADDON_" .. reason]
+        if type(text) ~= "string" then text = reason or "unknown" end
+    end
+    C_Timer.After(FAILURE_PRINT_DELAY, function()
+        KE:Print("Rare Alert could not load its rare table: " .. text)
+    end)
 end
 
 local function RecordFriendly(record)
@@ -1008,6 +1067,7 @@ end
 
 function RA:OnEnable()
     if not self.db.Enabled then return end
+    self:LoadData()
     self:CreateHolder()
     self:RegWithEditMode()
     self:RegisterEvent("PLAYER_ENTERING_WORLD")
