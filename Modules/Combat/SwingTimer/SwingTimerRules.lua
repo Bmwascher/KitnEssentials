@@ -175,6 +175,13 @@ function Rules.FillToward(fraction, now, endAt, toward)
     return endAt - duration, duration, toward == 0
 end
 
+-- The stretch of the bar a restart let go, when it drew `before` and now draws
+-- `after`. Nil when the bar grew or stands about where it was.
+function Rules.GhostSpan(before, after)
+    if before - after < NEAR_END then return nil end
+    return after, before
+end
+
 function Rules.RangedAtEnd(moving, casting, outOfRange, now, shotAt)
     if moving then return "held" end
     if casting or outOfRange then return "wait" end

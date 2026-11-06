@@ -32,6 +32,7 @@ local PREVIEW_TIME = "1.4"
 local TEXT_UPDATE_SECONDS = 0.05
 local POSITION_RETRY_SECONDS = 0.5
 local SPARK_WIDTH = 12
+local GHOST_FADE_SECONDS = 0.15
 -- Floors for a size another addon hands over; the page's sliders keep their own
 -- ranges.
 local MATCH_MIN_WIDTH = 20
@@ -330,6 +331,20 @@ function ST:BuildBar(key)
     spark:Hide()
     row.spark = spark
 
+    local ghost = bar:CreateTexture(nil, "ARTWORK", nil, 1)
+    ghost:SetAlpha(0)
+    ghost:Hide()
+    local ghostFade = ghost:CreateAnimationGroup()
+    ghostFade:SetToFinalAlpha(true)
+    local ghostAlpha = ghostFade:CreateAnimation("Alpha")
+    ghostAlpha:SetFromAlpha(1)
+    ghostAlpha:SetToAlpha(0)
+    ghostAlpha:SetDuration(GHOST_FADE_SECONDS)
+    ghostFade:SetScript("OnFinished", function() ghost:Hide() end)
+    row.ghost, row.ghostFade = ghost, ghostFade
+    -- An animation on a hidden bar could resume when the bar shows again.
+    frame:SetScript("OnHide", function() self:StopGhost(row) end)
+
     -- Above the fill in both directions, so a depleting bar shows the marks too.
     local overlay = CreateFrame("Frame", nil, bar)
     overlay:SetAllPoints(bar)
@@ -380,6 +395,7 @@ function ST:StyleBar(row)
     row.bar:SetStatusBarTexture(texture)
     -- The stop zone shares the fill's texture, so one color shows as one shade on both.
     row.zoneStop:SetTexture(texture)
+    row.ghost:SetTexture(texture)
     row.spark:SetSize(SPARK_WIDTH, db.Height)
     KE:ApplyFontToText(row.label, db.FontFace, db.FontSize, db.FontOutline)
     KE:ApplyFontToText(row.time, db.FontFace, db.FontSize, db.FontOutline)
@@ -387,6 +403,7 @@ function ST:StyleBar(row)
     row.window:SetColorTexture(wr, wg, wb, wa)
     row.shownColor, row.windowFraction, row.zoneStopBy = nil, nil, nil
     self:HideMarks(row)
+    self:StopGhost(row)
 end
 
 function ST:HideMarks(row)
@@ -417,19 +434,41 @@ function ST:RecordFill(row, start, duration, drains, timed)
     row.fillSwing, row.holdsEnd, row.redHold = row.starts, timed, nil
 end
 
+function ST:StopGhost(row)
+    if not row.ghost:IsShown() then return end
+    row.ghostFade:Stop()
+    row.ghost:Hide()
+end
+
+-- The stretch of fill a restart let go fades out over a bar already at its true
+-- position. A fill draws from the bar's left in both directions.
+function ST:PlayGhost(row)
+    local after = R.FillAt(row.fillStart, row.fillDuration, row.fillDrains, GetTime())
+    local from, to = R.GhostSpan(row.ghostFrom, after)
+    row.ghostFrom = nil
+    if not from then return end
+    local ghost, width = row.ghost, self:BarWidth()
+    ghost:ClearAllPoints()
+    ghost:SetPoint("TOPLEFT", row.bar, "TOPLEFT", from * width, 0)
+    ghost:SetPoint("BOTTOMLEFT", row.bar, "BOTTOMLEFT", from * width, 0)
+    ghost:SetWidth(math.max((to - from) * width, KE:GetPixelSize()))
+    ghost:SetTexCoord(from, to, 0, 1)
+    ghost:Show()
+    row.ghostFade:Play()
+end
+
 function ST:StartFill(row, start, duration, deplete)
     self:RecordFill(row, start, duration, deplete, true)
-    local interpolation = Enum.StatusBarInterpolation
-    local how = row.easeNext and interpolation.ExponentialEaseOut or interpolation.Immediate
-    row.easeNext = nil
     row.duration:SetTimeFromStart(start, duration)
-    row.bar:SetTimerDuration(row.duration, how, FillDirection(deplete))
+    row.bar:SetTimerDuration(row.duration, Enum.StatusBarInterpolation.Immediate, FillDirection(deplete))
     row.spark:Show()
+    if row.ghostFrom then self:PlayGhost(row) end
 end
 
 -- A parked timer keeps painting its terminal state and SetValue alone does not
 -- repaint it, so the timer is re-armed on a finished duration as well.
 function ST:ParkBar(row, full)
+    self:StopGhost(row)
     local start = GetTime() - 1
     self:RecordFill(row, start, 1, not full, false)
     row.duration:SetTimeFromStart(start, 1)
@@ -631,7 +670,7 @@ function ST:RefreshBar(row)
     -- Above the preview's return: the listeners follow the state, not the painting.
     if row.key == "R" then self:SyncMovement() end
     if self.isPreview then
-        row.easeNext = nil
+        row.ghostFrom = nil
         return
     end
     if row.isTarget then
@@ -642,14 +681,18 @@ function ST:RefreshBar(row)
         self:RefreshMelee(row)
     end
     -- A repaint that parked leaves the mark unspent; it never carries over.
-    row.easeNext = nil
+    row.ghostFrom = nil
     self:PlaceTick(row)
     self:UpdateHolder()
 end
 
--- A restart on a shown bar slides to its new fill; every other paint is at once.
+-- A restart on a shown bar notes what it draws, and in which color, before the
+-- repaint changes both; every other paint leaves no ghost.
 function ST:MarkRestart(row)
-    row.easeNext = not self.isPreview and row.frame:IsVisible()
+    self:StopGhost(row)
+    if self.isPreview or not row.frame:IsVisible() then return end
+    row.ghostFrom = R.FillAt(row.fillStart, row.fillDuration, row.fillDrains, GetTime())
+    row.ghost:SetVertexColor(KE:ResolveColor(self.db[row.shownColor], WHITE))
 end
 
 function ST:RefreshAll()
