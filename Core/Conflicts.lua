@@ -277,6 +277,14 @@ local CONFLICTS = {
             },
         },
     },
+    -- No resolver: each of these addons is a single-purpose planner, so the
+    -- whole-addon disable takes out exactly the conflicting feature.
+    {
+        module = "WhatsTraining",
+        label  = "What's Training",
+        dbPath = { "WhatsTraining" },
+        addons = { "WhatsTraining", "NaowhForever_Training" },
+    },
     -- The next two rows carry no resolver, and that is deliberate.
     -- EllesmereUI ships each of these as its own single-purpose addon --
     -- own .toc, own SavedVariables, one feature -- so the whole-addon
