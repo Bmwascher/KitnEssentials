@@ -83,7 +83,9 @@ describe("Rare table conversion", function()
             if line:match("^%[%d+%]=") then rows = rows + 1 end
         end
         assert.equals(3, rows)
-        assert.truthy(table.concat(lines, "\n"):find("%[5%]=.-%[61%]="))
+        -- The loot block also holds [61], so the order is read in the rares block alone.
+        local rareBlock = assert(table.concat(lines, "\n"):match("\nrares={\n(.-)\n},\nloot={\n"))
+        assert.truthy(rareBlock:find("^%[5%]=.-\n%[61%]="))
         local built = buildBack(lines)
         assert.same(rares, built.rares)
         assert.same(loot, built.loot)
