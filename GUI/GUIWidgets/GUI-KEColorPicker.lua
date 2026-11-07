@@ -141,17 +141,23 @@ local function ConstructColorPicker(parent)
             opacity = prevA,
             hasOpacity = not noOpacity
         }
+        -- Blizzard's setup selects the color before it sets the alpha slider for this
+        -- open, and a delayed call can outlast the open that queued it. Neither writes.
+        local live = false
         info.swatchFunc = function()
+            if not live or ColorPickerFrame.swatchFunc ~= info.swatchFunc then return end
             local r, g, b = ColorPickerFrame:GetColorRGB()
             local a = noOpacity and prevA or ColorPickerFrame:GetColorAlpha()
             Apply(r or 1, g or 1, b or 1, a or 1)
         end
         info.opacityFunc = info.swatchFunc
         info.cancelFunc = function()
+            live = false
             Apply(prevR, prevG, prevB, prevA)
         end
         row._openSwatchFunc = info.swatchFunc
         ColorPickerFrame:SetupColorPickerAndShow(info)
+        live = true
     end)
 
     -- Busy while Blizzard's picker is still open on this widget's color: the

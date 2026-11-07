@@ -331,10 +331,11 @@ function Setup.ReportStart()
 end
 
 -- Every start marks the character seen, except a login whose start-up call never
--- came while this character's setup was due: it stays unseen for a later load.
+-- came while this character's setup was due: it stays unseen for a later load, and
+-- this session's later starts leave it so while its setup stays due.
 function Setup.AtStart(atLogin)
     local store = KE:GetCharStore(true)
-    if atLogin and not booted and MayWriteAtStart()
+    if (atLogin or newMissed) and not booted and MayWriteAtStart()
         and Rules.ShouldAutoSetup(Theme.Option("SetUpNewCharacters"), store.RestedXPSeen) then
         newMissed = true
     else

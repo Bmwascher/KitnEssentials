@@ -423,9 +423,6 @@ local function SkinTitle(title)
     local text = title.text
     if not Has(text, "GetFont") then return end
     KeepTitle(text)
-    -- RestedXP writes this string's font in UpdateVisuals, so KE's last write says
-    -- nothing about what it holds now.
-    dressed[text] = nil
     Faced(text, K.BOX_TITLE_TEXT)
     Colored(text, "title")
     title:SetSize(text:GetStringWidth() + K.BOX_TITLE_ROOM, K.BOX_TITLE_HEIGHT)
@@ -494,6 +491,9 @@ local function SkinHooks(frames)
         if not paintHooked[frame] and Has(frame, "UpdateVisuals") then
             paintHooked[frame] = true
             hooksecurefunc(frame, "UpdateVisuals", function()
+                -- The one place RestedXP writes this title's font after building it.
+                local text = Dig(frame, "title", "text")
+                if text then dressed[text] = nil end
                 if active then Repaint() end
             end)
         end
@@ -535,7 +535,7 @@ function Repaint()
     paintPending = true
     KE:RunAfterCombat(function()
         paintPending = false
-        PaintFrames()
+        Run("WindowPaint", PaintFrames)
     end)
 end
 
@@ -669,6 +669,8 @@ local function TipHead(text, accent, under)
     end
 end
 
+local tipOwner
+
 -- One tooltip per hover: a cut line's full text, then what a click does.
 local function Tip(owner, text, menu, plain, full)
     if not Option("Tips") or GameTooltip:IsForbidden() then return end
@@ -676,6 +678,7 @@ local function Tip(owner, text, menu, plain, full)
     local accent = Theme.Tokens().accent
     local dim = K.TIP_DIM
     GameTooltip:SetOwner(owner, K.TIP_ANCHOR)
+    tipOwner = owner
     if full then GameTooltip:SetText(full, 1, 1, 1, 1, true) end
     if plain then
         TipHead(text, accent, full)
@@ -696,8 +699,12 @@ local function StepTip(owner, step)
     Tip(owner, Rules.TagAlong(step, progress) and K.TEXT_HIDE or K.TEXT_SKIP, true)
 end
 
+-- A leave with no tooltip of this window's own leaves another owner's up. A row's
+-- owner is its box, and a redraw can move the row, so the check is on the last owner.
 local function TipHide()
-    if not GameTooltip:IsForbidden() then GameTooltip:Hide() end
+    local owner = tipOwner
+    tipOwner = nil
+    if owner and not GameTooltip:IsForbidden() and GameTooltip:GetOwner() == owner then GameTooltip:Hide() end
 end
 
 ---------------------------------------------------------------------------------
@@ -869,6 +876,7 @@ end
 local function LinkEnter(row, link)
     if row:IsForbidden() or GameTooltip:IsForbidden() then return end
     GameTooltip:SetOwner(row, "ANCHOR_CURSOR")
+    tipOwner = row
     GameTooltip:SetHyperlink(link)
 end
 
