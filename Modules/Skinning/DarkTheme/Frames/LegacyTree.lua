@@ -13,8 +13,7 @@ local ICON_CROP = 0.146
 -- edge, so the plate sits inside them.
 local CARD_INSET = 8
 
--- Drawn on the divider's own frame, which sits beneath the tree cards. The
--- left edge sits on the frame's center: a 1 px line centered there would
+-- The left edge sits on the frame's center: a 1 px line centered there would
 -- straddle two pixels.
 local function DividerLine(divider)
     if not divider or S.data(divider).keLine then return end
