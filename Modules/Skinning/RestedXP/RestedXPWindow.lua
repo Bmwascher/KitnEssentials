@@ -57,8 +57,10 @@ local K = {
     TEXT_MENU = "Right-click: menu",
     TEXT_GO = "Go to step %d",
     TEXT_PICK = "Pick a guide",
+    TEXT_NEXT = "NEXT STEPS",
     TIP_DIM = 0.7,
     WHEEL_LINES = 2,
+    LABEL_LINES = 1,
     SCROLL_W = 2, SCROLL_GAP = 4, SCROLL_MIN = 12,
     HOME = { "LEFT", "LEFT", 0, 35 },
     DRAG_BUTTON = "LeftButton", TIP_ANCHOR = "ANCHOR_TOP",
@@ -677,8 +679,9 @@ end
 ---------------------------------------------------------------------------------
 -- Sizing
 ---------------------------------------------------------------------------------
+-- The label takes a line as soon as one step shows, so the first step costs two.
 local function StepsFor(height)
-    return floor((height - window.chrome) / window.lineHeight)
+    return math_max(0, floor((height - window.chrome) / window.lineHeight) - K.LABEL_LINES)
 end
 
 local function LiveSize(width, height)
@@ -792,6 +795,7 @@ local function Build()
     f.k = f:CreateTexture(nil, "OVERLAY")
     f.k:SetTexture(K.MARK_K)
     f.k:SetSize(K.MARK_SIZE, K.MARK_SIZE)
+    f.nextLabel = Text(f, Option("ListSize"))
     f.rule = f:CreateTexture(nil, "ARTWORK")
     f.rule:SetHeight(KE:GetPixelSize())
     f.bar = MakeBar(f)
@@ -1130,15 +1134,29 @@ local function DrawScrollBar(from, height, top, count, total)
     window.thumb:SetColorTexture(accent[1], accent[2], accent[3], accent[4])
 end
 
+local function DrawNextLabel(y, listH)
+    local label = window.nextLabel
+    label:ClearAllPoints()
+    label:SetPoint("TOPLEFT", window, "TOPLEFT", K.PAD, y)
+    Faced(label, Option("ListSize"))
+    Colored(label, "accent")
+    label:SetText(K.TEXT_NEXT)
+    label:Show()
+    window.labelLines = K.LABEL_LINES
+    return y - listH
+end
+
 local function DrawSteps(model, y, inner, listH)
     local list = model.list
     local count = sizing and sizing.steps or Option("ListedSteps")
     local top
     top, scroll = Rules.ListWindow(model.first, scroll, count, #list)
+    local last = math_min(#list, top + count - 1)
     local scrollable = count > 0 and #list > count
     local barred = scrollable and Option("ScrollBar")
+    if last >= top then y = DrawNextLabel(y, listH) end
     local from = y
-    for i = top, math_min(#list, top + count - 1) do
+    for i = top, last do
         local entry = list[i]
         local look = model.current[entry.index] and "current" or entry.done and "done" or nil
         y = ListLine(y, inner, listH, ("%d  %s"):format(entry.index, Model.LineText(entry)), entry.index, false,
@@ -1173,10 +1191,13 @@ local function DrawChrome(y, listH, folded)
     if not sizing then window:SetHeight(-y + K.PAD) end
     if wantsBags then window:RegisterEvent(K.BAG_EVENT) else window:UnregisterEvent(K.BAG_EVENT) end
     window.lineHeight = listH
-    window.chrome = -y + K.PAD - linesDrawn * listH
+    -- The label is left out, so showing or hiding it under a held grip cannot change
+    -- how many steps a height means.
+    window.chrome = -y + K.PAD - (linesDrawn + window.labelLines) * listH
     local locked = Option("Lock")
     window:SetResizable(not locked and not folded)
-    window:SetResizeBounds(K.WIDTH_MIN, window.chrome, K.WIDTH_MAX, window.chrome + K.STEPS_MAX * listH)
+    window:SetResizeBounds(K.WIDTH_MIN, window.chrome, K.WIDTH_MAX,
+        window.chrome + (K.STEPS_MAX + K.LABEL_LINES) * listH)
     window.grip:SetShown(not folded and not locked)
 end
 
@@ -1222,6 +1243,8 @@ function Draw()
     window.track:Hide()
     window.thumb:Hide()
     window.wheel:Hide()
+    window.nextLabel:Hide()
+    window.labelLines = 0
     if folded then
         y = DrawFolded(model, y, width - K.PAD * 2)
     else
