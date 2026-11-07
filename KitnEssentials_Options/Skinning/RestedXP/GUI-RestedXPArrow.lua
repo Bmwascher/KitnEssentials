@@ -21,11 +21,10 @@ function GUIFrame.RestedXPTabs.Arrow(scrollChild, yOffset, page)
         db.ArrowEnabled = checked
         page.Apply()
     end)
-    card:AddLabel("Adds KE's text under RestedXP's own waypoint arrow. Its place on screen stays yours: drag it in " ..
-        "RestedXP as you do today.")
+    page.Note(card, "RestedXP's own arrow, with KE's text under it. Drag it in RestedXP as you do today.")
 
-    local sizeRow = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-    local sizeSlider = GUIFrame:CreateSlider(sizeRow, "Size, percent of RestedXP's arrow", {
+    local sizeRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+    local sizeSlider = GUIFrame:CreateSlider(sizeRow, "Size, percent", {
         min = 60, max = 200, step = 5,
         value = db.ArrowSize or 100,
         callback = page.Setter("ArrowSize"),
@@ -39,41 +38,38 @@ function GUIFrame.RestedXPTabs.Arrow(scrollChild, yOffset, page)
     })
     sizeRow:AddWidget(gapSlider, 1 / 2)
     manager:Register(gapSlider, "arrow")
-    card:AddRow(sizeRow, Theme.rowHeightLast, 0)
-    yOffset = card:GetNextOffset()
+    card:AddRow(sizeRow, Theme.rowHeight)
+    page.Separator(card)
 
-    local textCard = GUIFrame:CreateCard(scrollChild, "Arrow Text", yOffset)
-    manager:Register(textCard, "arrow")
-
-    local wordsRow = GUIFrame:CreateRow(textCard.content, Theme.rowHeight)
-    local wordsCheck = GUIFrame:CreateCheckbox(wordsRow, "Show the Objective's Words", {
-        value = db.ArrowWords ~= false,
-        callback = page.Setter("ArrowWords"),
-    })
-    wordsRow:AddWidget(wordsCheck, 1 / 2)
-    manager:Register(wordsCheck, "arrow")
-    local textSize = GUIFrame:CreateSlider(wordsRow, "Text Size", {
+    local fontRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+    local textSize = GUIFrame:CreateSlider(fontRow, "Text Size", {
         min = 8, max = 24, step = 1,
         value = db.ArrowTextSize or 14,
         callback = page.Setter("ArrowTextSize"),
     })
-    wordsRow:AddWidget(textSize, 1 / 2)
+    fontRow:AddWidget(textSize, 1 / 2)
     manager:Register(textSize, "arrow")
-    textCard:AddRow(wordsRow, Theme.rowHeight)
-
-    local fontRow = GUIFrame:CreateRow(textCard.content, Theme.rowHeightLast)
     local fontCheck = GUIFrame:CreateCheckbox(fontRow, "Use the Addon Font", {
         value = db.ArrowAddonFont ~= false,
         callback = page.Setter("ArrowAddonFont"),
     })
     fontRow:AddWidget(fontCheck, 1 / 2)
     manager:Register(fontCheck, "arrow")
-    local distanceCheck = GUIFrame:CreateCheckbox(fontRow, "Show the Distance", {
+    card:AddRow(fontRow, Theme.rowHeight)
+
+    local wordsRow = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+    local wordsCheck = GUIFrame:CreateCheckbox(wordsRow, "Show the Objective's Words", {
+        value = db.ArrowWords ~= false,
+        callback = page.Setter("ArrowWords"),
+    })
+    wordsRow:AddWidget(wordsCheck, 1 / 2)
+    manager:Register(wordsCheck, "arrow")
+    local distanceCheck = GUIFrame:CreateCheckbox(wordsRow, "Show the Distance", {
         value = db.ArrowDistance ~= false,
         callback = page.Setter("ArrowDistance"),
     })
-    fontRow:AddWidget(distanceCheck, 1 / 2)
+    wordsRow:AddWidget(distanceCheck, 1 / 2)
     manager:Register(distanceCheck, "arrow")
-    textCard:AddRow(fontRow, Theme.rowHeightLast, 0)
-    return textCard:GetNextOffset()
+    card:AddRow(wordsRow, Theme.rowHeightLast, 0)
+    return card:GetNextOffset()
 end
