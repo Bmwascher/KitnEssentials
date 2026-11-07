@@ -218,6 +218,7 @@ describe("restedxp rules", function()
             { "ArrowWords", "yes", true }, { "ArrowWords", false, false },
             { "Look", "nope", "window" }, { "Look", "colors", "colors" },
             { "Palette", "forest", "forest" }, { "Palette", "mauve", "ke" },
+            { "FontOutline", nil, "OUTLINE" }, { "FontOutline", "shadow", "shadow" },
         }) do
             assert.equals(row[3], Rules.Option(row[1], row[2]), row[1] .. " " .. tostring(row[2]))
         end

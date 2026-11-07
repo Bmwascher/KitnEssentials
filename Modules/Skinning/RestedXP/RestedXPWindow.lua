@@ -350,12 +350,17 @@ local function ReadFont()
     fontOutline = Option("FontOutline")
 end
 
--- Shadow is not a font flag: it is no outline plus KE's shadow setting.
+-- Shadow is not a font flag: it is no outline plus KE's shadow setting. KE's font
+-- helper adds the Slug flag for every caller, and this window's text goes without
+-- it, so the font is set once more with the plain flags.
 local function Faced(fs, size)
     local last = dressed[fs]
     if last and last.path == fontPath and last.size == size and last.outline == fontOutline then return end
     local shadow = fontOutline == "shadow"
-    KE:ApplyFontToText(fs, fontName, size, shadow and "NONE" or fontOutline, shadow and K.SHADOW or nil)
+    local outline = shadow and "NONE" or fontOutline
+    KE:ApplyFontToText(fs, fontName, size, outline, shadow and K.SHADOW or nil)
+    local path, height = fs:GetFont()
+    if path then fs:SetFont(path, height, KE:GetFontOutline(outline)) end
     dressed[fs] = { path = fontPath, size = size, outline = fontOutline }
 end
 

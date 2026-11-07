@@ -157,7 +157,7 @@ local function AddFont(scrollChild, yOffset, page)
     manager:Register(face, "all")
     local outline = GUIFrame:CreateDropdown(faceRow, "Outline", {
         options = OutlineOptions(),
-        value = db.FontOutline or "shadow",
+        value = db.FontOutline or "OUTLINE",
         callback = page.Setter("FontOutline"),
     })
     faceRow:AddWidget(outline, 1 / 2)
