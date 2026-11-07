@@ -117,6 +117,73 @@ local function StyleCategoryRow(row)
     PaintCategoryRow(row)
 end
 
+local CARD_ART = {
+    "Background", "BackgroundTop", "BackgroundMiddle", "BackgroundBottom",
+    "SelectedOverlay", "TitleBar",
+}
+local TITLE_COLORS = {
+    account = { 0, 0.6, 1 },
+    accountDimmed = { 0, 0.3, 0.5 },
+}
+local TRACKED_SIZE = 20
+
+-- Dimmed is RefreshStateArt's own rule: not completed and not selected.
+function S._LegacyCardLook(selected, completed, accountWide)
+    local titleKey
+    if accountWide then
+        titleKey = (not completed and not selected) and "accountDimmed" or "account"
+    end
+    return selected and true or false, titleKey
+end
+
+-- RefreshStateArt is the last call of Init, so this runs after every state
+-- change; UpdatePlusMinusArt would otherwise put the red button back.
+local function PaintCard(card)
+    if not card.id then return end
+    local plate = S.data(card).keLegacyPlate
+    if not plate then return end
+    local selected = card.IsSelected and card:IsSelected()
+    local brandBorder, titleKey = S._LegacyCardLook(selected, card.completed, card.accountWide)
+    if brandBorder then
+        S.PaintBrand(plate, "SetBackdropBorderColor", 1)
+    else
+        S.ForgetBrand(plate)
+        local b = S.borderColor
+        plate:SetBackdropBorderColor(b[1], b[2], b[3], b[4])
+    end
+    local title = titleKey and TITLE_COLORS[titleKey]
+    if title and card.Label then card.Label:SetTextColor(title[1], title[2], title[3]) end
+    if card.PlusMinus then
+        card.PlusMinus:SetAtlas(card.collapsed and EXPAND_ATLAS or COLLAPSE_ATLAS)
+    end
+end
+
+local function StyleCard(card)
+    local d = S.data(card)
+    if d.keLegacyCard then return end
+    d.keLegacyCard = true
+    S.Vanish(card, CARD_ART)
+    local icon = card.Icon
+    if icon then
+        if icon.frame then icon.frame:SetAlpha(0) end
+        S.Icon(icon.texture, true)
+    end
+    local shield = card.Shield
+    if shield and shield.CheckBackground then shield.CheckBackground:SetAlpha(0) end
+    -- The template's box is 15px; S.CheckBox insets its plate by 4 on each side.
+    if card.Tracked then
+        S.CheckBox(card.Tracked)
+        card.Tracked:SetSize(TRACKED_SIZE, TRACKED_SIZE)
+    end
+    local plate = S.Backdrop(card)
+    if not plate then return end
+    d.keLegacyPlate = plate
+    AddHover(card, plate)
+    if card.RefreshStateArt then hooksecurefunc(card, "RefreshStateArt", PaintCard) end
+    if card.UpdatePlusMinusArt then hooksecurefunc(card, "UpdatePlusMinusArt", PaintCard) end
+    PaintCard(card)
+end
+
 function S.LegacyRewardTrackPage()
     local page = _G.LegacySystemFrame and _G.LegacySystemFrame.RewardTrackPage
     if not page or S.data(page).skinned then return end
@@ -139,7 +206,10 @@ function S.LegacyChallengesPage()
         S.HookScrollBox(list.ScrollBox, StyleCategoryRow)
         S.SetFont(list.NoResultsText)
     end
-    if page.DetailPane then S.ScrollBar(page.DetailPane.ScrollBar) end
+    if page.DetailPane then
+        S.ScrollBar(page.DetailPane.ScrollBar)
+        S.HookScrollBox(page.DetailPane.ScrollBox, StyleCard)
+    end
     S.Vanish(page, PAGE_ART)
     SkinPointSummary(page.LegacyChallengePointSummary)
     FlattenDivider(page.VerticalDivider)
