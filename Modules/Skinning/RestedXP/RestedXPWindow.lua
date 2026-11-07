@@ -574,6 +574,10 @@ local function Menu()
     if type(menu) == "function" then Run("WindowMenu", menu) end
 end
 
+local function MenuOnRight(_, button)
+    if button == "RightButton" then Menu() end
+end
+
 local function PickGuide()
     local v2 = Dig(_G.RXP, "v2")
     if Has(v2, "ShowGuideSelectionMenu") then
@@ -647,18 +651,35 @@ local function StepClick(self, button)
     if MaySkip() then SkipStep(self.step) end
 end
 
-local function Tip(owner, text, menu, plain)
+-- The full text of a string the window cut, or nil for one that fits.
+local function CutText(fs)
+    local cut = Has(fs, "IsTruncated") and fs:IsTruncated()
+    if Secret(cut) or not cut then return nil end
+    return fs:GetText()
+end
+
+local function TipHead(text, accent, under)
+    if under then
+        GameTooltip:AddLine(text, accent[1], accent[2], accent[3])
+    else
+        GameTooltip:SetText(text, accent[1], accent[2], accent[3])
+    end
+end
+
+-- One tooltip per hover: a cut line's full text, then what a click does.
+local function Tip(owner, text, menu, plain, full)
     if not Option("Tips") or GameTooltip:IsForbidden() then return end
     local mode = Option("Skip")
     local accent = Theme.Tokens().accent
     local dim = K.TIP_DIM
     GameTooltip:SetOwner(owner, K.TIP_ANCHOR)
+    if full then GameTooltip:SetText(full, 1, 1, 1, 1, true) end
     if plain then
-        GameTooltip:SetText(text, accent[1], accent[2], accent[3])
+        TipHead(text, accent, full)
     elseif mode == "off" then
-        GameTooltip:SetText(K.TEXT_MENU, accent[1], accent[2], accent[3])
-    else
-        GameTooltip:SetText(text, accent[1], accent[2], accent[3])
+        if menu then TipHead(K.TEXT_MENU, accent, full) end
+    elseif text then
+        TipHead(text, accent, full)
         if mode == "shift" then GameTooltip:AddLine(K.TEXT_SHIFT, dim, dim, dim) end
         if menu then GameTooltip:AddLine(K.TEXT_MENU, dim, dim, dim) end
     end
@@ -775,9 +796,7 @@ local function Build()
     window = f
     Draggable(f)
     f:SetScript("OnHide", HoldEnded)
-    f:SetScript("OnMouseUp", function(_, button)
-        if button == "RightButton" then Menu() end
-    end)
+    f:SetScript("OnMouseUp", MenuOnRight)
     f:SetScript("OnEvent", OnWindowEvent)
     f.back = f:CreateTexture(nil, "BACKGROUND")
     f.back:SetAllPoints()
@@ -788,6 +807,16 @@ local function Build()
     f.fold:SetScript("OnClick", ToggleFold)
     f.title = Text(f, Option("TitleSize"))
     f.title:SetWordWrap(false)
+    f.titleHit = CreateFrame("Frame", nil, f)
+    f.titleHit:SetAllPoints(f.title)
+    f.titleHit:EnableMouse(true)
+    f.titleHit:SetScript("OnEnter", function(self)
+        local full = CutText(f.title)
+        if full then Tip(self, nil, false, false, full) end
+    end)
+    f.titleHit:SetScript("OnLeave", TipHide)
+    f.titleHit:SetScript("OnMouseUp", MenuOnRight)
+    Draggable(f.titleHit)
     f.progress = Text(f, Option("TitleSize"), "RIGHT")
     f.rim = f:CreateTexture(nil, "OVERLAY")
     f.rim:SetTexture(K.MARK_RIM)
@@ -882,14 +911,18 @@ local function MakeHit(holder)
         if MaySkip() then GoTo(self.index) end
     end)
     hit:SetScript("OnEnter", function(self)
-        if not self.menu and Option("Skip") == "off" then return end
+        local full = not self.menu and CutText(self.line) or nil
+        if not self.menu and Option("Skip") == "off" then
+            if full then Tip(self, nil, false, false, full) end
+            return
+        end
         local accent = Theme.Tokens().accent
         self.shade:SetColorTexture(accent[1], accent[2], accent[3], K.HOVER_ALPHA)
         self.shade:Show()
         if self.menu then
             Tip(self, K.TEXT_PICK, false, true)
         else
-            Tip(self, K.TEXT_GO:format(self.index or 0))
+            Tip(self, K.TEXT_GO:format(self.index or 0), false, false, full)
         end
     end)
     hit:SetScript("OnLeave", function(self)
@@ -1115,7 +1148,7 @@ local function ListLine(y, inner, listH, text, index, menu, look, barred)
     hit:ClearAllPoints()
     hit:SetPoint("TOPLEFT", window, "TOPLEFT", K.PAD, y)
     hit:SetSize(inner, listH)
-    hit.index, hit.menu = index, menu
+    hit.index, hit.menu, hit.line = index, menu, line
     hit.shade:Hide()
     return y - listH
 end
