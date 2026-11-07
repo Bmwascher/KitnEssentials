@@ -23,10 +23,6 @@ local SKIP_OPTIONS = {
     { key = "click", text = "Click" },
     { key = "off", text = "Off" },
 }
-local LOGO_OPTIONS = {
-    { key = "mark", text = "KE Mark" },
-    { key = "off", text = "Off" },
-}
 local WINDOW_COLOR_OPTIONS = {
     { key = "accent", text = "From the Accent" },
     { key = "custom", text = "Custom" },
@@ -108,14 +104,13 @@ local function AddDisplay(scrollChild, yOffset, page)
     for _, def in ipairs({
         { label = "Under the Title", key = "UnderTitle", options = UNDER_TITLE_OPTIONS, default = "bar" },
         { label = "Skipping Steps", key = "Skip", options = SKIP_OPTIONS, default = "shift" },
-        { label = "Logo", key = "Logo", options = LOGO_OPTIONS, default = "mark" },
     }) do
         local drop = GUIFrame:CreateDropdown(dropRow, def.label, {
             options = def.options,
             value = db[def.key] or def.default,
             callback = page.Setter(def.key),
         })
-        dropRow:AddWidget(drop, 1 / 3)
+        dropRow:AddWidget(drop, 1 / 2)
         manager:Register(drop, "all")
     end
     card:AddRow(dropRow, Theme.rowHeight)
@@ -123,9 +118,10 @@ local function AddDisplay(scrollChild, yOffset, page)
     for i, group in ipairs({
         { { "Yards on the Step Box", "StepYards", true }, { "Flash When the Guide Moves On", "StepFlash", true } },
         { { "Keep the Objective When Folded", "FoldObjective", true }, { "Show Tooltips", "Tips", true } },
-        { { "Show Scroll Bar", "ScrollBar", false }, { "Lock Window", "Lock", false } },
+        { { "Show the KE Mark", "ShowMark", true }, { "Show Scroll Bar", "ScrollBar", false } },
+        { { "Lock Window", "Lock", false } },
     }) do
-        local last = i == 3
+        local last = i == 4
         local height = last and Theme.rowHeightLast or Theme.rowHeight
         local row = GUIFrame:CreateRow(card.content, height)
         for _, def in ipairs(group) do
@@ -166,7 +162,7 @@ local function AddFont(scrollChild, yOffset, page)
     manager:Register(outline, "all")
     card:AddRow(faceRow, Theme.rowHeight)
 
-    local sizeRow = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+    local sizeRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     for _, def in ipairs({
         { label = "Title Size", key = "TitleSize", min = 10, max = 28, default = 16 },
         { label = "Step Text Size", key = "StepSize", min = 8, max = 24, default = 13 },
@@ -180,7 +176,8 @@ local function AddFont(scrollChild, yOffset, page)
         sizeRow:AddWidget(slider, 1 / 3)
         manager:Register(slider, "all")
     end
-    card:AddRow(sizeRow, Theme.rowHeightLast, 0)
+    card:AddRow(sizeRow, Theme.rowHeight)
+    page.Note(card, "This window doesn't use Slug, so it stays crisp with Slug on elsewhere.")
     return card:GetNextOffset()
 end
 

@@ -1065,7 +1065,7 @@ end
 
 -- Centered on the title's line. Returns the width it takes from the title.
 local function DrawMark(x, titleSize)
-    local shown = Option("Logo") == "mark"
+    local shown = Option("ShowMark")
     window.rim:SetShown(shown)
     window.k:SetShown(shown)
     if not shown then return 0 end
