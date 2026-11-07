@@ -206,12 +206,84 @@ local function StyleStepRows(objectives)
     end
 end
 
+local REWARD_ART = { "RewardCardBG", "Highlight", "IconBorder", "LevelSquare" }
+-- The track overlaps neighboring cards by 5px.
+local REWARD_PLATE_INSET = 4
+local LEVEL_BADGE = 24
+local LAST_EARNED = { 0.08, 0.68, 0.17, 1 }
+local LAST_EARNED_FILL_A = 0.2
+local UNEARNED_PLATE_A = 0.5
+
+local function PaintRewardCard(card, _, displayLevel)
+    local plate = S.data(card).keLegacyPlate
+    if not plate or not displayLevel or not card.GetLevel then return end
+    local level = card:GetLevel()
+    local border, fill, fillA = S.borderColor, S.bgColor, S.bgColor[4]
+    if level == displayLevel then
+        border, fill, fillA = LAST_EARNED, LAST_EARNED, LAST_EARNED_FILL_A
+    end
+    plate:SetBackdropBorderColor(border[1], border[2], border[3], border[4])
+    plate:SetBackdropColor(fill[1], fill[2], fill[3], fillA)
+    plate:SetAlpha(level > displayLevel and UNEARNED_PLATE_A or 1)
+end
+
+-- Textures on the card, not a child frame: a frame would draw over the
+-- card's own Level text.
+local function AddLevelBadge(card)
+    local anchor = card.LevelSquare
+    if not anchor then return end
+    local px = KE:GetPixelSize()
+    local b, c = S.borderColor, S.palette.control
+    local edge = card:CreateTexture(nil, "BACKGROUND", nil, 6)
+    edge:SetColorTexture(b[1], b[2], b[3], b[4])
+    edge:SetSize(LEVEL_BADGE, LEVEL_BADGE)
+    edge:SetPoint("CENTER", anchor, "CENTER")
+    local fill = card:CreateTexture(nil, "BACKGROUND", nil, 7)
+    fill:SetColorTexture(c[1], c[2], c[3], c[4])
+    fill:SetPoint("TOPLEFT", edge, "TOPLEFT", px, -px)
+    fill:SetPoint("BOTTOMRIGHT", edge, "BOTTOMRIGHT", -px, px)
+end
+
+local function StyleRewardCard(card)
+    local d = S.data(card)
+    if d.keLegacyReward then return end
+    d.keLegacyReward = true
+    S.Vanish(card, REWARD_ART)
+    local plate = S.Backdrop(card, REWARD_PLATE_INSET)
+    if not plate then return end
+    d.keLegacyPlate = plate
+    S.HoverWash(card)
+    S.Icon(card.Icon, true)
+    AddLevelBadge(card)
+    if card.Refresh then hooksecurefunc(card, "Refresh", PaintRewardCard) end
+end
+
+local function StyleRewardCards(track, displayLevel)
+    local cards = track.GetElements and track:GetElements()
+    if not cards then return end
+    for _, card in ipairs(cards) do
+        StyleRewardCard(card)
+        PaintRewardCard(card, nil, displayLevel)
+    end
+end
+
+-- Init's first argument is the level list, not a display level.
+local function OnTrackInit(track)
+    StyleRewardCards(track)
+end
+
 function S.LegacyRewardTrackPage()
     local page = _G.LegacySystemFrame and _G.LegacySystemFrame.RewardTrackPage
     if not page or S.data(page).skinned then return end
     S.FontStrings(page)
-    local bar = page.LegacyRewardProgressBar
-    if bar then S.SetFont(bar.Text) end
+    S.Vanish(page, PAGE_ART)
+    S.Vanish(page, BAR_BACKGROUND_ART)
+    FlatBar(page.LegacyRewardProgressBar)
+    local track = page.LegacyRewardProgressFrame
+    if track then
+        if track.Init then hooksecurefunc(track, "Init", OnTrackInit) end
+        StyleRewardCards(track, page.displayLevel)
+    end
     S.data(page).skinned = true
 end
 
