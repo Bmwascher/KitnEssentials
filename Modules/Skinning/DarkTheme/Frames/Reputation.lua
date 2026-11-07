@@ -51,7 +51,7 @@ local function StyleEntry(child)
     -- StripTextures clears every texture region, so the hover is added after it.
     -- A header that carries its expand icon as StateIcon keeps that icon.
     S.StripKeepingIcon(child, child.StateIcon)
-    S.RowHover(child)
+    if not (KE.IS_FOREVER and S.CharacterRowHighlight(child)) then S.RowHover(child) end
     FixCollapseChevron(child)
 
     if child.Right or child.StateIcon then
@@ -86,7 +86,7 @@ local function StyleEntry(child)
             end
         else
             -- A colored progress bar: a Frame, so the StatusBar hook would raise.
-            S.ColoredBar(bar, DAMPEN)
+            S.ColoredBar(bar)
         end
 
         S.FontStrings(content, REP_ROW_FONT, "")
@@ -101,15 +101,20 @@ local function Skin()
     S.StripTextures(frame)
     if frame.filterDropdown then S.DropDown(frame.filterDropdown) end
     if frame.ScrollBar then S.ScrollBar(frame.ScrollBar) end
+    if KE.IS_FOREVER then S.CharacterListLines(frame.ScrollBox) end
     if frame.ScrollBox then S.HookScrollBox(frame.ScrollBox, StyleEntry) end
 
     local detail = frame.ReputationDetailFrame
     if detail then
-        S.StripTextures(detail)
-        S.Backdrop(detail)
-        if detail.CloseButton then S.CloseButton(detail.CloseButton) end
-        local descBar = detail.ScrollingDescriptionScrollBar or detail.DescriptionScrollBar
-        if descBar then S.ScrollBar(descBar) end
+        if KE.IS_FOREVER then
+            S.CharacterSidePane(detail)
+        else
+            S.StripTextures(detail)
+            S.Backdrop(detail)
+            if detail.CloseButton then S.CloseButton(detail.CloseButton) end
+            local descBar = detail.ScrollingDescriptionScrollBar or detail.DescriptionScrollBar
+            if descBar then S.ScrollBar(descBar) end
+        end
         for _, cb in ipairs({ "AtWarCheckbox", "MakeInactiveCheckbox", "WatchFactionCheckbox" }) do
             if detail[cb] then S.CheckBox(detail[cb]) end
         end
