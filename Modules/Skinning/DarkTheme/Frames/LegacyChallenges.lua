@@ -52,6 +52,71 @@ local function FlattenDivider(divider)
     S.data(divider).keLegacyLine = line
 end
 
+local EXPAND_ATLAS = "Soulbinds_Collection_CategoryHeader_Expand"
+local COLLAPSE_ATLAS = "Soulbinds_Collection_CategoryHeader_Collapse"
+
+-- The engine shows a HIGHLIGHT-layer texture on mouseover, so no scripts.
+local function AddHover(button, plate)
+    if not plate or S.data(button).keLegacyHover then return end
+    local hl = button:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetTexture(FLAT_TEX)
+    local c = S.palette.hover
+    hl:SetVertexColor(c[1], c[2], c[3])
+    hl:SetAlpha(c[4])
+    S.InsetToEdge(hl, plate)
+    S.data(button).keLegacyHover = hl
+end
+
+local function PaintCollapseIcon(button, collapsed)
+    local atlas = collapsed and EXPAND_ATLAS or COLLAPSE_ATLAS
+    if button.Icon then button.Icon:SetAtlas(atlas, true) end
+    button:SetHighlightAtlas(atlas)
+end
+
+-- A white wash over the plate, not a second plate color: it keeps expansion
+-- rows lighter than leaf rows whatever backdrop color the player picks.
+local PARENT_LIFT_A = 0.05
+
+-- A pooled row can come back as the other kind, so the lift is set on every
+-- refresh along with the selection fill.
+local function PaintCategoryRow(row)
+    local d = S.data(row)
+    local fill, lift = d.keLegacyFill, d.keLegacyLift
+    if not (fill and lift) then return end
+    fill:SetShown(row.selected and true or false)
+    lift:SetShown(row.collapsable and true or false)
+end
+
+-- Alpha, not a strip: RefreshCardArt re-sets both atlases on every refresh.
+local function StyleCategoryRow(row)
+    local d = S.data(row)
+    if d.keLegacyRow then return end
+    d.keLegacyRow = true
+    local normal = row.GetNormalTexture and row:GetNormalTexture()
+    if normal then normal:SetAlpha(0) end
+    local highlight = row.GetHighlightTexture and row:GetHighlightTexture()
+    if highlight then highlight:SetAlpha(0) end
+    local plate = S.Backdrop(row)
+    if not plate then return end
+    AddHover(row, plate)
+    local lift = row:CreateTexture(nil, "BACKGROUND", nil, 0)
+    lift:SetColorTexture(1, 1, 1)
+    lift:SetAlpha(PARENT_LIFT_A)
+    S.InsetToEdge(lift, plate)
+    local fill = row:CreateTexture(nil, "BACKGROUND", nil, 1)
+    fill:SetTexture(FLAT_TEX)
+    S.InsetToEdge(fill, plate)
+    S.PaintBrand(fill, "SetVertexColor", S.palette.selectedA)
+    d.keLegacyFill, d.keLegacyLift = fill, lift
+    if row.RefreshCardArt then hooksecurefunc(row, "RefreshCardArt", PaintCategoryRow) end
+    local toggle = row.CollapseButton
+    if toggle and toggle.UpdateCollapsedState then
+        hooksecurefunc(toggle, "UpdateCollapsedState", PaintCollapseIcon)
+        PaintCollapseIcon(toggle, toggle.collapsed)
+    end
+    PaintCategoryRow(row)
+end
+
 function S.LegacyRewardTrackPage()
     local page = _G.LegacySystemFrame and _G.LegacySystemFrame.RewardTrackPage
     if not page or S.data(page).skinned then return end
@@ -71,6 +136,7 @@ function S.LegacyChallengesPage()
         if list.FilterDropdown then S.CloseButton(list.FilterDropdown.ResetButton) end
         S.EditBox(list.SearchBox)
         S.ScrollBar(list.ScrollBar)
+        S.HookScrollBox(list.ScrollBox, StyleCategoryRow)
         S.SetFont(list.NoResultsText)
     end
     if page.DetailPane then S.ScrollBar(page.DetailPane.ScrollBar) end
