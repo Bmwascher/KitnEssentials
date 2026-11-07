@@ -36,6 +36,7 @@
     <Script file="GuildRegistrar.lua" />
     <Script file="Help.lua" />
     <Script file="Inspect.lua" />
+    <Script file="LegacyChallenges.lua" />
     <Script file="LegacySystem.lua" />
     <Script file="Loot.lua" />
     <Script file="LossControl.lua" />
