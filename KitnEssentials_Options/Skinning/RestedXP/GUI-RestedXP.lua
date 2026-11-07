@@ -14,9 +14,10 @@ local C_AddOns = C_AddOns
 local C_Timer = C_Timer
 local CreateFrame = CreateFrame
 local UIParent = UIParent
-local ipairs, tostring = ipairs, tostring
+local ipairs, tostring, type = ipairs, tostring, type
 
 local Safe, Rules, Setup, RxpTheme = KE.RestedXPSafe, KE.RestedXPRules, KE.RestedXPSetup, KE.RestedXPTheme
+local Icons = KE.RestedXPIcons
 
 local PAGE_ID = "SkinRestedXP"
 local TAB_GENERAL = "SkinRestedXPGeneral"
@@ -30,18 +31,75 @@ local TEXT_UNDO_TITLE = "Undo RestedXP setup for this character?"
 local TEXT_UNDO_BODY = "KitnEssentials will put these RestedXP settings back for this character."
 local TEXT_RELOAD_NOTE = "RestedXP reads the V2 setting when it loads, so this ends with a reload."
 local TEXT_REASON = " is off, because RestedXP no longer has a call it needs."
+local TEXT_OFF_NOTE = "Turn this off to put RestedXP back as it was."
+local TEXT_NEW_CHARACTERS = "A character KE has not seen gets set up at the first load that can apply it, with no " ..
+    "reload and no preview. Undo Setup puts it back."
+local TEXT_WINDOW_HELD = "KE's guide window stays off until you answer the conflict prompt."
+local TEXT_ICONS_WAIT = "KE's step icons come in at the next reload, because RestedXP builds its rows from them " ..
+    "as a guide loads."
 
 local DIALOG_WIDTH, DIALOG_PAD, DIALOG_ROW, DIALOG_GAP, BUTTON_H, BUTTON_W = 430, 14, 18, 10, 26, 150
 local COLUMNS = { 0, 170, 290 }
 local MAX_ROWS = 3
 local GRAY_COLOR = { 0.66, 0.66, 0.66 }
+local STATE_SHARE, STATE_BUTTON_Y = 0.72, -7
+local NEW_CHARACTER_H, NEW_SWITCH_SHARE, NEW_SWITCH_RISE = 54, 0.1, 10
 
+-- What each state of Rules.CharacterState says. window marks a line that tells of
+-- KE's window, so the conflict prompt's line replaces it while that holds the window.
+local CHARACTER_STATES = {
+    notInstalled = {
+        head = "Not installed",
+        line = "Install RestedXP Guides first. Nothing here works until it is installed.",
+    },
+    notLoaded = {
+        head = "Not loaded",
+        line = "RestedXP Guides is off for this character. Turn it on in the AddOns list.",
+    },
+    noProfile = {
+        head = "Not available",
+        line = "RestedXP no longer has a call setup needs, so nothing can change here.",
+    },
+    reloading = {
+        head = "Reload pending",
+        line = "KE asked for a reload. If it does not come, this clears in two seconds.",
+    },
+    noWindow = {
+        head = "Not available",
+        line = "This RestedXP has no guide window KE can use, so KE's window can't start.",
+    },
+    notSetUp = {
+        head = "Not set up", window = true,
+        line = "One click and a reload turn on KE's guide window here.",
+    },
+    themeOnly = {
+        head = "Not set up", window = true,
+        line = "KE's guide window is on. One click, with no reload, adds KE's theme too.",
+        lineLiveOff = "KE's guide window is on. One click and a reload add KE's theme too.",
+    },
+    setupMissed = {
+        head = "Not set up",
+        line = "RestedXP started before KitnEssentials at this load, so setup can't apply.",
+    },
+    setUp = {
+        head = "Set up", good = true, window = true,
+        line = "KE's guide window is on for this character.",
+    },
+    undoMissed = {
+        head = "Set up", good = true,
+        line = "RestedXP started before KitnEssentials at this load, so Undo can't apply.",
+    },
+    setUpFound = {
+        head = "Set up", good = true, window = true,
+        line = "KE's guide window is on. KE changed nothing here, so there is nothing to undo.",
+    },
+}
+
+-- The Window and Setup parts have their own states.
 local PART_LABELS = {
     { key = "Theme", label = "Theme" },
     { key = "Arrow", label = "Arrow" },
     { key = "Icons", label = "Step Icons" },
-    { key = "Window", label = "Guide Window" },
-    { key = "Setup", label = "Set Up This Character" },
 }
 
 local function GetModule()
@@ -122,6 +180,7 @@ local function Confirm()
         KE:ReloadUI()
         dialog:Hide()
         Setup.SavePending(shown.kind, rows)
+        RebuildPage()
         return
     end
     dialog:Hide()
@@ -211,19 +270,29 @@ function OpenDialog(shown, rows)
     dialog:Show()
 end
 
--- A Beta or V2 change waits for RestedXP's next start, and after this load's start
--- was missed the next one most likely is too, so such rows count as none.
-local function Rows(rows)
-    if not (rows and #rows > 0) then return nil end
-    if rows.reload and Setup.StartMissed() then return nil end
-    return rows
+local function CharacterState()
+    return Rules.CharacterState({
+        installed = Installed(),
+        loaded = C_AddOns.IsAddOnLoaded(RXP_ADDON) and type(_G.RXP) == "table",
+        profile = Setup.Profile() ~= nil,
+        window = Safe.PartOn("Window"),
+        waiting = Setup.WaitingKind(),
+        missed = Setup.StartMissed(),
+        plan = Setup.Plan(),
+        undo = Setup.Undo(),
+    })
 end
 
+-- The button and turning the module on share this read, so a preview opens only where
+-- the card lights the button.
 local SETUP_DIALOG = {
     kind = "setup",
     title = TEXT_SETUP_TITLE,
     body = TEXT_SETUP_BODY,
-    read = function() return Setup.MayWrite() and Rows(Setup.Plan()) or nil end,
+    read = function()
+        local _, which, live = CharacterState()
+        return live and which == "setup" and Setup.MayWrite() and Setup.Plan() or nil
+    end,
     write = Setup.Write,
 }
 
@@ -232,7 +301,10 @@ local UNDO_DIALOG = {
     kind = "undo",
     title = TEXT_UNDO_TITLE,
     body = TEXT_UNDO_BODY,
-    read = function() return Rows(Setup.Undo()) end,
+    read = function()
+        local rows = Setup.Undo()
+        return Rules.Doable(rows, Setup.StartMissed()) and rows or nil
+    end,
     write = Setup.WriteUndo,
 }
 
@@ -254,7 +326,10 @@ local function ApplyModuleState(enabled)
     if not mod then return end
     mod.db.Enabled = enabled
     if enabled then
+        -- The start marks the character seen, so a Cancel here stays canceled at the
+        -- next login.
         KitnEssentials:EnableModule(PAGE_ID)
+        OpenSetup()
         return
     end
     KitnEssentials:DisableModule(PAGE_ID)
@@ -273,13 +348,9 @@ local function BuildHeader(scrollChild, yOffset)
         db.Enabled = checked
         ApplyModuleState(checked)
     end)
-    card:AddLabel("Gives " .. KE:Gold("RestedXP Guides") .. " the KitnEssentials look: its colors, its text under " ..
-        "RestedXP's arrow, step icons, and an optional single guide window.\n\nNeeds " ..
-        KE:Gold("RestedXP Guides") .. ". " ..
-        (installed and ("It changes RestedXP's settings when you click, after showing you what changes, and for " ..
-            "a new character only if you turn on " .. KE:Gold("Set Up New Characters") .. ". Turning this off " ..
-            "puts RestedXP's theme back.")
-            or "Nothing here works until it is installed."))
+    card:AddLabel("Gives " .. KE:Gold("RestedXP Guides") .. " KE's single guide window, icons and arrow text.")
+    Note(card, installed and TEXT_OFF_NOTE
+        or ("Needs " .. KE:Gold("RestedXP Guides") .. ". Nothing here works until it is installed."))
     -- With the module off too: a waiting Undo runs at the start without it.
     local startNote = Setup.StartNote()
     if startNote then
@@ -293,61 +364,73 @@ end
 ---------------------------------------------------------------------------------
 -- General tab
 ---------------------------------------------------------------------------------
-local function V2Status()
-    local v2 = Safe.Dig(_G.RXP, "v2")
-    if not Safe.Has(v2, "IsGuideWindowEnabled") then return "Not available" end
-    local on = Safe.Run("PageV2", v2.IsGuideWindowEnabled, v2)
-    return on and "On" or "Off. KE's guide window needs it"
+local function Colored(color, text)
+    return "|cff" .. Rules.Hex(color) .. text .. "|r"
+end
+
+local function FoundLine()
+    if not Installed() then return "RestedXP Guides not found" end
+    local version = C_AddOns.GetAddOnMetadata(RXP_ADDON, "Version")
+    return "RestedXP Guides " .. (version and ("v" .. version .. " ") or "") .. "found"
 end
 
 local function AddThisCharacter(scrollChild, yOffset, page)
     local db, manager = page.db, page.manager
     Setup.WatchProfile(OnProfileChange)
-    manager:SetCondition("planReady", function() return SETUP_DIALOG.read() ~= nil end)
-    manager:SetCondition("hasRecord", function() return UNDO_DIALOG.read() ~= nil end)
+    manager:SetCondition("characterAction", function()
+        local _, which, live = CharacterState()
+        return live and (which == "undo" or Setup.MayWrite())
+    end)
 
     local card = GUIFrame:CreateCard(scrollChild, "This Character", yOffset)
     manager:Register(card, "all")
 
-    local version = C_AddOns.GetAddOnMetadata(RXP_ADDON, "Version")
-    local found = Installed() and ("Found" .. (version and (", v" .. version) or "")) or "Not installed"
-    local profile = Setup.Profile()
-    card:AddLabel("RestedXP Guides: " .. found)
-    card:AddLabel("V2 interface, this character: " .. V2Status())
-    card:AddLabel("RestedXP theme: " .. tostring(profile and profile.activeTheme or "Not available"))
-
-    local buttonRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
-    local setupButton = GUIFrame:CreateButton(buttonRow, "Set Up This Character", {
+    local key, which, live = CharacterState()
+    local state = CHARACTER_STATES[key]
+    local rival = KE:RestedXPRivalSettings()
+    local line = state.window and rival and rival.rxpWindow == true and TEXT_WINDOW_HELD
+        or RxpTheme.LiveReloadOff() and state.lineLiveOff or state.line
+    local stateRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+    local stateBlock = GUIFrame:CreateText(stateRow, Colored(state.good and Theme.success or Theme.warning, state.head),
+        Colored(GRAY_COLOR, line), Theme.rowHeight, "hide")
+    stateRow:AddWidget(stateBlock, STATE_SHARE)
+    manager:Register(stateBlock, "all")
+    local button = GUIFrame:CreateButton(stateRow, which == "undo" and "Undo Setup" or "Set Up This Character", {
         height = BUTTON_H,
-        callback = OpenSetup,
+        callback = which == "undo" and OpenUndo or OpenSetup,
     })
-    buttonRow:AddWidget(setupButton, 1 / 2)
-    manager:Register(setupButton, "planReady")
-    local undoButton = GUIFrame:CreateButton(buttonRow, "Undo Setup", {
-        height = BUTTON_H,
-        callback = OpenUndo,
-    })
-    buttonRow:AddWidget(undoButton, 1 / 2)
-    manager:Register(undoButton, "hasRecord")
-    card:AddRow(buttonRow, Theme.rowHeight)
+    stateRow:AddWidget(button, 1 - STATE_SHARE, nil, 0, STATE_BUTTON_Y)
+    button:SetFilled(live and which == "setup")
+    manager:Register(button, "characterAction")
+    card:AddRow(stateRow, Theme.rowHeight)
 
-    local switchRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
-    local newCharacters = GUIFrame:CreateCheckbox(switchRow, "Set Up New Characters", {
+    for _, part in ipairs(PART_LABELS) do
+        if not Safe.PartOn(part.key) then Note(card, part.label .. TEXT_REASON) end
+    end
+    if Setup.Profile() and Safe.PartOn("Icons") and not Icons.Applied() then Note(card, TEXT_ICONS_WAIT) end
+    page.Separator(card)
+
+    local newRow = GUIFrame:CreateRow(card.content, NEW_CHARACTER_H)
+    local newCharacters = GUIFrame:CreateCheckbox(newRow, "", {
         value = db.SetUpNewCharacters == true,
         callback = function(checked)
             db.SetUpNewCharacters = checked
-            if checked then Setup.MarkSeen() end
+            if checked then
+                Setup.MarkSeen()
+                RebuildPage()
+            end
         end,
     })
-    switchRow:AddWidget(newCharacters, 1)
+    newRow:AddWidget(newCharacters, NEW_SWITCH_SHARE, nil, 0, NEW_SWITCH_RISE)
     manager:Register(newCharacters, "all")
-    card:AddRow(switchRow, Theme.rowHeight)
+    local newBlock = GUIFrame:CreateText(newRow, "Set Up New Characters", Colored(GRAY_COLOR, TEXT_NEW_CHARACTERS),
+        NEW_CHARACTER_H, "hide")
+    newRow:AddWidget(newBlock, 1 - NEW_SWITCH_SHARE)
+    manager:Register(newBlock, "all")
+    card:AddRow(newRow, NEW_CHARACTER_H)
+    page.Separator(card)
 
-    card:AddLabel("Off to start. On: a character KE has not seen gets the changes above as it first loads, with " ..
-        "no reload. RestedXP keeps these per character unless you share a profile.")
-    for _, part in ipairs(PART_LABELS) do
-        if not Safe.PartOn(part.key) then card:AddNote(part.label .. TEXT_REASON) end
-    end
+    Note(card, FoundLine())
     return card:GetNextOffset()
 end
 

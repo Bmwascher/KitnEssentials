@@ -185,6 +185,17 @@ local function ConstructButton(parent)
         selectedFill:SetShown(selected)
     end
 
+    -- A solid accent plate with white words, for a page's one main action. The next
+    -- configure puts a pooled button back to plain.
+    function button:SetFilled(filled)
+        local TT = Theme
+        local plate = filled and TT.accent or TT.selectedBg
+        selectedFill:SetColorTexture(plate[1], plate[2], plate[3], filled and 1 or plate[4])
+        selectedFill:SetShown(filled)
+        local words = filled and TT.textPrimary or TT.accent
+        textWidget:SetTextColor(words[1], words[2], words[3], 1)
+    end
+
     function button:SetEnabled(enabled)
         if enabled then
             button:Enable()

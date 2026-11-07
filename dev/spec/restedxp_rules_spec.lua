@@ -585,6 +585,46 @@ describe("restedxp rules", function()
         assert.is_false(Rules.ShouldFlash(nil, nil, guide, 4))
     end)
 
+    it("gives This Character one state and one button, lit only when an action exists", function()
+        local beta = { { key = "enableBetaFeatures" }, reload = true }
+        local theme = { { key = "activeTheme" } }
+        local none = {}
+        for _, row in ipairs({
+            { { installed = false }, "notInstalled", "setup", false },
+            { { loaded = false }, "notLoaded", "setup", false },
+            { { profile = false }, "noProfile", "setup", false },
+            { { waiting = "setup", plan = beta }, "reloading", "setup", false },
+            { { waiting = "undo", plan = none, undo = beta }, "reloading", "undo", false },
+            { { window = false, plan = beta }, "noWindow", "setup", false },
+            { { window = false, plan = none, undo = theme }, "noWindow", "undo", true },
+            { { window = false, plan = none, undo = beta, missed = true }, "noWindow", "setup", false },
+            { { plan = beta }, "notSetUp", "setup", true },
+            { { plan = beta, undo = theme }, "notSetUp", "setup", true },
+            { { plan = theme }, "themeOnly", "setup", true },
+            { { plan = theme, missed = true }, "themeOnly", "setup", true },
+            { { plan = beta, missed = true }, "setupMissed", "setup", false },
+            { { plan = beta, undo = theme, missed = true }, "setupMissed", "undo", true },
+            { { plan = none, undo = theme }, "setUp", "undo", true },
+            { { plan = none, undo = beta }, "setUp", "undo", true },
+            { { plan = none, undo = theme, missed = true }, "setUp", "undo", true },
+            { { plan = none, undo = beta, missed = true }, "undoMissed", "undo", false },
+            { { plan = none, undo = none }, "setUpFound", "undo", false },
+            { { plan = none }, "setUpFound", "undo", false },
+        }) do
+            local facts = { installed = true, loaded = true, profile = true, window = true }
+            for key, value in pairs(row[1]) do facts[key] = value end
+            local state, button, live = Rules.CharacterState(facts)
+            assert.equals(row[2], state)
+            assert.equals(row[3], button, row[2])
+            assert.equals(row[4], live, row[2])
+        end
+        assert.is_true(Rules.Doable(theme, true))
+        assert.is_false(Rules.Doable(beta, true))
+        assert.is_true(Rules.Doable(beta, false))
+        assert.is_false(Rules.Doable(none, false))
+        assert.is_false(Rules.Doable(nil, false))
+    end)
+
     it("turns off only the part a missing call belongs to", function()
         local function Full()
             local function Call() end

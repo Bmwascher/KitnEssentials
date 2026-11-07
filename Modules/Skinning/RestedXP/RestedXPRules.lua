@@ -377,6 +377,38 @@ function Rules.ShouldAutoSetup(on, seen)
     return on == true and not seen
 end
 
+local function HasRows(rows)
+    return rows ~= nil and #rows > 0
+end
+
+-- A Beta or V2 change waits for the next start, and after this load's start was
+-- missed the next one most likely is too.
+function Rules.Doable(rows, missed)
+    return HasRows(rows) and not (rows.reload and missed)
+end
+
+-- The This Character card shows one state and one button, and the button grays only
+-- when no action exists. Returns the state, "setup" or "undo", and whether it is lit.
+function Rules.CharacterState(facts)
+    if not facts.installed then return "notInstalled", "setup", false end
+    if not facts.loaded then return "notLoaded", "setup", false end
+    if not facts.profile then return "noProfile", "setup", false end
+    if facts.waiting then return "reloading", facts.waiting == "undo" and "undo" or "setup", false end
+    local canSetUp, canUndo = Rules.Doable(facts.plan, facts.missed), Rules.Doable(facts.undo, facts.missed)
+    if not facts.window then
+        if canUndo then return "noWindow", "undo", true end
+        return "noWindow", "setup", false
+    end
+    if HasRows(facts.plan) then
+        if canSetUp then return facts.plan.reload and "notSetUp" or "themeOnly", "setup", true end
+        if canUndo then return "setupMissed", "undo", true end
+        return "setupMissed", "setup", false
+    end
+    if canUndo then return "setUp", "undo", true end
+    if HasRows(facts.undo) then return "undoMissed", "undo", false end
+    return "setUpFound", "undo", false
+end
+
 ---------------------------------------------------------------------------------
 -- Giving back
 ---------------------------------------------------------------------------------

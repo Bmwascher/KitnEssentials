@@ -127,6 +127,14 @@ function Setup.MarkSeen()
     KE:GetCharStore(true).RestedXPSeen = true
 end
 
+-- The kind of change waiting for the reload its click asked for, or nil. This load's
+-- start took any earlier one off the store, so only a refused reload shows it.
+function Setup.WaitingKind()
+    local store = KE:GetCharStore(false)
+    local waiting = store and store.RestedXPPending
+    return waiting and waiting.kind or nil
+end
+
 -- Every gate that lets the module run, from the current profile. Read at each
 -- click, because an open preview or a profile switch can outlast them.
 function Setup.MayWrite()
