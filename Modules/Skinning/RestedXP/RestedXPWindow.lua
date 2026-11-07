@@ -565,9 +565,9 @@ local function Place(frame)
     frame:SetPoint(point, UIParent, relativePoint, x, y)
 end
 
--- A retained window keeps its scale and points across a reset, a Look change and
--- a profile switch, so every start and every settings pass sets them again. A held
--- grip or drag is left alone until it ends.
+-- A retained window keeps its scale and points across a reset and a profile switch,
+-- so every start and every settings pass sets them again. A held grip or drag is
+-- left alone until it ends.
 local function ApplyGeometry()
     if not window or sizing or moving then return end
     window:SetScale(Option("Scale") / K.PERCENT)
@@ -1360,6 +1360,10 @@ function Window.Stop()
     if not active then return end
     Arrow.WatchYards(nil)
     Activate(false)
+end
+
+function Window.IsActive()
+    return active == true
 end
 
 function Window.ApplySettings()

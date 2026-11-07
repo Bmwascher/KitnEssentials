@@ -27,7 +27,7 @@ local LOGO_OPTIONS = {
     { key = "off", text = "Off" },
 }
 local WINDOW_COLOR_OPTIONS = {
-    { key = "palette", text = "From the Palette" },
+    { key = "accent", text = "From the Accent" },
     { key = "custom", text = "Custom" },
 }
 local CUSTOM_COLORS = {
@@ -192,7 +192,7 @@ local function AddColors(scrollChild, yOffset, page)
     local modeRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local mode = GUIFrame:CreateDropdown(modeRow, "Window Colors", {
         options = WINDOW_COLOR_OPTIONS,
-        value = db.WindowColors or "palette",
+        value = db.WindowColors or "accent",
         callback = page.Setter("WindowColors"),
     })
     modeRow:AddWidget(mode, 1 / 2)
@@ -264,8 +264,8 @@ local function AddBackdrop(scrollChild, yOffset, page)
     manager:Register(opacity, "all")
     card:AddRow(colorRow, Theme.rowHeight)
 
-    card:AddLabel("Starts on the same color and opacity as Chat and the Damage Meter. A full palette replaces this " ..
-        "color while Backdrop and Highlights Follow the Palette is on. Turn Window Background off for the floating look.")
+    card:AddLabel("Starts on the same color and opacity as Chat and the Damage Meter. Turn Window Background off " ..
+        "for the floating look.")
     return card:GetNextOffset()
 end
 
@@ -278,7 +278,7 @@ local function AddReset(scrollChild, yOffset, page)
         callback = function()
             KE:CreatePrompt(
                 "Reset RestedXP",
-                "Reset this page's window, arrow and look settings to their defaults? RestedXP's own settings " ..
+                "Reset this page's window, arrow and color settings to their defaults? RestedXP's own settings " ..
                     "do not change.",
                 false, nil, false, nil, nil, nil, nil,
                 function()

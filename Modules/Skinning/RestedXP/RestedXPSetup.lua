@@ -63,7 +63,7 @@ end
 
 function Setup.Plan()
     local profile = Setup.Profile()
-    return profile and Rules.PlanSetup(Theme.Option("Look"), profile) or nil
+    return profile and Rules.PlanSetup(profile) or nil
 end
 
 function Setup.Undo()

@@ -44,8 +44,6 @@ end
 -- imports themes, loads guides or builds a window; it sets one global and creates
 -- nothing. With the module off it runs only for a waiting Undo.
 local function PrepareEarly(self, enabled)
-    self.wantIcons = enabled and Icons.InForce()
-    local wantIcons, wantTheme = self.wantIcons, enabled and Theme.Option("Look") ~= "own"
     if C_AddOns.IsAddOnLoaded(RXP_ADDON) then
         -- RestedXP has started: a late icon swap shows an icon twice, and setup's
         -- start-up writes cannot run. Setup keeps this load's start-up facts.
@@ -58,8 +56,10 @@ local function PrepareEarly(self, enabled)
         _G.RXPOnInitialize = earlier
         if type(earlier) == "function" then pcall(earlier) end
         Safe.Run("SetupBoot", Setup.Boot)
-        if wantIcons then Safe.Run("IconsApply", Icons.Apply) end
-        if wantTheme then Safe.Run("ThemeAddEarly", Theme.AddEarly) end
+        if enabled then
+            Safe.Run("IconsApply", Icons.Apply)
+            Safe.Run("ThemeAddEarly", Theme.AddEarly)
+        end
     end
 end
 
@@ -79,31 +79,22 @@ function M:OnInitialize()
     PrepareEarly(self, enabled)
 end
 
-local function WindowWanted(self, look)
+local function WindowWanted(self)
     if not self.parts.Window then return false end
     local v2 = _G.RXP.v2
     local v2On = Safe.Run("WindowGate", v2.IsGuideWindowEnabled, v2) and true or false
     local rival = KE:RestedXPRivalSettings()
-    return Rules.WindowMayStart(look, v2On, rival ~= nil and rival.rxpWindow == true)
+    return Rules.WindowMayStart(v2On, rival ~= nil and rival.rxpWindow == true)
 end
 
 local function StartParts(self)
-    local look = Theme.Option("Look")
-    if self.parts.Theme and look ~= "own" then
-        Theme.Start(look == "colors")
-    else
-        Theme.Stop()
-    end
-    -- Every path into RestedXP's Own gives the player's theme back here, a profile
-    -- switch included. Once written, the record holds no theme, so a later pass
-    -- writes nothing.
-    if look == "own" then Setup.RestoreTheme() end
+    if self.parts.Theme then Theme.Register() end
     if self.parts.Arrow and Theme.Option("ArrowEnabled") then
         Arrow.Start()
     else
         Arrow.Stop()
     end
-    if WindowWanted(self, look) then
+    if WindowWanted(self) then
         Window.Start()
     else
         Window.Stop()
@@ -119,7 +110,7 @@ function M:OnEnable()
     for part, on in pairs(self.parts) do
         if not on then Safe.Missing(part, PART_SITES[part]) end
     end
-    if self.wantIcons and Setup.StartMissed() then
+    if atLogin and Setup.StartMissed() then
         self.parts.Icons = false
         Safe.Missing("Icons", "start-up call")
     end
@@ -137,14 +128,16 @@ function M:ApplySettings()
     Window.ApplySettings()
 end
 
+-- KE's window tints its icons from their path, so only RestedXP's own window can
+-- show the accent an icon started with.
 local function AskIfIconsStale()
-    if Icons.AccentStale() then KE:CreateReloadPrompt(TEXT_ICONS_COLOR) end
+    if not Window.IsActive() and Icons.AccentStale() then KE:CreateReloadPrompt(TEXT_ICONS_COLOR) end
 end
 
 function M:ThemeChanged()
     if not (self:IsEnabled() and self.parts) then return end
     local asked = false
-    if self.parts.Theme and Theme.Option("Look") ~= "own" then asked = Theme.Refresh() end
+    if self.parts.Theme then asked = Theme.Refresh() end
     Arrow.Paint()
     Window.Refresh()
     if not asked then AskIfIconsStale() end
@@ -156,16 +149,6 @@ end
 
 function M:AskIconsBack()
     if Icons.Applied() then KE:CreateReloadPrompt(TEXT_ICONS_BACK) end
-end
-
-function M:LookChanged()
-    local own = Theme.Option("Look") == "own"
-    self:ApplySettings()
-    if own then
-        self:AskIconsBack()
-    else
-        AskIfIconsStale()
-    end
 end
 
 -- Writes nothing to RestedXP and leaves the setup record alone.
@@ -184,6 +167,5 @@ end
 function M:OnDisable()
     Window.Stop()
     Arrow.Stop()
-    Theme.Stop()
     Setup.RestoreTheme()
 end

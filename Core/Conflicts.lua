@@ -253,7 +253,7 @@ local CONFLICTS = {
     -- frames, and both arrows post-hook the same text.
     {
         module = "SkinRestedXP",
-        label = "RestedXP Look",
+        label = "RestedXP",
         dbPath = { "SkinRestedXP" },
         skinGated = true,
         addons = { "NaowhForever" },

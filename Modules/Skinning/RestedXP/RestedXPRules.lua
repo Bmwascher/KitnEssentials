@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Modules/Skinning/RestedXP/RestedXPRules.lua             ║
--- ║  Purpose: RestedXP Look's pure rules and palette data.   ║
+-- ║  Purpose: The RestedXP module's pure rules.              ║
 -- ║           No WoW API, no frames.                         ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -8,7 +8,7 @@
 local KE = select(2, ...)
 
 local floor, math_max, math_min = math.floor, math.max, math.min
-local ipairs, next, pairs, select, tonumber, type, unpack = ipairs, next, pairs, select, tonumber, type, unpack
+local ipairs, next, pairs, select, tonumber, type = ipairs, next, pairs, select, tonumber, type
 
 local Safe = KE.RestedXPSafe
 local Has, Dig = Safe.Has, Safe.Dig
@@ -29,7 +29,7 @@ local LEAD_PATH, CONTENT_ID, CONTENT_DIR = "^|T([^|:]+)", "^%d+$", "interface[/\
 local TEXT_YARDS = "%d yd"
 
 ---------------------------------------------------------------------------------
--- Palettes
+-- Colors
 ---------------------------------------------------------------------------------
 local function RGB(hex)
     return {
@@ -39,33 +39,8 @@ local function RGB(hex)
     }
 end
 
-local function Palette(name, bg, panel, line, fg, muted, accent)
-    return {
-        name = name, full = true,
-        bg = RGB(bg), panel = RGB(panel), line = RGB(line), fg = RGB(fg), muted = RGB(muted), accent = RGB(accent),
-    }
-end
-
-Rules.PALETTES = {
-    midnight = Palette("Midnight", "0b1020", "151c30", "2a3550", "eef2ff", "9ba7c8", "5b8cff"),
-    slate = Palette("Slate", "12161c", "1e242d", "36404d", "f0f3f5", "9aa7b4", "2bb8a8"),
-    obsidian = Palette("Obsidian", "070708", "131417", "2b2d32", "f5f5f4", "a1a1a6", "f5a524"),
-    aubergine = Palette("Aubergine", "130d18", "1f1626", "3a2c46", "f3eef7", "a89bb8", "b57bff"),
-    forest = Palette("Forest", "0c1310", "162019", "2c3b31", "eef4ef", "9aae9f", "36c58a"),
-    crimson = Palette("Crimson", "140a0c", "201316", "3d2429", "f6eff0", "ac9a9e", "ef4b56"),
-    rosenoir = Palette("Rose Noir", "1a0b14", "27121d", "4a2438", "fdeef5", "c9a3b6", "ff5fa2"),
-    cottoncandy = Palette("Cotton Candy", "1c1832", "272245", "463f70", "f8f2ff", "bbb2dc", "f78fc8"),
-    classic = Palette("Classic", "15100b", "221a12", "4d3c26", "f4e8cc", "a89a7c", "d68e35"),
-    forevergold = Palette("Forever gold", "11100e", "1b1916", "6e5126", "e8dab4", "9a8f7a", "ffd100"),
-}
-
-Rules.PALETTE_ORDER = {
-    "midnight", "slate", "obsidian", "aubergine", "forest", "crimson", "rosenoir", "cottoncandy", "classic",
-    "forevergold",
-}
-
 local OFF_BOX = RGB("080808")
-local KE_TOKENS = { bg = OFF_BOX, panel = OFF_BOX, line = RGB("000000"), fg = RGB("ffffff"), muted = RGB("c8c8c8") }
+local KE_TOKENS = { fg = RGB("ffffff"), muted = RGB("c8c8c8") }
 
 local function With(color, alpha)
     return { color[1], color[2], color[3], alpha }
@@ -76,31 +51,19 @@ function Rules.Hex(color)
         floor(color[3] * CHANNEL_MAX + ROUND))
 end
 
-function Rules.Tokens(palette, accent)
-    local full = Rules.PALETTES[palette]
-    if full then return full end
-    return {
-        bg = KE_TOKENS.bg, panel = KE_TOKENS.panel, line = KE_TOKENS.line, fg = KE_TOKENS.fg, muted = KE_TOKENS.muted,
-        accent = accent, full = false,
-    }
+function Rules.Tokens(accent)
+    return { fg = KE_TOKENS.fg, muted = KE_TOKENS.muted, accent = accent }
 end
 
-local function Tinted(tokens, follow)
-    return follow == true and tokens.full == true
-end
-
-function Rules.ThemeFields(tokens, follow, font, back)
-    local tinted = Tinted(tokens, follow)
+function Rules.ThemeFields(tokens, font, back)
     local accent, fg = tokens.accent, tokens.fg
     return {
         name = Rules.THEME_NAME,
         displayName = Rules.THEME_NAME,
         author = Rules.THEME_NAME,
-        background = tinted and With(tokens.panel, 1) or With(back, back[4] or 1),
-        bottomFrameBG = tinted and With(tokens.panel, 1) or With(back, back[4] or 1),
-        bottomFrameHighlight = tinted and With(accent, 0.5) or { 1, 1, 1, 0.15 },
-        dividerColor = tinted and With(tokens.line, 0.6) or { 1, 1, 1, 0.28 },
-        chromeColor = With(tokens.muted, 0.7),
+        background = With(back, back[4] or 1),
+        bottomFrameBG = With(back, back[4] or 1),
+        bottomFrameHighlight = { 1, 1, 1, 0.15 },
         mapPins = With(accent, 1),
         tooltip = "|cff" .. Rules.Hex(accent),
         textColor = { fg[1], fg[2], fg[3] },
@@ -111,25 +74,22 @@ function Rules.ThemeFields(tokens, follow, font, back)
 end
 
 -- panel is the Background Color setting, or nil with Window Background off.
-function Rules.WindowColors(tokens, follow, panel, opacity, mode, custom)
-    local tinted = Tinted(tokens, follow)
+function Rules.WindowColors(tokens, panel, opacity, mode, custom)
     local boxAlpha = opacity / PERCENT
-    local line = tinted and With(tokens.fg, 0.5) or { 1, 1, 1, 0.28 }
+    local line = { 1, 1, 1, 0.28 }
     local colors = {
         title = With(tokens.fg, 1),
         text = With(tokens.fg, 1),
         accent = With(tokens.accent, 1),
         muted = With(tokens.muted, 0.9),
         line = line,
-        box = With(tinted and tokens.bg or OFF_BOX, boxAlpha),
-        border = tinted and With(tokens.line, 0.8) or { 0, 0, 0, 1 },
-        boxBorder = tinted and With(tokens.line, 1) or { 0, 0, 0, 1 },
+        box = With(OFF_BOX, boxAlpha),
+        border = { 0, 0, 0, 1 },
+        boxBorder = { 0, 0, 0, 1 },
         barFill = With(tokens.accent, 1),
         barBack = With(line, line[4]),
     }
-    if panel then
-        colors.panel = tinted and With(tokens.panel, 0.92) or With(panel, panel[4] or 1)
-    end
+    if panel then colors.panel = With(panel, panel[4] or 1) end
     if mode == "custom" and type(custom) == "table" then
         for _, key in ipairs({ "title", "text", "line", "border", "barFill", "barBack" }) do
             if type(custom[key]) == "table" then colors[key] = custom[key] end
@@ -158,10 +118,6 @@ local function Choice(default, ...)
 end
 
 local OPTIONS = {
-    Look = Choice("window", "window", "own", "colors"),
-    Palette = Choice("ke", "ke", unpack(Rules.PALETTE_ORDER)),
-    FollowPalette = Toggle(true),
-    IconStyle = Choice("ke", "ke", "own"),
     SetUpNewCharacters = Toggle(false),
     ArrowEnabled = Toggle(true),
     ArrowSize = Number(100, 60, 200, 5),
@@ -192,7 +148,7 @@ local OPTIONS = {
     TitleSize = Number(16, 10, 28),
     StepSize = Number(13, 8, 24),
     ListSize = Number(12, 8, 24),
-    WindowColors = Choice("palette", "palette", "custom"),
+    WindowColors = Choice("accent", "accent", "custom"),
     Panel = Toggle(true),
     Border = Toggle(true),
     BoxOpacity = Number(55, 0, 100),
@@ -225,23 +181,15 @@ local SETUP_ROWS = {
     { key = THEME_KEY, label = "Theme", after = Rules.THEME_NAME },
 }
 
-local LOOK_ROWS = {
-    window = { enableBetaFeatures = true, enableV2Interface = true, [THEME_KEY] = true },
-    colors = { [THEME_KEY] = true },
-}
-
 local function AddRow(rows, def, now, after)
     rows[#rows + 1] = { key = def.key, label = def.label, now = now, after = after }
     if def.reload then rows.reload = true end
 end
 
-function Rules.PlanSetup(look, profile)
-    local rows, wanted = {}, LOOK_ROWS[look]
-    if not wanted then return rows end
+function Rules.PlanSetup(profile)
+    local rows = {}
     for _, def in ipairs(SETUP_ROWS) do
-        if wanted[def.key] and profile[def.key] ~= def.after then
-            AddRow(rows, def, profile[def.key], def.after)
-        end
+        if profile[def.key] ~= def.after then AddRow(rows, def, profile[def.key], def.after) end
     end
     return rows
 end
@@ -426,8 +374,8 @@ end
 ---------------------------------------------------------------------------------
 -- Window
 ---------------------------------------------------------------------------------
-function Rules.WindowMayStart(look, v2On, rivalWindowOn)
-    return look == "window" and v2On == true and not rivalWindowOn
+function Rules.WindowMayStart(v2On, rivalWindowOn)
+    return v2On == true and not rivalWindowOn
 end
 
 -- A scenario counts as open world, as RestedXP's own instance test treats it.
@@ -440,10 +388,6 @@ end
 
 function Rules.ShouldFlash(lastGuide, lastAfter, guide, after)
     return lastGuide ~= nil and lastGuide == guide and lastAfter ~= after
-end
-
-function Rules.IconsInForce(enabled, look, style)
-    return enabled == true and look ~= "own" and style == "ke"
 end
 
 -- RestedXP keeps such a step active beside the guide's progress until the guide

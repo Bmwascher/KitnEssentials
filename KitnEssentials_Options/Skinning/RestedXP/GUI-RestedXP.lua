@@ -16,7 +16,7 @@ local CreateFrame = CreateFrame
 local UIParent = UIParent
 local ipairs, tostring = ipairs, tostring
 
-local Safe, Rules, Setup, Look = KE.RestedXPSafe, KE.RestedXPRules, KE.RestedXPSetup, KE.RestedXPTheme
+local Safe, Rules, Setup, RxpTheme = KE.RestedXPSafe, KE.RestedXPRules, KE.RestedXPSetup, KE.RestedXPTheme
 
 local PAGE_ID = "SkinRestedXP"
 local TAB_GENERAL = "SkinRestedXPGeneral"
@@ -35,15 +35,6 @@ local DIALOG_WIDTH, DIALOG_PAD, DIALOG_ROW, DIALOG_GAP, BUTTON_H, BUTTON_W = 430
 local COLUMNS = { 0, 170, 290 }
 local MAX_ROWS = 3
 
-local LOOK_OPTIONS = {
-    { key = "window", text = "KE Guide Window" },
-    { key = "own", text = "RestedXP's Own" },
-    { key = "colors", text = "KE Colors on RestedXP's Windows" },
-}
-local ICON_OPTIONS = {
-    { key = "ke", text = "KE Icons" },
-    { key = "own", text = "RestedXP's Own" },
-}
 local PART_LABELS = {
     { key = "Theme", label = "Theme" },
     { key = "Arrow", label = "Arrow" },
@@ -127,7 +118,7 @@ local function Confirm()
     end
     dialog:Hide()
     shown.write(rows)
-    Look.ReloadOrAsk()
+    RxpTheme.ReloadOrAsk()
     RebuildPage()
 end
 
@@ -352,113 +343,16 @@ local function AddThisCharacter(scrollChild, yOffset, page)
     return card:GetNextOffset()
 end
 
-local function PaletteOptions()
-    local options = { { key = "ke", text = "KE, Follow the Accent" } }
-    for _, key in ipairs(Rules.PALETTE_ORDER) do
-        options[#options + 1] = { key = key, text = Rules.PALETTES[key].name }
-    end
-    return options
-end
-
-local function AddGuideLook(scrollChild, yOffset, page)
-    local db, manager = page.db, page.manager
-    manager:SetCondition("kePalette", function() return db.Palette == "ke" end)
-    manager:SetCondition("fullPalette", function() return db.Palette ~= "ke" end)
-
-    local card = GUIFrame:CreateCard(scrollChild, "Guide Look", yOffset)
-    manager:Register(card, "all")
-
-    local lookRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
-    local lookDrop = GUIFrame:CreateDropdown(lookRow, "Look", {
-        options = LOOK_OPTIONS,
-        value = db.Look or "window",
-        callback = function(key)
-            db.Look = key
-            if page.module then page.module:LookChanged() end
-            OpenSetup()
-            RebuildPage()
-        end,
-    })
-    lookRow:AddWidget(lookDrop, 1 / 2)
-    manager:Register(lookDrop, "all")
-    local paletteDrop = GUIFrame:CreateDropdown(lookRow, "Palette", {
-        options = PaletteOptions(),
-        value = db.Palette or "ke",
-        callback = function(key)
-            db.Palette = key
-            if key == "ke" then db.AccentPreset = nil end
-            page.ThemeChanged()
-            RebuildPage()
-        end,
-    })
-    lookRow:AddWidget(paletteDrop, 1 / 2)
-    manager:Register(paletteDrop, "all")
-    card:AddRow(lookRow, Theme.rowHeight)
-
-    card:AddLabel("Accent")
-    local accentRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
-    local swatches = GUIFrame:CreatePresetSwatches(accentRow, {
-        value = db.AccentPreset,
-        callback = function(name)
-            db.AccentPreset = name
-            page.ThemeChanged()
-        end,
-    })
-    accentRow:AddWidget(swatches, 1)
-    manager:Register(swatches, "kePalette")
-    card:AddRow(accentRow, Theme.rowHeight)
-
-    local followRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
-    local follow = GUIFrame:CreateCheckbox(followRow, "Backdrop and Highlights Follow the Palette", {
-        value = db.FollowPalette ~= false,
-        callback = function(checked)
-            db.FollowPalette = checked
-            page.ThemeChanged()
-        end,
-    })
-    followRow:AddWidget(follow, 1)
-    manager:Register(follow, "fullPalette")
-    card:AddRow(followRow, Theme.rowHeight)
-
-    card:AddLabel("The other looks: RestedXP's Own, and KE Colors on RestedXP's Windows. The accent follows " ..
-        "KitnEssentials until you pick one. The switch matters once you pick a full palette such as Forest: on, the " ..
-        "whole window takes its colors; off, the backdrop, borders and highlights stay KE's and only the accent and " ..
-        "text change. A theme change waits for combat to end.")
-    return card:GetNextOffset()
-end
-
-local function AddStepIcons(scrollChild, yOffset, page)
-    local db, manager = page.db, page.manager
-    manager:SetCondition("iconStyle", function() return db.Look ~= "own" end)
-
-    local card = GUIFrame:CreateCard(scrollChild, "Step Icons", yOffset)
-    manager:Register(card, "all")
-    local row = GUIFrame:CreateRow(card.content, Theme.rowHeight)
-    local drop = GUIFrame:CreateDropdown(row, "Icon Style", {
-        options = ICON_OPTIONS,
-        value = db.IconStyle or "ke",
-        callback = function(key) db.IconStyle = key end,
-    })
-    row:AddWidget(drop, 1)
-    manager:Register(drop, "iconStyle")
-    card:AddRow(row, Theme.rowHeight)
-    card:AddLabel("Takes a reload, because RestedXP builds its rows from the icons as a guide loads. The other " ..
-        "choice is RestedXP's Own.")
-    return card:GetNextOffset()
-end
-
 local function BuildGeneralTab(scrollChild, yOffset, page)
-    yOffset = AddThisCharacter(scrollChild, yOffset, page)
-    yOffset = AddGuideLook(scrollChild, yOffset, page)
-    return AddStepIcons(scrollChild, yOffset, page)
+    return AddThisCharacter(scrollChild, yOffset, page)
 end
 
 ---------------------------------------------------------------------------------
 -- Page registration
 ---------------------------------------------------------------------------------
 -- Each tab makes its own manager. The host builds a tab only while the module is
--- on, so no manager spans two builders. gate grays a whole tab.
-local function TabPage(getBuilder, gate)
+-- on, so no manager spans two builders.
+local function TabPage(getBuilder)
     return function(scrollChild, yOffset)
         local db = KE.db and KE.db.profile.SkinRestedXP
         if not db then return yOffset end
@@ -467,7 +361,7 @@ local function TabPage(getBuilder, gate)
         local page = { db = db, manager = manager, module = mod }
 
         function page.Refresh()
-            manager:UpdateAll(db.Enabled == true and Installed() and (not gate or gate(db)))
+            manager:UpdateAll(db.Enabled == true and Installed())
         end
         function page.Apply()
             if mod and mod.ApplySettings then mod:ApplySettings() end
@@ -498,8 +392,7 @@ end
 
 GUIFrame:RegisterContent(TAB_GENERAL, TabPage(function() return BuildGeneralTab end))
 GUIFrame:RegisterContent(TAB_ARROW, TabPage(function() return GUIFrame.RestedXPTabs.Arrow end))
-GUIFrame:RegisterContent(TAB_WINDOW, TabPage(function() return GUIFrame.RestedXPTabs.Window end,
-    function(db) return db.Look == "window" end))
+GUIFrame:RegisterContent(TAB_WINDOW, TabPage(function() return GUIFrame.RestedXPTabs.Window end))
 
 GUIFrame:RegisterTabbedContent(PAGE_ID, {
     { id = TAB_GENERAL, label = "General" },

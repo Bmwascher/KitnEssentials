@@ -216,30 +216,29 @@ describe("restedxp rules", function()
             { "ArrowSize", 10, 60 }, { "ArrowSize", 152, 150 }, { "ArrowSize", 153, 155 },
             { "ArrowTextSize", nil, 14 }, { "SetUpNewCharacters", nil, false },
             { "ArrowWords", "yes", true }, { "ArrowWords", false, false },
-            { "Look", "nope", "window" }, { "Look", "colors", "colors" },
-            { "Palette", "forest", "forest" }, { "Palette", "mauve", "ke" },
+            { "WindowColors", nil, "accent" }, { "WindowColors", "palette", "accent" },
+            { "WindowColors", "custom", "custom" },
             { "FontOutline", nil, "OUTLINE" }, { "FontOutline", "shadow", "shadow" },
         }) do
             assert.equals(row[3], Rules.Option(row[1], row[2]), row[1] .. " " .. tostring(row[2]))
         end
     end)
 
-    it("plans setup rows by look and starting values", function()
+    it("plans setup rows by starting values", function()
         local THEME = Rules.THEME_NAME
         for _, row in ipairs({
-            { look = "window", profile = {},
+            { profile = {},
               keys = { "enableBetaFeatures", "enableV2Interface", "activeTheme" }, reload = true },
-            { look = "window", profile = { enableBetaFeatures = true },
+            { profile = { enableBetaFeatures = true },
               keys = { "enableV2Interface", "activeTheme" }, reload = true },
-            { look = "window", profile = { enableBetaFeatures = true, enableV2Interface = true, activeTheme = THEME },
-              keys = {}, reload = nil },
-            { look = "colors", profile = { enableV2Interface = false },
+            { profile = { enableBetaFeatures = true, enableV2Interface = true },
               keys = { "activeTheme" }, reload = nil },
-            { look = "own", profile = {}, keys = {}, reload = nil },
+            { profile = { enableBetaFeatures = true, enableV2Interface = true, activeTheme = THEME },
+              keys = {}, reload = nil },
         }) do
-            local rows = Rules.PlanSetup(row.look, row.profile)
-            assert.same(row.keys, Rules.RowKeys(rows), row.look)
-            assert.equals(row.reload, rows.reload, row.look)
+            local rows = Rules.PlanSetup(row.profile)
+            assert.same(row.keys, Rules.RowKeys(rows))
+            assert.equals(row.reload, rows.reload)
         end
     end)
 
@@ -253,7 +252,7 @@ describe("restedxp rules", function()
             local profile = {}
             for key, value in pairs(start) do profile[key] = value end
 
-            local rows = Rules.PlanSetup("window", profile)
+            local rows = Rules.PlanSetup(profile)
             local before = Rules.MergeBefore({}, profile, Rules.RowKeys(rows))
             if start.enableBetaFeatures then
                 assert.is_nil(before.enableBetaFeatures)
@@ -350,7 +349,7 @@ describe("restedxp rules", function()
             { key = "enableBetaFeatures", now = true, after = false },
             { key = "enableV2Interface", now = true, after = false },
         }, now)
-        local rows = Rules.PlanSetup("window", profile)
+        local rows = Rules.PlanSetup(profile)
         assert.same({ "activeTheme" }, Rules.RowKeys(rows))
         assert.is_nil(rows.reload)
         assert.is_true(Rules.PendingApplies(store.RestedXPPending, "A", profile, true, now))
@@ -460,11 +459,11 @@ describe("restedxp rules", function()
         end
     end)
 
-    it("reads each color from the palette, the Off column or Custom, for the window and the theme", function()
+    it("reads each color from KE's tokens, the accent or Custom, for the window and the theme", function()
         local ACCENT, BACK = { 0.1, 0.2, 0.3, 1 }, { 0.5, 0.6, 0.7, 0.8 }
         local WHITE, BLACK = { 1, 1, 1 }, { 0, 0, 0 }
         local OFF_BOX = { 8 / 255, 8 / 255, 8 / 255 }
-        local forest = Rules.PALETTES.forest
+        local tokens = Rules.Tokens(ACCENT)
 
         local function Reads(color, source, alpha, name)
             assert.near(source[1], color[1], 0.0001, name)
@@ -473,52 +472,34 @@ describe("restedxp rules", function()
             assert.near(alpha, color[4], 0.0001, name)
         end
 
-        local on = Rules.WindowColors(Rules.Tokens("forest", ACCENT), true, BACK, 55, "palette")
-        Reads(on.panel, forest.panel, 0.92, "panel on")
-        Reads(on.box, forest.bg, 0.55, "box on")
-        Reads(on.border, forest.line, 0.8, "border on")
-        Reads(on.boxBorder, forest.line, 1, "box border on")
-        Reads(on.line, forest.fg, 0.5, "line on")
-        Reads(on.barBack, forest.fg, 0.5, "bar track on")
-        Reads(on.barFill, forest.accent, 1, "bar fill on")
-        Reads(on.muted, forest.muted, 0.9, "muted on")
+        local colors = Rules.WindowColors(tokens, BACK, 55, "accent")
+        Reads(colors.panel, BACK, 0.8, "panel")
+        Reads(colors.box, OFF_BOX, 0.55, "box")
+        Reads(colors.border, BLACK, 1, "border")
+        Reads(colors.boxBorder, BLACK, 1, "box border")
+        Reads(colors.line, WHITE, 0.28, "line")
+        Reads(colors.barBack, WHITE, 0.28, "bar track")
+        Reads(colors.barFill, ACCENT, 1, "bar fill")
+        Reads(colors.accent, ACCENT, 1, "accent")
+        Reads(colors.title, WHITE, 1, "title")
 
-        for _, row in ipairs({
-            { name = "switch off", tokens = Rules.Tokens("forest", ACCENT), follow = false, accent = forest.accent },
-            { name = "KE palette", tokens = Rules.Tokens("ke", ACCENT), follow = true, accent = ACCENT },
-        }) do
-            local off = Rules.WindowColors(row.tokens, row.follow, BACK, 55, "palette")
-            Reads(off.panel, BACK, 0.8, row.name)
-            Reads(off.box, OFF_BOX, 0.55, row.name)
-            Reads(off.border, BLACK, 1, row.name)
-            Reads(off.boxBorder, BLACK, 1, row.name)
-            Reads(off.line, WHITE, 0.28, row.name)
-            Reads(off.barFill, row.accent, 1, row.name)
-        end
-
-        local tokens = Rules.Tokens("forest", ACCENT)
-        local custom = { title = { 1, 0, 0, 1 }, box = { 0, 1, 0, 1 } }
-        local picked = Rules.WindowColors(tokens, true, BACK, 55, "custom", custom)
+        local custom = { title = { 1, 0, 0, 1 }, box = { 0, 1, 0, 1 }, border = { 0, 0, 1, 1 } }
+        local picked = Rules.WindowColors(tokens, BACK, 55, "custom", custom)
         Reads(picked.title, custom.title, 1, "custom title")
         Reads(picked.box, custom.box, 0.55, "custom box keeps the opacity setting")
-        Reads(picked.accent, forest.accent, 1, "accent is not a custom color")
-        Reads(Rules.WindowColors(tokens, true, BACK, 55, "palette", custom).title, forest.fg, 1, "palette ignores custom")
-        assert.is_nil(Rules.WindowColors(tokens, true, nil, 55, "palette").panel)
+        Reads(picked.boxBorder, custom.border, 1, "custom border")
+        Reads(picked.accent, ACCENT, 1, "accent is not a custom color")
+        Reads(Rules.WindowColors(tokens, BACK, 55, "accent", custom).title, WHITE, 1, "accent mode ignores custom")
+        assert.is_nil(Rules.WindowColors(tokens, nil, 55, "accent").panel)
 
-        local themeOn = Rules.ThemeFields(tokens, true, "font", BACK)
-        Reads(themeOn.background, forest.panel, 1, "background on")
-        Reads(themeOn.bottomFrameBG, forest.panel, 1, "bottom on")
-        Reads(themeOn.bottomFrameHighlight, forest.accent, 0.5, "highlight on")
-        Reads(themeOn.dividerColor, forest.line, 0.6, "divider on")
-        Reads(themeOn.chromeColor, forest.muted, 0.7, "chrome on")
-        Reads(themeOn.mapPins, forest.accent, 1, "pins on")
-        assert.equals("font", themeOn.font)
-
-        local themeOff = Rules.ThemeFields(tokens, false, "font", BACK)
-        Reads(themeOff.background, BACK, 0.8, "background off")
-        Reads(themeOff.bottomFrameHighlight, WHITE, 0.15, "highlight off")
-        Reads(themeOff.dividerColor, WHITE, 0.28, "divider off")
-        Reads(themeOff.chromeColor, forest.muted, 0.7, "chrome either way")
+        local theme = Rules.ThemeFields(tokens, "font", BACK)
+        Reads(theme.background, BACK, 0.8, "background")
+        Reads(theme.bottomFrameBG, BACK, 0.8, "bottom")
+        Reads(theme.bottomFrameHighlight, WHITE, 0.15, "highlight")
+        Reads(theme.mapPins, ACCENT, 1, "pins")
+        assert.equals("font", theme.font)
+        assert.is_nil(theme.dividerColor)
+        assert.is_nil(theme.chromeColor)
     end)
 
     it("keeps the first record of a frame", function()
@@ -541,12 +522,11 @@ describe("restedxp rules", function()
         end
     end)
 
-    it("decides the window, Show In, the flash and the icons", function()
+    it("decides the window, Show In and the flash", function()
         for _, row in ipairs({
-            { "window", true, false, true }, { "window", false, false, false },
-            { "window", true, true, false }, { "colors", true, false, false }, { "own", true, false, false },
+            { true, false, true }, { false, false, false }, { true, true, false },
         }) do
-            assert.equals(row[4], Rules.WindowMayStart(row[1], row[2], row[3]))
+            assert.equals(row[3], Rules.WindowMayStart(row[1], row[2]))
         end
 
         for _, row in ipairs({
@@ -562,13 +542,6 @@ describe("restedxp rules", function()
         assert.is_false(Rules.ShouldFlash(guide, 3, guide, 3))
         assert.is_false(Rules.ShouldFlash(guide, 3, other, 4))
         assert.is_false(Rules.ShouldFlash(nil, nil, guide, 4))
-
-        for _, row in ipairs({
-            { true, "window", "ke", true }, { true, "colors", "ke", true }, { true, "own", "ke", false },
-            { true, "window", "own", false }, { false, "window", "ke", false },
-        }) do
-            assert.equals(row[4], Rules.IconsInForce(row[1], row[2], row[3]))
-        end
     end)
 
     it("turns off only the part a missing call belongs to", function()

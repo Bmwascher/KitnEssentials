@@ -188,7 +188,7 @@ local FOREVER_ALLOWED = {
     CombatLogger = true,
     MerchantPages = true,
     Scout = true,
-    -- Skinning: RestedXP Look, its three tabs, Forever only.
+    -- Skinning: RestedXP, its three tabs, Forever only.
     SkinRestedXP = true,
     SkinRestedXPGeneral = true,
     SkinRestedXPArrow = true,

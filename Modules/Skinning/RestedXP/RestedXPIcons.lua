@@ -63,20 +63,15 @@ local GLYPHS = {
 
 local bakedAccent
 
-function Icons.InForce()
-    return Rules.IconsInForce(true, Theme.Option("Look"), Theme.Option("IconStyle"))
-end
-
 -- True once RestedXP's table holds KE's icons. Only a reload takes them out.
 function Icons.Applied()
     return bakedAccent ~= nil
 end
 
 -- The accent is baked into each escape, and RestedXP's own rows draw them as they
--- stand. KE's window draws from the path, so only KE Colors can show a stale one.
+-- stand.
 function Icons.AccentStale()
-    return bakedAccent ~= nil and Theme.Option("Look") == "colors"
-        and Rules.Hex(Theme.Tokens().accent) ~= bakedAccent
+    return bakedAccent ~= nil and Rules.Hex(Theme.Tokens().accent) ~= bakedAccent
 end
 
 local function Channel(value)
@@ -111,7 +106,7 @@ function Icons.PathOf(text)
 end
 
 -- These two follow what RestedXP's table holds, not the settings, so a window's
--- rows stay one set until the reload a style change asks for.
+-- rows stay one set until the next reload.
 function Icons.TextureFor(glyph)
     if not bakedAccent then return nil end
     return ART .. glyph .. EXTENSION
