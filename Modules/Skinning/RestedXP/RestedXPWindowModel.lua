@@ -61,7 +61,7 @@ local function Row(rxp, element, opts)
     local have, need, bags = Rules.Counted(element.tag, element.id, element.qty, text, opts.getCount)
     return {
         text = text, icon = glyph, done = done and true or false, source = Dig(frame, "text"),
-        have = have, need = need, bags = bags, nested = nested, note = element.textOnly == true and glyph == "",
+        have = have, need = need, bags = bags, nested = nested,
     }
 end
 

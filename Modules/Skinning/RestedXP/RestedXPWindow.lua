@@ -40,8 +40,8 @@ local K = {
     PAD = 10, BOX_PAD = 7, FOLD_W = 16, PROGRESS_W = 120, GAP = 5,
     HEAD_PAD = 10, LIST_PAD = 6,
     BOX_TITLE_TEXT = 9, BOX_TITLE_HEIGHT = 19, BOX_TITLE_ROOM = 10,
-    BAR_W = 2, ICON_GAP = 5, GRIP_SIZE = 16,
-    FIRST_GROW = 2, FIRST_ICON_GROW = 2, MARK_SIZE = 24, BAR_HEIGHT = 5, INDENT = 12, ICON_SIZE = 18,
+    ICON_GAP = 5, GRIP_SIZE = 16,
+    FIRST_GROW = 2, FIRST_ICON_GROW = 2, MARK_SIZE = 24, BAR_HEIGHT = 5, ICON_SIZE = 18,
     HOVER_ALPHA = 0.25, ICON_DONE_ALPHA = 0.5, DONE_ALPHA = 0.5, YARDS_ALPHA = 0.85,
     COUNT_GAP = 2,
     REDRAW_GAP = 0.1,
@@ -842,7 +842,6 @@ local function MakeRow(holder)
     row:SetScript("OnClick", StepClick)
     row:SetScript("OnEnter", function(self) Tip(self.box or self, K.TEXT_SKIP, true) end)
     row:SetScript("OnLeave", TipHide)
-    row.bar = row:CreateTexture(nil, "ARTWORK")
     row.icon = Text(row, K.ICON_SIZE)
     row.glyph = row:CreateTexture(nil, "OVERLAY")
     row.meter = MakeBar(row)
@@ -934,7 +933,7 @@ local function DrawMeter(item, row, fill, x, y, width)
     return height
 end
 
-local function DrawRow(parent, row, x, y, width, first, noSideBar)
+local function DrawRow(parent, row, x, y, width, first)
     local item = Pools().row:Acquire(parent)
     item.box = parent ~= window and parent or nil
     item.step = row.step
@@ -946,32 +945,25 @@ local function DrawRow(parent, row, x, y, width, first, noSideBar)
         textSize = textSize + K.FIRST_GROW
         iconSize = iconSize + K.FIRST_GROW * K.FIRST_ICON_GROW
     end
-    local iconW = iconSize + K.ICON_GAP
-    local drop = math_max(0, floor((iconSize - textSize) / 2))
-    local lead = K.BAR_W + K.GAP
-    local textWidth = width - lead - iconW
-    item.bar:ClearAllPoints()
-    item.bar:SetPoint("TOPLEFT", item, "TOPLEFT", 0, 0)
-    item.bar:SetPoint("BOTTOMLEFT", item, "BOTTOMLEFT", 0, 0)
-    item.bar:SetWidth(K.BAR_W)
-    item.bar:SetShown(not first and not noSideBar and not row.nested and not row.note)
-    local side = row.done and colors.muted or colors.accent
-    item.bar:SetColorTexture(side[1], side[2], side[3], side[4])
+    -- A row with no icon gives the column to its text.
+    local hasIcon = type(row.icon) == "string" and row.icon ~= ""
+    local iconW = hasIcon and iconSize + K.ICON_GAP or 0
+    local drop = hasIcon and math_max(0, floor((iconSize - textSize) / 2)) or 0
+    local textWidth = width - iconW
     item.icon:ClearAllPoints()
-    item.icon:SetPoint("TOPLEFT", item, "TOPLEFT", lead, 0)
+    item.icon:SetPoint("TOPLEFT", item, "TOPLEFT", 0, 0)
     Faced(item.icon, iconSize)
     DrawIcon(item, row, iconSize)
     item.text:ClearAllPoints()
-    item.text:SetPoint("TOPLEFT", item, "TOPLEFT", lead + iconW, -drop)
+    item.text:SetPoint("TOPLEFT", item, "TOPLEFT", iconW, -drop)
     item.text:SetWidth(textWidth)
     Colored(item.text, row.done and "muted" or "text")
     Faced(item.text, textSize)
     item.text:SetText(row.text)
-    local height = math_max(drop + math_max(item.text:GetStringHeight(), textSize), iconSize)
+    local height = math_max(drop + math_max(item.text:GetStringHeight(), textSize), hasIcon and iconSize or 0)
     local fill = Rules.CountFill(row.have, row.need, row.bags, row.done)
     if fill then
-        local x2 = lead + iconW
-        height = height + K.COUNT_GAP + DrawMeter(item, row, fill, x2, height + K.COUNT_GAP, textWidth)
+        height = height + K.COUNT_GAP + DrawMeter(item, row, fill, iconW, height + K.COUNT_GAP, textWidth)
     else
         item.meter:Hide()
     end
@@ -1011,8 +1003,7 @@ local function DrawBox(step, y, inner, first)
     local by = -pad - head - gap
     local column = K.ICON_SIZE + K.ICON_GAP
     for i, row in ipairs(step.rows) do
-        local set = i > 1 and K.INDENT or 0
-        if i > 1 and row.nested then set = set + column end
+        local set = i > 1 and row.nested and column or 0
         by = by - DrawRow(box, row, pad + set, by, inner - pad * 2 - set, i == 1) - gap
     end
     box:SetHeight(-by + pad - gap)
@@ -1152,7 +1143,7 @@ local function DrawFolded(model, y, inner)
     local step = model.steps[#model.steps]
     local row = step and step.rows[1]
     if not row then return y end
-    return y - DrawRow(window, row, K.PAD, y, inner, false, true) - K.GAP
+    return y - DrawRow(window, row, K.PAD, y, inner, false) - K.GAP
 end
 
 local function DrawChrome(y, listH, folded)
