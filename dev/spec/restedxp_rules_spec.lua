@@ -720,4 +720,19 @@ describe("restedxp rules", function()
             assert.equals(row[4], got, "row " .. i)
         end
     end)
+
+    it("tells a state's words on KE's window from the window itself", function()
+        for _, state in ipairs({ "themeOnly", "setUp", "setUpFound" }) do
+            assert.is_false(Rules.WindowPending(state, true), state)
+            assert.is_true(Rules.WindowPending(state, false), state)
+        end
+        assert.is_true(Rules.WindowPending("notSetUp", true))
+        assert.is_false(Rules.WindowPending("notSetUp", false))
+        for _, state in ipairs({
+            "notInstalled", "notLoaded", "noProfile", "reloading", "noWindow", "setupMissed", "undoMissed",
+        }) do
+            assert.is_false(Rules.WindowPending(state, true), state)
+            assert.is_false(Rules.WindowPending(state, false), state)
+        end
+    end)
 end)

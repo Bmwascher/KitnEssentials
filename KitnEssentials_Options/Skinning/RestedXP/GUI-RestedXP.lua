@@ -17,7 +17,7 @@ local UIParent = UIParent
 local ipairs, tostring, type = ipairs, tostring, type
 
 local Safe, Rules, Setup, RxpTheme = KE.RestedXPSafe, KE.RestedXPRules, KE.RestedXPSetup, KE.RestedXPTheme
-local Icons = KE.RestedXPIcons
+local Icons, RxpWindow = KE.RestedXPIcons, KE.RestedXPWindow
 
 local PAGE_ID = "SkinRestedXP"
 local TAB_GENERAL = "SkinRestedXPGeneral"
@@ -47,6 +47,7 @@ local NEW_CHARACTER_H, NEW_SWITCH_SHARE, NEW_SWITCH_RISE = 54, 0.1, 10
 
 -- What each state of Rules.CharacterState says. window marks a line that tells of
 -- KE's window, so the conflict prompt's line replaces it while that holds the window.
+-- pending replaces a line while Rules.WindowPending says the window has yet to follow.
 local CHARACTER_STATES = {
     notInstalled = {
         head = "Not installed",
@@ -71,11 +72,14 @@ local CHARACTER_STATES = {
     notSetUp = {
         head = "Not set up", window = true,
         line = "One click and a reload turn on KE's guide window here.",
+        pending = "KE's window stops at the next loading screen. One click and a reload keep it on.",
     },
     themeOnly = {
         head = "Not set up", window = true,
         line = "KE's guide window is on. One click, with no reload, adds KE's theme too.",
         lineLiveOff = "KE's guide window is on. One click and a reload add KE's theme too.",
+        pending = "KE's window starts at the next loading screen. One click adds its theme too.",
+        pendingLiveOff = "KE's window starts at the next loading screen. A click and a reload add its theme.",
     },
     setupMissed = {
         head = "Not set up",
@@ -84,6 +88,7 @@ local CHARACTER_STATES = {
     setUp = {
         head = "Set up", good = true, window = true,
         line = "KE's guide window is on for this character.",
+        pending = "KE's window starts at the next loading screen.",
     },
     undoMissed = {
         head = "Set up", good = true,
@@ -92,6 +97,7 @@ local CHARACTER_STATES = {
     setUpFound = {
         head = "Set up", good = true, window = true,
         line = "KE's guide window is on. KE changed nothing here, so there is nothing to undo.",
+        pending = "KE's window starts at the next loading screen, and KE changed nothing to undo.",
     },
 }
 
@@ -391,9 +397,17 @@ local function AddThisCharacter(scrollChild, yOffset, page)
 
     local key, which, live = CharacterState()
     local state = CHARACTER_STATES[key]
+    local running = RxpWindow.IsActive()
     local rival = KE:RestedXPRivalSettings()
-    local line = state.window and rival and rival.rxpWindow == true and TEXT_WINDOW_HELD
-        or RxpTheme.LiveReloadOff() and state.lineLiveOff or state.line
+    local liveOff = RxpTheme.LiveReloadOff()
+    local line
+    if state.window and not running and rival and rival.rxpWindow == true then
+        line = TEXT_WINDOW_HELD
+    elseif Rules.WindowPending(key, running) then
+        line = liveOff and state.pendingLiveOff or state.pending
+    else
+        line = liveOff and state.lineLiveOff or state.line
+    end
     local stateRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local stateBlock = GUIFrame:CreateText(stateRow, Colored(state.good and Theme.success or Theme.warning, state.head),
         Colored(GRAY_COLOR, line), Theme.rowHeight, "hide")

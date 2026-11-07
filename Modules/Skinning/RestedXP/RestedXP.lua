@@ -88,6 +88,7 @@ local function WindowWanted(self)
 end
 
 local function StartParts(self)
+    local wasRunning = Window.IsActive()
     if self.parts.Theme then Theme.Register() end
     if self.parts.Arrow and Theme.Option("ArrowEnabled") then
         Arrow.Start()
@@ -99,6 +100,8 @@ local function StartParts(self)
     else
         Window.Stop()
     end
+    -- This Character's line reads the window.
+    if Window.IsActive() ~= wasRunning then Setup.ProfileChanged() end
 end
 
 function M:OnEnable()

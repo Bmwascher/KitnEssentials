@@ -410,6 +410,15 @@ function Rules.CharacterState(facts)
     return "setUpFound", "undo", false
 end
 
+local WINDOW_SAYS_ON = { notSetUp = false, themeOnly = true, setUp = true, setUpFound = true }
+
+-- A state's words tell what the saved settings make of KE's window, which runs as its
+-- last start left it until the next settings pass. True while the two differ.
+function Rules.WindowPending(state, running)
+    local saysOn = WINDOW_SAYS_ON[state]
+    return saysOn ~= nil and saysOn ~= (running == true)
+end
+
 ---------------------------------------------------------------------------------
 -- Giving back
 ---------------------------------------------------------------------------------
