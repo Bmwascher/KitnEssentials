@@ -89,6 +89,7 @@ function Setup.Write(rows)
     Rules.MergeBefore(record.before, profile, Rules.RowKeys(rows))
     for _, row in ipairs(rows) do profile[row.key] = row.after end
     NewerChange(store)
+    Setup.MarkSeen()
 end
 
 local function ClearRecord(profile)
@@ -105,6 +106,7 @@ function Setup.WriteUndo(rows)
     for _, row in ipairs(rows) do profile[row.key] = row.after end
     ClearRecord(profile)
     NewerChange(KE:GetCharStore(false))
+    Setup.MarkSeen()
 end
 
 -- The current profile only: another profile's record waits for its own Undo, because
@@ -123,8 +125,11 @@ function Setup.RestoreTheme()
     ClearRecord(profile)
 end
 
+-- A character the start missed stays unseen for a later load, until the player answers
+-- it: a write, an undo or a Cancel. Otherwise that load would write over the answer.
 function Setup.MarkSeen()
     KE:GetCharStore(true).RestedXPSeen = true
+    newMissed = nil
 end
 
 -- The kind of change waiting for the reload its click asked for, or nil. This load's
@@ -270,7 +275,7 @@ local function BootWrites()
     if not (mayWrite and profile) then return end
     local store = KE:GetCharStore(true)
     if not Rules.ShouldAutoSetup(Theme.Option("SetUpNewCharacters"), store.RestedXPSeen) then return end
-    store.RestedXPSeen = true
+    Setup.MarkSeen()
     local rows = Setup.Plan()
     if rows and #rows > 0 then
         Setup.Write(rows)
@@ -333,7 +338,7 @@ function Setup.AtStart(atLogin)
         and Rules.ShouldAutoSetup(Theme.Option("SetUpNewCharacters"), store.RestedXPSeen) then
         newMissed = true
     else
-        store.RestedXPSeen = true
+        Setup.MarkSeen()
     end
     Setup.ReportStart()
 end

@@ -214,7 +214,7 @@ describe("restedxp rules", function()
         for _, row in ipairs({
             { "ArrowSize", nil, 100 }, { "ArrowSize", "x", 100 }, { "ArrowSize", 500, 200 },
             { "ArrowSize", 10, 60 }, { "ArrowSize", 152, 150 }, { "ArrowSize", 153, 155 },
-            { "ArrowTextSize", nil, 14 }, { "SetUpNewCharacters", nil, false },
+            { "ArrowTextSize", nil, 14 }, { "SetUpNewCharacters", nil, true }, { "SetUpNewCharacters", false, false },
             { "ArrowWords", "yes", true }, { "ArrowWords", false, false },
             { "WindowColors", nil, "accent" }, { "WindowColors", "palette", "accent" },
             { "WindowColors", "custom", "custom" }, { "FollowAccent", nil, false }, { "FollowAccent", true, true },

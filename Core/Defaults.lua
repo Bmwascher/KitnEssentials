@@ -2800,7 +2800,7 @@ local Defaults = {
         -- Skinning would count as SkinAPI's.
         SkinRestedXP = {
             Enabled = false,
-            SetUpNewCharacters = false,
+            SetUpNewCharacters = true,
             ArrowEnabled = true,
             ArrowSize = 100,
             ArrowGap = 4,

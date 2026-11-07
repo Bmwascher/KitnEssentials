@@ -235,7 +235,11 @@ local function BuildDialog()
     f.confirm:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -DIALOG_PAD, DIALOG_PAD)
     f.cancel = GUIFrame:CreateButton(f, "Cancel", {
         height = BUTTON_H,
-        callback = function() f:Hide() end,
+        callback = function()
+            Setup.MarkSeen()
+            f:Hide()
+            RebuildPage()
+        end,
     })
     f.cancel:SetSize(BUTTON_W, BUTTON_H)
     f.cancel:SetPoint("RIGHT", f.confirm, "LEFT", -DIALOG_GAP, 0)
@@ -412,7 +416,7 @@ local function AddThisCharacter(scrollChild, yOffset, page)
 
     local newRow = GUIFrame:CreateRow(card.content, NEW_CHARACTER_H)
     local newCharacters = GUIFrame:CreateCheckbox(newRow, "", {
-        value = db.SetUpNewCharacters == true,
+        value = db.SetUpNewCharacters ~= false,
         callback = function(checked)
             db.SetUpNewCharacters = checked
             if checked then

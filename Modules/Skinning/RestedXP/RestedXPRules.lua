@@ -143,7 +143,7 @@ local function Choice(default, ...)
 end
 
 local OPTIONS = {
-    SetUpNewCharacters = Toggle(false),
+    SetUpNewCharacters = Toggle(true),
     ArrowEnabled = Toggle(true),
     ArrowSize = Number(100, 60, 200, 5),
     ArrowGap = Number(4, 0, 20),
