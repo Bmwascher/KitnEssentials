@@ -109,6 +109,25 @@ local function SkinCard(button)
     PaintCard(button)
 end
 
+local function SkinBadge(badge)
+    if not badge then return end
+    if badge.Background then badge.Background:SetAlpha(0) end
+    S.Backdrop(badge)
+end
+
+local function PointBar(summary)
+    local border = summary and summary.Border
+    if not border then return end
+    border:SetAlpha(0)
+    local plate = S.Backdrop(border)
+    if not plate then return end
+    -- The art is 37 tall around a whole-pixel center line, so its top and
+    -- bottom sit on half pixels.
+    plate:ClearAllPoints()
+    plate:SetPoint("TOPLEFT", border, "TOPLEFT", 0, -0.5)
+    plate:SetPoint("BOTTOMRIGHT", border, "BOTTOMRIGHT", 0, 0.5)
+end
+
 function S.LegacyTreePage()
     local page = _G.LegacySystemFrame and _G.LegacySystemFrame.TreePage
     if not page or S.data(page).skinned then return end
@@ -124,6 +143,8 @@ function S.LegacyTreePage()
         S.Button(traits.ApplyButton)
         S.EditBox(traits.SearchBox)
         SkinSelectedIcon(traits.SelectedTreeIcon)
+        SkinBadge(traits.SpentPointsFrame)
     end
+    PointBar(page.LegacyTreePointSummary)
     S.data(page).skinned = true
 end
