@@ -38,6 +38,7 @@
     <Script file="Inspect.lua" />
     <Script file="LegacyChallenges.lua" />
     <Script file="LegacySystem.lua" />
+    <Script file="LegacyTree.lua" />
     <Script file="Loot.lua" />
     <Script file="LossControl.lua" />
     <Script file="Macro.lua" />
