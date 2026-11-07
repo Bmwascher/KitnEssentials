@@ -21,7 +21,6 @@ Rules.THEME_NAME = "KitnEssentials"
 local THEME_KEY = "activeTheme"
 local THEME_TEXTURES = "Interface/AddOns/RXPGuides/Textures/DarkMode/"
 local WHITE_TEXTURE = "Interface/BUTTONS/WHITE8X8"
-local FRAME_TEXTURE = "Interface\\AddOns\\KitnEssentials\\Media\\RestedXP\\frame.tga"
 local CHANNEL_MAX, ROUND, PERCENT = 255, 0.5, 100
 local COUNT_MIN = 2
 local COUNT_PATTERN = "(%d+)%s*/%s*(%d+)"
@@ -108,7 +107,6 @@ function Rules.ThemeFields(tokens, follow, font, back)
         font = font,
         texturePath = THEME_TEXTURES,
         bgTextures = { edge = WHITE_TEXTURE, bottom = WHITE_TEXTURE, guideName = WHITE_TEXTURE },
-        edges = { edge = FRAME_TEXTURE, guideName = FRAME_TEXTURE },
     }
 end
 

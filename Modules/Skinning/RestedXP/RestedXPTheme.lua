@@ -17,7 +17,6 @@ local Has, Dig, Run = Safe.Has, Safe.Dig, Safe.Run
 local Theme = {}
 KE.RestedXPTheme = Theme
 
-local GRIP = "Interface\\AddOns\\KitnEssentials\\Media\\RestedXP\\grip.tga"
 local BARS = { "GuideName", "Footer" }
 local ARROWS = { "ScrollUpButton", "ScrollDownButton" }
 local ARROW_PARTS = { "Normal", "Highlight", "Pushed", "Disabled" }
@@ -27,7 +26,7 @@ local SHOWN_PARTS = { {}, { "GuideName" }, { "Footer" }, { "ScrollChild" }, { "S
 local TEXT_LIVE_OFF = "RestedXP's live theme reload is off, so this takes a reload."
 
 local lastBuilt, reloadPending, askedLate, chromeOn, chromeHooked
-local footerTinted, scrollTinted, gripOriginal, thumbSize, ruleColor, ruleRows
+local footerTinted, scrollTinted, thumbSize, ruleColor, ruleRows
 local faded = setmetatable({}, { __mode = "k" })
 local rules = setmetatable({}, { __mode = "k" })
 
@@ -196,9 +195,8 @@ local function PaintBars()
     end
 end
 
-local function Skin(texture, path, color)
+local function Skin(texture, color)
     if not Has(texture, "SetVertexColor") then return end
-    if path and Has(texture, "SetTexture") then texture:SetTexture(path) end
     local r, g, b, a = 1, 1, 1, 1
     if color then r, g, b, a = color[1], color[2], color[3], color[4] or 1 end
     texture:SetVertexColor(r, g, b, a)
@@ -225,10 +223,8 @@ end
 
 local function PaintFooter(color)
     local frame = _G.RXPFrame
-    local grip = Normal(Dig(frame, "Footer", "icon"))
-    if Has(grip, "GetTexture") then gripOriginal = gripOriginal or grip:GetTexture() end
-    Skin(Normal(Dig(frame, "Footer", "cog")), nil, color)
-    Skin(grip, color and GRIP or gripOriginal, color)
+    Skin(Normal(Dig(frame, "Footer", "cog")), color)
+    Skin(Normal(Dig(frame, "Footer", "icon")), color)
 end
 
 local function PaintScrollBar(color)
