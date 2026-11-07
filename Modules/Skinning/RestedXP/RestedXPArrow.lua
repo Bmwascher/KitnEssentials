@@ -1,17 +1,16 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Modules/Skinning/RestedXP/RestedXPArrow.lua             ║
--- ║  Purpose: RestedXP's arrow in KE's shape, color and      ║
--- ║           words, by post-hooks only. No file-scope       ║
--- ║           frame.                                         ║
+-- ║  Purpose: KE's text under RestedXP's own arrow, by       ║
+-- ║           post-hooks only. No file-scope frame.          ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
 local KE = select(2, ...)
 
-local C_Timer, CreateColor, CreateFrame = C_Timer, CreateColor, CreateFrame
+local C_Timer = C_Timer
 local hooksecurefunc = hooksecurefunc
 local type, unpack = type, unpack
-local math_max, math_sqrt = math.max, math.sqrt
+local math_max = math.max
 
 local Safe, Rules, Theme = KE.RestedXPSafe, KE.RestedXPRules, KE.RestedXPTheme
 local Has, Dig, Run, Secret = Safe.Has, Safe.Dig, Safe.Run, Safe.Secret
@@ -19,68 +18,18 @@ local Has, Dig, Run, Secret = Safe.Has, Safe.Dig, Safe.Run, Safe.Secret
 local Arrow = {}
 KE.RestedXPArrow = Arrow
 
-local ART = "Interface\\AddOns\\KitnEssentials\\Media\\RestedXP\\Arrows\\"
-local IMAGES = {
-    kite = { [false] = ART .. "kite.tga", [true] = ART .. "kite_glow.tga" },
-    wide = { [false] = ART .. "wide.tga", [true] = ART .. "wide_glow.tga" },
-}
--- The glow files draw the arrow at this share of their canvas, so turning the
--- glow on leaves the arrow the same size.
-local GLOW_FILL = 0.76
 local TEXT_WIDTH = 240
 local WORDS_GAP = 0.1
 local PERCENT = 100
-local TOP_TOWARD_WHITE, BOTTOM_SHARE, LAYER_STRENGTH = 0.22, 0.72, 0.9
-local DIAGONAL = math_sqrt(2)
 
 local active, installed, textHooked
-local layer, swapped, fitted, rxpImage, textHome
+local fitted, textHome
 local keeping, composing
 local onYards, frameHooked, yardsAlpha
 local wordsFor, wordsRaw, wordsText, wordsPending
 
 ---------------------------------------------------------------------------------
--- Tint over RestedXP's own arrow
----------------------------------------------------------------------------------
-local function BuildLayer(af)
-    local texture = af.texture
-    if not Has(texture, "SetRotation") then return nil end
-    local f = CreateFrame("Frame", nil, af)
-    f:SetAllPoints()
-    f:SetFrameLevel(af:GetFrameLevel() + 1)
-    f.color = f:CreateTexture(nil, "OVERLAY")
-    f.color:SetPoint("CENTER")
-    f.color:SetBlendMode("ADD")
-    f.mask = f:CreateMaskTexture()
-    f.mask:SetAllPoints()
-    f.color:AddMaskTexture(f.mask)
-    hooksecurefunc(texture, "SetRotation", function(_, radians)
-        if f:IsShown() then f.mask:SetRotation(radians) end
-    end)
-    local function Cover(self, w, h)
-        local side = math_max(w, h) * DIAGONAL
-        self.color:SetSize(side, side)
-    end
-    f:SetScript("OnSizeChanged", Cover)
-    Cover(f, af:GetSize())
-    return f
-end
-
-local function ShowLayer(af, c)
-    layer = layer or BuildLayer(af)
-    if not layer then return end
-    layer.color:SetColorTexture(1, 1, 1, 1)
-    layer.color:SetGradient("VERTICAL",
-        CreateColor(c[1] * BOTTOM_SHARE, c[2] * BOTTOM_SHARE, c[3] * BOTTOM_SHARE, LAYER_STRENGTH),
-        CreateColor(c[1] + (1 - c[1]) * TOP_TOWARD_WHITE, c[2] + (1 - c[2]) * TOP_TOWARD_WHITE,
-            c[3] + (1 - c[3]) * TOP_TOWARD_WHITE, LAYER_STRENGTH))
-    layer.mask:SetTexture(af.texture:GetTexture(), "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-    layer.mask:SetRotation(af.orientation or 0)
-    layer:Show()
-end
-
----------------------------------------------------------------------------------
--- KE's image
+-- Size, and the text's place
 ---------------------------------------------------------------------------------
 local function MoveText(af, down)
     local text = af.text
@@ -102,27 +51,11 @@ local function Fit(af, scale)
     MoveText(af, math_max(0, dy) + Theme.Option("ArrowGap"))
 end
 
-local function ShowImage(af, c)
-    local glow = Theme.Option("ArrowGlow")
-    af.texture:SetTexture(IMAGES[Theme.Option("ArrowStyle")][glow])
-    af.texture:SetVertexColor(c[1], c[2], c[3], 1)
-    fitted = Theme.Option("ArrowSize") / PERCENT / (glow and GLOW_FILL or 1)
-    Fit(af, fitted)
-    swapped = true
-end
-
-local function HandBackImage(af)
-    local texture = af.texture
-    if fitted then
-        fitted = nil
-        texture:ClearAllPoints()
-        texture:SetAllPoints()
-        texture:SetVertexColor(1, 1, 1, 1)
-    end
-    if swapped then
-        if rxpImage then texture:SetTexture(rxpImage) end
-        swapped = false
-    end
+local function HandBackFit(af)
+    if not fitted then return end
+    fitted = nil
+    af.texture:ClearAllPoints()
+    af.texture:SetAllPoints()
 end
 
 ---------------------------------------------------------------------------------
@@ -268,15 +201,8 @@ end
 function Arrow.Paint()
     local af = _G.RXPG_ARROW
     if not (active and af) then return end
-    local accent = Theme.Tokens().accent
-    if Theme.Option("ArrowStyle") == "tint" then
-        HandBackImage(af)
-        ShowLayer(af, accent)
-        MoveText(af, Theme.Option("ArrowGap"))
-    else
-        if layer then layer:Hide() end
-        ShowImage(af, accent)
-    end
+    fitted = Theme.Option("ArrowSize") / PERCENT
+    Fit(af, fitted)
     af.text:SetWidth(Theme.Option("ArrowWords") and TEXT_WIDTH or 0)
     KeepFont(af.text, true)
     Arrow.Stale()
@@ -305,11 +231,8 @@ local function HookWords(owner, name)
     if Has(owner, name) then hooksecurefunc(owner, name, OnWordsChanged) end
 end
 
-local function OnUpdateVisuals(af)
-    if not active then return end
-    swapped = false
-    rxpImage = Rules.KeepImage(af.texture:GetTexture(), rxpImage, false)
-    Arrow.Paint()
+local function OnUpdateVisuals()
+    if active then Arrow.Paint() end
 end
 
 local function OnArrowSize(af)
@@ -341,7 +264,6 @@ function Arrow.Start()
     end
     active = true
     Install(af)
-    rxpImage = Rules.KeepImage(af.texture:GetTexture(), rxpImage, swapped)
     Arrow.Paint()
 end
 
@@ -349,8 +271,7 @@ function Arrow.Stop()
     local af = _G.RXPG_ARROW
     if not (active and af) then return end
     active = false
-    HandBackImage(af)
-    if layer then layer:Hide() end
+    HandBackFit(af)
     local text = af.text
     if textHome then text:SetPoint(unpack(textHome)) end
     text:SetWidth(0)

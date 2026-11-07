@@ -166,12 +166,10 @@ local OPTIONS = {
     IconStyle = Choice("ke", "ke", "own"),
     SetUpNewCharacters = Toggle(false),
     ArrowEnabled = Toggle(true),
-    ArrowStyle = Choice("kite", "kite", "wide", "tint"),
-    ArrowSize = Number(150, 60, 200, 5),
-    ArrowGlow = Toggle(false),
+    ArrowSize = Number(100, 60, 200, 5),
     ArrowGap = Number(4, 0, 20),
     ArrowWords = Toggle(true),
-    ArrowTextSize = Number(12, 8, 24),
+    ArrowTextSize = Number(14, 8, 24),
     ArrowAddonFont = Toggle(true),
     ArrowDistance = Toggle(true),
     ShowOpenWorld = Toggle(true),
@@ -413,11 +411,6 @@ end
 function Rules.KeepHome(home, alpha, mouse)
     if home then return home end
     return { alpha = alpha, mouse = mouse }
-end
-
-function Rules.KeepImage(current, kept, isOurs)
-    if isOurs or current == nil then return kept end
-    return current
 end
 
 ---------------------------------------------------------------------------------

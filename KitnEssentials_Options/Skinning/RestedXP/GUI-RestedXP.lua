@@ -274,8 +274,9 @@ local function BuildHeader(scrollChild, yOffset)
         db.Enabled = checked
         ApplyModuleState(checked)
     end)
-    card:AddLabel("Gives " .. KE:Gold("RestedXP Guides") .. " the KitnEssentials look: its colors, an arrow and " ..
-        "step icons, and an optional single guide window.\n\nNeeds " .. KE:Gold("RestedXP Guides") .. ". " ..
+    card:AddLabel("Gives " .. KE:Gold("RestedXP Guides") .. " the KitnEssentials look: its colors, its text under " ..
+        "RestedXP's arrow, step icons, and an optional single guide window.\n\nNeeds " ..
+        KE:Gold("RestedXP Guides") .. ". " ..
         (installed and ("It changes RestedXP's settings when you click, after showing you what changes, and for " ..
             "a new character only if you turn on " .. KE:Gold("Set Up New Characters") .. ". Turning this off " ..
             "puts RestedXP's theme back.")

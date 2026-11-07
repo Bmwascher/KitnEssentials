@@ -10,17 +10,10 @@ local Theme = KE.Theme
 
 GUIFrame.RestedXPTabs = GUIFrame.RestedXPTabs or {}
 
-local STYLE_OPTIONS = {
-    { key = "kite", text = "KE Kite" },
-    { key = "wide", text = "KE Wide" },
-    { key = "tint", text = "Tint over RestedXP's Arrow" },
-}
-
 function GUIFrame.RestedXPTabs.Arrow(scrollChild, yOffset, page)
     local db, manager = page.db, page.manager
 
     manager:SetCondition("arrow", function() return db.ArrowEnabled ~= false end)
-    manager:SetCondition("arrowGlow", function() return db.ArrowEnabled ~= false and db.ArrowStyle ~= "tint" end)
 
     local card = GUIFrame:CreateCard(scrollChild, "Arrow", yOffset)
     manager:Register(card, "all")
@@ -28,41 +21,25 @@ function GUIFrame.RestedXPTabs.Arrow(scrollChild, yOffset, page)
         db.ArrowEnabled = checked
         page.Apply()
     end)
-    card:AddLabel("Styles RestedXP's waypoint arrow. Its place on screen stays yours: drag it in RestedXP as you " ..
-        "do today.")
+    card:AddLabel("Adds KE's text under RestedXP's own waypoint arrow. Its place on screen stays yours: drag it in " ..
+        "RestedXP as you do today.")
 
-    local styleRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
-    local styleDrop = GUIFrame:CreateDropdown(styleRow, "Style", {
-        options = STYLE_OPTIONS,
-        value = db.ArrowStyle or "kite",
-        callback = page.Setter("ArrowStyle"),
-    })
-    styleRow:AddWidget(styleDrop, 1 / 2)
-    manager:Register(styleDrop, "arrow")
-    local sizeSlider = GUIFrame:CreateSlider(styleRow, "Size, percent of RestedXP's arrow", {
+    local sizeRow = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+    local sizeSlider = GUIFrame:CreateSlider(sizeRow, "Size, percent of RestedXP's arrow", {
         min = 60, max = 200, step = 5,
-        value = db.ArrowSize or 150,
+        value = db.ArrowSize or 100,
         callback = page.Setter("ArrowSize"),
     })
-    styleRow:AddWidget(sizeSlider, 1 / 2)
+    sizeRow:AddWidget(sizeSlider, 1 / 2)
     manager:Register(sizeSlider, "arrow")
-    card:AddRow(styleRow, Theme.rowHeight)
-
-    local glowRow = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-    local glowCheck = GUIFrame:CreateCheckbox(glowRow, "Glow", {
-        value = db.ArrowGlow == true,
-        callback = page.Setter("ArrowGlow"),
-    })
-    glowRow:AddWidget(glowCheck, 1 / 2)
-    manager:Register(glowCheck, "arrowGlow")
-    local gapSlider = GUIFrame:CreateSlider(glowRow, "Gap Under the Arrow", {
+    local gapSlider = GUIFrame:CreateSlider(sizeRow, "Gap Under the Arrow", {
         min = 0, max = 20, step = 1,
         value = db.ArrowGap or 4,
         callback = page.Setter("ArrowGap"),
     })
-    glowRow:AddWidget(gapSlider, 1 / 2)
+    sizeRow:AddWidget(gapSlider, 1 / 2)
     manager:Register(gapSlider, "arrow")
-    card:AddRow(glowRow, Theme.rowHeightLast, 0)
+    card:AddRow(sizeRow, Theme.rowHeightLast, 0)
     yOffset = card:GetNextOffset()
 
     local textCard = GUIFrame:CreateCard(scrollChild, "Arrow Text", yOffset)
@@ -77,7 +54,7 @@ function GUIFrame.RestedXPTabs.Arrow(scrollChild, yOffset, page)
     manager:Register(wordsCheck, "arrow")
     local textSize = GUIFrame:CreateSlider(wordsRow, "Text Size", {
         min = 8, max = 24, step = 1,
-        value = db.ArrowTextSize or 12,
+        value = db.ArrowTextSize or 14,
         callback = page.Setter("ArrowTextSize"),
     })
     wordsRow:AddWidget(textSize, 1 / 2)

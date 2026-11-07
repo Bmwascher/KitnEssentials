@@ -175,9 +175,10 @@ describe("restedxp rules", function()
 
     it("takes a valid option, snaps and clamps a number and defaults anything else", function()
         for _, row in ipairs({
-            { "ArrowSize", nil, 150 }, { "ArrowSize", "x", 150 }, { "ArrowSize", 500, 200 },
+            { "ArrowSize", nil, 100 }, { "ArrowSize", "x", 100 }, { "ArrowSize", 500, 200 },
             { "ArrowSize", 10, 60 }, { "ArrowSize", 152, 150 }, { "ArrowSize", 153, 155 },
-            { "ArrowGlow", nil, false }, { "ArrowWords", "yes", true }, { "ArrowWords", false, false },
+            { "ArrowTextSize", nil, 14 }, { "SetUpNewCharacters", nil, false },
+            { "ArrowWords", "yes", true }, { "ArrowWords", false, false },
             { "Look", "nope", "window" }, { "Look", "colors", "colors" },
             { "Palette", "forest", "forest" }, { "Palette", "mauve", "ke" },
         }) do
@@ -482,14 +483,10 @@ describe("restedxp rules", function()
         Reads(themeOff.chromeColor, forest.muted, 0.7, "chrome either way")
     end)
 
-    it("keeps the first record of a frame and never stores KE's own image", function()
+    it("keeps the first record of a frame", function()
         local home = Rules.KeepHome(nil, 1, true)
         assert.same({ alpha = 1, mouse = true }, home)
         assert.equals(home, Rules.KeepHome(home, 0, false))
-
-        assert.equals("rxp", Rules.KeepImage("ke", "rxp", true))
-        assert.equals("new", Rules.KeepImage("new", "rxp", false))
-        assert.equals("rxp", Rules.KeepImage(nil, "rxp", false))
     end)
 
     it("composes the arrow text from the two switches", function()
