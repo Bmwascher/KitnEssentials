@@ -685,14 +685,14 @@ describe("restedxp rules", function()
 
     it("counts the steps a window height holds", function()
         local chrome, line, label = 100.25, 16, 1
-        local function Steps(lines)
+        local function Held(lines)
             return Rules.StepsForHeight(chrome + lines * line, chrome, line, label)
         end
-        assert.equals(5, Steps(6))
-        assert.equals(1, Steps(2))
-        assert.equals(0, Steps(1))
-        assert.equals(0, Steps(0))
-        assert.equals(0, Steps(-1))
+        assert.equals(5, Held(6))
+        assert.equals(1, Held(2))
+        assert.equals(0, Held(1))
+        assert.equals(0, Held(0))
+        assert.equals(0, Held(-1))
         -- A frame's stored height can read just under the one it was set to.
         assert.equals(5, Rules.StepsForHeight(chrome + 6 * line - 0.00003, chrome, line, label))
         assert.equals(4, Rules.StepsForHeight(chrome + 6 * line - 1, chrome, line, label))
