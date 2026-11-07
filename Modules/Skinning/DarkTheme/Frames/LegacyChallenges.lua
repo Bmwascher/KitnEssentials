@@ -184,6 +184,28 @@ local function StyleCard(card)
     PaintCard(card)
 end
 
+-- Blizzard only toggles the Background's shown state, so it is recolored in
+-- place.
+local function StyleStepRow(row)
+    local d = S.data(row)
+    if d.keLegacyStep then return end
+    d.keLegacyStep = true
+    if row.Background then
+        local c = S.palette.inlineTint
+        row.Background:SetColorTexture(c[1], c[2], c[3], c[4])
+    end
+    S.Vanish(row, BAR_BACKGROUND_ART)
+    FlatBar(row.ProgressBar)
+end
+
+local function StyleStepRows(objectives)
+    local pool = objectives and objectives.criteriaPool
+    if not pool then return end
+    for row in pool:EnumerateActive() do
+        StyleStepRow(row)
+    end
+end
+
 function S.LegacyRewardTrackPage()
     local page = _G.LegacySystemFrame and _G.LegacySystemFrame.RewardTrackPage
     if not page or S.data(page).skinned then return end
@@ -213,5 +235,10 @@ function S.LegacyChallengesPage()
     S.Vanish(page, PAGE_ART)
     SkinPointSummary(page.LegacyChallengePointSummary)
     FlattenDivider(page.VerticalDivider)
+    local objectives = _G.LegacyChallengeObjectives
+    if objectives and objectives.Display then
+        hooksecurefunc(objectives, "Display", StyleStepRows)
+        StyleStepRows(objectives)
+    end
     S.data(page).skinned = true
 end
