@@ -547,3 +547,13 @@ end
 function Rules.StepsForHeight(height, chrome, lineHeight, labelLines)
     return math_max(0, floor((height - chrome) / lineHeight + HEIGHT_SLACK) - labelLines)
 end
+
+-- Listed Steps under a held grip. A list with fewer rows leaves the window shorter
+-- than the setting, so the height says nothing until it moves a whole line, and then
+-- moves the setting only the way the height went.
+function Rules.GripSteps(listed, height, pressedHeight, count, lineHeight)
+    local moved = height - pressedHeight
+    if moved > -lineHeight and moved < lineHeight then return listed end
+    if moved > 0 then return math_max(listed, count) end
+    return math_min(listed, count)
+end

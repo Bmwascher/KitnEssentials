@@ -715,22 +715,30 @@ local function StepsFor(height)
     return Rules.StepsForHeight(height, window.chrome, window.lineHeight, K.LABEL_LINES)
 end
 
+local function HeldSteps(hold, height)
+    return Rules.GripSteps(hold.listed, height, hold.pressedHeight, StepsFor(height), window.lineHeight)
+end
+
 local function LiveSize(width, height)
     if not (sizing and sizingModel and window) then return end
     sizing.width = math_min(K.WIDTH_MAX, math_max(K.WIDTH_MIN, width))
-    sizing.steps = math_max(0, math_min(K.STEPS_MAX, StepsFor(height)))
+    sizing.steps = math_max(0, math_min(K.STEPS_MAX, HeldSteps(sizing, height)))
     Redraw()
 end
 
 local function GripReleased()
     if not sizing then return end
-    local owner = sizing.db
+    local hold = sizing
     sizing, sizingModel = nil, nil
     window:StopMovingOrSizing()
-    owner.Width = Rules.Option("Width", window:GetWidth())
-    owner.ListedSteps = Rules.Option("ListedSteps", StepsFor(window:GetHeight()))
-    Save(window, owner)
-    if owner ~= DB() then ApplyGeometry() end
+    local width, height = window:GetWidth(), window:GetHeight()
+    -- A press with no drag changes no setting, and the window keeps its home.
+    if width ~= hold.pressedWidth or height ~= hold.pressedHeight then
+        hold.db.Width = Rules.Option("Width", width)
+        hold.db.ListedSteps = Rules.Option("ListedSteps", HeldSteps(hold, height))
+        Save(window, hold.db)
+    end
+    ApplyGeometry()
     Redraw()
 end
 
@@ -750,7 +758,11 @@ local function MakeGrip(parent)
     grip:SetScript("OnMouseDown", function()
         if Option("Lock") then return end
         sizingModel = Run("WindowGripRead", Model.Read, _G.RXP, READ_OPTIONS)
-        sizing = { width = window:GetWidth(), steps = Option("ListedSteps"), db = DB() }
+        local width, height, listed = window:GetWidth(), window:GetHeight(), Option("ListedSteps")
+        sizing = {
+            width = width, steps = listed, db = DB(),
+            pressedWidth = width, pressedHeight = height, listed = listed,
+        }
         window:StartSizing(K.GRIP_CORNER)
     end)
     grip:SetScript("OnMouseUp", GripReleased)

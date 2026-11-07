@@ -697,4 +697,27 @@ describe("restedxp rules", function()
         assert.equals(5, Rules.StepsForHeight(chrome + 6 * line - 0.00003, chrome, line, label))
         assert.equals(4, Rules.StepsForHeight(chrome + 6 * line - 1, chrome, line, label))
     end)
+
+    it("keeps Listed Steps until a held grip moves a whole line", function()
+        local line, pressed = 16, 200
+        -- The setting, the lines the height moved, the count that height holds, the result.
+        local rows = {
+            { 6, 0, 2, 6 },
+            { 6, 0, 0, 6 },
+            { 6, 0.9, 2, 6 },
+            { 6, -0.9, 1, 6 },
+            { 6, 1, 3, 6 },
+            { 6, 5, 7, 7 },
+            { 6, -1, 1, 1 },
+            { 5, 1, 6, 6 },
+            { 5, -1, 4, 4 },
+            { 0, 1, 0, 0 },
+            { 0, 2, 1, 1 },
+            { 1, -1, 0, 0 },
+        }
+        for i, row in ipairs(rows) do
+            local got = Rules.GripSteps(row[1], pressed + row[2] * line, pressed, row[3], line)
+            assert.equals(row[4], got, "row " .. i)
+        end
+    end)
 end)
