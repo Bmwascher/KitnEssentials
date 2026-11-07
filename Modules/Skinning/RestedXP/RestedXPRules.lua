@@ -446,6 +446,20 @@ function Rules.IconsInForce(enabled, look, style)
     return enabled == true and look ~= "own" and style == "ke"
 end
 
+-- RestedXP keeps such a step active beside the guide's progress until the guide
+-- passes its target, so a skip has no step to move past: the window hides its box.
+function Rules.TagAlong(step, progress)
+    return type(step) == "table" and step.completewith ~= nil and progress ~= nil and step.index ~= progress
+end
+
+-- A hidden box lasts only while RestedXP keeps its step active, so a step the guide
+-- passed shows again if the guide returns to it.
+function Rules.PruneHidden(hidden)
+    for step in pairs(hidden) do
+        if not step.active then hidden[step] = nil end
+    end
+end
+
 function Rules.Parts(rxp)
     local arrow = Dig(rxp, "arrowFrame")
     local v2 = Dig(rxp, "v2")

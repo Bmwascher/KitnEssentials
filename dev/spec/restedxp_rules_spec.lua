@@ -114,6 +114,39 @@ describe("restedxp rules", function()
         assert.is_false(Row({ text = "raw" }).done)
     end)
 
+    it("hides only the tag-along step it was asked to, until RestedXP retires it", function()
+        for _, row in ipairs({
+            { step = { index = 40, completewith = "next" }, progress = 41, want = true, name = "behind, by next" },
+            { step = { index = 40, completewith = "crocs" }, progress = 41, want = true, name = "behind, by label" },
+            { step = { index = 41, completewith = "next" }, progress = 41, want = false, name = "the progress step" },
+            { step = { index = 40, sticky = true }, progress = 41, want = false, name = "sticky with no target" },
+            { step = { index = 41 }, progress = 41, want = false, name = "the current step" },
+            { step = { index = 40, completewith = "next" }, want = false, name = "no progress" },
+            { progress = 41, want = false, name = "no step" },
+        }) do
+            assert.equals(row.want, Rules.TagAlong(row.step, row.progress), row.name)
+        end
+
+        local tagAlong = { index = 40, active = true, completewith = "next", elements = {} }
+        local twin = { index = 40, active = true, completewith = "next", elements = {} }
+        local current = { index = 41, active = true, elements = {} }
+        local hidden = { [tagAlong] = true }
+        local rxp = Rxp({
+            GetGuideProgress = function() return 41 end,
+            RXPFrame = { activeSteps = { tagAlong, twin, current } },
+        })
+        local model = Model.Read(rxp, { hidden = hidden })
+        assert.equals(2, #model.steps)
+        assert.equals(twin, model.steps[1].source)
+        assert.equals(current, model.steps[2].source)
+
+        tagAlong.active = nil
+        Model.Read(rxp, { hidden = hidden })
+        assert.is_nil(hidden[tagAlong])
+        tagAlong.active = true
+        assert.equals(3, #Model.Read(rxp, { hidden = hidden }).steps)
+    end)
+
     it("lifts a lead icon, marks an item icon as nested, leaves a mid-line marker and strips escapes", function()
         for _, row in ipairs({
             { shown = "|TInterface\\AddOns\\X\\a.tga:0|t Accept", glyph = "",

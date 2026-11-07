@@ -65,10 +65,11 @@ local function Row(rxp, element, opts)
     }
 end
 
-local function ActiveSteps(rxp)
+local function ActiveSteps(rxp, hidden)
     local out = {}
+    if hidden then Rules.PruneHidden(hidden) end
     for _, step in ipairs(Dig(rxp, "RXPFrame", "activeSteps") or {}) do
-        if step.active and not step.hidewindow and not step.hidetip then
+        if step.active and not step.hidewindow and not step.hidetip and not (hidden and hidden[step]) then
             out[#out + 1] = step
             if #out == ACTIVE_SHOWN then break end
         end
@@ -128,7 +129,7 @@ function Model.Read(rxp, opts)
         model.percent = floor(model.fraction * PERCENT + ROUND)
     end
     local after = step or 0
-    for _, activeStep in ipairs(ActiveSteps(rxp)) do
+    for _, activeStep in ipairs(ActiveSteps(rxp, opts.hidden)) do
         local rows = {}
         for _, element in ipairs(activeStep.elements or {}) do
             if element.text or element.rawtext or element.tooltipText then

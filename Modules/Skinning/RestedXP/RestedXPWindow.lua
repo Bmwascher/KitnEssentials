@@ -52,6 +52,7 @@ local K = {
     TEXT_FOLD = "-", TEXT_UNFOLD = "+", TEXT_DOT = " \194\183 ",
     TEXT_YARDS = "\194\183 %d yd",
     TEXT_SKIP = "Skip step",
+    TEXT_HIDE = "Hide this step",
     TEXT_SHIFT = "Shift-click",
     TEXT_MENU = "Right-click: menu",
     TEXT_GO = "Go to step %d",
@@ -378,6 +379,8 @@ local function TintRange(range)
 end
 
 local READ_OPTIONS = {
+    -- The tag-along boxes hidden this session, by their step tables.
+    hidden = setmetatable({}, { __mode = "k" }),
     tint = TintRange,
     iconText = function(text) return Icons.InlineText(text) end,
     getCount = function(id) return C_Item.GetItemCount(id) end,
@@ -621,7 +624,11 @@ local function SkipStep(step)
     local rxp = _G.RXP
     local progress = Run("WindowProgress", rxp.GetGuideProgress)
     if not progress then return end
-    if step and step.index ~= progress then
+    if Rules.TagAlong(step, progress) then
+        -- This window's own: RestedXP's state does not change.
+        READ_OPTIONS.hidden[step] = true
+        Refresh()
+    elseif step and step.index ~= progress then
         SkipObjectives(rxp, step)
     else
         GoTo(progress + 1)
@@ -654,6 +661,13 @@ local function Tip(owner, text, menu, plain)
         if menu then GameTooltip:AddLine(K.TEXT_MENU, dim, dim, dim) end
     end
     GameTooltip:Show()
+end
+
+-- The words say what the click does, by the rule the click uses.
+local function StepTip(owner, step)
+    local rxp = _G.RXP
+    local progress = Has(rxp, "GetGuideProgress") and Run("WindowProgress", rxp.GetGuideProgress) or nil
+    Tip(owner, Rules.TagAlong(step, progress) and K.TEXT_HIDE or K.TEXT_SKIP, true)
 end
 
 local function TipHide()
@@ -795,7 +809,7 @@ local function MakeBox(holder)
     local box = CreateFrame("Button", nil, holder)
     box:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     box:SetScript("OnClick", StepClick)
-    box:SetScript("OnEnter", function(self) Tip(self, K.TEXT_SKIP, true) end)
+    box:SetScript("OnEnter", function(self) StepTip(self, self.step) end)
     box:SetScript("OnLeave", TipHide)
     Draggable(box)
     box.back = box:CreateTexture(nil, "BACKGROUND")
@@ -837,7 +851,7 @@ local function MakeRow(holder)
     row:SetScript("OnHyperlinkLeave", LinkLeave)
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row:SetScript("OnClick", StepClick)
-    row:SetScript("OnEnter", function(self) Tip(self.box or self, K.TEXT_SKIP, true) end)
+    row:SetScript("OnEnter", function(self) StepTip(self.box or self, self.step) end)
     row:SetScript("OnLeave", TipHide)
     row.icon = Text(row, K.ICON_SIZE)
     row.glyph = row:CreateTexture(nil, "OVERLAY")
@@ -1192,6 +1206,7 @@ function Draw()
         return true
     end
     local model = sizing and sizingModel or Model.Read(_G.RXP, READ_OPTIONS) or Model.NoGuide()
+    if not sizing and model.guide ~= anchorGuide then wipe(READ_OPTIONS.hidden) end
     local moved = not sizing and (model.guide ~= anchorGuide or model.after ~= anchorAfter)
     local flash = moved and Option("StepFlash") and Rules.ShouldFlash(anchorGuide, anchorAfter, model.guide, model.after)
     if moved then scroll = 0 end
@@ -1251,6 +1266,7 @@ local function Activate(want)
         end
     else
         Release()
+        wipe(READ_OPTIONS.hidden)
         if window then
             window:Hide()
             window:UnregisterAllEvents()
