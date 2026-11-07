@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.19
+
+### WoW Forever only
+
+- Dark Theme's Reputation, Skills, PvP, Currency and Statistics tabs are
+  cleaner: bars use the KitnEssentials bar texture, the right pane no longer
+  has its own dark box, the bronze list lines and pane rows are gone, and a
+  selected row shows your accent color
+
+---
+
 ## v4.16.18
 
 ### Both clients
