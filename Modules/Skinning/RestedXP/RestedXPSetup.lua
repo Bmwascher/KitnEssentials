@@ -126,7 +126,8 @@ function Setup.RestoreTheme()
 end
 
 -- A character the start missed stays unseen for a later load, until the player answers
--- it: a write, an undo or a Cancel. Otherwise that load would write over the answer.
+-- it: a write, an undo, a Cancel or the Set Up New Characters switch. Otherwise that
+-- load would write over the answer.
 function Setup.MarkSeen()
     KE:GetCharStore(true).RestedXPSeen = true
     newMissed = nil

@@ -23,6 +23,7 @@ local THEME_TEXTURES = "Interface/AddOns/RXPGuides/Textures/DarkMode/"
 local WHITE_TEXTURE = "Interface/BUTTONS/WHITE8X8"
 local CHANNEL_MAX, ROUND, PERCENT = 255, 0.5, 100
 local COUNT_MIN = 2
+local HEIGHT_SLACK = 0.001
 local COUNT_PATTERN = "(%d+)%s*/%s*(%d+)"
 local LEAD_ICON, LEAD_PLAIN = "^%s*(|T[^|]*|t)%s*", "^|T([^|:]+):%d+|t$"
 local LEAD_PATH, CONTENT_ID, CONTENT_DIR = "^|T([^|:]+)", "^%d+$", "interface[/\\]icons[/\\]"
@@ -539,4 +540,10 @@ end
 function Rules.ListWindow(first, scroll, count, total)
     local top = math_max(1, math_min(first + scroll, math_max(first, total - count + 1)))
     return top, top - first
+end
+
+-- The steps a window height holds. A height set from a whole count can read just
+-- under it once the frame has stored it, so a hair of slack keeps that count.
+function Rules.StepsForHeight(height, chrome, lineHeight, labelLines)
+    return math_max(0, floor((height - chrome) / lineHeight + HEIGHT_SLACK) - labelLines)
 end

@@ -712,7 +712,7 @@ end
 ---------------------------------------------------------------------------------
 -- The label takes a line as soon as one step shows, so the first step costs two.
 local function StepsFor(height)
-    return math_max(0, floor((height - window.chrome) / window.lineHeight) - K.LABEL_LINES)
+    return Rules.StepsForHeight(height, window.chrome, window.lineHeight, K.LABEL_LINES)
 end
 
 local function LiveSize(width, height)

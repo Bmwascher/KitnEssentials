@@ -144,7 +144,7 @@ local function ShowCurrentRows()
     end
 end
 
--- The page's buttons and theme line belong to one RestedXP profile too. With the
+-- This Character's state and button belong to one RestedXP profile too. With the
 -- module off the page is its header alone, which holds neither, but can hold the
 -- note of a refused reload, so it rebuilds only when there is a note to show.
 local function OnProfileChange()
@@ -375,7 +375,7 @@ end
 local function FoundLine()
     if not Installed() then return "RestedXP Guides not found" end
     local version = C_AddOns.GetAddOnMetadata(RXP_ADDON, "Version")
-    return "RestedXP Guides " .. (version and ("v" .. version .. " ") or "") .. "found"
+    return "RestedXP Guides " .. (version and (version .. " ") or "") .. "found"
 end
 
 local function AddThisCharacter(scrollChild, yOffset, page)
@@ -419,10 +419,8 @@ local function AddThisCharacter(scrollChild, yOffset, page)
         value = db.SetUpNewCharacters ~= false,
         callback = function(checked)
             db.SetUpNewCharacters = checked
-            if checked then
-                Setup.MarkSeen()
-                RebuildPage()
-            end
+            Setup.MarkSeen()
+            RebuildPage()
         end,
     })
     newRow:AddWidget(newCharacters, NEW_SWITCH_SHARE, nil, 0, NEW_SWITCH_RISE)
