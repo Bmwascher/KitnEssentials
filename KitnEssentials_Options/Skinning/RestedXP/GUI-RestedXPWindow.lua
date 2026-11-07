@@ -8,6 +8,7 @@ local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
+local Rules = KE.RestedXPRules
 local ipairs, pairs = ipairs, pairs
 
 GUIFrame.RestedXPTabs = GUIFrame.RestedXPTabs or {}
@@ -34,7 +35,8 @@ local CUSTOM_COLORS = {
     { label = "Title", key = "ColorTitle", default = { 1, 1, 1, 1 } },
     { label = "Text", key = "ColorText", default = { 1, 1, 1, 1 } },
     { label = "Line", key = "ColorLine", default = { 1, 1, 1, 0.28 } },
-    { label = "Step Box", key = "ColorBox", default = { 0.031, 0.031, 0.031, 1 } },
+    -- Step Box Opacity owns this color's alpha.
+    { label = "Step Box", key = "ColorBox", default = { 0.031, 0.031, 0.031, 1 }, noOpacity = true },
     { label = "Border", key = "ColorBorder", default = { 0, 0, 0, 1 } },
     { label = "Bar", key = "ColorBarFill", default = { 1, 0, 0.549, 1 } },
     { label = "Bar Background", key = "ColorBarBack", default = { 1, 1, 1, 0.28 } },
@@ -182,52 +184,25 @@ local function AddFont(scrollChild, yOffset, page)
     return card:GetNextOffset()
 end
 
--- Built here, not by the shared card: its mode dropdown holds other choices.
+-- Built here, not by the shared card: its mode dropdown holds other choices. The
+-- custom colors take their room only on Custom, so picking a mode rebuilds the page.
 local function AddColors(scrollChild, yOffset, page)
     local db, manager = page.db, page.manager
-    manager:SetCondition("customColors", function() return db.WindowColors == "custom" end)
+    manager:SetCondition("followSwitch", function() return db.WindowColors ~= "custom" end)
+    manager:SetCondition("backgroundColor", function()
+        return db.Panel ~= false and not Rules.Washed(db.FollowAccent, db.WindowColors)
+    end)
     local card = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     manager:Register(card, "all")
 
-    local modeRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
-    local mode = GUIFrame:CreateDropdown(modeRow, "Window Colors", {
-        options = WINDOW_COLOR_OPTIONS,
-        value = db.WindowColors or "accent",
-        callback = page.Setter("WindowColors"),
+    local followRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+    local follow = GUIFrame:CreateCheckbox(followRow, "Backdrop and Highlights Follow the Accent", {
+        value = db.FollowAccent == true,
+        callback = page.Setter("FollowAccent"),
     })
-    modeRow:AddWidget(mode, 1 / 2)
-    manager:Register(mode, "all")
-    card:AddRow(modeRow, Theme.rowHeight)
-
-    local count = #CUSTOM_COLORS
-    for i = 1, count, 2 do
-        local last = i + 2 > count
-        local height = last and Theme.rowHeightLast or Theme.rowHeight
-        local row = GUIFrame:CreateRow(card.content, height)
-        for slot = i, i + 1 do
-            local entry = CUSTOM_COLORS[slot]
-            if entry then
-                local r, g, b, a = KE:ReadCardColor(db, entry)
-                local picker = GUIFrame:CreateColorPicker(row, entry.label, {
-                    color = { r, g, b, a },
-                    callback = function(nr, ng, nb, na)
-                        KE:WriteCardColor(db, entry, nr, ng, nb, na)
-                        page.Apply()
-                    end,
-                })
-                row:AddWidget(picker, 1 / 2)
-                manager:Register(picker, "customColors")
-            end
-        end
-        card:AddRow(row, height, last and 0 or nil)
-    end
-    return card:GetNextOffset()
-end
-
-local function AddBackdrop(scrollChild, yOffset, page)
-    local db, manager = page.db, page.manager
-    local card = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
-    manager:Register(card, "all")
+    followRow:AddWidget(follow, 1)
+    manager:Register(follow, "followSwitch")
+    card:AddRow(followRow, Theme.rowHeight)
 
     local switchRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local panel = GUIFrame:CreateCheckbox(switchRow, "Window Background", {
@@ -254,7 +229,7 @@ local function AddBackdrop(scrollChild, yOffset, page)
         end,
     })
     colorRow:AddWidget(picker, 1 / 2)
-    manager:Register(picker, "all")
+    manager:Register(picker, "backgroundColor")
     local opacity = GUIFrame:CreateSlider(colorRow, "Step Box Opacity", {
         min = 0, max = 100, step = 1,
         value = db.BoxOpacity or 55,
@@ -263,9 +238,50 @@ local function AddBackdrop(scrollChild, yOffset, page)
     colorRow:AddWidget(opacity, 1 / 2)
     manager:Register(opacity, "all")
     card:AddRow(colorRow, Theme.rowHeight)
+    page.Separator(card)
 
-    card:AddLabel("Starts on the same color and opacity as Chat and the Damage Meter. Turn Window Background off " ..
-        "for the floating look.")
+    local modeRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+    local mode = GUIFrame:CreateDropdown(modeRow, "Window Colors", {
+        options = WINDOW_COLOR_OPTIONS,
+        value = Rules.Option("WindowColors", db.WindowColors),
+        callback = function(key)
+            db.WindowColors = key
+            page.Apply()
+            page.Rebuild()
+        end,
+    })
+    modeRow:AddWidget(mode, 1 / 2)
+    manager:Register(mode, "all")
+    card:AddRow(modeRow, Theme.rowHeight)
+
+    if db.WindowColors ~= "custom" then
+        page.Note(card, "Starts on the same color as Chat and the Damage Meter. Choosing " .. KE:Gold("Custom") ..
+            " shows seven more colors here.")
+        return card:GetNextOffset()
+    end
+
+    for i = 1, #CUSTOM_COLORS, 2 do
+        local row = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+        for slot = i, i + 1 do
+            local entry = CUSTOM_COLORS[slot]
+            if entry then
+                local r, g, b, a = KE:ReadCardColor(db, entry)
+                local customPicker = GUIFrame:CreateColorPicker(row, entry.label, {
+                    color = { r, g, b, a },
+                    noOpacity = entry.noOpacity,
+                    callback = function(nr, ng, nb, na)
+                        KE:WriteCardColor(db, entry, nr, ng, nb, na)
+                        page.Apply()
+                    end,
+                })
+                row:AddWidget(customPicker, 1 / 2)
+                manager:Register(customPicker, "all")
+            end
+        end
+        card:AddRow(row, Theme.rowHeight)
+    end
+    page.Note(card, "Custom replaces the accent's wash, so " ..
+        KE:Gold("Backdrop and Highlights Follow the Accent") .. " waits until you choose From the Accent.")
     return card:GetNextOffset()
 end
 
@@ -301,6 +317,5 @@ function GUIFrame.RestedXPTabs.Window(scrollChild, yOffset, page)
     yOffset = AddDisplay(scrollChild, yOffset, page)
     yOffset = AddFont(scrollChild, yOffset, page)
     yOffset = AddColors(scrollChild, yOffset, page)
-    yOffset = AddBackdrop(scrollChild, yOffset, page)
     return AddReset(scrollChild, yOffset, page)
 end

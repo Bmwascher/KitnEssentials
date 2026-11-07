@@ -129,7 +129,7 @@ local function ConstructColorPicker(parent)
         local prevR, prevG, prevB, prevA = swatch.r, swatch.g, swatch.b, swatch.a
         -- Bound for this one open: a rebuild while the picker is up must not
         -- send its color to another setting, nor repaint a reused swatch.
-        local callback, gen = row._callback, row._keGen
+        local callback, gen, noOpacity = row._callback, row._keGen, row._noOpacity
         local function Apply(r, g, b, a)
             if row._keGen == gen then SetSwatch(r, g, b, a) end
             if callback then callback(r, g, b, a or 1) end
@@ -139,11 +139,11 @@ local function ConstructColorPicker(parent)
             g = prevG,
             b = prevB,
             opacity = prevA,
-            hasOpacity = true
+            hasOpacity = not noOpacity
         }
         info.swatchFunc = function()
             local r, g, b = ColorPickerFrame:GetColorRGB()
-            local a = ColorPickerFrame:GetColorAlpha()
+            local a = noOpacity and prevA or ColorPickerFrame:GetColorAlpha()
             Apply(r or 1, g or 1, b or 1, a or 1)
         end
         info.opacityFunc = info.swatchFunc
@@ -191,7 +191,8 @@ local function ConstructColorPicker(parent)
     return row
 end
 
--- ColorPicker widget — config-table API: { color = {r,g,b,a}, callback, tooltip }
+-- ColorPicker widget — config-table API: { color = {r,g,b,a}, callback, tooltip,
+-- noOpacity }. noOpacity is for a color whose alpha another control owns.
 local function ConfigureColorPicker(row, labelText, config)
     local color = config.color or { 1, 1, 1, 1 }
     local TT = Theme
@@ -206,6 +207,7 @@ local function ConfigureColorPicker(row, labelText, config)
     -- After the font: ApplyThemeFont sets the theme's shadow.
     row.hexText:SetShadowColor(0, 0, 0, 0)
     row._tooltip = config.tooltip
+    row._noOpacity = config.noOpacity
     row._hoverAnimGroup:Stop()
     row._setSwatch(color[1], color[2], color[3], color[4] or 1)
     row.swatch:SetBackdropBorderColor(TT.controlBorder[1], TT.controlBorder[2], TT.controlBorder[3], 1)

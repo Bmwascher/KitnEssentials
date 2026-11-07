@@ -136,8 +136,6 @@ function Refresh()
     end)
 end
 
-Window.Refresh = Refresh
-
 local function Wheel(_, delta)
     scroll = scroll - delta * K.WHEEL_LINES
     Refresh()
@@ -1091,11 +1089,12 @@ local function DrawHeader(model, folded, width, headH)
     Faced(window.progress, size)
     if model.step then
         window.progress:SetText(Tint("accent", ("%d/%d"):format(model.step, model.total)) .. K.TEXT_DOT
-            .. Tint("title", ("%d%%"):format(model.percent)))
+            .. ("%d%%"):format(model.percent))
     else
         window.progress:SetText("")
     end
-    window.progress:SetTextColor(1, 1, 1, 1)
+    -- A color escape is opaque, so the percent takes the string's color and alpha.
+    Colored(window.progress, "title")
     local x = pad + foldW + gap
     x = x + DrawMark(x, size)
     window.title:ClearAllPoints()
@@ -1366,11 +1365,19 @@ function Window.IsActive()
     return active == true
 end
 
+-- A color setting or KE's accent changed. Targets and Items repaint only when told,
+-- and wait out combat; the window takes the new colors on its next redraw.
+function Window.Recolor()
+    if not active then return end
+    Repaint()
+    Refresh()
+end
+
 function Window.ApplySettings()
     ApplyGeometry()
     if not active then return end
     TestShowIn()
-    Refresh()
+    Window.Recolor()
 end
 
 -- One SetScale for the whole window, keeping it in place on screen.

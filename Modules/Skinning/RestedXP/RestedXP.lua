@@ -139,7 +139,7 @@ function M:ThemeChanged()
     local asked = false
     if self.parts.Theme then asked = Theme.Refresh() end
     Arrow.Paint()
-    Window.Refresh()
+    Window.Recolor()
     if not asked then AskIfIconsStale() end
 end
 

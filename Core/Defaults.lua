@@ -2830,6 +2830,7 @@ local Defaults = {
             TitleSize = 16,
             StepSize = 13,
             ListSize = 12,
+            FollowAccent = false,
             WindowColors = "accent",
             ColorTitle = { 1, 1, 1, 1 },
             ColorText = { 1, 1, 1, 1 },

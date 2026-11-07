@@ -34,6 +34,7 @@ local TEXT_REASON = " is off, because RestedXP no longer has a call it needs."
 local DIALOG_WIDTH, DIALOG_PAD, DIALOG_ROW, DIALOG_GAP, BUTTON_H, BUTTON_W = 430, 14, 18, 10, 26, 150
 local COLUMNS = { 0, 170, 290 }
 local MAX_ROWS = 3
+local GRAY_COLOR = { 0.66, 0.66, 0.66 }
 
 local PART_LABELS = {
     { key = "Theme", label = "Theme" },
@@ -58,6 +59,13 @@ local function RebuildPage()
     C_Timer.After(0, function()
         if GUIFrame.selectedSidebarItem == PAGE_ID then GUIFrame:RefreshContent() end
     end)
+end
+
+-- KE's card labels are white, so a secondary line sets its own gray.
+local function Note(card, text)
+    local label = card:AddLabel(text)
+    label:SetTextColor(GRAY_COLOR[1], GRAY_COLOR[2], GRAY_COLOR[3], 1)
+    return label
 end
 
 ---------------------------------------------------------------------------------
@@ -376,6 +384,8 @@ local function TabPage(getBuilder)
                 page.Refresh()
             end
         end
+        page.Note = Note
+        page.Rebuild = RebuildPage
         function page.Separator(card)
             local row = GUIFrame:CreateRow(card.content, Theme.rowHeightSeparator)
             local separator = GUIFrame:CreateSeparator(row)

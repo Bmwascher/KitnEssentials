@@ -40,7 +40,13 @@ local function RGB(hex)
 end
 
 local OFF_BOX = RGB("080808")
+local BLACK = RGB("000000")
 local KE_TOKENS = { fg = RGB("ffffff"), muted = RGB("c8c8c8") }
+
+-- How much accent each part takes over KE's near-black or black while the backdrop
+-- and highlights follow it, and the backdrop's alpha then.
+Rules.WASH_PANEL, Rules.WASH_BOX, Rules.WASH_EDGE = 0.10, 0.06, 0.40
+Rules.WASH_PANEL_ALPHA = 0.92
 
 local function With(color, alpha)
     return { color[1], color[2], color[3], alpha }
@@ -49,6 +55,14 @@ end
 function Rules.Hex(color)
     return ("%02x%02x%02x"):format(floor(color[1] * CHANNEL_MAX + ROUND), floor(color[2] * CHANNEL_MAX + ROUND),
         floor(color[3] * CHANNEL_MAX + ROUND))
+end
+
+local function Mix(base, color, share)
+    return {
+        base[1] + (color[1] - base[1]) * share,
+        base[2] + (color[2] - base[2]) * share,
+        base[3] + (color[3] - base[3]) * share,
+    }
 end
 
 function Rules.Tokens(accent)
@@ -73,23 +87,34 @@ function Rules.ThemeFields(tokens, font, back)
     }
 end
 
+-- Custom replaces the wash, so all of its colors and Background Color act there.
+function Rules.Washed(follow, mode)
+    return follow == true and mode ~= "custom"
+end
+
 -- panel is the Background Color setting, or nil with Window Background off.
-function Rules.WindowColors(tokens, panel, opacity, mode, custom)
+function Rules.WindowColors(tokens, follow, panel, opacity, mode, custom)
+    local washed = Rules.Washed(follow, mode)
+    local accent = tokens.accent
     local boxAlpha = opacity / PERCENT
     local line = { 1, 1, 1, 0.28 }
+    local edge = With(washed and Mix(BLACK, accent, Rules.WASH_EDGE) or BLACK, 1)
     local colors = {
         title = With(tokens.fg, 1),
         text = With(tokens.fg, 1),
-        accent = With(tokens.accent, 1),
+        accent = With(accent, 1),
         muted = With(tokens.muted, 0.9),
         line = line,
-        box = With(OFF_BOX, boxAlpha),
-        border = { 0, 0, 0, 1 },
-        boxBorder = { 0, 0, 0, 1 },
-        barFill = With(tokens.accent, 1),
+        box = With(washed and Mix(OFF_BOX, accent, Rules.WASH_BOX) or OFF_BOX, boxAlpha),
+        border = edge,
+        boxBorder = edge,
+        barFill = With(accent, 1),
         barBack = With(line, line[4]),
     }
-    if panel then colors.panel = With(panel, panel[4] or 1) end
+    if panel then
+        colors.panel = washed and With(Mix(OFF_BOX, accent, Rules.WASH_PANEL), Rules.WASH_PANEL_ALPHA)
+            or With(panel, panel[4] or 1)
+    end
     if mode == "custom" and type(custom) == "table" then
         for _, key in ipairs({ "title", "text", "line", "border", "barFill", "barBack" }) do
             if type(custom[key]) == "table" then colors[key] = custom[key] end
@@ -148,6 +173,7 @@ local OPTIONS = {
     TitleSize = Number(16, 10, 28),
     StepSize = Number(13, 8, 24),
     ListSize = Number(12, 8, 24),
+    FollowAccent = Toggle(false),
     WindowColors = Choice("accent", "accent", "custom"),
     Panel = Toggle(true),
     Border = Toggle(true),

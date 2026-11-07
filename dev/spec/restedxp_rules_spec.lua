@@ -217,7 +217,7 @@ describe("restedxp rules", function()
             { "ArrowTextSize", nil, 14 }, { "SetUpNewCharacters", nil, false },
             { "ArrowWords", "yes", true }, { "ArrowWords", false, false },
             { "WindowColors", nil, "accent" }, { "WindowColors", "palette", "accent" },
-            { "WindowColors", "custom", "custom" },
+            { "WindowColors", "custom", "custom" }, { "FollowAccent", nil, false }, { "FollowAccent", true, true },
             { "FontOutline", nil, "OUTLINE" }, { "FontOutline", "shadow", "shadow" },
         }) do
             assert.equals(row[3], Rules.Option(row[1], row[2]), row[1] .. " " .. tostring(row[2]))
@@ -472,7 +472,7 @@ describe("restedxp rules", function()
             assert.near(alpha, color[4], 0.0001, name)
         end
 
-        local colors = Rules.WindowColors(tokens, BACK, 55, "accent")
+        local colors = Rules.WindowColors(tokens, false, BACK, 55, "accent")
         Reads(colors.panel, BACK, 0.8, "panel")
         Reads(colors.box, OFF_BOX, 0.55, "box")
         Reads(colors.border, BLACK, 1, "border")
@@ -484,13 +484,13 @@ describe("restedxp rules", function()
         Reads(colors.title, WHITE, 1, "title")
 
         local custom = { title = { 1, 0, 0, 1 }, box = { 0, 1, 0, 1 }, border = { 0, 0, 1, 1 } }
-        local picked = Rules.WindowColors(tokens, BACK, 55, "custom", custom)
+        local picked = Rules.WindowColors(tokens, false, BACK, 55, "custom", custom)
         Reads(picked.title, custom.title, 1, "custom title")
         Reads(picked.box, custom.box, 0.55, "custom box keeps the opacity setting")
         Reads(picked.boxBorder, custom.border, 1, "custom border")
         Reads(picked.accent, ACCENT, 1, "accent is not a custom color")
-        Reads(Rules.WindowColors(tokens, BACK, 55, "accent", custom).title, WHITE, 1, "accent mode ignores custom")
-        assert.is_nil(Rules.WindowColors(tokens, nil, 55, "accent").panel)
+        Reads(Rules.WindowColors(tokens, false, BACK, 55, "accent", custom).title, WHITE, 1, "accent mode ignores custom")
+        assert.is_nil(Rules.WindowColors(tokens, false, nil, 55, "accent").panel)
 
         local theme = Rules.ThemeFields(tokens, "font", BACK)
         Reads(theme.background, BACK, 0.8, "background")
@@ -500,6 +500,47 @@ describe("restedxp rules", function()
         assert.equals("font", theme.font)
         assert.is_nil(theme.dividerColor)
         assert.is_nil(theme.chromeColor)
+    end)
+
+    it("takes the accent's wash only with the follow on and no Custom", function()
+        local ACCENT, BACK = { 0.1, 0.2, 0.3, 1 }, { 0.5, 0.6, 0.7, 0.8 }
+        local NEAR_BLACK, BLACK = { 8 / 255, 8 / 255, 8 / 255 }, { 0, 0, 0 }
+        local tokens = Rules.Tokens(ACCENT)
+
+        local function Reads(color, source, alpha, name)
+            for channel = 1, 3 do assert.near(source[channel], color[channel], 0.0001, name) end
+            assert.near(alpha, color[4], 0.0001, name)
+        end
+
+        local function Wash(base, share)
+            local mixed = {}
+            for channel = 1, 3 do mixed[channel] = base[channel] + (ACCENT[channel] - base[channel]) * share end
+            return mixed
+        end
+
+        local off = Rules.WindowColors(tokens, false, BACK, 55, "accent")
+        local on = Rules.WindowColors(tokens, true, BACK, 55, "accent")
+        Reads(on.panel, Wash(NEAR_BLACK, Rules.WASH_PANEL), Rules.WASH_PANEL_ALPHA, "panel")
+        Reads(on.box, Wash(NEAR_BLACK, Rules.WASH_BOX), 0.55, "box keeps the opacity setting")
+        Reads(on.border, Wash(BLACK, Rules.WASH_EDGE), 1, "window edge")
+        Reads(on.boxBorder, Wash(BLACK, Rules.WASH_EDGE), 1, "box edge")
+        assert.same(off.line, on.line)
+        assert.same(off.title, on.title)
+        assert.same(off.barBack, on.barBack)
+        assert.is_nil(Rules.WindowColors(tokens, true, nil, 55, "accent").panel)
+
+        local custom = { box = { 0, 1, 0, 1 }, border = { 0, 0, 1, 1 } }
+        local picked = Rules.WindowColors(tokens, true, BACK, 55, "custom", custom)
+        Reads(picked.panel, BACK, 0.8, "Custom gives Background Color back")
+        Reads(picked.box, custom.box, 0.55, "custom box")
+        Reads(picked.border, custom.border, 1, "custom border")
+
+        for _, row in ipairs({
+            { true, "accent", true }, { true, nil, true }, { false, "accent", false },
+            { nil, "accent", false }, { true, "custom", false },
+        }) do
+            assert.equals(row[3], Rules.Washed(row[1], row[2]))
+        end
     end)
 
     it("keeps the first record of a frame", function()

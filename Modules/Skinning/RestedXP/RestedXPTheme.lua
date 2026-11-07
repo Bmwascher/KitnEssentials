@@ -33,8 +33,8 @@ end
 
 function Theme.WindowColors()
     local db = DB()
-    return Rules.WindowColors(Theme.Tokens(), Theme.Option("Panel") and db.PanelColor or nil,
-        Theme.Option("BoxOpacity"), Theme.Option("WindowColors"), {
+    return Rules.WindowColors(Theme.Tokens(), Theme.Option("FollowAccent"),
+        Theme.Option("Panel") and db.PanelColor or nil, Theme.Option("BoxOpacity"), Theme.Option("WindowColors"), {
             title = db.ColorTitle, text = db.ColorText, line = db.ColorLine, box = db.ColorBox,
             border = db.ColorBorder, barFill = db.ColorBarFill, barBack = db.ColorBarBack,
         })
