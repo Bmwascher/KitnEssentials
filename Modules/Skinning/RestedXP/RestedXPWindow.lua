@@ -37,7 +37,7 @@ local K = {
     GRIP_HIGHLIGHT = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight",
     GRIP_CORNER = "BOTTOMRIGHT",
     PERCENT = 100,
-    PAD = 10, BOX_PAD = 7, FOLD_W = 16, PROGRESS_W = 120, GAP = 5,
+    PAD = 10, BOX_PAD = 7, FOLD_W = 16, GAP = 5,
     HEAD_PAD = 10, LIST_PAD = 6,
     BOX_TITLE_TEXT = 9, BOX_TITLE_HEIGHT = 19, BOX_TITLE_ROOM = 10,
     ICON_GAP = 5, GRIP_SIZE = 16,
@@ -771,7 +771,13 @@ local function Build()
     f.fold:SetScript("OnClick", ToggleFold)
     f.title = Text(f, Option("TitleSize"))
     f.title:SetWordWrap(false)
-    f.progress = Text(f, Option("StepSize"), "RIGHT")
+    f.progress = Text(f, Option("TitleSize"), "RIGHT")
+    f.rim = f:CreateTexture(nil, "OVERLAY")
+    f.rim:SetTexture(K.MARK_RIM)
+    f.rim:SetSize(K.MARK_SIZE, K.MARK_SIZE)
+    f.k = f:CreateTexture(nil, "OVERLAY")
+    f.k:SetTexture(K.MARK_K)
+    f.k:SetSize(K.MARK_SIZE, K.MARK_SIZE)
     f.rule = f:CreateTexture(nil, "ARTWORK")
     f.rule:SetHeight(KE:GetPixelSize())
     f.bar = MakeBar(f)
@@ -796,18 +802,9 @@ local function MakeBox(holder)
     box.back:SetAllPoints()
     KE:AddBorders(box, colors.boxBorder)
     box.label = Text(box, Option("StepSize"))
-    local pad, mark = K.BOX_PAD, K.MARK_SIZE
-    box.label:SetPoint("TOPLEFT", box, "TOPLEFT", pad, -pad)
+    box.label:SetPoint("TOPLEFT", box, "TOPLEFT", K.BOX_PAD, -K.BOX_PAD)
     box.yards = Text(box, Option("StepSize"))
     box.yards:SetPoint("LEFT", box.label, "RIGHT", 6, 0)
-    box.rim = box:CreateTexture(nil, "OVERLAY")
-    box.rim:SetTexture(K.MARK_RIM)
-    box.rim:SetSize(mark, mark)
-    box.rim:SetPoint("TOPRIGHT", box, "TOPRIGHT", -pad, -pad)
-    box.k = box:CreateTexture(nil, "OVERLAY")
-    box.k:SetTexture(K.MARK_K)
-    box.k:SetSize(mark, mark)
-    box.k:SetPoint("TOPRIGHT", box, "TOPRIGHT", -pad, -pad)
     box.flash = box:CreateTexture(nil, "OVERLAY")
     box.flash:SetAllPoints()
     box.flash:SetAlpha(0)
@@ -972,14 +969,14 @@ local function DrawRow(parent, row, x, y, width, first)
     return height
 end
 
-local function DrawBox(step, y, inner, first)
+local function DrawBox(step, y, inner)
     local box = Pools().box:Acquire(window)
     box.step = step.source
     local size = Option("StepSize")
     box:ClearAllPoints()
     box:SetPoint("TOPLEFT", window, "TOPLEFT", K.PAD, y)
     box:SetWidth(inner)
-    local fill, edge, accent, muted = colors.box, colors.boxBorder, colors.accent, colors.muted
+    local fill, edge, accent = colors.box, colors.boxBorder, colors.accent
     box.back:SetColorTexture(fill[1], fill[2], fill[3], fill[4])
     box:SetBorderColor(edge[1], edge[2], edge[3], edge[4])
     box.flash:SetColorTexture(accent[1], accent[2], accent[3], 1)
@@ -990,17 +987,8 @@ local function DrawBox(step, y, inner, first)
     Colored(box.yards, "text")
     box.yards:SetAlpha(K.YARDS_ALPHA)
     box.yards:SetText("")
-    local mark = first and Option("Logo") == "mark"
-    box.rim:SetShown(mark)
-    box.k:SetShown(mark)
-    local head = size
-    if mark then
-        box.rim:SetVertexColor(muted[1], muted[2], muted[3])
-        box.k:SetVertexColor(accent[1], accent[2], accent[3])
-        head = math_max(size, K.MARK_SIZE)
-    end
     local pad, gap = K.BOX_PAD, K.GAP
-    local by = -pad - head - gap
+    local by = -pad - size - gap
     local column = K.ICON_SIZE + K.ICON_GAP
     for i, row in ipairs(step.rows) do
         local set = i > 1 and row.nested and column or 0
@@ -1021,18 +1009,30 @@ local function DrawFold(folded, headH)
     Colored(fold.text, "line")
 end
 
+-- Centered on the title's line. Returns the width it takes from the title.
+local function DrawMark(x, titleSize)
+    local shown = Option("Logo") == "mark"
+    window.rim:SetShown(shown)
+    window.k:SetShown(shown)
+    if not shown then return 0 end
+    local muted, accent = colors.muted, colors.accent
+    window.rim:SetVertexColor(muted[1], muted[2], muted[3])
+    window.k:SetVertexColor(accent[1], accent[2], accent[3])
+    local size, y = K.MARK_SIZE, -K.PAD - titleSize / 2
+    window.rim:ClearAllPoints()
+    window.rim:SetPoint("CENTER", window, "TOPLEFT", x + size / 2, y)
+    window.k:ClearAllPoints()
+    window.k:SetPoint("CENTER", window, "TOPLEFT", x + size / 2, y)
+    return size + K.GAP
+end
+
 local function DrawHeader(model, folded, width, headH)
     DrawFold(folded, headH)
     local pad, foldW, gap = K.PAD, K.FOLD_W, K.GAP
-    window.title:ClearAllPoints()
-    window.title:SetPoint("TOPLEFT", window, "TOPLEFT", pad + foldW + gap, -pad)
-    window.title:SetWidth(width - pad * 2 - foldW - gap - K.PROGRESS_W)
-    Faced(window.title, Option("TitleSize"))
-    Colored(window.title, "title")
-    window.title:SetText(model.heading)
+    local size = Option("TitleSize")
     window.progress:ClearAllPoints()
     window.progress:SetPoint("TOPRIGHT", window, "TOPRIGHT", -pad, -pad)
-    Faced(window.progress, Option("StepSize"))
+    Faced(window.progress, size)
     if model.step then
         window.progress:SetText(Tint("accent", ("%d/%d"):format(model.step, model.total)) .. K.TEXT_DOT
             .. Tint("title", ("%d%%"):format(model.percent)))
@@ -1040,6 +1040,15 @@ local function DrawHeader(model, folded, width, headH)
         window.progress:SetText("")
     end
     window.progress:SetTextColor(1, 1, 1, 1)
+    local x = pad + foldW + gap
+    x = x + DrawMark(x, size)
+    window.title:ClearAllPoints()
+    window.title:SetPoint("TOPLEFT", window, "TOPLEFT", x, -pad)
+    -- A width of 0 would let the string run under the progress.
+    window.title:SetWidth(math_max(1, width - x - pad - window.progress:GetStringWidth() - gap))
+    Faced(window.title, size)
+    Colored(window.title, "title")
+    window.title:SetText(model.heading)
 end
 
 local function DrawLine(model, y)
@@ -1134,7 +1143,7 @@ end
 
 local function DrawList(model, y, inner, listH)
     if model.empty then y = ListLine(y, inner, listH, K.TEXT_PICK, nil, true, "current") end
-    for i, step in ipairs(model.steps) do y = DrawBox(step, y, inner, i == 1) end
+    for _, step in ipairs(model.steps) do y = DrawBox(step, y, inner) end
     return DrawSteps(model, y, inner, listH)
 end
 

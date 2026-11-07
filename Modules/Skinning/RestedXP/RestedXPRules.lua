@@ -466,11 +466,12 @@ end
 ---------------------------------------------------------------------------------
 -- Reading guide text
 ---------------------------------------------------------------------------------
-function Rules.SplitRange(text)
+-- The level range tinted where the text has it, first or last.
+function Rules.TintRange(text, tint)
     local range, place = text:match("^(%d+%-%d+)%s+(.+)$")
-    if range then return place, range end
+    if range then return tint(range) .. " " .. place end
     place, range = text:match("^(.-)%s+(%d+%-%d+)$")
-    if place then return place, range end
+    if place then return place .. " " .. tint(range) end
     return text
 end
 

@@ -47,15 +47,21 @@ describe("restedxp rules", function()
 
     local function Tint(text) return "<" .. text .. ">" end
 
-    it("reads the heading with the range first or last, the progress, no progress and no guide", function()
+    it("reads the heading from the chapter in its own order, the progress, no progress and no guide", function()
         for _, row in ipairs({
-            { title = "1-6 Northshire", want = "Northshire <1-6>" },
+            { chapter = "23-24 Wetlands", subgroup = "Speedrun Guide 20-30", want = "<23-24> Wetlands" },
+            { chapter = "Northshire 1-6", title = "Other", want = "Northshire <1-6>" },
+            { chapter = "", subgroup = "Speedrun Guide 20-30", want = "Speedrun Guide <20-30>" },
+            { title = "1-6 Northshire", want = "<1-6> Northshire" },
             { title = "Northshire 1-6", want = "Northshire <1-6>" },
             { title = "Northshire", want = "Northshire" },
         }) do
             Model.Stale()
-            local rxp = Rxp({ currentGuide = { title = row.title, steps = Steps(60) } })
-            assert.equals(row.want, Model.Read(rxp, { tint = Tint }).heading, row.title)
+            local rxp = Rxp({
+                currentGuide = { title = row.title, subgroup = row.subgroup, steps = Steps(60) },
+                GetGuideName = row.chapter and function() return row.chapter end or nil,
+            })
+            assert.equals(row.want, Model.Read(rxp, { tint = Tint }).heading, row.want)
         end
 
         local model = Model.Read(Rxp(), {})

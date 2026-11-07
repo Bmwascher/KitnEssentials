@@ -26,11 +26,11 @@ local kept
 local function Same(text) return text end
 
 local function Heading(rxp, guide, tint)
-    local title = guide.title or guide.subgroup
-        or (Has(rxp, "GetGuideName") and Run("WindowGuideName", rxp.GetGuideName, guide)) or guide.name
+    local chapter = Has(rxp, "GetGuideName") and Run("WindowGuideName", rxp.GetGuideName, guide)
+    local title = type(chapter) == "string" and chapter ~= "" and chapter
+        or guide.title or guide.subgroup or guide.name
     if type(title) ~= "string" then return "" end
-    local place, range = Rules.SplitRange(title)
-    return range and (place .. " " .. tint(range)) or place
+    return Rules.TintRange(title, tint)
 end
 
 local function ShownText(rxp, element, frame)
