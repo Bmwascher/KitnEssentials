@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.24
+
+### WoW Forever only
+
+- Dark Theme's thin divider lines in the Progress Legacy window and the
+  character window, and the reward level boxes' borders, stay one sharp
+  pixel at any panel scale, including while the scale changes
+- The reward level boxes and the Challenges divider take a new border
+  color at once, without a reload
+- The reward level numbers stay centered when the Blizzard Fonts frame
+  skin, the Base Size or the skin font changes with the window open
+
+---
+
 ## v4.16.23
 
 ### WoW Forever only
