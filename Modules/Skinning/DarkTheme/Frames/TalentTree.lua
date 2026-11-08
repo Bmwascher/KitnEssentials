@@ -20,8 +20,8 @@ local EDGE_COLOR_KEYS = {
     ["talents-arrow-line-red"]    = "red",
 }
 
--- Same grouping as the client's state-border rule, which draws every
--- non-disabled state other than maxed with the spendable art.
+-- Same grouping as the client's state-border rule, which draws Normal and
+-- Invisible with the same spendable art as Selectable.
 function S._TalentStateColorKey(visualState, states)
     if visualState == nil or not states then return nil end
     if visualState == states.RefundInvalid or visualState == states.DisplayError then
