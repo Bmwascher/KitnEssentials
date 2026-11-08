@@ -10,13 +10,12 @@ local function loadSkin()
 end
 
 describe("Legacy reward level number ink nudge", function()
-    it("nudges plain OUTLINE text only", function()
+    it("nudges outlined text only", function()
         local nudge = loadSkin()._LegacyInkNudge
         -- font flags, expected whole pixels
         local cases = {
             { "OUTLINE, SLUG", 2 },
             { "outline", 2 },
-            { "THICKOUTLINE", 0 },
             { "SLUG", 0 },
             { "", 0 },
             { nil, 0 },

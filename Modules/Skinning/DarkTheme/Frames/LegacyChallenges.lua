@@ -218,14 +218,12 @@ function S._LegacyPixelOffset(value, px)
     return math.floor(value / px + 0.5) * px - value
 end
 
--- OUTLINE widens a string's rect by 4px on the ink's right side, so a centered
--- rect leaves the digits 2px left. Pixels to move the text right.
+-- Measured at size 12: OUTLINE widened "25" from 15 to 19px and a centered
+-- rect left the digits about 2px left. Pixels to move outlined text right.
 local OUTLINE_INK_NUDGE = 2
 
 function S._LegacyInkNudge(flags)
-    if type(flags) ~= "string" then return 0 end
-    flags = flags:upper()
-    if flags:find("OUTLINE", 1, true) and not flags:find("THICK", 1, true) then
+    if type(flags) == "string" and flags:upper():find("OUTLINE", 1, true) then
         return OUTLINE_INK_NUDGE
     end
     return 0
