@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.23
+
+### WoW Forever only
+
+- Dark Theme now crops the character window's resistance icons to their
+  school art, without the bronze frame and glow, with a thin border, on
+  the player and pet stat lists
+- The Progress Legacy window's side tabs show cropped, bordered icons
+  like the character window's side tabs
+
+---
+
 ## v4.16.22
 
 ### WoW Forever only
