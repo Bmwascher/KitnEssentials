@@ -154,6 +154,25 @@ function S.ForgetBrand(obj)
     brandPaint[obj] = nil
 end
 
+-- Textures painted the border color. The palette entry is mutated in place,
+-- so a texture painted once at skin time keeps the old color without this.
+local borderPaint = setmetatable({}, { __mode = "k" })
+
+local function PaintBorderNow(tex)
+    local b = S.palette.border
+    tex:SetColorTexture(b[1], b[2], b[3], b[4])
+end
+
+function S.PaintBorder(tex)
+    if not tex then return end
+    borderPaint[tex] = true
+    PaintBorderNow(tex)
+end
+
+local function RepaintBorders()
+    for tex in pairs(borderPaint) do PaintBorderNow(tex) end
+end
+
 function S.RefreshPalette()
     local accent = KE.GetSkinBrandColor and KE:GetSkinBrandColor()
     if accent then
@@ -172,6 +191,7 @@ function S.RefreshPalette()
         ApplyColor(S.palette.window, bs.BackdropColor)
         ApplyColor(S.palette.border, bs.BorderColor)
     end
+    RepaintBorders()
 end
 
 S.RefreshPalette()
@@ -224,6 +244,7 @@ function S.SetSkinColors(bg, border)
             end
         end
     end
+    if border then RepaintBorders() end
 end
 
 S.bgColor = S.palette.window

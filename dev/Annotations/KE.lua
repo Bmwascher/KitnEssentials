@@ -1037,6 +1037,11 @@ function KE.Skins.GetSuppressionState(key) end
 ---@param border number[]? {r,g,b,a} or nil to leave unchanged
 function KE.Skins.SetSkinColors(bg, border) end
 
+--- Paints tex the border color now and again whenever the border color
+--- changes (KE.Skins.SetSkinColors with a border, KE.Skins.RefreshPalette).
+---@param tex Texture?  nil is ignored
+function KE.Skins.PaintBorder(tex) end
+
 --- Re-applies every registered string with no reload.
 ---@param face string?    LibSharedMedia font name, "" for the addon's own font, nil to leave unchanged
 ---@param size number?    base size 8-20, nil to leave unchanged

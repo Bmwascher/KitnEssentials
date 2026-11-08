@@ -981,6 +981,24 @@ describe("S.SetSkinColors", function()
         assert.are.same({ 0.4, 0.5, 0.6, 0 }, hidden._set)
         assert.are.same({ 0.4, 0.5, 0.6, 1 }, shown._set)
     end)
+
+    -- A texture is not a backdrop, so only the registry carries a border
+    -- change to it.
+    it("repaints a registered border texture on a border change and not on a background change", function()
+        local tex = {}
+        function tex:SetColorTexture(r, g, b, a) self.color = { r, g, b, a } end
+        S.PaintBorder(tex)
+        assert.are.same({ unpack(S.palette.border) }, tex.color)
+        local cases = {
+            { "background only", { 0.2, 0.2, 0.2, 1 }, nil, "untouched" },
+            { "border", nil, { 0.4, 0.5, 0.6, 1 }, { 0.4, 0.5, 0.6, 1 } },
+        }
+        for _, c in ipairs(cases) do
+            tex.color = "untouched"
+            S.SetSkinColors(c[2], c[3])
+            assert.are.same(c[4], tex.color, c[1])
+        end
+    end)
 end)
 
 -- The two Blizzard font-object sweeps both read this, and the frame skin is
