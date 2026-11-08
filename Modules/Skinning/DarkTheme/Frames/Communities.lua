@@ -1,6 +1,7 @@
 local KE = select(2, ...)
 local S = KE.Skins
 local _G = _G
+local unpack = unpack
 
 local mixinHooked = false
 
@@ -186,6 +187,272 @@ local function LayoutChat(frame)
         sb:SetPoint("TOPLEFT", mf, "TOPRIGHT", 8, 1)
         sb:SetPoint("BOTTOMLEFT", mf, "BOTTOMRIGHT", 8, -25)
     end
+end
+
+local AVATAR_CROP = 0.08
+
+-- Avatar textures this skin squared. Weak keys: a released pool frame's
+-- icon must not be held.
+local avatarIcons = setmetatable({}, { __mode = "k" })
+local avatarHooked = false
+
+-- Absolute coordinates, so a repeat call cannot shrink the art.
+local function CropAvatar(icon)
+    if icon then icon:SetTexCoord(AVATAR_CROP, 1 - AVATAR_CROP, AVATAR_CROP, 1 - AVATAR_CROP) end
+end
+
+-- Every dialog sets its avatar again on each open or change, and that call
+-- can reset the crop. One hook covers every call site.
+local function HookAvatarTexture()
+    local club = _G.C_Club
+    if avatarHooked or not (club and club.SetAvatarTexture) then return end
+    avatarHooked = true
+    hooksecurefunc(club, "SetAvatarTexture", function(icon)
+        if avatarIcons[icon] then CropAvatar(icon) end
+    end)
+end
+
+local function AvatarBorder(icon, owner)
+    S.PixelSnap(icon)
+    local border = S.Backdrop(icon, -1, true)
+    if border then border:SetFrameLevel(owner:GetFrameLevel() + 1) end
+    return border
+end
+
+local function SquareAvatar(owner, icon, mask, ring)
+    if not icon or avatarIcons[icon] then return end
+    avatarIcons[icon] = true
+    -- A mask left on would clip the square's corners.
+    if mask then icon:RemoveMaskTexture(mask) end
+    -- Re-atlased or re-shown on every open; the alpha survives both.
+    if ring then ring:SetAlpha(0) end
+    CropAvatar(icon)
+    AvatarBorder(icon, owner)
+end
+
+-- For art with no parentKey: the popup border pieces and card backgrounds.
+local function HideLayers(frame, a, b)
+    for _, r in ipairs({ frame:GetRegions() }) do
+        if r.IsObjectType and r:IsObjectType("Texture") then
+            local layer = r:GetDrawLayer()
+            if layer == a or layer == b then r:SetAlpha(0) end
+        end
+    end
+end
+
+local function Buttons(frame, keys)
+    for _, key in ipairs(keys) do
+        if frame[key] then S.Button(frame[key]) end
+    end
+end
+
+local function ScrollInput(sf)
+    if not sf then return end
+    S.EditBox(sf)
+    local eb = sf.EditBox
+    if eb then
+        S.SetFont(eb, 12, "")
+        if eb.Instructions then S.SetFont(eb.Instructions, 12, "") end
+    end
+    if sf.ScrollBar then S.ScrollBar(sf.ScrollBar) end
+end
+
+-- Dialogs whose border and fill all live on a DialogBorderDark BG. Never
+-- S.StripTextures on the dialog itself: an avatar can be one of its regions.
+local function DarkDialog(d)
+    if d.BG then S.StripTextures(d.BG) end
+    S.Backdrop(d)
+end
+
+local function SkinSettingsDialog()
+    local d = _G.CommunitiesSettingsDialog
+    if not d or S.data(d).skinned then return end
+    S.data(d).skinned = true
+    DarkDialog(d)
+    SquareAvatar(d, d.IconPreview, d.CircleMask, d.IconPreviewRing)
+
+    if d.NameEdit then S.EditBox(d.NameEdit) end
+    if d.ShortNameEdit then S.EditBox(d.ShortNameEdit) end
+    ScrollInput(d.Description)
+    ScrollInput(d.MessageOfTheDay)
+
+    if d.CrossFactionToggle and d.CrossFactionToggle.CheckButton then
+        S.CheckBox(d.CrossFactionToggle.CheckButton)
+    end
+    for _, key in ipairs({ "ShouldListClub", "AutoAcceptApplications", "MaxLevelOnly", "MinIlvlOnly" }) do
+        local row = d[key]
+        if row and row.Button then S.CheckBox(row.Button) end
+    end
+    if d.MinIlvlOnly and d.MinIlvlOnly.EditBox then S.EditBox(d.MinIlvlOnly.EditBox) end
+    for _, key in ipairs({ "ClubFocusDropdown", "LookingForDropdown", "LanguageDropdown" }) do
+        if d[key] then S.DropDown(d[key]) end
+    end
+    Buttons(d, { "ChangeAvatarButton", "Accept", "Delete", "Cancel" })
+end
+
+local function StyleTicketRow(row)
+    if not row or S.data(row).keTicketRow then return end
+    S.data(row).keTicketRow = true
+    if row.CopyLinkButton then S.Button(row.CopyLinkButton) end
+    if row.RevokeButton then S.Button(row.RevokeButton) end
+end
+
+local function SkinTicketDialog()
+    local d = _G.CommunitiesTicketManagerDialog
+    if not d or S.data(d).skinned then return end
+    S.data(d).skinned = true
+    -- The icon and the separator line sit on ARTWORK, the ring on OVERLAY.
+    HideLayers(d, "BORDER", "BACKGROUND")
+    S.Backdrop(d)
+    SquareAvatar(d, d.Icon, d.CircleMask, d.IconRing)
+
+    Buttons(d, { "LinkToChat", "Copy", "Close", "GenerateLinkButton" })
+    if d.ExpiresDropdown then S.DropDown(d.ExpiresDropdown) end
+    if d.UsesDropdown then S.DropDown(d.UsesDropdown) end
+
+    local expand = d.MaximizeButton
+    if expand then
+        S.Button(expand)
+        if expand.icon then S.ArrowTexture(expand.icon, "down", 12) end
+    end
+
+    local im = d.InviteManager
+    if im then
+        if im.ArtOverlay then im.ArtOverlay:SetAlpha(0) end
+        if im.ScrollBox then
+            if im.ScrollBox.Background then im.ScrollBox.Background:SetAlpha(0) end
+            S.HookScrollBox(im.ScrollBox, StyleTicketRow)
+        end
+        if im.ScrollBar then
+            if im.ScrollBar.Background then im.ScrollBar.Background:SetAlpha(0) end
+            S.ScrollBar(im.ScrollBar)
+        end
+        local col = im.ColumnDisplay
+        if col then
+            S.StripTextures(col)
+            for _, k in ipairs({ "InsetBorderLeft", "InsetBorderBottomLeft", "InsetBorderTopLeft",
+                "InsetBorderTopRight", "InsetBorderTop" }) do
+                if col[k] then col[k]:SetAlpha(0) end
+            end
+            for _, header in ipairs({ col:GetChildren() }) do
+                S.StripTextures(header)
+                S.Backdrop(header)
+            end
+        end
+    end
+end
+
+local function StyleAvatarTile(tile)
+    if not tile then return end
+    local d = S.data(tile)
+    if not d.keAvatarTile then
+        d.keAvatarTile = true
+        if tile.Selected then tile.Selected:SetAlpha(0) end
+        local hl = tile.GetHighlightTexture and tile:GetHighlightTexture()
+        if hl then hl:SetTexture(WHITE); hl:SetVertexColor(1, 1, 1, 0.12) end
+        if tile.Icon then
+            avatarIcons[tile.Icon] = true
+            CropAvatar(tile.Icon)
+            d.keBorder = AvatarBorder(tile.Icon, tile)
+        end
+    end
+    -- Selection shows on the border: Blizzard's selected frame is hidden.
+    local border = d.keBorder
+    if not border then return end
+    if tile.Selected and tile.Selected:IsShown() then
+        S.PaintBrand(border, "SetBackdropBorderColor", 1)
+    else
+        S.ForgetBrand(border)
+        border:SetBackdropBorderColor(unpack(S.borderColor))
+    end
+end
+
+local function SkinAvatarPicker()
+    local d = _G.CommunitiesAvatarPickerDialog
+    if not d or S.data(d).skinned then return end
+    S.data(d).skinned = true
+    HideLayers(d, "BACKGROUND")
+    local sel = d.Selector
+    if sel then
+        S.StripTextures(sel)
+        Buttons(sel, { "OkayButton", "CancelButton" })
+    end
+    S.Backdrop(d)
+    if d.ScrollBar then S.ScrollBar(d.ScrollBar) end
+    if d.ScrollBox then S.HookScrollBox(d.ScrollBox, StyleAvatarTile) end
+end
+
+local function SkinEditStreamDialog(d)
+    if not d or S.data(d).skinned then return end
+    S.data(d).skinned = true
+    DarkDialog(d)
+    if d.NameEdit then S.EditBox(d.NameEdit) end
+    ScrollInput(d.Description)
+    if d.TypeCheckbox then S.CheckBox(d.TypeCheckbox) end
+    Buttons(d, { "Accept", "Delete", "Cancel" })
+end
+
+local function StyleStreamEntry(row)
+    if S.data(row).keStreamRow then return end
+    S.data(row).keStreamRow = true
+    if row.HideNotificationsButton then S.CheckBox(row.HideNotificationsButton) end
+    if row.ShowNotificationsButton then S.CheckBox(row.ShowNotificationsButton) end
+end
+
+local function SkinNotificationDialog(d)
+    if not d or S.data(d).skinned then return end
+    S.data(d).skinned = true
+    if d.BG then d.BG:SetAlpha(0) end
+    local sel = d.Selector
+    if sel then
+        S.StripTextures(sel)
+        Buttons(sel, { "OkayButton", "CancelButton" })
+    end
+    S.Backdrop(d)
+    if d.CommunitiesListDropdown then S.DropDown(d.CommunitiesListDropdown) end
+    local sf = d.ScrollFrame
+    if sf then
+        if sf.ScrollBar then S.ScrollBar(sf.ScrollBar) end
+        local child = sf.Child
+        if child then
+            if child.QuickJoinButton then S.CheckBox(child.QuickJoinButton) end
+            Buttons(child, { "NoneButton", "AllButton" })
+        end
+    end
+    -- Stream rows come from a pool that Refresh fills on every open.
+    if d.Refresh and d.buttonPool then
+        hooksecurefunc(d, "Refresh", function(self)
+            for row in self.buttonPool:EnumerateActive() do StyleStreamEntry(row) end
+        end)
+    end
+end
+
+-- The community and club finder invitation cards, and the invite link card.
+local function SkinInvitation(f)
+    if not f or S.data(f).skinned then return end
+    S.data(f).skinned = true
+    -- The wide card art; a guild's banner art sits on BORDER and ARTWORK.
+    HideLayers(f, "BACKGROUND")
+    if f.InsetFrame then
+        S.StripTextures(f.InsetFrame)
+        S.Backdrop(f.InsetFrame)
+    end
+    SquareAvatar(f, f.Icon, f.CircleMask, f.IconRing)
+    Buttons(f, { "AcceptButton", "DeclineButton", "ApplyButton" })
+
+    local wd = f.WarningDialog
+    if wd then
+        DarkDialog(wd)
+        Buttons(wd, { "Accept", "Cancel" })
+    end
+end
+
+local function SkinPreferredPlay(pp)
+    if not pp or S.data(pp).skinned then return end
+    S.data(pp).skinned = true
+    if pp.LocaleDropdown then S.DropDown(pp.LocaleDropdown) end
+    if pp.DatacenterDropdown then S.DropDown(pp.DatacenterDropdown) end
+    Buttons(pp, { "LocaleApplyButton", "DatacenterApplyButton" })
 end
 
 local function Skin()
@@ -592,6 +859,16 @@ local function Skin()
         S.data(rd).skinned = true
     end
 
+    HookAvatarTexture()
+    SkinSettingsDialog()
+    SkinTicketDialog()
+    SkinAvatarPicker()
+    SkinEditStreamDialog(frame.EditStreamDialog)
+    SkinNotificationDialog(frame.NotificationSettingsDialog)
+    SkinInvitation(frame.InvitationFrame)
+    SkinInvitation(frame.TicketFrame)
+    SkinInvitation(frame.ClubFinderInvitationFrame)
+    SkinPreferredPlay(frame.GuildPreferredPlaySettingsFrame)
 end
 
 S:Register("Blizzard_Communities", Skin, "Communities")
