@@ -17,17 +17,12 @@ local RANK_ART = "Talents-Square-Box-c60"
 -- Holds a single-digit "rank/max" at the 14 pt outline font.
 local RANK_BOX_W, RANK_BOX_H = 30, 18
 
--- The left edge sits on the frame's center: a 1 px line centered there would
--- straddle two pixels.
+local LINE_COLOR = { 1, 1, 1, LINE_ALPHA }
+
 local function DividerLine(divider)
-    if not divider or S.data(divider).keLine then return end
+    if not divider then return end
     if divider.VerticalDivider then divider.VerticalDivider:SetAlpha(0) end
-    local line = divider:CreateTexture(nil, "OVERLAY")
-    line:SetColorTexture(1, 1, 1, LINE_ALPHA)
-    line:SetPoint("TOPLEFT", divider, "TOP")
-    line:SetPoint("BOTTOMLEFT", divider, "BOTTOM")
-    line:SetWidth(KE:GetPixelSize())
-    S.data(divider).keLine = line
+    S.VerticalLine(divider, "FROM_CENTER", LINE_COLOR)
 end
 
 -- Atlas space: the three icons share one sheet. A new atlas resets the crop.

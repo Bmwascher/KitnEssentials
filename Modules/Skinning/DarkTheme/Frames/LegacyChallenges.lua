@@ -40,16 +40,10 @@ end
 
 -- The divider's only region is an unnamed atlas texture.
 local function FlattenDivider(divider)
-    if not divider or S.data(divider).keLegacyLine then return end
+    if not divider or S.data(divider).keVerticalLine then return end
     local art = divider:GetRegions()
     if art and art.SetAlpha then art:SetAlpha(0) end
-    local line = divider:CreateTexture(nil, "OVERLAY")
-    local b = S.borderColor
-    line:SetColorTexture(b[1], b[2], b[3], b[4])
-    line:SetPoint("TOP")
-    line:SetPoint("BOTTOM")
-    line:SetWidth(KE:GetPixelSize())
-    S.data(divider).keLegacyLine = line
+    S.PaintBorder(S.VerticalLine(divider, "CENTER", S.borderColor))
 end
 
 local EXPAND_ATLAS = "Soulbinds_Collection_CategoryHeader_Expand"
