@@ -1006,9 +1006,14 @@ function Timers.Labeled(bar, key)
 end
 
 -- RestedXP's table can hold a key whose frame is no longer its bar, and one frame
--- under two keys, so a bar counts only under the key it was started under.
+-- under two keys, so a bar counts only under the key it was started under. An error
+-- in a post-hook reaches RestedXP's own caller, so the note runs guarded.
 function Timers.Started(duration, label)
     if not (active and window) then return end
+    Run("WindowTimerStart", Timers.Note, duration, label)
+end
+
+function Timers.Note(duration, label)
     local frame = Dig(_G.RXP, "RXPFrame")
     -- The start's own refusal: past it, the entry under the label is the bar it started.
     if type(duration) ~= "number" or duration <= 0 or not (Has(frame, "IsShown") and frame:IsShown()) then return end
@@ -1032,7 +1037,7 @@ function Timers.Sorted()
     if not active or Timers.busy or not window then return end
     -- A bar taken under a hidden window hides, and RestedXP's hide handler sorts again.
     Timers.busy = true
-    Run("WindowTimerSort", Timers.Hold)
+    Timers.Hold()
     Timers.busy = false
     Refresh()
 end
@@ -1048,7 +1053,7 @@ function Timers.Stopped(_, bar)
     local home = Timers.taken[bar]
     if not home then return end
     Timers.Forget(bar)
-    if bar:GetParent() == window then Run("WindowTimerBack", Timers.Restore, bar, home, false) end
+    if Run("WindowTimerHeld", Timers.Held, bar) then Run("WindowTimerBack", Timers.Restore, bar, home, false) end
     Refresh()
 end
 
@@ -1059,7 +1064,7 @@ function Timers.Watch(on)
     if on then
         Run("WindowTimerWatch", candy.RegisterCallback, Timers, "LibCandyBar_Stop", Timers.Stopped)
     else
-        Run("WindowTimerWatch", candy.UnregisterCallback, Timers, "LibCandyBar_Stop")
+        Run("WindowTimerUnwatch", candy.UnregisterCallback, Timers, "LibCandyBar_Stop")
     end
 end
 
@@ -1109,6 +1114,16 @@ function Timers.Cache()
     return type(cache) == "table" and cache or nil
 end
 
+-- RestedXP's running bars by label.
+function Timers.Bars()
+    local bars = Dig(_G.RXP, "RXPFrame", "BarContainer", "bars")
+    return type(bars) == "table" and bars or nil
+end
+
+function Timers.Held(bar)
+    return bar:GetParent() == window
+end
+
 -- Which icon calls a bar takes. A newer copy of the library keeps an icon flag in a
 -- table an older copy's bar does not have, and fails there, so that bar takes none.
 function Timers.IconMode(bar)
@@ -1145,8 +1160,8 @@ function Timers.Take(bar)
     bar:SetParent(window)
     bar:SetAlpha(0)
     -- Under a hidden window the bar hides, and RestedXP's hide handler drops it.
-    local bars = Dig(_G.RXP, "RXPFrame", "BarContainer", "bars")
-    if type(bars) == "table" then Timers.PutBack(bars, bar, GetTime()) end
+    local bars = Timers.Bars()
+    if bars then Timers.PutBack(bars, bar, GetTime()) end
 end
 
 -- RestedXP writes its icon, color and height again on a bar it starts again, so a
@@ -1172,11 +1187,18 @@ end
 -- not hung on since, because only RestedXP's sort hangs bars.
 function Timers.HandOver(bar, slot)
     local n = bar:GetNumPoints()
-    if n == 0 or select(2, bar:GetPoint(1)) == slot then return end
-    local bars = Dig(_G.RXP, "RXPFrame", "BarContainer", "bars")
-    if type(bars) ~= "table" then return end
+    if Secret(n) or n == 0 then return end
+    local first = select(2, bar:GetPoint(1))
+    if Secret(first) or first == slot then return end
+    -- An anchor the client keeps secret is neither compared nor handed on.
+    for i = 2, n do
+        if Secret((select(2, bar:GetPoint(i)))) then return end
+    end
+    local bars = Timers.Bars()
+    if not bars then return end
     for _, other in pairs(bars) do
-        if other ~= bar and Has(other, "GetPoint") and select(2, other:GetPoint(1)) == bar then
+        local rel = other ~= bar and Has(other, "GetPoint") and select(2, other:GetPoint(1))
+        if not Secret(rel) and rel == bar then
             -- One frame under two keys could hang the bar on the frame it hands over to.
             local loops = false
             for i = 1, n do
@@ -1208,11 +1230,12 @@ function Timers.Keep(bar)
     if slot then Timers.Place(bar, slot) else bar:SetAlpha(0) end
 end
 
+-- One guard a bar: RestedXP's sort has already hung every held bar in its column.
 function Timers.Hold()
-    local bars = Dig(_G.RXP, "RXPFrame", "BarContainer", "bars")
-    if type(bars) ~= "table" then return end
+    local bars = Timers.Bars()
+    if not bars then return end
     for key, bar in pairs(bars) do
-        if Timers.owned[bar] == key then Timers.Keep(bar) end
+        if Timers.owned[bar] == key then Run("WindowTimerHold", Timers.Keep, bar) end
     end
 end
 
@@ -1224,18 +1247,24 @@ function Timers.Forget(bar)
 end
 
 -- listed: whether to list the bar as free again, for a give back. A stop leaves that
--- to the library.
+-- to the library. The parent and the listing come first, so a failure in the look
+-- still leaves the frame RestedXP's and free.
 function Timers.Restore(bar, home, listed)
     bar:SetParent(home.parent or UIParent)
+    local cache = listed and home.cached and Timers.Cache()
+    if cache then cache[bar] = true end
     bar:SetFrameStrata(home.strata)
     bar:SetFrameLevel(home.level)
     bar:SetAlpha(home.alpha)
-    bar.candyBarBar:SetStatusBarTexture(home.fill)
+    -- A getter can return no path, which these setters refuse: the fill falls back to
+    -- RestedXP's own texture, and a font with no path stays as it is.
+    local fill = home.fill or Dig(_G.RXP, "RXPFrame", "BarContainer", "barTexture")
+    if fill then bar.candyBarBar:SetStatusBarTexture(fill) end
     bar.candyBarBar:SetStatusBarColor(unpack(home.fillColor))
     bar.candyBarBackground:SetTexture(home.back)
     bar.candyBarBackground:SetVertexColor(unpack(home.backColor))
-    bar.candyBarLabel:SetFont(unpack(home.labelFont))
-    bar.candyBarDuration:SetFont(unpack(home.timeFont))
+    if home.labelFont[1] then bar.candyBarLabel:SetFont(unpack(home.labelFont)) end
+    if home.timeFont[1] then bar.candyBarDuration:SetFont(unpack(home.timeFont)) end
     bar:SetTextColor(unpack(home.textColor))
     bar:SetShadowOffset(unpack(home.shadowOffset))
     bar:SetShadowColor(unpack(home.shadowColor))
@@ -1246,8 +1275,6 @@ function Timers.Restore(bar, home, listed)
     elseif home.setIcon then
         home.setIcon(bar, home.icon)
     end
-    local cache = listed and home.cached and Timers.Cache()
-    if cache then cache[bar] = true end
 end
 
 -- RestedXP drops a bar from its table when the bar hides with the window while it
@@ -1261,11 +1288,11 @@ function Timers.PutBack(bars, bar, now)
 end
 
 function Timers.Refill()
-    local bars = Dig(_G.RXP, "RXPFrame", "BarContainer", "bars")
-    if type(bars) ~= "table" then return end
+    local bars = Timers.Bars()
+    if not bars then return end
     local now = GetTime()
     for bar in pairs(Timers.taken) do
-        if bar:GetParent() == window then Timers.PutBack(bars, bar, now) end
+        if Run("WindowTimerHeld", Timers.Held, bar) then Run("WindowTimerPutBack", Timers.PutBack, bars, bar, now) end
     end
 end
 
@@ -1278,29 +1305,28 @@ end
 -- Before the window hides, so no bar it holds drops out of RestedXP's table, and
 -- RestedXP's own sort then hangs them under its footer again.
 function Timers.GiveBack()
-    local bars = Dig(_G.RXP, "RXPFrame", "BarContainer", "bars")
+    local bars = Timers.Bars()
     local now, gave = GetTime(), false
     for bar, home in pairs(Timers.taken) do
         Timers.Forget(bar)
-        if bar:GetParent() == window then
+        if Run("WindowTimerHeld", Timers.Held, bar) then
             gave = true
             Run("WindowTimerBack", Timers.Restore, bar, home, true)
-            if type(bars) == "table" then Timers.PutBack(bars, bar, now) end
+            if bars then Run("WindowTimerPutBack", Timers.PutBack, bars, bar, now) end
         end
     end
     wipe(Timers.owned)
     wipe(Timers.slotOf)
     local rxp = _G.RXP
-    if gave and Has(rxp, "SortTimers") then Run("WindowTimerSort", rxp.SortTimers, rxp) end
+    if gave and Has(rxp, "SortTimers") then Run("WindowTimerGiveSort", rxp.SortTimers, rxp) end
 end
 
 -- Under the last step box and above NEXT STEPS, one line a bar. A held grip draws the
 -- order and count it pressed on, so the height it reads stays the list's.
 function Timers.DrawSlot(y, inner, room)
     if not sizing then
-        local bars = Dig(_G.RXP, "RXPFrame", "BarContainer", "bars")
-        local list = type(bars) == "table"
-            and Run("WindowTimerRead", Timers.Order, bars, GetTime()) or Timers.none
+        local bars = Timers.Bars()
+        local list = bars and Run("WindowTimerRead", Timers.Order, bars, GetTime()) or Timers.none
         Timers.list, Timers.shown = list, #list
         for i, bar in ipairs(list) do Timers.starts[i] = bar.start end
     end
@@ -1308,10 +1334,8 @@ function Timers.DrawSlot(y, inner, room)
     for i = 1, Timers.shown do
         local slot = Pools().timer:Acquire(window)
         Timers.PaintSlot(slot, y, inner, room)
-        -- Under a held grip a line keeps only its own run: a bar that ended has left the
-        -- owner map, and a frame RestedXP started again since has a new start.
         local bar = Timers.list[i]
-        if bar and not (Timers.owned[bar] and bar.start == Timers.starts[i] and bar:IsShown()) then bar = nil end
+        if bar and not Run("WindowTimerLine", Timers.Lined, bar, i) then bar = nil end
         slot:SetShown(bar ~= nil)
         if bar then Timers.slotOf[bar] = slot end
         y = y - room
@@ -1320,9 +1344,19 @@ function Timers.DrawSlot(y, inner, room)
     return y
 end
 
+-- Under a held grip a line keeps only its own run: a bar that ended has left the
+-- owner map, and a frame RestedXP started again since has a new start.
+function Timers.Lined(bar, i)
+    return Timers.owned[bar] ~= nil and bar.start == Timers.starts[i] and bar:IsShown()
+end
+
+function Timers.Fade(bar)
+    if Timers.Held(bar) then bar:SetAlpha(0) end
+end
+
 function Timers.Wait()
     for bar in pairs(Timers.taken) do
-        if not Timers.slotOf[bar] and bar:GetParent() == window then bar:SetAlpha(0) end
+        if not Timers.slotOf[bar] then Run("WindowTimerWait", Timers.Fade, bar) end
     end
 end
 
@@ -1330,7 +1364,7 @@ end
 -- hide handler drops it from its table.
 function Timers.Seat()
     for bar in pairs(Timers.slotOf) do Run("WindowTimerSeat", Timers.Keep, bar) end
-    Run("WindowTimerWait", Timers.Wait)
+    Timers.Wait()
 end
 
 ---------------------------------------------------------------------------------
@@ -1757,7 +1791,7 @@ end
 function Window.HeldTimers()
     local count = 0
     for bar in pairs(Timers.taken) do
-        if bar:GetParent() == window then count = count + 1 end
+        if Run("WindowTimerHeld", Timers.Held, bar) then count = count + 1 end
     end
     return count
 end
