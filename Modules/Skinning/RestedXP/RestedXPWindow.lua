@@ -12,7 +12,7 @@ local KE = select(2, ...)
 
 local C_Timer, CreateFrame, GameTooltip, UIParent = C_Timer, CreateFrame, GameTooltip, UIParent
 local hooksecurefunc, IsInInstance, IsShiftKeyDown = hooksecurefunc, IsInInstance, IsShiftKeyDown
-local InCombatLockdown, LibStub = InCombatLockdown, LibStub
+local GetTime, InCombatLockdown, LibStub = GetTime, InCombatLockdown, LibStub
 local ipairs, pairs, select, setmetatable, type = ipairs, pairs, select, setmetatable, type
 local floor, math_max, math_min = math.floor, math.max, math.min
 
@@ -32,6 +32,7 @@ local K = {
     WHITE = "Interface\\Buttons\\WHITE8X8",
     MARK_RIM = "Interface\\AddOns\\KitnEssentials\\Media\\RestedXP\\Logo\\rim.tga",
     MARK_K = "Interface\\AddOns\\KitnEssentials\\Media\\RestedXP\\Logo\\k.tga",
+    CLOCK = "Interface\\AddOns\\KitnEssentials\\Media\\RestedXP\\Icons\\clock.tga",
     GRIP_UP = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up",
     GRIP_DOWN = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down",
     GRIP_HIGHLIGHT = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight",
@@ -40,7 +41,7 @@ local K = {
     PAD = 10, BOX_PAD = 7, FOLD_W = 16, GAP = 5,
     HEAD_PAD = 10, LIST_PAD = 6,
     BOX_TITLE_TEXT = 9, BOX_TITLE_HEIGHT = 19, BOX_TITLE_ROOM = 10,
-    ICON_GAP = 5, GRIP_SIZE = 16,
+    ICON_GAP = 5, GRIP_SIZE = 16, TIMER_ICON_INSET = 2,
     FIRST_GROW = 2, FIRST_ICON_GROW = 2, MARK_SIZE = 24, BAR_HEIGHT = 5, ICON_SIZE = 18,
     HOVER_ALPHA = 0.25, ICON_DONE_ALPHA = 0.5, DONE_ALPHA = 0.5, YARDS_ALPHA = 0.85,
     COUNT_GAP = 2,
@@ -97,6 +98,18 @@ local targetingHooked
 local Timers = {
     -- Each bar RestedXP started, to the one key of its table it was started under.
     owned = setmetatable({}, { __mode = "k" }),
+    -- Each bar the window took, to what it had at first touch.
+    taken = setmetatable({}, { __mode = "k" }),
+    -- Each bar the last redraw gave a line, to that line's slot.
+    slotOf = setmetatable({}, { __mode = "k" }),
+    -- The last order outside a held grip and its line count, which a held grip draws
+    -- from, so its redraws, up to one a frame, make no list.
+    list = {}, shown = 0,
+    -- Each listed bar's start at that redraw, so a held grip shows a line only for the
+    -- same run of the same bar. Refilled in place, never made again.
+    starts = {},
+    -- The order with no bar table. Never written.
+    none = {},
 }
 local Draw
 
@@ -969,6 +982,7 @@ local function Pools()
             row = KE.FramePool:New(MakeRow),
             line = KE.FramePool:New(MakeLine),
             hit = KE.FramePool:New(MakeHit),
+            timer = KE.FramePool:New(Timers.MakeSlot),
         }
     end
     return pools
@@ -1002,17 +1016,39 @@ function Timers.Started(duration, label)
     local bar = Dig(frame, "BarContainer", "bars", label)
     if type(bar) ~= "table" or not Timers.Labeled(bar, label) then return end
     Timers.owned[bar] = label
+    -- RestedXP's sort inside the start ran before this, so the new bar is taken here,
+    -- unseen until the redraw gives it a line. Under a held grip that is the release's
+    -- redraw, even for a bar restarted on a frame that already has a line.
+    if sizing then Timers.slotOf[bar] = nil end
+    Timers.busy = true
+    Run("WindowTimerTake", Timers.Keep, bar)
+    Timers.busy = false
     Refresh()
 end
 
+-- RestedXP's sort hangs every bar of its table under its own footer again, so the
+-- bars the window holds go back to their lines in the same call.
 function Timers.Sorted()
-    if active then Refresh() end
+    if not active or Timers.busy or not window then return end
+    -- A bar taken under a hidden window hides, and RestedXP's hide handler sorts again.
+    Timers.busy = true
+    Run("WindowTimerSort", Timers.Hold)
+    Timers.busy = false
+    Refresh()
 end
 
--- LibCandyBar takes a stopped bar back for any addon's next bar.
+-- The library calls this before it hides and caches the bar. RestedXP restarts a bar
+-- from its own pool without the library's reset, so the bar gets its own look back
+-- first, and hides under a shown parent, which RestedXP's hide handler needs. The
+-- library lists the bar as free itself once every listener has run, and not before:
+-- a listener that made a bar in between could take this one while it still stops.
 function Timers.Stopped(_, bar)
-    if type(bar) ~= "table" or not Timers.owned[bar] then return end
+    if type(bar) ~= "table" then return end
     Timers.owned[bar] = nil
+    local home = Timers.taken[bar]
+    if not home then return end
+    Timers.Forget(bar)
+    if bar:GetParent() == window then Run("WindowTimerBack", Timers.Restore, bar, home, false) end
     Refresh()
 end
 
@@ -1034,6 +1070,238 @@ function Timers.Hook(rxp)
     end
     hooksecurefunc(rxp, "SortTimers", Timers.Sorted)
     hooksecurefunc(rxp, "StartTimer", Timers.Started)
+end
+
+-- KE's frame behind one bar: its border, a divider and the clock. The bar is the
+-- window's child, because each redraw hides the slots it releases, and a bar that
+-- hides drops out of RestedXP's table.
+function Timers.MakeSlot(holder)
+    local slot = CreateFrame("Frame", nil, holder)
+    KE:AddBorders(slot, colors.boxBorder)
+    slot.clock = slot:CreateTexture(nil, "ARTWORK")
+    slot.clock:SetTexture(K.CLOCK)
+    slot.divider = slot:CreateTexture(nil, "ARTWORK")
+    return slot
+end
+
+function Timers.PaintSlot(slot, y, inner, room)
+    local edge, accent, px = colors.boxBorder, colors.accent, KE:GetPixelSize()
+    local icon = room - K.TIMER_ICON_INSET * 2
+    slot:ClearAllPoints()
+    slot:SetPoint("TOPLEFT", window, "TOPLEFT", K.PAD, y)
+    slot:SetSize(inner, room)
+    slot:SetBorderColor(edge[1], edge[2], edge[3], edge[4])
+    slot.clock:ClearAllPoints()
+    slot.clock:SetPoint("CENTER", slot, "TOPLEFT", room / 2, -room / 2)
+    slot.clock:SetSize(icon, icon)
+    slot.clock:SetVertexColor(accent[1], accent[2], accent[3])
+    slot.divider:ClearAllPoints()
+    slot.divider:SetPoint("TOPLEFT", slot, "TOPLEFT", room - px, 0)
+    slot.divider:SetPoint("BOTTOMLEFT", slot, "BOTTOMLEFT", room - px, 0)
+    slot.divider:SetWidth(px)
+    slot.divider:SetColorTexture(edge[1], edge[2], edge[3], edge[4])
+    slot.room = room
+end
+
+-- The library's list of free bars, which its New hands frames out from.
+function Timers.Cache()
+    local cache = Dig(LibStub and LibStub("LibCandyBar-3.0", true), "barCache")
+    return type(cache) == "table" and cache or nil
+end
+
+-- Which icon calls a bar takes. A newer copy of the library keeps an icon flag in a
+-- table an older copy's bar does not have, and fails there, so that bar takes none.
+function Timers.IconMode(bar)
+    if not Has(bar, "SetIconVisibility") then return "plain" end
+    if type(bar.data) == "table" then return "flag" end
+    return nil
+end
+
+-- First touch only, so a later hold cannot store the window's look as RestedXP's.
+function Timers.Take(bar)
+    if Timers.taken[bar] then return end
+    local label, timeText, fill, back = bar.candyBarLabel, bar.candyBarDuration, bar.candyBarBar, bar.candyBarBackground
+    local home = {
+        parent = bar:GetParent(), strata = bar:GetFrameStrata(), level = bar:GetFrameLevel(), alpha = bar:GetAlpha(),
+        fill = fill:GetStatusBarTexture():GetTexture(), fillColor = { fill:GetStatusBarColor() },
+        back = back:GetTexture(), backColor = { back:GetVertexColor() },
+        labelFont = { label:GetFont() }, timeFont = { timeText:GetFont() }, textColor = { label:GetTextColor() },
+        shadowOffset = { label:GetShadowOffset() }, shadowColor = { label:GetShadowColor() },
+        icon = bar:GetIcon(),
+    }
+    local mode = Timers.IconMode(bar)
+    if mode == "flag" then home.iconShown = bar:IsIconVisible() == true end
+    -- A newer copy loaded later replaces this setter with one this bar cannot run, so
+    -- the record keeps the one the bar was made with.
+    if mode == "plain" then home.setIcon = bar.SetIcon end
+    -- RestedXP restarts a stopped bar from its own pool, which leaves the library
+    -- listing it as free. While the window holds it, no addon's New can hand it out.
+    local cache = Timers.Cache()
+    if cache and cache[bar] then
+        home.cached = true
+        cache[bar] = nil
+    end
+    Timers.taken[bar] = home
+    bar:SetParent(window)
+    bar:SetAlpha(0)
+end
+
+-- RestedXP writes its icon, color and height again on a bar it starts again, so a
+-- held bar is dressed at every hold.
+function Timers.Dress(bar)
+    local fill, back, text = colors.barFill, colors.barBack, colors.text
+    local size = Option("ListSize")
+    bar:SetTexture(K.WHITE)
+    bar:SetColor(fill[1], fill[2], fill[3], fill[4])
+    bar:SetBackgroundColor(back[1], back[2], back[3], back[4])
+    Faced(bar.candyBarLabel, size)
+    Faced(bar.candyBarDuration, size)
+    bar:SetTextColor(text[1], text[2], text[3], text[4])
+    -- One version of the library lays out the icon's square while this flag is on.
+    local mode = Timers.IconMode(bar)
+    if mode == "flag" then bar:SetIconVisibility(false) end
+    if mode then bar:SetIcon(nil) end
+end
+
+-- RestedXP's sort hangs each bar on the one before it, so a bar it hung on this one
+-- would follow it into the window. That bar takes this one's anchors instead, the
+-- place RestedXP's column gives it without this one. A bar already on its slot was
+-- not hung on since, because only RestedXP's sort hangs bars.
+function Timers.HandOver(bar, slot)
+    local n = bar:GetNumPoints()
+    if n == 0 or select(2, bar:GetPoint(1)) == slot then return end
+    local bars = Dig(_G.RXP, "RXPFrame", "BarContainer", "bars")
+    if type(bars) ~= "table" then return end
+    for _, other in pairs(bars) do
+        if other ~= bar and Has(other, "GetPoint") and select(2, other:GetPoint(1)) == bar then
+            -- One frame under two keys could hang the bar on the frame it hands over to.
+            local loops = false
+            for i = 1, n do
+                if select(2, bar:GetPoint(i)) == other then loops = true end
+            end
+            if not loops then
+                other:ClearAllPoints()
+                for i = 1, n do other:SetPoint(bar:GetPoint(i)) end
+            end
+        end
+    end
+end
+
+-- Inside the slot's border, right of the clock. The level is set each time, because
+-- what a new parent does to the level the library gave is not the window's to know.
+function Timers.Place(bar, slot)
+    local px = KE:GetPixelSize()
+    Timers.HandOver(bar, slot)
+    bar:ClearAllPoints()
+    bar:SetPoint("TOPLEFT", slot, "TOPLEFT", slot.room, -px)
+    bar:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -px, px)
+    bar:SetFrameLevel(slot:GetFrameLevel() + 1)
+    bar:SetAlpha(1)
+end
+
+function Timers.Keep(bar)
+    Timers.Take(bar)
+    Timers.Dress(bar)
+    local slot = Timers.slotOf[bar]
+    if slot then Timers.Place(bar, slot) else bar:SetAlpha(0) end
+end
+
+function Timers.Hold()
+    local bars = Dig(_G.RXP, "RXPFrame", "BarContainer", "bars")
+    if type(bars) ~= "table" then return end
+    for key, bar in pairs(bars) do
+        if Timers.owned[bar] == key then Timers.Keep(bar) end
+    end
+end
+
+function Timers.Forget(bar)
+    Timers.taken[bar], Timers.slotOf[bar] = nil, nil
+    local label, timeText = Dig(bar, "candyBarLabel"), Dig(bar, "candyBarDuration")
+    if label then dressed[label] = nil end
+    if timeText then dressed[timeText] = nil end
+end
+
+-- listed: whether to list the bar as free again, for a give back. A stop leaves that
+-- to the library.
+function Timers.Restore(bar, home, listed)
+    bar:SetParent(home.parent or UIParent)
+    bar:SetFrameStrata(home.strata)
+    bar:SetFrameLevel(home.level)
+    bar:SetAlpha(home.alpha)
+    bar.candyBarBar:SetStatusBarTexture(home.fill)
+    bar.candyBarBar:SetStatusBarColor(unpack(home.fillColor))
+    bar.candyBarBackground:SetTexture(home.back)
+    bar.candyBarBackground:SetVertexColor(unpack(home.backColor))
+    bar.candyBarLabel:SetFont(unpack(home.labelFont))
+    bar.candyBarDuration:SetFont(unpack(home.timeFont))
+    bar:SetTextColor(unpack(home.textColor))
+    bar:SetShadowOffset(unpack(home.shadowOffset))
+    bar:SetShadowColor(unpack(home.shadowColor))
+    local mode = Timers.IconMode(bar)
+    if mode == "flag" and home.iconShown ~= nil then bar:SetIconVisibility(home.iconShown) end
+    if mode then
+        bar:SetIcon(home.icon)
+    elseif home.setIcon then
+        home.setIcon(bar, home.icon)
+    end
+    local cache = listed and home.cached and Timers.Cache()
+    if cache then cache[bar] = true end
+end
+
+-- Before the window hides, so no bar it holds drops out of RestedXP's table, and
+-- RestedXP's own sort then hangs them under its footer again.
+function Timers.GiveBack()
+    local gave = false
+    for bar, home in pairs(Timers.taken) do
+        Timers.Forget(bar)
+        if bar:GetParent() == window then
+            gave = true
+            Run("WindowTimerBack", Timers.Restore, bar, home, true)
+        end
+    end
+    wipe(Timers.owned)
+    wipe(Timers.slotOf)
+    local rxp = _G.RXP
+    if gave and Has(rxp, "SortTimers") then Run("WindowTimerSort", rxp.SortTimers, rxp) end
+end
+
+-- Under the last step box and above NEXT STEPS, one line a bar. A held grip draws the
+-- order and count it pressed on, so the height it reads stays the list's.
+function Timers.DrawSlot(y, inner, room)
+    if not sizing then
+        local bars = Dig(_G.RXP, "RXPFrame", "BarContainer", "bars")
+        local list = type(bars) == "table"
+            and Run("WindowTimerRead", Rules.TimerOrder, bars, Timers.owned, GetTime()) or Timers.none
+        Timers.list, Timers.shown = list, #list
+        for i, bar in ipairs(list) do Timers.starts[i] = bar.start end
+    end
+    wipe(Timers.slotOf)
+    for i = 1, Timers.shown do
+        local slot = Pools().timer:Acquire(window)
+        Timers.PaintSlot(slot, y, inner, room)
+        -- Under a held grip a line keeps only its own run: a bar that ended has left the
+        -- owner map, and a frame RestedXP started again since has a new start.
+        local bar = Timers.list[i]
+        if bar and not (Timers.owned[bar] and bar.start == Timers.starts[i] and bar:IsShown()) then bar = nil end
+        slot:SetShown(bar ~= nil)
+        if bar then Timers.slotOf[bar] = slot end
+        y = y - room
+    end
+    if Timers.shown > 0 then y = y - K.GAP end
+    return y
+end
+
+function Timers.Wait()
+    for bar in pairs(Timers.taken) do
+        if not Timers.slotOf[bar] and bar:GetParent() == window then bar:SetAlpha(0) end
+    end
+end
+
+-- After the window shows: a bar taken under a hidden window hides, and RestedXP's
+-- hide handler drops it from its table.
+function Timers.Seat()
+    for bar in pairs(Timers.slotOf) do Run("WindowTimerSeat", Timers.Keep, bar) end
+    Run("WindowTimerWait", Timers.Wait)
 end
 
 ---------------------------------------------------------------------------------
@@ -1296,6 +1564,7 @@ end
 local function DrawList(model, y, inner, listH)
     if model.empty then y = ListLine(y, inner, listH, K.TEXT_PICK, nil, true, "current") end
     for _, step in ipairs(model.steps) do y = DrawBox(step, y, inner) end
+    y = Timers.DrawSlot(y, inner, listH)
     return DrawSteps(model, y, inner, listH)
 end
 
@@ -1366,12 +1635,13 @@ function Draw()
     window.nextLabel:Hide()
     window.labelLines = 0
     if folded then
-        y = DrawFolded(model, y, width - K.PAD * 2)
+        y = Timers.DrawSlot(DrawFolded(model, y, width - K.PAD * 2), width - K.PAD * 2, listH)
     else
         y = DrawList(model, y, width - K.PAD * 2, listH)
     end
     DrawChrome(y, listH, folded)
     window:Show()
+    Timers.Seat()
     yardBox = lastBox
     if yardBox then OnYards(_G.RXPG_ARROW) end
     if flash and lastBox then lastBox.flashAnim:Play() end
@@ -1412,7 +1682,7 @@ local function Activate(want)
         Release()
         wipe(READ_OPTIONS.hidden)
         Timers.Watch(false)
-        wipe(Timers.owned)
+        Run("WindowTimerGive", Timers.GiveBack)
         if window then
             window:Hide()
             window:UnregisterAllEvents()
