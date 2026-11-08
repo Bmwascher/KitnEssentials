@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.22
+
+### WoW Forever only
+
+- Dark Theme now skins the Progress Legacy window's Tree page: the tree
+  cards are flat plates with square icons and an accent on the selected
+  tree, the page art and bronze frames are gone, the points bar, points
+  badge and node rank numbers sit in flat bordered boxes, and the crown
+  shield, Reset, Undo, talent nodes and arrows match the Challenges page
+  and the talent window
+
+---
+
 ## v4.16.21
 
 ### WoW Forever only
