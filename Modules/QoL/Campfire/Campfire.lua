@@ -154,13 +154,14 @@ end
 -- duration nil when it is gone.
 local function ReadRest(rest)
     local aura, hidden = ReadCampAura(Rules.WELL_RESTED)
+    local previous = rest.expiry
     rest.expiry, rest.duration, rest.stacks = nil, nil, 0
     if hidden then return false end
     if not aura then return true end
     local expiry, duration, secret = TimesOf(aura)
     local stacks = aura.applications
     if secret or KE:IsSecretValue(stacks) then return false end
-    rest.expiry, rest.duration, rest.stacks = expiry, duration, stacks or 0
+    rest.expiry, rest.duration, rest.stacks = Rules.SteadyExpiry(previous, expiry), duration, stacks or 0
     return true
 end
 
@@ -579,8 +580,9 @@ end
 function CF:SyncButtons(moment, near, c)
     local db, i, rest = self.db, self.inputs, self.rest
     local nearOrSeated = near or c.seated
-    local known = not self.inCombat and ReadRest(rest)
-    if known then self:ArmRest() end
+    local known = db.BagButton and not self.inCombat and ReadRest(rest)
+    if not db.BagButton then rest.expiry = nil end
+    if known or not db.BagButton then self:ArmRest() end
     local restLow = known and not i.dead and not i.onTaxi
         and Rules.RestLow(rest.expiry and rest.expiry - GetTime() or nil)
     local first, second = Rules.ButtonCandidates(moment, nearOrSeated, self.inCombat, db, restLow)
