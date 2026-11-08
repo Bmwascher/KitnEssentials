@@ -12,6 +12,10 @@ local ICON_CROP = 0.146
 -- Card art rects overlap their neighbors and start past the window's left
 -- edge, so the plate sits inside them.
 local CARD_INSET = 8
+-- Unnamed in the node template, so it is found by its atlas.
+local RANK_ART = "Talents-Square-Box-c60"
+-- Holds a single-digit "rank/max" at the 14 pt outline font.
+local RANK_BOX_W, RANK_BOX_H = 30, 18
 
 -- The left edge sits on the frame's center: a 1 px line centered there would
 -- straddle two pixels.
@@ -127,6 +131,54 @@ local function PointBar(summary)
     plate:SetPoint("BOTTOMRIGHT", border, "BOTTOMRIGHT", 0, 0.5)
 end
 
+local rankBoxOwner = {}
+
+local function SkinRankBox(button)
+    local text = button and button.SpendText
+    if not text then return end
+    local d = S.data(button)
+    if d.keRankBox ~= nil then return end
+    d.keRankBox = false
+    local rankArt
+    for _, region in ipairs({ button:GetRegions() }) do
+        if region.IsObjectType and region:IsObjectType("Texture")
+            and region.GetAtlas and region:GetAtlas() == RANK_ART then
+            rankArt = region
+            break
+        end
+    end
+    -- Selection and large nodes use templates without this art.
+    if not rankArt then return end
+    rankArt:SetAlpha(0)
+    -- Centered where the rank text is centered, above the node's border art;
+    -- the text moves onto the box so it draws above the plate.
+    local box = CreateFrame("Frame", nil, button)
+    box:SetFrameLevel(button:GetFrameLevel() + 3)
+    box:SetSize(RANK_BOX_W, RANK_BOX_H)
+    box:SetPoint("CENTER", button, "BOTTOMRIGHT")
+    S.Backdrop(box)
+    text:SetParent(box)
+    S.SetFont(text, 14, "OUTLINE")
+    d.keRankBox = box
+end
+
+local function OnRankButtonAcquired(_, button)
+    SkinRankBox(button)
+end
+
+local function RankBoxes(traits)
+    local d = S.data(traits)
+    if d.keRankBoxes then return end
+    d.keRankBoxes = true
+    local event = traits.Event and traits.Event.TalentButtonAcquired
+    if event and traits.RegisterCallback then
+        traits:RegisterCallback(event, OnRankButtonAcquired, rankBoxOwner)
+    end
+    if traits.EnumerateAllTalentButtons then
+        for button in traits:EnumerateAllTalentButtons() do SkinRankBox(button) end
+    end
+end
+
 function S.LegacyTreePage()
     local page = _G.LegacySystemFrame and _G.LegacySystemFrame.TreePage
     if not page or S.data(page).skinned then return end
@@ -148,6 +200,7 @@ function S.LegacyTreePage()
             S.TalentIconButton(traits.UndoButton)
         end
         if S.TalentTree then S.TalentTree(traits) end
+        RankBoxes(traits)
     end
     local summary = page.LegacyTreePointSummary
     PointBar(summary)
