@@ -1190,8 +1190,7 @@ function Timers.HandOver(bar, slot)
     end
 end
 
--- Inside the slot's border, right of the clock. The level is set each time, because
--- what a new parent does to the level the library gave is not the window's to know.
+-- The level is set each time: a new parent may change the level the library gave.
 function Timers.Place(bar, slot)
     local px = KE:GetPixelSize()
     Timers.HandOver(bar, slot)
