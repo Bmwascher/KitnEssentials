@@ -1144,6 +1144,9 @@ function Timers.Take(bar)
     Timers.taken[bar] = home
     bar:SetParent(window)
     bar:SetAlpha(0)
+    -- Under a hidden window the bar hides, and RestedXP's hide handler drops it.
+    local bars = Dig(_G.RXP, "RXPFrame", "BarContainer", "bars")
+    if type(bars) == "table" then Timers.PutBack(bars, bar, GetTime()) end
 end
 
 -- RestedXP writes its icon, color and height again on a bar it starts again, so a
@@ -1248,15 +1251,42 @@ function Timers.Restore(bar, home, listed)
     if cache then cache[bar] = true end
 end
 
+-- RestedXP drops a bar from its table when the bar hides with the window while it
+-- still runs. It goes back under its label at once, as RestedXP's own show puts bars
+-- back, so RestedXP's stop still reaches it while the window is hidden.
+function Timers.PutBack(bars, bar, now)
+    local label = Timers.owned[bar]
+    if label and bars[label] == nil and bar:IsShown() and type(bar.exp) == "number" and bar.exp > now then
+        bars[label] = bar
+    end
+end
+
+function Timers.Refill()
+    local bars = Dig(_G.RXP, "RXPFrame", "BarContainer", "bars")
+    if type(bars) ~= "table" then return end
+    local now = GetTime()
+    for bar in pairs(Timers.taken) do
+        if bar:GetParent() == window then Timers.PutBack(bars, bar, now) end
+    end
+end
+
+-- A hide KE did not cause, as the whole interface hiding, drops bars the same way.
+function Timers.Order(bars, now)
+    Timers.Refill()
+    return Rules.TimerOrder(bars, Timers.owned, now)
+end
+
 -- Before the window hides, so no bar it holds drops out of RestedXP's table, and
 -- RestedXP's own sort then hangs them under its footer again.
 function Timers.GiveBack()
-    local gave = false
+    local bars = Dig(_G.RXP, "RXPFrame", "BarContainer", "bars")
+    local now, gave = GetTime(), false
     for bar, home in pairs(Timers.taken) do
         Timers.Forget(bar)
         if bar:GetParent() == window then
             gave = true
             Run("WindowTimerBack", Timers.Restore, bar, home, true)
+            if type(bars) == "table" then Timers.PutBack(bars, bar, now) end
         end
     end
     wipe(Timers.owned)
@@ -1271,7 +1301,7 @@ function Timers.DrawSlot(y, inner, room)
     if not sizing then
         local bars = Dig(_G.RXP, "RXPFrame", "BarContainer", "bars")
         local list = type(bars) == "table"
-            and Run("WindowTimerRead", Rules.TimerOrder, bars, Timers.owned, GetTime()) or Timers.none
+            and Run("WindowTimerRead", Timers.Order, bars, GetTime()) or Timers.none
         Timers.list, Timers.shown = list, #list
         for i, bar in ipairs(list) do Timers.starts[i] = bar.start end
     end
@@ -1613,6 +1643,8 @@ function Draw()
     end
     if not allowedHere then
         window:Hide()
+        -- The hide drops the window's bars from RestedXP's table, and its stop needs them.
+        Run("WindowTimerKeep", Timers.Refill)
         return true
     end
     local model = sizing and sizingModel or Model.Read(_G.RXP, READ_OPTIONS) or Model.NoGuide()
@@ -1720,6 +1752,15 @@ end
 
 function Window.IsActive()
     return active == true
+end
+
+-- How many of RestedXP's bars the window holds now, for the smoke's macros.
+function Window.HeldTimers()
+    local count = 0
+    for bar in pairs(Timers.taken) do
+        if bar:GetParent() == window then count = count + 1 end
+    end
+    return count
 end
 
 -- A color setting or KE's accent changed. Targets and Items repaint only when told,
