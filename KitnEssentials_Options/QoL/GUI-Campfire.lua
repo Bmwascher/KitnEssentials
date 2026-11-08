@@ -147,9 +147,9 @@ GUIFrame:RegisterContent("Campfire", function(scrollChild, yOffset)
         GridPick("In Combat", "TimerInCombat"),
     })
     showInCard:AddLabel("Bonus list shows")
-    showInCard:AddCheckboxGrid({
+    manager:RegisterGroup(showInCard:AddCheckboxGrid({
         GridPick("In Combat", "ListInCombat"),
-    }, { isLast = true })
+    }, { isLast = true }), "round")
     yOffset = showInCard:GetNextOffset()
 
     ----------------------------------------------------------------
