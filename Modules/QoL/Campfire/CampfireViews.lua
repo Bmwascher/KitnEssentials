@@ -847,6 +847,24 @@ end
 -- Public
 ---------------------------------------------------------------------------------
 
+local countdownArgs = { seated = false }
+
+-- The views' countdown on a frame of another file, which owns f.time. Only after
+-- Views.Build, which makes the formatter.
+function Views.AddCountdown(f)
+    f.dur = C_DurationUtil.CreateDuration()
+    f.binding = NewBinding(f.time, f.dur)
+end
+
+-- expiry nil clears the text.
+function Views.SetCountdown(f, expiry, duration)
+    countdownArgs.expiry, countdownArgs.duration = expiry, duration
+    SetTimeText(f, countdownArgs, plainFormat)
+end
+
+Views.KeyColor = KeyColor
+Views.ShortTime = ShortTime
+
 function Views.Build(owner)
     Views.owner = owner
     if Views.round then return end

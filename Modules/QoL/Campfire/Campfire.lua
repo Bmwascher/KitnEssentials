@@ -150,6 +150,20 @@ local function ReadStacks()
     return stacks or 0
 end
 
+-- Well-Rested for the bag button: false when unreadable, else known with expiry and
+-- duration nil when it is gone.
+local function ReadRest(rest)
+    local aura, hidden = ReadCampAura(Rules.WELL_RESTED)
+    rest.expiry, rest.duration, rest.stacks = nil, nil, 0
+    if hidden then return false end
+    if not aura then return true end
+    local expiry, duration, secret = TimesOf(aura)
+    local stacks = aura.applications
+    if secret or KE:IsSecretValue(stacks) then return false end
+    rest.expiry, rest.duration, rest.stacks = expiry, duration, stacks or 0
+    return true
+end
+
 local function IsWellFed()
     local food = KE.ReadyCheckConsumablesForever and KE.ReadyCheckConsumablesForever.food
     if not food then return false end
@@ -544,19 +558,41 @@ function CF:StopButtonEvents()
     self:SetButtonEvent("BAG_UPDATE_DELAYED", false)
 end
 
+-- One-shots at each step of the current Well-Rested: color changes, the low
+-- threshold that shows the bag away from a fire, and the end.
+function CF:ArmRest()
+    local expiry = self.rest.expiry
+    if expiry == self.restKey then return end
+    self.restKey = expiry
+    self.restGen = self.restGen + 1
+    if not expiry then return end
+    local gen, left = self.restGen, expiry - GetTime()
+    for _, step in ipairs(Rules.REST_STEPS) do
+        if left > step then
+            C_Timer.After(left - step + THRESHOLD_PAD, function()
+                if gen == self.restGen and self:IsEnabled() then self:MarkDirty() end
+            end)
+        end
+    end
+end
+
 function CF:SyncButtons(moment, near, c)
-    local db = self.db
+    local db, i, rest = self.db, self.inputs, self.rest
     local nearOrSeated = near or c.seated
-    local candidate = Rules.ButtonCandidate(moment, nearOrSeated, self.inCombat, db)
-    self:SetButtonEvent("BAG_UPDATE_DELAYED", candidate ~= nil)
+    local known = not self.inCombat and ReadRest(rest)
+    if known then self:ArmRest() end
+    local restLow = known and not i.dead and not i.onTaxi
+        and Rules.RestLow(rest.expiry and rest.expiry - GetTime() or nil)
+    local first, second = Rules.ButtonCandidates(moment, nearOrSeated, self.inCombat, db, restLow)
+    self:SetButtonEvent("BAG_UPDATE_DELAYED", first ~= nil)
     if self.inCombat then return end
 
     local carried = self.carried
-    carried.bag = candidate == "bag" and CountOf(Rules.SLEEPING_BAG) > 0
-    carried.kit = candidate == "kit" and Rules.BestKit(Rules.KITS, CountOf, UsableOf) or nil
-    local wanted = Rules.ButtonWanted(moment, nearOrSeated, self.inCombat, db, carried)
-    Buttons.Sync(wanted, carried.kit, wanted == "bag" and ReadStacks() or nil, db)
-    self:SetButtonEvent("BAG_UPDATE_COOLDOWN", wanted ~= nil)
+    carried.bag = (first == "bag" or second == "bag") and CountOf(Rules.SLEEPING_BAG) > 0
+    carried.kit = first == "kit" and Rules.BestKit(Rules.KITS, CountOf, UsableOf) or nil
+    local wanted = Rules.ButtonWanted(moment, nearOrSeated, self.inCombat, db, carried, restLow)
+    Buttons.Sync(wanted, carried.kit, db, wanted == "bag" and known and rest or nil)
+    self:SetButtonEvent("BAG_UPDATE_COOLDOWN", wanted == "kit")
 end
 
 function CF:FillInputs(c)
@@ -696,6 +732,7 @@ end
 function CF:BumpGenerations()
     self.thresholdGen = self.thresholdGen + 1
     self.thresholdKey = nil
+    self.restGen, self.restKey = self.restGen + 1, nil
     self.previewGen = self.previewGen + 1
     self.alertBoundary, self.alertTextLive = nil, false
     self:NewLife()
@@ -711,7 +748,7 @@ function CF:EnterInstance()
     self.coverDirty, self.dismissed = true, false
     self:DrawNothing("Nothing")
     KE:RunAfterCombat(function()
-        if self:IsEnabled() and self.inInstance then Buttons.Sync(nil, nil, nil, self.db) end
+        if self:IsEnabled() and self.inInstance then Buttons.Sync(nil, nil, self.db) end
     end)
 end
 
@@ -844,7 +881,7 @@ function CF:RenderPreview()
     if sample.moment == "Landing" then self.landingToken = self.landingToken + 1 end
     self:Draw(s)
 
-    Buttons.Sync(nil, nil, nil, db)
+    Buttons.Sync(nil, nil, db)
     self:StopButtonEvents()
     if sample.near and db.BagButton then
         Buttons.ShowSample("bag", db)
@@ -962,6 +999,8 @@ function CF:ResetState()
     self.scene = {}
     self.render = {}
     self.carried = {}
+    self.rest = {}
+    self.restGen, self.restKey = self.restGen or 0, nil
     self.prevState, self.nowState = {}, {}
     self.coverNames = self.coverNames or {}
     self.onYou = {}

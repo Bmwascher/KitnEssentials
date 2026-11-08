@@ -19,6 +19,7 @@ local InCombatLockdown = InCombatLockdown
 local RegisterStateDriver = RegisterStateDriver
 local UIParent = UIParent
 local UnregisterStateDriver = UnregisterStateDriver
+local max = math.max
 
 local Buttons = {}
 KE.CampfireButtons = Buttons
@@ -27,6 +28,9 @@ local ROUND_SCALE, ROUND_GAP = 0.55, 12
 local SIMPLE_SIZE, SIMPLE_GAP = 26, 4
 local KIT_LABEL, KIT_LABEL_SIZE, KIT_LABEL_GAP = "Light a Fire", 13, 3
 local COUNT_SIZE = 12
+local TIME_SHARE, TIME_MIN_SIZE = 0.32, 10
+-- The sample's Well-Rested time: a preview shows the bag with time on it, as live play does.
+local SAMPLE_REST_LEFT = 3000
 -- A cooldown this short is the global cooldown, not the item's own.
 local GLOBAL_COOLDOWN = 1.5
 local COOLDOWN_PAD = 0.1
@@ -50,6 +54,8 @@ local function Dress(frame)
     frame.count:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
     frame.label = frame:CreateFontString(nil, "OVERLAY")
     frame.label:SetPoint("TOP", frame, "BOTTOM", 0, -KIT_LABEL_GAP)
+    frame.time = frame:CreateFontString(nil, "OVERLAY")
+    frame.time:SetPoint("CENTER", frame, "CENTER", 0, 0)
 end
 
 local function NewSecure(name)
@@ -92,14 +98,27 @@ local function Place(frame, x, y, size)
     frame:SetSize(size, size)
 end
 
-local function Style(frame, which, stacks, db)
+-- left: Well-Rested's seconds left, which sets the time's color; nil for no time.
+local function Style(frame, which, stacks, db, size, left)
     KE:ApplyFontToText(frame.count, db.FontFace, COUNT_SIZE, "OUTLINE")
     KE:ApplyFontToText(frame.label, db.FontFace, KIT_LABEL_SIZE, db.FontOutline)
+    KE:ApplyFontToText(frame.time, db.FontFace, max(TIME_MIN_SIZE, size * TIME_SHARE), "OUTLINE")
     frame.count:SetText((stacks and stacks > 0) and stacks or "")
     frame.label:SetText(which == "kit" and db.Shape == "ROUND" and KIT_LABEL or "")
+    if left then frame.time:SetTextColor(Views.KeyColor(Rules.RingColorKey(left, false))) end
+end
+
+-- The bag's Well-Rested time runs on the game's binding; a dropped bag stops it.
+local function SetRestTime(button, rest)
+    if not button.binding then
+        if not rest then return end
+        Views.AddCountdown(button)
+    end
+    Views.SetCountdown(button, rest and rest.expiry, rest and rest.duration)
 end
 
 local function Drop(button)
+    if button == bag then SetRestTime(button, nil) end
     if button.driven then
         UnregisterStateDriver(button, "visibility")
         button.driven = false
@@ -132,7 +151,8 @@ end
 
 -- Outside combat only. In combat the driver has them hidden, and the
 -- PLAYER_REGEN_ENABLED refresh brings them back to this call.
-function Buttons.Sync(wanted, kitItem, stacks, db)
+-- rest: the bag's Well-Rested read, with expiry nil when it is gone; nil when unread.
+function Buttons.Sync(wanted, kitItem, db, rest)
     if not bag or InCombatLockdown() then return end
     local button = (wanted == "bag" and bag) or (wanted == "kit" and kit) or nil
     if bag ~= button then Drop(bag) end
@@ -148,7 +168,9 @@ function Buttons.Sync(wanted, kitItem, stacks, db)
     end
     Arm(button, wanted == "kit" and kitItem or Rules.SLEEPING_BAG)
     Place(button, x, y, size)
-    Style(button, wanted, stacks, db)
+    local expiry = rest and rest.expiry
+    Style(button, wanted, rest and rest.stacks, db, size, expiry and expiry - GetTime())
+    if button == bag then SetRestTime(button, rest) end
     if not button.driven then
         -- No show clause: outside combat it parses to nil and does nothing, so
         -- the module keeps the choice of when to show the button.
@@ -164,6 +186,13 @@ end
 function Buttons.UpdateCooldown()
     local button = active
     if not button or InCombatLockdown() then return end
+    -- The bag stays in full color through its cooldown, with no sweep.
+    if button == bag then
+        button.icon:SetDesaturated(false)
+        button.cooldownEnds = nil
+        button.cooldown:Hide()
+        return
+    end
     local start, duration = ReadCooldown(button.armedItem)
     button.icon:SetDesaturated(start ~= nil)
     if not start then
@@ -218,7 +247,9 @@ function Buttons.ShowSample(which, db)
     end
     SetIcon(sample, which == "kit" and Rules.KITS[1] or Rules.SLEEPING_BAG)
     Place(sample, x, y, size)
-    Style(sample, which, which == "bag" and 1 or 0, db)
+    local left = which == "bag" and SAMPLE_REST_LEFT or nil
+    Style(sample, which, which == "bag" and 1 or 0, db, size, left)
+    sample.time:SetText(left and Views.ShortTime(left) or "")
     sample:Show()
 end
 

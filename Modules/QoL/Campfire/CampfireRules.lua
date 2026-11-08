@@ -29,6 +29,11 @@ Rules.REFILL_PROVEN = false
 local COLOR_GOOD_ABOVE, COLOR_WARN_ABOVE = 1800, 300
 local EXPIRY_SLACK = 1
 
+-- Away from a fire, the bag shows once Well-Rested has this little left, or is gone.
+Rules.REST_LOW_AT = 300
+-- Where the bag's Well-Rested time changes color, and where it runs out.
+Rules.REST_STEPS = { COLOR_GOOD_ABOVE, COLOR_WARN_ABOVE, 0 }
+
 -- points: how many numbers the bonus carries, default 1; 0 shows the label with
 -- no amount. numbers: how many the amount text takes, default points. period:
 -- the fixed second number of a per-period bonus.
@@ -383,16 +388,25 @@ function Rules.BestKit(kits, countOf, usableOf)
     return nil
 end
 
--- What the moment and settings allow, before any inventory read.
-function Rules.ButtonCandidate(moment, nearOrSeated, combat, settings)
-    if combat then return nil end
-    if nearOrSeated then return settings.BagButton and "bag" or nil end
-    if moment == "NoCamp" and settings.KitButton then return "kit" end
-    return nil
+-- left: Well-Rested's seconds left, nil when it is gone.
+function Rules.RestLow(left)
+    return left == nil or left <= Rules.REST_LOW_AT
 end
 
-function Rules.ButtonWanted(moment, nearOrSeated, combat, settings, carried)
-    local candidate = Rules.ButtonCandidate(moment, nearOrSeated, combat, settings)
-    if candidate and carried[candidate] then return candidate end
+-- What the moment and settings allow, before any inventory read, best first. The
+-- kit takes the shared spot over a low rest; the bag shows there if no kit is carried.
+function Rules.ButtonCandidates(moment, nearOrSeated, combat, settings, restLow)
+    if combat then return nil end
+    if nearOrSeated then return settings.BagButton and "bag" or nil end
+    local kit = moment == "NoCamp" and settings.KitButton and "kit" or nil
+    local bag = restLow and settings.BagButton and "bag" or nil
+    if kit then return kit, bag end
+    return bag
+end
+
+function Rules.ButtonWanted(moment, nearOrSeated, combat, settings, carried, restLow)
+    local first, second = Rules.ButtonCandidates(moment, nearOrSeated, combat, settings, restLow)
+    if first and carried[first] then return first end
+    if second and carried[second] then return second end
     return nil
 end

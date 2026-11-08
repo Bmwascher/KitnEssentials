@@ -369,32 +369,43 @@ describe("campfire rules", function()
 
         local on = { BagButton = true, KitButton = true }
         local both = { bag = true, kit = 3 }
-        -- case, moment, near or seated, combat, settings, carried, button
+        -- case, moment, near or seated, combat, settings, carried, rest low, button
         local cases = {
-            { "bag at a fire", "Passing", true, false, on, both, "bag" },
-            { "bag on the road", "Road", true, false, on, both, "bag" },
-            { "bag seated", "Sitting", true, false, on, both, "bag" },
-            { "no bag away from a fire", "Road", false, false, on, both, nil },
-            { "kit in no camp", "NoCamp", false, false, on, both, "kit" },
-            { "kit not at a fire", "FireHere", true, false, { KitButton = true }, both, nil },
-            { "refused in combat", "Passing", true, true, on, both, nil },
-            { "kit refused in combat", "NoCamp", false, true, on, both, nil },
-            { "bag not carried", "Passing", true, false, on, { kit = 3 }, nil },
-            { "kit not carried", "NoCamp", false, false, on, { bag = true }, nil },
-            { "bag box off", "Passing", true, false, { KitButton = true }, both, nil },
-            { "kit box off", "NoCamp", false, false, { BagButton = true }, both, nil },
+            { "bag at a fire", "Passing", true, false, on, both, false, "bag" },
+            { "bag on the road", "Road", true, false, on, both, false, "bag" },
+            { "bag seated", "Sitting", true, false, on, both, false, "bag" },
+            { "no bag away from a fire", "Road", false, false, on, both, false, nil },
+            { "bag away from a fire, rest low", "Road", false, false, on, both, true, "bag" },
+            { "kit in no camp", "NoCamp", false, false, on, both, false, "kit" },
+            { "kit wins over a low rest", "NoCamp", false, false, on, both, true, "kit" },
+            { "bag when no kit is carried", "NoCamp", false, false, on, { bag = true }, true, "bag" },
+            { "kit not at a fire", "FireHere", true, false, { KitButton = true }, both, false, nil },
+            { "refused in combat", "Passing", true, true, on, both, false, nil },
+            { "kit refused in combat", "NoCamp", false, true, on, both, false, nil },
+            { "low rest refused in combat", "Road", false, true, on, both, true, nil },
+            { "bag not carried", "Passing", true, false, on, { kit = 3 }, false, nil },
+            { "kit not carried", "NoCamp", false, false, on, { bag = true }, false, nil },
+            { "bag box off", "Passing", true, false, { KitButton = true }, both, false, nil },
+            { "low rest, bag box off", "Road", false, false, { KitButton = true }, both, true, nil },
+            { "kit box off", "NoCamp", false, false, { BagButton = true }, both, false, nil },
         }
         for _, case in ipairs(cases) do
-            assert.equals(case[7], Rules.ButtonWanted(case[2], case[3], case[4], case[5], case[6]), case[1])
+            assert.equals(case[8], Rules.ButtonWanted(case[2], case[3], case[4], case[5], case[6], case[7]), case[1])
         end
 
         -- No candidate means no inventory read at all.
-        assert.equals("bag", Rules.ButtonCandidate("Road", true, false, on))
-        assert.equals("kit", Rules.ButtonCandidate("NoCamp", false, false, on))
-        assert.is_nil(Rules.ButtonCandidate("Road", false, false, on))
-        assert.is_nil(Rules.ButtonCandidate("Passing", true, false, { KitButton = true }))
-        assert.is_nil(Rules.ButtonCandidate("NoCamp", false, false, { BagButton = true }))
-        assert.is_nil(Rules.ButtonCandidate("NoCamp", false, true, on))
+        local function candidates(...) return { Rules.ButtonCandidates(...) } end
+        assert.same({ "bag" }, candidates("Road", true, false, on, true))
+        assert.same({ "kit", "bag" }, candidates("NoCamp", false, false, on, true))
+        assert.same({ "bag" }, candidates("Road", false, false, on, true))
+        assert.same({}, candidates("Road", false, false, on, false))
+        assert.same({}, candidates("Passing", true, false, { KitButton = true }, true))
+        assert.same({}, candidates("NoCamp", false, false, { BagButton = true }, false))
+        assert.same({}, candidates("NoCamp", false, true, on, true))
+
+        assert.is_true(Rules.RestLow(nil))
+        assert.is_true(Rules.RestLow(Rules.REST_LOW_AT))
+        assert.is_false(Rules.RestLow(Rules.REST_LOW_AT + 1))
     end)
 
     it("fills a checklist dot by presence and stacks", function()
