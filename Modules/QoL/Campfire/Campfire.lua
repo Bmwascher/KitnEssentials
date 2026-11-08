@@ -453,7 +453,7 @@ function CF:FillRenderLook(r, s, look)
     local lines = Rules.BuildLines(s.newRows, s.keptRows, db.DimCovered, s.onYou, seated and "kept" or "plain")
     r.lines = lines
     r.dots = s.dots
-    r.showList = (look.list and not s.inCombat and (#lines > 0 or s.dots ~= nil)) and true or false
+    r.showList = (look.list and (not s.inCombat or db.ListInCombat) and (#lines > 0 or s.dots ~= nil)) and true or false
 
     r.simpleLines = moment == "FireHere" and EMPTY or lines
     r.simpleHead = nil
@@ -582,7 +582,7 @@ function CF:ApplyHeld()
     self.lastMoment = "Held"
     self.alertTextLive = false
     self:ArmThresholds()
-    Views.EnterHeld(self.inCombat)
+    Views.EnterHeld(self.inCombat, self.db.ListInCombat)
     local shown = self.shownMoment
     if shown == "FireHere" or shown == "NoCamp" then
         Views.HideShape()

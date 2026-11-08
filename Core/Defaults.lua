@@ -781,6 +781,7 @@ local Defaults = {
             TimerInRestAreas = true,
             TimerWhileMounted = true,
             TimerInCombat = true,
+            ListInCombat = false,
 
             ShowAlways = false,
             ShowUnderMinutes = 5,

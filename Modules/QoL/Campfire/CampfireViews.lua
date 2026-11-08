@@ -901,10 +901,10 @@ function Views.SetColorKey(key)
     Views.simple.time:SetTextColor(SimpleTimeColor(key))
 end
 
-function Views.EnterHeld(inCombat)
+function Views.EnterHeld(inCombat, keepList)
     AlertOff()
     if inCombat then
-        Views.round.list:Hide()
+        if not keepList then Views.round.list:Hide() end
         Views.simple.panel:Hide()
     end
 end

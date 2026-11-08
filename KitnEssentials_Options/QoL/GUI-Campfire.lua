@@ -145,6 +145,10 @@ GUIFrame:RegisterContent("Campfire", function(scrollChild, yOffset)
         GridPick("In Rest Areas", "TimerInRestAreas"),
         GridPick("While Mounted", "TimerWhileMounted"),
         GridPick("In Combat", "TimerInCombat"),
+    })
+    showInCard:AddLabel("Bonus list shows")
+    showInCard:AddCheckboxGrid({
+        GridPick("In Combat", "ListInCombat"),
     }, { isLast = true })
     yOffset = showInCard:GetNextOffset()
 
