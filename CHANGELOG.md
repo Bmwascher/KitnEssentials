@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.20
+
+### WoW Forever only
+
+- Dark Theme now skins the Progress Legacy window's Challenges and Reward
+  Track pages: flat dark page art, category rows, challenge cards and step
+  rows, a KitnEssentials checkbox for tracking, and reward cards with a
+  bordered level box
+
+---
+
 ## v4.16.19
 
 ### WoW Forever only
