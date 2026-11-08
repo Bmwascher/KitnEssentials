@@ -121,6 +121,64 @@ local function SkinSpellBook(frame, book)
     S.data(book).skinned = true
 end
 
+local ART_DIM = 0.5
+local DIMMED_ART = {
+    "ClassBackground", "OverlayBackgroundRight", "OverlayBackgroundMid",
+    "Clouds1", "Clouds2", "AirParticlesClose", "AirParticlesFar",
+}
+local HIDDEN_ART = {
+    "Background", "BackgroundBorder", "DividerHorizontalLeft",
+    "DividerHorizontalRight", "DividerVerticalLeft", "DividerVerticalRight",
+}
+local HEADER_ART = { "MainRing", "TextBackground", "Divider" }
+
+-- Dimmed by vertex color: several of these run looping alpha animations
+-- that own their alpha.
+local function DimTalentArt(talents)
+    for _, key in ipairs(DIMMED_ART) do
+        local region = talents[key]
+        if region then region:SetVertexColor(ART_DIM, ART_DIM, ART_DIM) end
+    end
+end
+
+-- Hidden by alpha: these regions anchor the tabs, headers, search box and
+-- Apply button.
+local function SkinTalentArt(talents)
+    S.Vanish(talents, HIDDEN_ART)
+    DimTalentArt(talents)
+    local d = S.data(talents)
+    if d.talentArt or not talents.UpdateSpecBackground then return end
+    d.talentArt = true
+    -- A spec change re-sets the painting's atlas.
+    hooksecurefunc(talents, "UpdateSpecBackground", DimTalentArt)
+end
+
+local function SkinTreeHeader(header)
+    local d = S.data(header)
+    if d.talentHeader then return end
+    d.talentHeader = true
+    local icon = header.Icon
+    if icon then
+        -- The round mask is unnamed, so every mask goes.
+        if icon.GetNumMaskTextures and icon.RemoveMaskTexture then
+            for i = icon:GetNumMaskTextures(), 1, -1 do
+                local mask = icon:GetMaskTexture(i)
+                if mask then icon:RemoveMaskTexture(mask) end
+            end
+        end
+        S.Icon(icon, true)
+    end
+    S.Vanish(header, HEADER_ART)
+    S.SetFont(header.Name, 16, "")
+    S.SetFont(header.Text, 14, "OUTLINE")
+end
+
+local function SkinTreeHeaders(talents)
+    local pool = talents.treeHeaderPool
+    if not (pool and pool.EnumerateActive) then return end
+    for header in pool:EnumerateActive() do SkinTreeHeader(header) end
+end
+
 local function Skin()
     local frame = _G.PlayerSpellsFrame
     if not frame then return S.Skip("PlayerSpellsFrame missing") end
@@ -186,6 +244,16 @@ local function Skin()
         end
         local hero = talents.HeroTalentsContainer
         if hero and hero.HeroSpecLabel then S.SetFont(hero.HeroSpecLabel, 16, "") end
+        if KE.IS_FOREVER then
+            S.TalentTree(talents)
+            SkinTalentArt(talents)
+            SkinTreeHeaders(talents)
+            local d = S.data(talents)
+            if talents.RefreshTreeHeaders and not d.headerHook then
+                d.headerHook = true
+                hooksecurefunc(talents, "RefreshTreeHeaders", SkinTreeHeaders)
+            end
+        end
     end
 
     SkinTalentDialog(_G.ClassTalentLoadoutImportDialog)
