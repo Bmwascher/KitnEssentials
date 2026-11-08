@@ -38,6 +38,7 @@ GUIFrame:RegisterContent("Campfire", function(scrollChild, yOffset)
     manager:SetCondition("alertOn", function() return db.AlertEnabled end)
     manager:SetCondition("round", function() return db.Shape == "ROUND" end)
     manager:SetCondition("simple", function() return db.Shape == "SIMPLE" end)
+    manager:SetCondition("listCombat", function() return db.Shape == "ROUND" and db.TimerInCombat end)
     manager:SetCondition("lapseOn", function() return db.LapseSoundEnabled end)
     manager:SetCondition("landOn", function() return db.LandSoundEnabled end)
 
@@ -75,7 +76,7 @@ GUIFrame:RegisterContent("Campfire", function(scrollChild, yOffset)
         return slider
     end
 
-    local function GridPick(label, key)
+    local function GridPick(label, key, gates)
         return {
             label = label,
             config = {
@@ -83,6 +84,7 @@ GUIFrame:RegisterContent("Campfire", function(scrollChild, yOffset)
                 callback = function(checked)
                     db[key] = checked
                     ApplySettings()
+                    if gates then UpdateAllWidgetStates() end
                 end,
             },
         }
@@ -144,12 +146,12 @@ GUIFrame:RegisterContent("Campfire", function(scrollChild, yOffset)
     showInCard:AddCheckboxGrid({
         GridPick("In Rest Areas", "TimerInRestAreas"),
         GridPick("While Mounted", "TimerWhileMounted"),
-        GridPick("In Combat", "TimerInCombat"),
+        GridPick("In Combat", "TimerInCombat", true),
     })
     showInCard:AddLabel("Bonus list shows")
     manager:RegisterGroup(showInCard:AddCheckboxGrid({
         GridPick("In Combat", "ListInCombat"),
-    }, { isLast = true }), "round")
+    }, { isLast = true }), "listCombat")
     yOffset = showInCard:GetNextOffset()
 
     ----------------------------------------------------------------
