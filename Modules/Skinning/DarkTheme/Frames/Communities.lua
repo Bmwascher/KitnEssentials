@@ -227,13 +227,22 @@ local function SquareAvatar(owner, icon, mask, ring)
     -- Re-atlased or re-shown on every open; the alpha survives both.
     if ring then ring:SetAlpha(0) end
     CropAvatar(icon)
-    AvatarBorder(icon, owner)
+    local border = AvatarBorder(icon, owner)
+    if not border then return end
+    -- The border is a frame on the owner, so it would outlive a hidden icon:
+    -- a guild's finder card hides the icon and shows its banner there.
+    local function follow() border:SetShown(icon:IsShown()) end
+    follow()
+    hooksecurefunc(icon, "Show", follow)
+    hooksecurefunc(icon, "Hide", follow)
+    hooksecurefunc(icon, "SetShown", follow)
 end
 
--- For art with no parentKey: the popup border pieces and card backgrounds.
+-- Whole draw layers, for art that is partly keyless: popup border pieces and
+-- card backgrounds.
 local function HideLayers(frame, a, b)
     for _, r in ipairs({ frame:GetRegions() }) do
-        if r.IsObjectType and r:IsObjectType("Texture") then
+        if not issecretvalue(r) and r.IsObjectType and r:IsObjectType("Texture") then
             local layer = r:GetDrawLayer()
             if layer == a or layer == b then r:SetAlpha(0) end
         end
@@ -264,6 +273,19 @@ local function DarkDialog(d)
     S.Backdrop(d)
 end
 
+-- The club finder listing controls, shared by the guild recruitment dialog and
+-- Community Settings.
+local function ClubFinderOptions(d)
+    for _, key in ipairs({ "ShouldListClub", "AutoAcceptApplications", "MaxLevelOnly", "MinIlvlOnly" }) do
+        local row = d[key]
+        if row and row.Button then S.CheckBox(row.Button) end
+    end
+    if d.MinIlvlOnly and d.MinIlvlOnly.EditBox then S.EditBox(d.MinIlvlOnly.EditBox) end
+    for _, key in ipairs({ "ClubFocusDropdown", "LookingForDropdown", "LanguageDropdown" }) do
+        if d[key] then S.DropDown(d[key]) end
+    end
+end
+
 local function SkinSettingsDialog()
     local d = _G.CommunitiesSettingsDialog
     if not d or S.data(d).skinned then return end
@@ -279,14 +301,7 @@ local function SkinSettingsDialog()
     if d.CrossFactionToggle and d.CrossFactionToggle.CheckButton then
         S.CheckBox(d.CrossFactionToggle.CheckButton)
     end
-    for _, key in ipairs({ "ShouldListClub", "AutoAcceptApplications", "MaxLevelOnly", "MinIlvlOnly" }) do
-        local row = d[key]
-        if row and row.Button then S.CheckBox(row.Button) end
-    end
-    if d.MinIlvlOnly and d.MinIlvlOnly.EditBox then S.EditBox(d.MinIlvlOnly.EditBox) end
-    for _, key in ipairs({ "ClubFocusDropdown", "LookingForDropdown", "LanguageDropdown" }) do
-        if d[key] then S.DropDown(d[key]) end
-    end
+    ClubFinderOptions(d)
     Buttons(d, { "ChangeAvatarButton", "Accept", "Delete", "Cancel" })
 end
 
@@ -330,10 +345,6 @@ local function SkinTicketDialog()
         local col = im.ColumnDisplay
         if col then
             S.StripTextures(col)
-            for _, k in ipairs({ "InsetBorderLeft", "InsetBorderBottomLeft", "InsetBorderTopLeft",
-                "InsetBorderTopRight", "InsetBorderTop" }) do
-                if col[k] then col[k]:SetAlpha(0) end
-            end
             for _, header in ipairs({ col:GetChildren() }) do
                 S.StripTextures(header)
                 S.Backdrop(header)
@@ -359,7 +370,10 @@ local function StyleAvatarTile(tile)
     -- Selection shows on the border: Blizzard's selected frame is hidden.
     local border = d.keBorder
     if not border then return end
-    if tile.Selected and tile.Selected:IsShown() then
+    local selected = tile.Selected and tile.Selected:IsShown() or false
+    if d.keSelected == selected then return end
+    d.keSelected = selected
+    if selected then
         S.PaintBrand(border, "SetBackdropBorderColor", 1)
     else
         S.ForgetBrand(border)
@@ -837,10 +851,7 @@ local function Skin()
 
         if rd.BG then S.StripTextures(rd.BG) end
         S.Backdrop(rd)
-        if rd.ShouldListClub and rd.ShouldListClub.Button then S.CheckBox(rd.ShouldListClub.Button) end
-        if rd.ClubFocusDropdown then S.DropDown(rd.ClubFocusDropdown) end
-        if rd.LookingForDropdown then S.DropDown(rd.LookingForDropdown) end
-        if rd.LanguageDropdown then S.DropDown(rd.LanguageDropdown) end
+        ClubFinderOptions(rd)
         local msg = rd.RecruitmentMessageFrame
         if msg then
             S.StripTextures(msg)
@@ -848,11 +859,6 @@ local function Skin()
                 S.EditBox(msg.RecruitmentMessageInput)
                 if msg.RecruitmentMessageInput.ScrollBar then S.ScrollBar(msg.RecruitmentMessageInput.ScrollBar) end
             end
-        end
-        if rd.MaxLevelOnly and rd.MaxLevelOnly.Button then S.CheckBox(rd.MaxLevelOnly.Button) end
-        if rd.MinIlvlOnly then
-            if rd.MinIlvlOnly.Button then S.CheckBox(rd.MinIlvlOnly.Button) end
-            if rd.MinIlvlOnly.EditBox then S.EditBox(rd.MinIlvlOnly.EditBox) end
         end
         if rd.Accept then S.Button(rd.Accept) end
         if rd.Cancel then S.Button(rd.Cancel) end
