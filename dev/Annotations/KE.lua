@@ -1057,6 +1057,15 @@ function KE.Skins.RelevelPlate(owner, plate) end
 ---@return string reason
 function KE.Skins.Skip(reason) end
 
+--- A vertical line one physical pixel wide on host, created once and returned
+--- on every call. Its width follows the host's scale; color and anchors are
+--- fixed at creation.
+---@param host Frame?  nil returns nil
+---@param align "LEFT"|"CENTER"|"FROM_CENTER"  LEFT: host's left edge; CENTER: centered; FROM_CENTER: left edge on the center line
+---@param color number[]  {r,g,b,a}
+---@return Texture? line
+function KE.Skins.VerticalLine(host, align, color) end
+
 -- ─── Skinning (Modules/Skinning/DarkTheme/Frames/LFG.lua) ──────────
 --- Repaints the Group Finder search rows and role count strips with the
 --- current set. Applicant role buttons keep Blizzard's art.

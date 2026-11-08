@@ -537,8 +537,10 @@ function S.Backdrop(frame, inset, borderOnly)
 end
 
 -- An inset client's mode: true insets all four sides, VERTICAL_ONLY only top
--- and bottom, for a row hover that spans the row's full width.
+-- and bottom, for a row hover that spans the row's full width. WIDTH_ONLY
+-- leaves the anchors to the owner and sets only the width, for a 1 px line.
 local VERTICAL_ONLY = "vertical"
+local WIDTH_ONLY = "width"
 
 local function PlaceInset(region, bd, e, mode)
     local x = (mode == VERTICAL_ONLY) and 0 or e
@@ -582,7 +584,11 @@ local function RefitEdgeClients(bd)
     if not clients then return end
     local e = EdgeFor(bd)
     for region, mode in pairs(clients) do
-        PlaceInset(region, bd, e, mode)
+        if mode == WIDTH_ONLY then
+            region:SetWidth(e)
+        else
+            PlaceInset(region, bd, e, mode)
+        end
     end
 end
 
@@ -648,6 +654,34 @@ function S.TrackEdgeClients(frame)
         ownEdges[frame] = false
         EnsureShared()
     end
+end
+
+-- FROM_CENTER puts the left edge on the center line: a 1 px line centered
+-- there would straddle two pixels.
+local LINE_ANCHORS = {
+    LEFT = { "TOPLEFT", "TOPLEFT", "BOTTOMLEFT", "BOTTOMLEFT" },
+    CENTER = { "TOP", "TOP", "BOTTOM", "BOTTOM" },
+    FROM_CENTER = { "TOPLEFT", "TOP", "BOTTOMLEFT", "BOTTOM" },
+}
+
+-- A vertical line one physical pixel wide on host, created once. Its width
+-- follows the host's scale through the edge refit; its color and anchors do
+-- not change after creation.
+function S.VerticalLine(host, align, color)
+    if not host then return end
+    local d = S.data(host)
+    if d.keVerticalLine then return d.keVerticalLine end
+    local a = LINE_ANCHORS[align] or LINE_ANCHORS.LEFT
+    local line = host:CreateTexture(nil, "OVERLAY")
+    line:SetColorTexture(color[1], color[2], color[3], color[4])
+    line:SetPoint(a[1], host, a[2])
+    line:SetPoint(a[3], host, a[4])
+    line:SetWidth(EdgeFor(host))
+    d.edgeClients = d.edgeClients or setmetatable({}, { __mode = "k" })
+    d.edgeClients[line] = WIDTH_ONLY
+    S.TrackEdgeClients(host)
+    d.keVerticalLine = line
+    return line
 end
 
 -- A 1 px KE edge on the frame itself, for frames whose owner colors their own

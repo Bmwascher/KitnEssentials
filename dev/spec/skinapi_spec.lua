@@ -1682,6 +1682,28 @@ describe("SkinAPI edge refresh", function()
             end
         end
     end)
+
+    -- A line keeps the anchors its owner gave it; only its width follows the
+    -- host's scale.
+    it("refits a width-only line's width to the host's edge and leaves its anchors alone", function()
+        local S = L.loadSkinAPI().Skins
+        local line = { points = {}, cleared = 0 }
+        function line:SetColorTexture(r, g, b, a) self.color = { r, g, b, a } end
+        function line:SetPoint(point, rel, relPoint) self.points[point] = { rel, relPoint } end
+        function line:ClearAllPoints() self.cleared = self.cleared + 1 end
+        function line:SetWidth(w) self.width = w end
+        local host = { scale = 1 }
+        function host:GetEffectiveScale() return self.scale end
+        host.CreateTexture = function() return line end
+        assert.equals(line, S.VerticalLine(host, "FROM_CENTER", { 1, 1, 1, 0.15 }))
+        assert.near(UNIT, line.width, 1e-9)
+        host.scale = 1.1
+        S._RefreshOwnEdge(host)
+        assert.near(UNIT / 1.1, line.width, 1e-9)
+        assert.equals(0, line.cleared)
+        assert.same({ host, "TOP" }, line.points.TOPLEFT)
+        assert.same({ host, "BOTTOM" }, line.points.BOTTOMLEFT)
+    end)
 end)
 
 -- The walk's membership and its per-backdrop raise isolation, through the
