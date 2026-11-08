@@ -214,7 +214,23 @@ local LAST_EARNED = { 0.08, 0.68, 0.17, 1 }
 local LAST_EARNED_FILL_A = 0.2
 local UNEARNED_PLATE_A = 0.5
 
+-- The diamond's center can fall on a half pixel, where the box edges and the
+-- number's left edge round in opposite directions. Read after layout settles.
+local function SnapLevelBadge(card)
+    local edge, anchor = S.data(card).keLegacyBadge, card.LevelSquare
+    local x, y = anchor:GetCenter()
+    local scale = card:GetEffectiveScale()
+    if not x or not y or not scale or scale <= 0 then return end
+    local px = KE:GetPixelSize() * _G.UIParent:GetEffectiveScale() / scale
+    local dx = math.floor(x / px + 0.5) * px - x
+    local dy = math.floor(y / px + 0.5) * px - y
+    edge:ClearAllPoints()
+    edge:SetPoint("CENTER", anchor, "CENTER", dx, dy)
+end
+
 local function PaintRewardCard(card, _, displayLevel)
+    local snap = S.data(card).keLegacySnap
+    if snap then C_Timer.After(0, snap) end
     local plate = S.data(card).keLegacyPlate
     if not plate or not displayLevel or not card.GetLevel then return end
     local level = card:GetLevel()
@@ -242,6 +258,13 @@ local function AddLevelBadge(card)
     fill:SetColorTexture(c[1], c[2], c[3], c[4])
     fill:SetPoint("TOPLEFT", edge, "TOPLEFT", px, -px)
     fill:SetPoint("BOTTOMRIGHT", edge, "BOTTOMRIGHT", -px, px)
+    if card.Level then
+        card.Level:ClearAllPoints()
+        card.Level:SetPoint("CENTER", edge, "CENTER")
+    end
+    local d = S.data(card)
+    d.keLegacyBadge = edge
+    d.keLegacySnap = function() SnapLevelBadge(card) end
 end
 
 local function StyleRewardCard(card)
