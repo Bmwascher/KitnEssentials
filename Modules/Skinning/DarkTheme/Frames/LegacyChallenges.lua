@@ -214,18 +214,22 @@ local LAST_EARNED = { 0.08, 0.68, 0.17, 1 }
 local LAST_EARNED_FILL_A = 0.2
 local UNEARNED_PLATE_A = 0.5
 
--- The diamond's center can fall on a half pixel, where the box edges and the
--- number's left edge round in opposite directions. Read after layout settles.
+function S._LegacyPixelOffset(value, px)
+    return math.floor(value / px + 0.5) * px - value
+end
+
+-- The diamond's center can fall on a half pixel on either axis, where the box
+-- edges and the number's edges round in opposite directions. Read after
+-- layout settles.
 local function SnapLevelBadge(card)
     local edge, anchor = S.data(card).keLegacyBadge, card.LevelSquare
     local x, y = anchor:GetCenter()
     local scale = card:GetEffectiveScale()
     if not x or not y or not scale or scale <= 0 then return end
     local px = KE:GetPixelSize() * _G.UIParent:GetEffectiveScale() / scale
-    local dx = math.floor(x / px + 0.5) * px - x
-    local dy = math.floor(y / px + 0.5) * px - y
     edge:ClearAllPoints()
-    edge:SetPoint("CENTER", anchor, "CENTER", dx, dy)
+    edge:SetPoint("CENTER", anchor, "CENTER",
+        S._LegacyPixelOffset(x, px), S._LegacyPixelOffset(y, px))
 end
 
 local function PaintRewardCard(card, _, displayLevel)
