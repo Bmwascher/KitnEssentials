@@ -272,10 +272,44 @@ local function UpdateStatsPane()
     end
 end
 
+local IS_FOREVER = KE.IS_FOREVER == true
+local RESIST_ICON_SIZE = 17
+-- Clears the painted frame and its glow on every side.
+local RESIST_ICON_CROP = 0.25
+
+-- The five icons share one atlas sheet, so the crop is in atlas space. Each
+-- row Init sets the atlas at its full size and then resets the coords; this
+-- runs after that last call, so the crop and the size go back on.
+local function ApplyResistIcon(icon)
+    local d = S.data(icon)
+    if d.keResistApplying then return end
+    local atlas = icon:GetAtlas()
+    if not atlas or atlas == "" then return end
+    d.keResistApplying = true
+    S.CropAtlasEdges(icon, RESIST_ICON_CROP, RESIST_ICON_CROP)
+    icon:SetSize(RESIST_ICON_SIZE, RESIST_ICON_SIZE)
+    S.PixelSnap(icon)
+    d.keResistApplying = nil
+end
+
+-- Only the resistance rows' template carries an Icon.
+local function SkinResistIcon(row)
+    local icon = row.Icon
+    if not IS_FOREVER or not icon or S.data(icon).keResistIcon then return end
+    S.data(icon).keResistIcon = true
+    hooksecurefunc(icon, "SetTexCoord", ApplyResistIcon)
+    ApplyResistIcon(icon)
+    local border = S.Backdrop(icon, -1, true)
+    if border then border:SetFrameLevel(row:GetFrameLevel() + 1) end
+end
+
 -- A client that lists the stats in a ScrollBox: header rows carry a Title,
 -- stat rows a Label and a Value. The pooled pane above stays, hidden there.
 local function StyleStatsScrollRow(row)
-    if not row.Title then return StyleStatLine(row) end
+    if not row.Title then
+        SkinResistIcon(row)
+        return StyleStatLine(row)
+    end
     local d = S.data(row)
     if d.keStatHeader then return end
     d.keStatHeader = true
