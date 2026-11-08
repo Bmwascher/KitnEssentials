@@ -147,6 +147,7 @@ function S.LegacyTreePage()
             S.TalentIconButton(traits.ResetButton)
             S.TalentIconButton(traits.UndoButton)
         end
+        if S.TalentTree then S.TalentTree(traits) end
     end
     local summary = page.LegacyTreePointSummary
     PointBar(summary)
