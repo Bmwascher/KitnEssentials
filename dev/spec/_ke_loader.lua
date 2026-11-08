@@ -3623,6 +3623,13 @@ function L.loadRCLootCouncilSkin(overrides)
         fitHeaders and findUpvalue(fitHeaders, "headerSize")
 end
 
+-- Modules/Skinning/DarkTheme/Frames/TalentTree.lua. At load the file only
+-- defines functions on KE.Skins, so a bare KE table is enough. Returns KE.
+function L.loadTalentTree(overrides)
+    installMock(overrides, {})
+    return helpers.loadModule("Modules/Skinning/DarkTheme/Frames/TalentTree.lua", { Skins = {} })
+end
+
 -- Core/PlateSlots.lua. CreateFrame comes from _wow_mock, so the event frame the
 -- builder makes on Start is the last entry of the returned frames list, and a
 -- spec fires plate events at it. C_Timer is inert unless the spec passes its
