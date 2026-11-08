@@ -231,7 +231,7 @@ local function SnapLevelBadge(card)
     local x, y = anchor:GetCenter()
     local scale = card:GetEffectiveScale()
     if not x or not y or not scale or scale <= 0 then return end
-    local px = KE:GetPixelSize() * _G.UIParent:GetEffectiveScale() / scale
+    local px = S.PixelsIn(card, 1)
     edge:ClearAllPoints()
     edge:SetPoint("CENTER", anchor, "CENTER",
         S._LegacyPixelOffset(x, px), S._LegacyPixelOffset(y, px))
@@ -263,16 +263,17 @@ end
 local function AddLevelBadge(card)
     local anchor = card.LevelSquare
     if not anchor then return end
-    local px = KE:GetPixelSize()
-    local b, c = S.borderColor, S.palette.control
+    local c = S.palette.control
     local edge = card:CreateTexture(nil, "BACKGROUND", nil, 6)
-    edge:SetColorTexture(b[1], b[2], b[3], b[4])
+    S.PaintBorder(edge)
     edge:SetSize(LEVEL_BADGE, LEVEL_BADGE)
     edge:SetPoint("CENTER", anchor, "CENTER")
     local fill = card:CreateTexture(nil, "BACKGROUND", nil, 7)
     fill:SetColorTexture(c[1], c[2], c[3], c[4])
-    fill:SetPoint("TOPLEFT", edge, "TOPLEFT", px, -px)
-    fill:SetPoint("BOTTOMRIGHT", edge, "BOTTOMRIGHT", -px, px)
+    -- Measured on the edge texture, so the inset is one pixel at the window's
+    -- own scale and refits when that scale changes.
+    S.InsetToEdge(fill, edge)
+    S.TrackEdgeClients(edge)
     if card.Level then
         card.Level:ClearAllPoints()
         card.Level:SetPoint("CENTER", edge, "CENTER")
@@ -310,6 +311,19 @@ local function OnTrackInit(track)
     StyleRewardCards(track)
 end
 
+-- A font or scale change moves the level number without refreshing the
+-- cards, so each card runs its snap again.
+local function ResnapLevels()
+    local page = _G.LegacySystemFrame and _G.LegacySystemFrame.RewardTrackPage
+    local track = page and page.LegacyRewardProgressFrame
+    local cards = track and track.GetElements and track:GetElements()
+    if not cards then return end
+    for _, card in ipairs(cards) do
+        local snap = S.data(card).keLegacySnap
+        if snap then C_Timer.After(0, snap) end
+    end
+end
+
 function S.LegacyRewardTrackPage()
     local page = _G.LegacySystemFrame and _G.LegacySystemFrame.RewardTrackPage
     if not page or S.data(page).skinned then return end
@@ -322,6 +336,9 @@ function S.LegacyRewardTrackPage()
         if track.Init then hooksecurefunc(track, "Init", OnTrackInit) end
         StyleRewardCards(track, page.displayLevel)
     end
+    if S.ApplyGlobalFonts then hooksecurefunc(S, "ApplyGlobalFonts", ResnapLevels) end
+    if S.RestoreGlobalFonts then hooksecurefunc(S, "RestoreGlobalFonts", ResnapLevels) end
+    hooksecurefunc(_G.LegacySystemFrame, "SetScale", ResnapLevels)
     S.data(page).skinned = true
 end
 
