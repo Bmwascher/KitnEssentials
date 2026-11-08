@@ -162,12 +162,7 @@ local function SkinTreeHeader(header)
     local icon = header.Icon
     if icon then
         -- The round mask is unnamed, so every mask goes.
-        if icon.GetNumMaskTextures and icon.RemoveMaskTexture then
-            for i = icon:GetNumMaskTextures(), 1, -1 do
-                local mask = icon:GetMaskTexture(i)
-                if mask then icon:RemoveMaskTexture(mask) end
-            end
-        end
+        S.ClearMasks(icon)
         S.Icon(icon, true)
     end
     S.Vanish(header, HEADER_ART)

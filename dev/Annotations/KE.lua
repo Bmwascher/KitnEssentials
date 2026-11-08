@@ -1055,6 +1055,10 @@ function KE.Skins.SetSkinFont(face, size, outline) end
 ---@return Frame? plate # nil when there is no owner or no plate
 function KE.Skins.RelevelPlate(owner, plate) end
 
+--- Removes every mask texture from tex.
+---@param tex Texture?  nil, or a region without mask methods, is ignored
+function KE.Skins.ClearMasks(tex) end
+
 --- A skin body returns this when its window or addon is missing, so verify
 --- reads "skipped (<reason>)" instead of "ok".
 ---@param reason string?  defaults to "no reason given"

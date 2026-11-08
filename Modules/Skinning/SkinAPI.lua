@@ -2380,6 +2380,15 @@ function S.SlotIcon(icon, border, withBackdrop)
     if border then S.IconBorder(border, S.GetBackdrop(icon)) end
 end
 
+-- Removes every mask on tex, for masks that have no key to remove them by.
+function S.ClearMasks(tex)
+    if not tex or not tex.GetNumMaskTextures or not tex.RemoveMaskTexture then return end
+    for i = tex:GetNumMaskTextures(), 1, -1 do
+        local m = tex:GetMaskTexture(i)
+        if m then tex:RemoveMaskTexture(m) end
+    end
+end
+
 local ICON_CROP = 0.08
 
 function S.Icon(icon, withBackdrop)
