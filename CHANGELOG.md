@@ -1,5 +1,23 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.25
+
+### Both clients
+
+- Dark Theme now skins the Guild & Communities dialogs: Community
+  Settings, Invite with its Link Options view, Choose an icon, Create
+  Channel, Notification Settings and the invitation cards take the dark
+  look, with themed input boxes, checkboxes, dropdowns and buttons
+- Community icons in those dialogs show as squares with a thin border,
+  without the gold or blue ring
+
+### WoW Forever only
+
+- The guild's Preferred Play Settings dropdowns and Apply buttons take the
+  dark look
+
+---
+
 ## v4.16.24
 
 ### WoW Forever only
