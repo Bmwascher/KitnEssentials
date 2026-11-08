@@ -143,6 +143,10 @@ function S.LegacyTreePage()
         S.EditBox(traits.SearchBox)
         SkinSelectedIcon(traits.SelectedTreeIcon)
         SkinBadge(traits.SpentPointsFrame)
+        if S.TalentIconButton then
+            S.TalentIconButton(traits.ResetButton)
+            S.TalentIconButton(traits.UndoButton)
+        end
     end
     local summary = page.LegacyTreePointSummary
     PointBar(summary)
