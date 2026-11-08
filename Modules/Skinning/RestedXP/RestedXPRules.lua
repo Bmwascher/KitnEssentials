@@ -566,3 +566,20 @@ function Rules.GripSteps(listed, height, pressedHeight, count, lineHeight)
     if moved > 0 then return math_max(listed, count) end
     return math_min(listed, count)
 end
+
+-- RestedXP's running bars, each under the one key the owner map names for it, so a
+-- frame under two keys comes once. Most time left first, as RestedXP sorts them, and
+-- equal times in key order, so two bars never swap lines between redraws.
+function Rules.TimerOrder(bars, owned, now)
+    local list = {}
+    for key, bar in pairs(bars) do
+        if owned[bar] == key and bar:IsShown() and type(bar.exp) == "number" and bar.exp > now then
+            list[#list + 1] = bar
+        end
+    end
+    table.sort(list, function(a, b)
+        if a.exp ~= b.exp then return a.exp > b.exp end
+        return tostring(owned[a]) < tostring(owned[b])
+    end)
+    return list
+end

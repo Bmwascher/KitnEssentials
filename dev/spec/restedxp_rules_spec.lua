@@ -735,4 +735,25 @@ describe("restedxp rules", function()
             assert.is_false(Rules.WindowPending(state, false), state)
         end
     end)
+
+    it("orders the running bars the owner map names, most time left first, each frame once", function()
+        local function Bar(exp, shown)
+            return { exp = exp, IsShown = function() return shown ~= false end }
+        end
+        local long, short, hidden, ended = Bar(40), Bar(20), Bar(50, false), Bar(5)
+        local tieA, tieB, reused, stranger = Bar(30), Bar(30), Bar(25), Bar(60)
+        local bars = {
+            Long = long, Short = short, Hidden = hidden, Ended = ended,
+            TieB = tieB, TieA = tieA, Old = reused, New = reused, Stranger = stranger,
+        }
+        local owned = {
+            [long] = "Long", [short] = "Short", [hidden] = "Hidden", [ended] = "Ended",
+            [tieA] = "TieA", [tieB] = "TieB", [reused] = "New",
+        }
+        local list = Rules.TimerOrder(bars, owned, 10)
+        local want = { long, tieA, tieB, reused, short }
+        assert.equals(#want, #list)
+        for i, bar in ipairs(want) do assert.equals(bar, list[i], "bar " .. i) end
+        assert.equals(0, #Rules.TimerOrder({}, owned, 10))
+    end)
 end)
