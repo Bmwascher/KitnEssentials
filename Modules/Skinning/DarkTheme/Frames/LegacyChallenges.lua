@@ -218,6 +218,19 @@ function S._LegacyPixelOffset(value, px)
     return math.floor(value / px + 0.5) * px - value
 end
 
+-- OUTLINE widens a string's rect by 4px on the ink's right side, so a centered
+-- rect leaves the digits 2px left. Pixels to move the text right.
+local OUTLINE_INK_NUDGE = 2
+
+function S._LegacyInkNudge(flags)
+    if type(flags) ~= "string" then return 0 end
+    flags = flags:upper()
+    if flags:find("OUTLINE", 1, true) and not flags:find("THICK", 1, true) then
+        return OUTLINE_INK_NUDGE
+    end
+    return 0
+end
+
 -- The diamond's center can fall on a half pixel on either axis, where the box
 -- edges and the number's edges round in opposite directions. Read after
 -- layout settles.
@@ -230,6 +243,12 @@ local function SnapLevelBadge(card)
     edge:ClearAllPoints()
     edge:SetPoint("CENTER", anchor, "CENTER",
         S._LegacyPixelOffset(x, px), S._LegacyPixelOffset(y, px))
+    local level = card.Level
+    if level then
+        level:ClearAllPoints()
+        local _, _, flags = level:GetFont()
+        level:SetPoint("CENTER", edge, "CENTER", S._LegacyInkNudge(flags) * px, 0)
+    end
 end
 
 local function PaintRewardCard(card, _, displayLevel)
