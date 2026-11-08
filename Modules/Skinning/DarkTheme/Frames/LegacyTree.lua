@@ -144,6 +144,8 @@ function S.LegacyTreePage()
         SkinSelectedIcon(traits.SelectedTreeIcon)
         SkinBadge(traits.SpentPointsFrame)
     end
-    PointBar(page.LegacyTreePointSummary)
+    local summary = page.LegacyTreePointSummary
+    PointBar(summary)
+    if summary and S.LegacyPointShield then S.LegacyPointShield(summary.Shield) end
     S.data(page).skinned = true
 end

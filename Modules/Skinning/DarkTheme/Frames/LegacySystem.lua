@@ -6,8 +6,7 @@ local function Skin()
     local frame = _G.LegacySystemFrame
     if not frame then return S.Skip("LegacySystemFrame missing") end
     if S.data(frame).skinned then return end
-    -- True keeps each page's Background: the page art stays as Blizzard
-    -- draws it.
+    -- True leaves each page's art to that page's own skin.
     S.Frame(frame, true)
     S.FontStrings(frame.TitleContainer)
     S.SideTabsInPlace(frame.Tabs)
