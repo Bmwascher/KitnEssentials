@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.21
+
+### WoW Forever only
+
+- Dark Theme now skins the talent window: talent nodes and arrows take a
+  flat color for their state (gold maxed, green available, gray locked),
+  the page art is dimmed, tree headers and the unspent talents count sit in
+  bordered boxes, and the spec tabs, Reset, Undo and Activate buttons match
+  the theme
+
+---
+
 ## v4.16.20
 
 ### WoW Forever only
