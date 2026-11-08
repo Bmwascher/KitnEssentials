@@ -131,6 +131,8 @@ local HIDDEN_ART = {
     "DividerHorizontalRight", "DividerVerticalLeft", "DividerVerticalRight",
 }
 local HEADER_ART = { "MainRing", "TextBackground", "Divider" }
+local HEADER_BOX_W, HEADER_BOX_H = 24, 18
+local CURRENCY_ART = { "Border" }
 
 -- Dimmed by vertex color: several of these run looping alpha animations
 -- that own their alpha.
@@ -171,6 +173,27 @@ local function SkinTreeHeader(header)
     S.Vanish(header, HEADER_ART)
     S.SetFont(header.Name, 16, "")
     S.SetFont(header.Text, 14, "OUTLINE")
+    -- The icon border is a frame above the header and would cover the
+    -- spent-points number, so the number moves into a box above that border.
+    local text = header.Text
+    if text and header.TextBackground then
+        local box = CreateFrame("Frame", nil, header)
+        box:SetFrameLevel(header:GetFrameLevel() + 3)
+        box:SetSize(HEADER_BOX_W, HEADER_BOX_H)
+        box:SetPoint("CENTER", header.TextBackground, "CENTER")
+        S.Backdrop(box)
+        text:SetParent(box)
+    end
+end
+
+local function SkinUnspentBox(cur)
+    local d = S.data(cur)
+    if d.talentCurrency then return end
+    d.talentCurrency = true
+    -- Alpha only: the layout frame sizes itself around this region.
+    S.Vanish(cur, CURRENCY_ART)
+    if cur.CurrentAmountContainer then S.Backdrop(cur.CurrentAmountContainer) end
+    S.SetFont(cur.UnspentLabel, 18, "")
 end
 
 local function SkinTreeHeaders(talents)
@@ -248,6 +271,7 @@ local function Skin()
             S.TalentTree(talents)
             SkinTalentArt(talents)
             SkinTreeHeaders(talents)
+            if talents.ClassCurrencyDisplay then SkinUnspentBox(talents.ClassCurrencyDisplay) end
             local d = S.data(talents)
             if talents.RefreshTreeHeaders and not d.headerHook then
                 d.headerHook = true
