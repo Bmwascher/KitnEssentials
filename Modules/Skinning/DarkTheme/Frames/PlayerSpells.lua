@@ -253,6 +253,18 @@ local function Skin()
                 d.headerHook = true
                 hooksecurefunc(talents, "RefreshTreeHeaders", SkinTreeHeaders)
             end
+            if talents.TabSystem then
+                -- Blizzard insets this row from the inner frame; the row flush
+                -- would move it to the window's edge.
+                S.data(talents.TabSystem).keepRowAnchor = true
+                for _, tab in ipairs({ talents.TabSystem:GetChildren() }) do
+                    S.Tab(tab)
+                end
+            end
+            S.TalentIconButton(talents.ResetButton)
+            S.TalentIconButton(talents.UndoButton)
+            local spec = talents.ActiveSpec
+            if spec and spec.ActivateButton then S.Button(spec.ActivateButton) end
         end
     end
 
