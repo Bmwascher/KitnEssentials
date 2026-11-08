@@ -9,7 +9,7 @@ local function Skin()
     -- True leaves each page's art to that page's own skin.
     S.Frame(frame, true)
     S.FontStrings(frame.TitleContainer)
-    S.SideTabsInPlace(frame.Tabs)
+    S.IconSideTabs(frame.Tabs)
     -- Each page's controls wait for that page's first show: skinning a scroll
     -- box before its first layout taints it.
     S.Defer(S.LegacyRewardTrackPage, frame.RewardTrackPage)
