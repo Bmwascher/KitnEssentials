@@ -92,6 +92,12 @@ local seenText = setmetatable({}, { __mode = "k" })
 local placeholders = setmetatable({}, { __mode = "k" })
 local titleHome = setmetatable({}, { __mode = "k" })
 local targetingHooked
+-- RestedXP's countdown bars. Its functions are fields: as locals they would take this
+-- file past Lua 5.1's limit of 200 locals in one chunk.
+local Timers = {
+    -- Each bar RestedXP started, to the one key of its table it was started under.
+    owned = setmetatable({}, { __mode = "k" }),
+}
 local Draw
 
 local function DB()
@@ -974,6 +980,63 @@ local function ReleaseAll()
 end
 
 ---------------------------------------------------------------------------------
+-- RestedXP's countdown bars
+---------------------------------------------------------------------------------
+-- RestedXP files each bar under the label it gives it. A frame another addon has
+-- taken since carries that addon's label, which can be secret.
+function Timers.Labeled(bar, key)
+    if not Has(bar, "GetLabel") then return false end
+    local text = bar:GetLabel()
+    if Secret(text) then return false end
+    return (text or "") == key
+end
+
+-- RestedXP's table can hold a key whose frame is no longer its bar, and one frame
+-- under two keys, so a bar counts only under the key it was started under.
+function Timers.Started(duration, label)
+    if not (active and window) then return end
+    local frame = Dig(_G.RXP, "RXPFrame")
+    -- The start's own refusal: past it, the entry under the label is the bar it started.
+    if type(duration) ~= "number" or duration <= 0 or not (Has(frame, "IsShown") and frame:IsShown()) then return end
+    label = label or ""
+    local bar = Dig(frame, "BarContainer", "bars", label)
+    if type(bar) ~= "table" or not Timers.Labeled(bar, label) then return end
+    Timers.owned[bar] = label
+    Refresh()
+end
+
+function Timers.Sorted()
+    if active then Refresh() end
+end
+
+-- LibCandyBar takes a stopped bar back for any addon's next bar.
+function Timers.Stopped(_, bar)
+    if type(bar) ~= "table" or not Timers.owned[bar] then return end
+    Timers.owned[bar] = nil
+    Refresh()
+end
+
+-- Only while the window runs. Every copy of the library shares one callback table.
+function Timers.Watch(on)
+    local candy = LibStub and LibStub("LibCandyBar-3.0", true)
+    if not (Has(candy, "RegisterCallback") and Has(candy, "UnregisterCallback")) then return end
+    if on then
+        Run("WindowTimerWatch", candy.RegisterCallback, Timers, "LibCandyBar_Stop", Timers.Stopped)
+    else
+        Run("WindowTimerWatch", candy.UnregisterCallback, Timers, "LibCandyBar_Stop")
+    end
+end
+
+function Timers.Hook(rxp)
+    if not (Has(rxp, "SortTimers") and Has(rxp, "StartTimer")) then
+        Safe.Missing("Timer bars", "timer calls")
+        return
+    end
+    hooksecurefunc(rxp, "SortTimers", Timers.Sorted)
+    hooksecurefunc(rxp, "StartTimer", Timers.Started)
+end
+
+---------------------------------------------------------------------------------
 -- Drawing
 ---------------------------------------------------------------------------------
 local function DrawIcon(item, row, size)
@@ -1337,6 +1400,7 @@ local function Activate(want)
         Model.Stale()
         TestShowIn()
         RefreshAccepts()
+        Timers.Watch(true)
         ApplyGeometry()
         Redraw()
         if window then
@@ -1347,6 +1411,8 @@ local function Activate(want)
     else
         Release()
         wipe(READ_OPTIONS.hidden)
+        Timers.Watch(false)
+        wipe(Timers.owned)
         if window then
             window:Hide()
             window:UnregisterAllEvents()
@@ -1370,6 +1436,7 @@ function Window.Start()
         HookRebuilt(v2, "UpdatePlayerActiveStepItem")
         if Has(v2, "RefreshActivePartyTabs") then hooksecurefunc(v2, "RefreshActivePartyTabs", OnPartyTabs) end
         WatchGuideRows()
+        Timers.Hook(rxp)
     end
     Arrow.WatchYards(OnYards)
     Activate(true)
