@@ -103,9 +103,9 @@ local function MaxRaidGroup()
     return 6
 end
 local PANEL_WIDTH = 250
--- Panel height WITH the two Group Sort rows and WITHOUT the Shared Notes row
--- or the Vantus row. Setup adjusts from this baseline in both directions.
-local PANEL_HEIGHT = 155
+-- Panel height WITHOUT the Shared Notes row or the Vantus row. Setup adjusts
+-- from this baseline in both directions.
+local PANEL_HEIGHT = 109
 local BUTTON_HEIGHT = 20
 local BUTTON_WIDTH = PANEL_WIDTH - 20
 local TARGET_SIZE = 22
@@ -1177,10 +1177,6 @@ local function OnEvent_Difficulty(self)
 end
 
 ---------------------------------------------------------------------------------
--- Group Sort row (optional; the engine ships separately)
----------------------------------------------------------------------------------
-
----------------------------------------------------------------------------------
 -- Setup
 ---------------------------------------------------------------------------------
 -- Frames parked here are hidden for the session: Hide, mouse off, events off,
@@ -1233,14 +1229,11 @@ function RC:Setup()
     -- Panel (secure base so the show button's snippet can drive it in combat)
     local panel = CreateFrame("Frame", "KE_RaidControlPanel", UIParent, "SecureHandlerBaseTemplate")
     S.Backdrop(panel)
-    -- Two blocks are conditional. Resize the panel by each absent or present
-    -- block (BUTTON_HEIGHT + a 3px gap per row) instead of leaving dead space.
-    -- PANEL_HEIGHT already includes the two Group Sort rows and excludes the
-    -- Shared Notes row -- see the comment on PANEL_HEIGHT itself.
-    local hasGroupSort = KE.GroupSort ~= nil
+    -- Resize the panel by each added row instead of leaving dead space: the
+    -- Shared Notes and Vantus rows are BUTTON_HEIGHT + a 3px gap each, and
+    -- PANEL_HEIGHT excludes both.
     local hasSharedNotes = _G.C_AddOns and _G.C_AddOns.IsAddOnLoaded("NorthernSkyRaidTools")
     local panelHeight = PANEL_HEIGHT
-    if not hasGroupSort then panelHeight = panelHeight - 2 * (BUTTON_HEIGHT + 3) end
     if hasSharedNotes then panelHeight = panelHeight + (BUTTON_HEIGHT + 3) end
     -- The Vantus row is unconditional and was not in PANEL_HEIGHT's baseline.
     panelHeight = panelHeight + (BUTTON_HEIGHT + 3)
@@ -1320,7 +1313,7 @@ function RC:Setup()
 
     -- Row 1: Ready Check, full width.
     -- Top rows started 5px further left than the rest: the
-    -- dropdown/assist/Group Sort chain resolves to x=10; Ready Check and
+    -- dropdown/assist chain resolves to x=10; Ready Check and
     -- the countdowns anchored at x=5. Aligned: left edge 10, right edge
     -- 10 + BUTTON_WIDTH (matching the utility rows below), countdown halves
     -- sized (BUTTON_WIDTH - 5) / 2 so the pair plus its 5px gap lands on
@@ -1381,54 +1374,14 @@ function RC:Setup()
     local lastUtilRow = EveryoneAssist
     local lastUtilXOfs, lastUtilYOfs = 4, -3
 
-    -- RAID-ONLY ROWS. Group arrangement, the Vantus check, the note buttons
-    -- and the buff strip are all meaningless in a party -- subgroups, runes
-    -- and raid notes do not exist there -- so the panel drops them and shrinks
+    -- RAID-ONLY ROWS. The Vantus check, the note buttons and the buff strip
+    -- are all meaningless in a party -- runes and raid notes do not exist there -- so the panel drops them and shrinks
     -- by exactly the rows it dropped.
     --
     -- One entry per ROW, not per button: the two note buttons share a row and
     -- together cost one row of height. `h` is that row's own cost.
     local raidOnly = {}
     self.RaidOnlyRows = raidOnly
-
-    if hasGroupSort then
-        -- Combat-gated: SetEnabled(false) blocks input, gray text signals it.
-        -- The hard gate lives in GroupSort:Run; this is the visual layer.
-        -- eventFunc also runs once at creation, so a /reload mid-combat starts
-        -- the buttons in the correct state.
-        local sortButtonEvents = { "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }
-        local function OnEvent_SortButton(self)
-            local inCombat = _G.InCombatLockdown()
-            self:SetEnabled(not inCombat)
-            if self.Text then
-                if inCombat then
-                    self.Text:SetTextColor(0.5, 0.5, 0.5)
-                else
-                    self.Text:SetTextColor(1, 1, 1)
-                end
-            end
-        end
-        -- Shift-click cancels a sort stuck mid-run, so the in-progress lock
-        -- never strands the buttons.
-        local function SortClick(mode)
-            return function()
-                if IsShiftKeyDown() then KE.GroupSort:Cancel() return end
-                KE.GroupSort:Run(mode)
-            end
-        end
-        local SortDefault = CreateUtilButton("KE_RaidControlSortDefault", panel, nil,
-            BUTTON_WIDTH, BUTTON_HEIGHT, "TOPLEFT", EveryoneAssist, "BOTTOMLEFT", 4, -3,
-            "Default Arrangement", sortButtonEvents, OnEvent_SortButton, SortClick("default"))
-        -- Evens/Odds removed; Split is a full-width row matching Default
-        -- Arrangement. The "odds" mode is still in GroupSort, macro-reachable.
-        local SplitGroups = CreateUtilButton("KE_RaidControlSplitGroups", panel, nil,
-            BUTTON_WIDTH, BUTTON_HEIGHT, "TOPLEFT", SortDefault, "BOTTOMLEFT", 0, -3,
-            "Split Arrangement", sortButtonEvents, OnEvent_SortButton, SortClick("split"))
-        lastUtilRow = SplitGroups
-        lastUtilXOfs, lastUtilYOfs = 0, -3
-        raidOnly[#raidOnly + 1] = { h = BUTTON_HEIGHT + 3, SortDefault }
-        raidOnly[#raidOnly + 1] = { h = BUTTON_HEIGHT + 3, SplitGroups }
-    end
 
     -- VANTUS RUNE CHECK. Who in the raid is missing the rune for this tier's
     -- boss. Prints to your own chat only -- it is a check, not an
@@ -1563,7 +1516,6 @@ end
 function RC:OnEnable()
     self:UpdateDB()
     if not self.db or not self.db.Enabled then return end
-    if KE.GroupSort then KE.GroupSort:Start() end
 
     if InCombatLockdown() then
         self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
@@ -1579,7 +1531,6 @@ function RC:OnEnable()
 end
 
 function RC:OnDisable()
-    if KE.GroupSort then KE.GroupSort:Stop() end
     if self.RefreshRestrictedControls then
         KE:UnregisterRestrictionListener(self.RefreshRestrictedControls)
     end
