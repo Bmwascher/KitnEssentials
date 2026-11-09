@@ -5,9 +5,9 @@
 ### WoW Forever only
 
 - **NEW:** Campfire, in Quality of Life, off by default. It shows your Camp
-  Benefits buff as a Round ring or a Simple bar, from 5 minutes left or at
-  any time by a setting, and lights up with a Camp Nearby alert when a fire
-  is in range and the buff is low or gone
+  Benefits buff as a Round ring or a Simple bar while it lasts, or only
+  from 5 minutes left by a setting, and lights up with a Camp Nearby alert
+  when a fire is in range and the buff is low or gone
 - Click the fire to sit. While seated it counts down to the landing and
   lists the bonuses you hold, with new ones in green as the buff lands and
   bonuses a class buff already covers dimmed
@@ -16,8 +16,8 @@
   once it has 5 minutes or less left; with Well-Rested gone it turns gray
   under a red "Missing". With no camp and no fire near, a kit button lights
   a fire
-- A Show In card sets rest areas, mounts and combat, and whether Round's
-  bonus list stays on screen in combat
+- A Show In card sets rest areas, mounts and combat. Round's bonus list
+  stays on screen in combat, as read before the fight, unless turned off
 
 ---
 

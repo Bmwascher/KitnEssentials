@@ -102,7 +102,7 @@ GUIFrame:RegisterContent("Campfire", function(scrollChild, yOffset)
         end
     end)
     card1:AddLabel("Shows, in the open world, what your camp buff is doing and whether a fire is worth stopping " ..
-        "at. It stays hidden until the buff runs low, lights up at a fire, shows the time to landing while you " ..
+        "at. It shows the buff's time while it lasts, lights up at a fire, shows the time to landing while you " ..
         "sit, and offers your Sleeping Bag and camping kit. Nothing shows in a dungeon or raid.")
     yOffset = card1:GetNextOffset()
 

@@ -781,9 +781,9 @@ local Defaults = {
             TimerInRestAreas = true,
             TimerWhileMounted = true,
             TimerInCombat = true,
-            ListInCombat = false,
+            ListInCombat = true,
 
-            ShowAlways = false,
+            ShowAlways = true,
             ShowUnderMinutes = 5,
             ShowMissing = true,
             ClickToSit = true,
@@ -801,7 +801,7 @@ local Defaults = {
             SimpleWidth = 360,
             SimpleHeight = 26,
             SimpleTextSize = 12,
-            AlertTextSize = 20,
+            AlertTextSize = 22,
 
             FontFace = nil, -- nil: the global font
             FontOutline = "OUTLINE",
@@ -813,7 +813,7 @@ local Defaults = {
             LandSound = "None",
 
             Strata = "MEDIUM",
-            RoundPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -680, YOffset = -201 },
+            RoundPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 544, YOffset = -642 },
             SimplePosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = -375 },
             AlertPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 150 },
         },
