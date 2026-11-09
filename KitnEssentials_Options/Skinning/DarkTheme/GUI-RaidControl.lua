@@ -30,7 +30,6 @@ GUIFrame:RegisterContent("RaidControl", function(scrollChild, yOffset)
     local RC = KitnEssentials:GetModule("RaidControl", true) or {}
 
     local raidOnly = {}
-    if KE.GroupSort then raidOnly[#raidOnly + 1] = "group arrangement" end
     if RC.VANTUS_ADMITTED then raidOnly[#raidOnly + 1] = "a check for who is missing a Vantus Rune" end
     if RC.BUFFS_ADMITTED then
         raidOnly[#raidOnly + 1] = "a strip of raid buff icons that dims the ones nobody brings"
