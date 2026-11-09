@@ -222,13 +222,10 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
 
     db.Blocklist = db.Blocklist or {}
 
-    -- The hardcoded blocklist is applied unconditionally regardless of a
-    -- row's own enabled flag (see AuraRules.HARDCODED_BLOCKLIST_SET), so any
-    -- row whose spell id is one of those ids can never actually be switched
-    -- off -- whether it's a shipped default row or one the user typed in
-    -- themselves. Read-only: this table is shared and used elsewhere as the
-    -- returned exclude set.
-    local ALWAYS_ON_BLOCKLIST_IDS = KE.AuraRules and KE.AuraRules.HARDCODED_BLOCKLIST_SET or {}
+    -- The aura engine hides these spells whatever a row's enabled flag says
+    -- (AuraRules.ALWAYS_HIDDEN_SPELLS), so a row for one of them, shipped or
+    -- typed in, can never be switched off. Read-only shared table.
+    local ALWAYS_ON_BLOCKLIST_IDS = KE.AuraRules and KE.AuraRules.ALWAYS_HIDDEN_SPELLS or {}
 
     local function IsAlwaysOnBlocklistEntry(spellId)
         return ALWAYS_ON_BLOCKLIST_IDS[spellId] == true
