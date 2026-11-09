@@ -981,6 +981,24 @@ describe("S.SetSkinColors", function()
         assert.are.same({ 0.4, 0.5, 0.6, 0 }, hidden._set)
         assert.are.same({ 0.4, 0.5, 0.6, 1 }, shown._set)
     end)
+
+    -- A texture is not a backdrop, so only the registry carries a border
+    -- change to it.
+    it("repaints a registered border texture on a border change and not on a background change", function()
+        local tex = {}
+        function tex:SetColorTexture(r, g, b, a) self.color = { r, g, b, a } end
+        S.PaintBorder(tex)
+        assert.are.same({ unpack(S.palette.border) }, tex.color)
+        local cases = {
+            { "background only", { 0.2, 0.2, 0.2, 1 }, nil, "untouched" },
+            { "border", nil, { 0.4, 0.5, 0.6, 1 }, { 0.4, 0.5, 0.6, 1 } },
+        }
+        for _, c in ipairs(cases) do
+            tex.color = "untouched"
+            S.SetSkinColors(c[2], c[3])
+            assert.are.same(c[4], tex.color, c[1])
+        end
+    end)
 end)
 
 -- The two Blizzard font-object sweeps both read this, and the frame skin is
@@ -1681,6 +1699,28 @@ describe("SkinAPI edge refresh", function()
                 assert.equals(size, info.edgeSize, label)
             end
         end
+    end)
+
+    -- A line keeps the anchors its owner gave it; only its width follows the
+    -- host's scale.
+    it("refits a width-only line's width to the host's edge and leaves its anchors alone", function()
+        local S = L.loadSkinAPI().Skins
+        local line = { points = {}, cleared = 0 }
+        function line:SetColorTexture(r, g, b, a) self.color = { r, g, b, a } end
+        function line:SetPoint(point, rel, relPoint) self.points[point] = { rel, relPoint } end
+        function line:ClearAllPoints() self.cleared = self.cleared + 1 end
+        function line:SetWidth(w) self.width = w end
+        local host = { scale = 1 }
+        function host:GetEffectiveScale() return self.scale end
+        host.CreateTexture = function() return line end
+        assert.equals(line, S.VerticalLine(host, "FROM_CENTER", { 1, 1, 1, 0.15 }))
+        assert.near(UNIT, line.width, 1e-9)
+        host.scale = 1.1
+        S._RefreshOwnEdge(host)
+        assert.near(UNIT / 1.1, line.width, 1e-9)
+        assert.equals(0, line.cleared)
+        assert.same({ host, "TOP" }, line.points.TOPLEFT)
+        assert.same({ host, "BOTTOM" }, line.points.BOTTOMLEFT)
     end)
 end)
 

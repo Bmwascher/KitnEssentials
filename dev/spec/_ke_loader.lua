@@ -636,6 +636,11 @@ function L.loadTooltips(opts, overrides)
     _G.UnitClass = opts.UnitClass or function() return "Evoker", "EVOKER" end
     _G.GetPlayerInfoByGUID = opts.GetPlayerInfoByGUID or function() return "Evoker", "EVOKER" end
     _G.C_ClassColor = opts.C_ClassColor or nil
+    -- The level color's inputs; the module caches the function at load.
+    _G.GetCreatureDifficultyColor = opts.GetCreatureDifficultyColor or function() return nil end
+    _G.QuestDifficultyColors = opts.QuestDifficultyColors
+    _G.NameplateLevelFrameMixin = opts.NameplateLevelFrameMixin
+    _G.UnitEffectiveLevel = opts.UnitEffectiveLevel or function() return 1 end
     -- Specs drive helpers, module methods and PLAYER_ENTERING_WORLD directly;
     -- OnEnable remains outside this fixture.
     local KE = {
@@ -3263,6 +3268,14 @@ function L.loadKickTrackerRules()
     return modules["KickTracker"]
 end
 
+-- Modules/QoL/QualityOfLife/RareAlertRules.lua alone: the alert's pure decisions call no WoW
+-- API, so only the module table the shim hands back is needed. Returns RA.
+function L.loadRareAlertRules()
+    local modules = helpers.installAddonShim()
+    helpers.loadModule("Modules/QoL/QualityOfLife/RareAlertRules.lua", {})
+    return modules["RareAlert"]
+end
+
 -- Modules/DungeonTools/KicksCasts/FocusAnnounce.lua. Its parsers call no WoW API: nothing to
 -- stub (the sender checks do, and no case calls them). Returns KE.FocusAnnounce.
 function L.loadFocusAnnounce()
@@ -3551,6 +3564,13 @@ function L.loadRCLootCouncilSkin(overrides)
         fitHeaders and findUpvalue(fitHeaders, "headerSize")
 end
 
+-- Modules/Skinning/DarkTheme/Frames/TalentTree.lua. At load the file only
+-- defines functions on KE.Skins, so a bare KE table is enough. Returns KE.
+function L.loadTalentTree(overrides)
+    installMock(overrides, {})
+    return helpers.loadModule("Modules/Skinning/DarkTheme/Frames/TalentTree.lua", { Skins = {} })
+end
+
 -- Core/PlateSlots.lua. CreateFrame comes from _wow_mock, so the event frame the
 -- builder makes on Start is the last entry of the returned frames list, and a
 -- spec fires plate events at it. C_Timer is inert unless the spec passes its
@@ -3607,6 +3627,13 @@ function L.loadPositionCardRules()
     installMock(nil, {})
     local KE = helpers.loadModule("GUI/GUIWidgets/GUI-PositionCardRules.lua", {})
     return KE.PositionCardRules, KE
+end
+
+-- Modules/Combat/SwingTimer/SwingTimerRules.lua. Pure logic: nothing to stub.
+-- Returns KE.
+function L.loadSwingTimerRules(overrides)
+    installMock(overrides, {})
+    return helpers.loadModule("Modules/Combat/SwingTimer/SwingTimerRules.lua", {})
 end
 
 -- Modules/Combat/ClassTools/CustomCooldownsRules.lua. Pure logic: nothing to

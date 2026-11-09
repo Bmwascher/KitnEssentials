@@ -65,7 +65,14 @@ local function Skin()
     end
 
     S.Tabs("InspectFrameTab", 5)
-    if frame.ModeTabs then S.SideTabsInPlace(frame.ModeTabs.Tabs) end
+    -- The tabs chain inside ModeTabs, so moving it moves the column; -30 is
+    -- the XML's y.
+    local modeTabs = frame.ModeTabs
+    if modeTabs then
+        S.IconSideTabs(modeTabs.Tabs)
+        modeTabs:ClearAllPoints()
+        modeTabs:SetPoint("TOPLEFT", frame, "TOPRIGHT", S.sideTabGap, -30)
+    end
 
     local model = _G.InspectModelFrame
     if model then

@@ -537,8 +537,13 @@ local function DressBookSpell(button)
     button:SetPushedTexture(WHITE)
     button:GetPushedTexture():SetColorTexture(1, 1, 1, 0.5)
 
+    -- Alpha, not Hide: Blizzard re-shows the overlay on every update.
+    if button.IconBorder then button.IconBorder:SetAlpha(0) end
+    if button.IconTextureOverlay then button.IconTextureOverlay:SetAlpha(0) end
+
     local icon = button.IconTexture
     if not icon then return end
+    if button.OutlineMask then icon:RemoveMaskTexture(button.OutlineMask) end
     icon:ClearAllPoints()
     icon:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
     icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
@@ -549,6 +554,16 @@ local function DressBookSpell(button)
         button.highlightTexture:SetPoint("TOPLEFT", ibd, "TOPLEFT", 1, -1)
         button.highlightTexture:SetPoint("BOTTOMRIGHT", ibd, "BOTTOMRIGHT", -1, 1)
     end
+end
+
+-- overrideWidth narrows the bar, track and mask but leaves Fill at the
+-- template's 441, and the backdrop sits on Fill. Fill takes the mask's
+-- full-bar span (width + offset, starting 1px in) plus 1px each side, so a
+-- full bar leaves both border pixels clear.
+local function FitBookBarFill(bar)
+    local fill, width = bar and bar.Fill, bar and bar.overrideWidth
+    if not fill or not width then return end
+    fill:SetWidth(width + (bar.overrideMaskRightOffset or 0) + 2)
 end
 
 -- Blizzard re-atlases each slot's Background per profession, so it is faded
@@ -563,6 +578,10 @@ local function SkinBookPage(page)
             if slot.Background then slot.Background:SetAlpha(0) end
             S.Backdrop(slot)
             SkinRankBar(slot.StatusBar)
+            FitBookBarFill(slot.StatusBar)
+            -- Gamepad mode re-runs OnLoad with a new overrideWidth.
+            if slot.StatusBar then hooksecurefunc(slot.StatusBar, "OnLoad", FitBookBarFill) end
+            if slot.UnlearnButton then S.CloseButton(slot.UnlearnButton) end
             S.FontStrings(slot, nil, "OUTLINE")
             for i = 1, 4 do DressBookSpell(slot["SpellButton" .. i]) end
         end
@@ -576,10 +595,16 @@ local function Skin()
     S.Frame(PF)
     if PF.MaximizeMinimize then S.MaxMinFrame(PF.MaximizeMinimize) end
     if PF.TabSystem then SkinTabRow(PF.TabSystem) end
-    -- The overview tab sits outside the profession tabs' array.
+    -- The overview tab sits outside the profession tabs' array. The others
+    -- chain below it, so moving it moves the column; -60 is the XML's y.
     if PF.rightProfessionTabs then
-        S.SideTabsInPlace({ PF.ProfessionsOverviewTab })
-        S.SideTabsInPlace(PF.rightProfessionTabs)
+        local overview = PF.ProfessionsOverviewTab
+        if overview then
+            S.IconSideTabs({ overview })
+            overview:ClearAllPoints()
+            overview:SetPoint("TOPLEFT", PF, "TOPRIGHT", S.sideTabGap, -60)
+        end
+        S.IconSideTabs(PF.rightProfessionTabs)
     end
     if PF.BookPage then SkinBookPage(PF.BookPage) end
 

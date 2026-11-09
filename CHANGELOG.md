@@ -1,5 +1,270 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.25
+
+### Both clients
+
+- Dark Theme now skins the Guild & Communities dialogs: Community
+  Settings, Invite with its Link Options view, Choose an icon, Create
+  Channel, Notification Settings and the invitation cards take the dark
+  look, with themed input boxes, checkboxes, dropdowns and buttons
+- Community icons in those dialogs show as squares with a thin border,
+  without the gold or blue ring
+
+### WoW Forever only
+
+- The guild's Preferred Play Settings dropdowns and Apply buttons take the
+  dark look
+
+---
+
+## v4.16.24
+
+### WoW Forever only
+
+- Dark Theme's thin divider lines in the Progress Legacy window and the
+  character window, and the reward level boxes' borders, stay one sharp
+  pixel at any panel scale, including while the scale changes
+- The reward level boxes and the Challenges divider take a new border
+  color at once, without a reload
+- The reward level numbers stay centered when the Blizzard Fonts frame
+  skin, the Base Size or the skin font changes with the window open
+
+---
+
+## v4.16.23
+
+### WoW Forever only
+
+- Dark Theme now crops the character window's resistance icons to their
+  school art, without the bronze frame and glow, with a thin border, on
+  the player and pet stat lists
+- The Progress Legacy window's side tabs show cropped, bordered icons
+  like the character window's side tabs
+
+---
+
+## v4.16.22
+
+### WoW Forever only
+
+- Dark Theme now skins the Progress Legacy window's Tree page: the tree
+  cards are flat plates with square icons and an accent on the selected
+  tree, the page art and bronze frames are gone, the points bar, points
+  badge and node rank numbers sit in flat bordered boxes, and the crown
+  shield, Reset, Undo, talent nodes and arrows match the Challenges page
+  and the talent window
+
+---
+
+## v4.16.21
+
+### WoW Forever only
+
+- Dark Theme now skins the talent window: talent nodes and arrows take a
+  flat color for their state (gold maxed, green available, gray locked),
+  the page art is dimmed, tree headers and the unspent talents count sit in
+  bordered boxes, and the spec tabs, Reset, Undo and Activate buttons match
+  the theme
+
+---
+
+## v4.16.20
+
+### WoW Forever only
+
+- Dark Theme now skins the Progress Legacy window's Challenges and Reward
+  Track pages: flat dark page art, category rows, challenge cards and step
+  rows, a KitnEssentials checkbox for tracking, and reward cards with a
+  bordered level box
+
+---
+
+## v4.16.19
+
+### WoW Forever only
+
+- Dark Theme's Reputation, Skills, PvP, Currency and Statistics tabs are
+  cleaner: bars use the KitnEssentials bar texture, the right pane no longer
+  has its own dark box, the bronze list lines and pane rows are gone, and a
+  selected row shows your accent color
+
+---
+
+## v4.16.18
+
+### Both clients
+
+- Tooltips now skins the tooltip on minimap icons from addons such as
+  AtlasLoot and KitnEssentials
+
+---
+
+## v4.16.17
+
+### WoW Forever only
+
+- New Swing Timer setting under Combat, off by default: a bar for each weapon
+  shows when your next melee swing or Auto Shot lands, with a countdown.
+  Hunters can add a guide for when to stand still before the shot, and you
+  can also show your target's estimated swing
+
+---
+
+## v4.16.16
+
+### Both clients
+
+- Tooltips now skins the close button on the item tooltip you open from a chat link
+
+---
+
+## v4.16.15
+
+### WoW Forever only
+
+- Dark Theme now skins the Prev and Next page arrows in the mailbox inbox
+
+---
+
+## v4.16.14
+
+### WoW Forever only
+
+- New Rare Alert setting under QoL, off by default: in the open world, a card
+  at the top of the screen warns you when a rare is near, with its portrait,
+  name, level, health, best drop and a pin to its spawn spot, and a horn.
+  Click the card or press your key to target the rare; out of combat this
+  also marks it with a skull. Picking KitnEssentials at the RareScanner
+  conflict prompt turns off only RareScanner's rare scan
+
+---
+
+## v4.16.13
+
+### WoW Forever only
+
+- World Marker Cycler is now available (Group Tools, World Markers tab):
+  place world markers at your cursor in your chosen order with one key,
+  and clear them all with another
+
+---
+
+## v4.16.12
+
+### Both clients
+
+- Raid Control's panel text is one point smaller
+
+### WoW Forever only
+
+- Raid Control is now available (Dark Theme, General tab): ready check,
+  countdowns, Everyone Assist, world markers and role counts; the
+  difficulty, group arrangement, Vantus Rune and raid buff rows are left
+  out because Forever has no use for them
+
+---
+
+## v4.16.11
+
+### Both clients
+
+- Fixed the chat window sliding out of the chat panel when you level up
+  in combat; every chat window now returns to the panel when combat ends
+
+---
+
+## v4.16.10
+
+### Both clients
+
+- New Level Colors setting in the Tooltips skin, on by default: the level
+  of an NPC you can attack is now colored by how hard it is for you, like a
+  player's, and a skull-level unit's "??" shows red; turned off, levels are
+  plain
+- On WoW Forever, tooltip level colors follow the nameplate's level bands,
+  so a tooltip and its nameplate show the same color
+
+---
+
+## v4.16.9
+
+### WoW Forever only
+
+- The Character and Inspect windows' side tabs match the Professions
+  window: cropped, bordered icons that fill each tab, with the column just
+  off the window
+- The guild window's Preferred Play Settings tab is now skinned like the
+  other guild tabs
+
+---
+
+## v4.16.8
+
+### Both clients
+
+- Side tab icons stay centered after a click instead of drifting left (the
+  World Map quest log tabs on retail)
+
+### WoW Forever only
+
+- The Professions window's secondary profession bars stay inside their
+  columns instead of overlapping past the window edge
+- The unlearn buttons use the KE close X, the side tabs use cropped,
+  bordered icons that fill each tab and sit just off the window, and the
+  book's profession icons lose Blizzard's gold frames
+- The AddOns window's buttons, dropdown, search box and checkbox are now
+  skinned
+
+---
+
+## v4.16.7
+
+### WoW Forever only
+
+- New Mob Scout setting under QoL, off by default: in the open world, a
+  hostile mob's tooltip lists its abilities with one control word each, how
+  much of your physical damage its armor takes, and what it is immune to or
+  resists. Hold a key to read what each ability does, below or above the
+  tooltip as you choose, and a faint line marks where its lines start. It
+  shows nothing in dungeons and raids, where the game keeps a mob's identity
+  secret. Much of the table is older game data not checked against Forever, so
+  a mob can differ from its lines. A manual install copies one more folder,
+  KitnEssentials_Data, which retail never loads.
+
+---
+
+## v4.16.6
+
+### WoW Forever only
+
+- The Character window's Dark Theme skin now covers the level row, swaps the
+  bronze bar beside the stats for a dim line, and uses the KE arrow on the
+  stats toggle
+- The ammo count reads over its icon instead of hiding behind it
+- The Character window shows the ranged weapon's item level below the bow
+
+---
+
+## v4.16.5
+
+### WoW Forever only
+
+- Quest offers show their full text with the Quests skin on, instead of only
+  the opening letters. The skin now turns on the game's Instant Quest Text
+  setting, because the writing-in effect cannot show with its white text
+
+---
+
+## v4.16.4
+
+### WoW Forever only
+
+- The Spellbook's category icons stay inside the window. They no longer move
+  past its left edge on some reloads
+
+---
+
 ## v4.16.4
 
 ### Raid Control

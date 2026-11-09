@@ -1149,7 +1149,7 @@ KE.PreviewManager = PreviewManager
 local PREVIEW_MODULES = {
     "StanceText", "CombatCross", "CombatTexts", "CombatRes",
     "CombatTimer", "PetStatusText", "DragonRiding",
-    "FocusCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
+    "FocusCastbar", "SwingTimer", "RaidNotifications", "HuntersMark", "RangeChecker",
     "TimeSpiral", "TotemTracker", "DisintegrateTicks", "StasisTracker", "Recuperate", "KickTracker",
     "NoMovementAlert", "GreatVaultAlert", "SecondaryStats", "PotionReady", "AuraExternals", "AuraMovement", "AuraDebuffs", "PartyBuffs",
     "EnemyCounter", "DungeonCasts", "HealerMana", "CCTracker", "PartyStops",
@@ -1172,6 +1172,7 @@ local PREVIEW_MODULES = {
     "DivineArbiter",
     "Executioner",
     "ImminentDemise",
+    "RareAlert",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -1179,7 +1180,7 @@ local PREVIEW_MODULES = {
 local SECTION_PREVIEW_MODULES = {
     combat_section = {
         "CombatRes", "CombatTexts", "CombatTimer",
-        "FocusCastbar", "CombatCross", "RangeChecker",
+        "FocusCastbar", "SwingTimer", "CombatCross", "RangeChecker",
         "Cursor",
         "HealerMana",
         "NoMovementAlert", "PlayerAbsorbs", "PotionReady",
@@ -1198,6 +1199,7 @@ local SECTION_PREVIEW_MODULES = {
         "GreatVaultAlert",
         "RaidNotifications", "ReadyCheckConsumables",
         "SecondaryStats",
+        "RareAlert",
     },
     -- Skyriding UI moved here from Quality of Life. Without this entry the
     -- module stays in PREVIEW_MODULES but no section reaches it, so opening its

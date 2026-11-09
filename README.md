@@ -101,7 +101,7 @@ Curated dungeon ability timers driven by BigWigs events, with hand-tuned cast du
 
 ## WoW Forever
 
-KitnEssentials also runs on WoW Forever, with the parts that work there: Home and Profiles, System Optimization, CVars, UI Scaling and Version Check; Dark Theme with its window skins, Elements, fonts and context menus, Color Picker, Tooltips, Chat, the Damage Meter and several Addon Skins; Character Panel, Inspect Panel and Compare Header; Player Buffs, Player Debuffs, Advanced Debuffs, External Tracker, Movement Buffs and Totem Tracker; Combat Timer, Combat Texts, Combat Res, Cursor Effects, Player Crosshair, Range Display, Focus Castbar, Pet Status, Player Absorbs, Combat Potion, Healer Mana and No Movement Alert; Custom Cooldowns, DoT Tracker and Missing Forms from Class Tools; the Interrupt Tracker, Focus Macros, Death Notifications, Enemy Counter, Targeted Spells, Dungeon Casts, CC Tracker and Keystone Helper's Instance Reset announcer; Ready Check Consumables; and Automation, Combat Logger, Merchant Pages, Secondary Stats, Spell Alert Opacity, Move Frames, Copy Anything and Slash Commands. Everything else stays hidden on Forever: it does not load, and its settings do not appear. Options that need realms, Mythic+, keystones or the Group Finder are left out there, and a one-time Copy from Retail popup brings your Retail profile across.
+KitnEssentials also runs on WoW Forever, with the parts that work there: Home and Profiles, System Optimization, CVars, UI Scaling and Version Check; Dark Theme with its window skins, Elements, fonts and context menus, Color Picker, Raid Control, Tooltips, Chat, the Damage Meter and several Addon Skins; Character Panel, Inspect Panel and Compare Header; Player Buffs, Player Debuffs, Advanced Debuffs, External Tracker, Movement Buffs and Totem Tracker; Combat Timer, Combat Texts, Combat Res, Cursor Effects, Player Crosshair, Range Display, Focus Castbar, Pet Status, Player Absorbs, Combat Potion, Healer Mana and No Movement Alert; Custom Cooldowns, DoT Tracker and Missing Forms from Class Tools; the Interrupt Tracker, Focus Macros, Death Notifications, Enemy Counter, Targeted Spells, Dungeon Casts, CC Tracker and Keystone Helper's Instance Reset announcer; Ready Check Consumables and World Marker Cycler; and Automation, Combat Logger, Merchant Pages, Secondary Stats, Spell Alert Opacity, Move Frames, Copy Anything and Slash Commands. Everything else stays hidden on Forever: it does not load, and its settings do not appear. Options that need realms, Mythic+, keystones or the Group Finder are left out there, and a one-time Copy from Retail popup brings your Retail profile across.
 
 ## Slash Commands
 
@@ -120,7 +120,7 @@ KitnEssentials also runs on WoW Forever, with the parts that work there: Home an
 
 ## Installing by Hand
 
-The download holds two folders, `KitnEssentials` and `KitnEssentials_Options`. Copy both into `Interface/AddOns`; the second one holds the settings pages.
+The download holds three folders, `KitnEssentials`, `KitnEssentials_Options` and `KitnEssentials_Data`. Copy all three into `Interface/AddOns`; the second one holds the settings pages, and the third holds data tables for WoW Forever, which retail never loads.
 
 ## Troubleshooting
 

@@ -6,10 +6,12 @@ manual-changelog:
   filename: CHANGELOG.md
   markup-type: markdown
 
-# The settings pages ship as their own load-on-demand addon, a sibling
-# folder of KitnEssentials in the package, not a subfolder of it.
+# The settings pages and the data tables each ship as their own
+# load-on-demand addon, a sibling folder of KitnEssentials in the package,
+# not a subfolder of it.
 move-folders:
   KitnEssentials/KitnEssentials_Options: KitnEssentials_Options
+  KitnEssentials/KitnEssentials_Data: KitnEssentials_Data
 
 # Only tracked files need listing here — gitignored paths (References/,
 # dev/docs/, editor configs, …) never reach the packager's clone. Tracked

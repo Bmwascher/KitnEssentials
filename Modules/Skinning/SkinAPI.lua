@@ -154,6 +154,25 @@ function S.ForgetBrand(obj)
     brandPaint[obj] = nil
 end
 
+-- Textures painted the border color. The palette entry is mutated in place,
+-- so a texture painted once at skin time keeps the old color without this.
+local borderPaint = setmetatable({}, { __mode = "k" })
+
+local function PaintBorderNow(tex)
+    local b = S.palette.border
+    tex:SetColorTexture(b[1], b[2], b[3], b[4])
+end
+
+function S.PaintBorder(tex)
+    if not tex then return end
+    borderPaint[tex] = true
+    PaintBorderNow(tex)
+end
+
+local function RepaintBorders()
+    for tex in pairs(borderPaint) do PaintBorderNow(tex) end
+end
+
 function S.RefreshPalette()
     local accent = KE.GetSkinBrandColor and KE:GetSkinBrandColor()
     if accent then
@@ -172,6 +191,7 @@ function S.RefreshPalette()
         ApplyColor(S.palette.window, bs.BackdropColor)
         ApplyColor(S.palette.border, bs.BorderColor)
     end
+    RepaintBorders()
 end
 
 S.RefreshPalette()
@@ -224,6 +244,7 @@ function S.SetSkinColors(bg, border)
             end
         end
     end
+    if border then RepaintBorders() end
 end
 
 S.bgColor = S.palette.window
@@ -537,8 +558,10 @@ function S.Backdrop(frame, inset, borderOnly)
 end
 
 -- An inset client's mode: true insets all four sides, VERTICAL_ONLY only top
--- and bottom, for a row hover that spans the row's full width.
+-- and bottom, for a row hover that spans the row's full width. WIDTH_ONLY
+-- leaves the anchors to the owner and sets only the width, for a 1 px line.
 local VERTICAL_ONLY = "vertical"
+local WIDTH_ONLY = "width"
 
 local function PlaceInset(region, bd, e, mode)
     local x = (mode == VERTICAL_ONLY) and 0 or e
@@ -582,7 +605,11 @@ local function RefitEdgeClients(bd)
     if not clients then return end
     local e = EdgeFor(bd)
     for region, mode in pairs(clients) do
-        PlaceInset(region, bd, e, mode)
+        if mode == WIDTH_ONLY then
+            region:SetWidth(e)
+        else
+            PlaceInset(region, bd, e, mode)
+        end
     end
 end
 
@@ -648,6 +675,34 @@ function S.TrackEdgeClients(frame)
         ownEdges[frame] = false
         EnsureShared()
     end
+end
+
+-- FROM_CENTER puts the left edge on the center line: a 1 px line centered
+-- there would straddle two pixels.
+local LINE_ANCHORS = {
+    LEFT = { "TOPLEFT", "TOPLEFT", "BOTTOMLEFT", "BOTTOMLEFT" },
+    CENTER = { "TOP", "TOP", "BOTTOM", "BOTTOM" },
+    FROM_CENTER = { "TOPLEFT", "TOP", "BOTTOMLEFT", "BOTTOM" },
+}
+
+-- A vertical line one physical pixel wide on host, created once. Its width
+-- follows the host's scale through the edge refit; its color and anchors do
+-- not change after creation.
+function S.VerticalLine(host, align, color)
+    if not host then return end
+    local d = S.data(host)
+    if d.keVerticalLine then return d.keVerticalLine end
+    local a = LINE_ANCHORS[align] or LINE_ANCHORS.LEFT
+    local line = host:CreateTexture(nil, "OVERLAY")
+    line:SetColorTexture(color[1], color[2], color[3], color[4])
+    line:SetPoint(a[1], host, a[2])
+    line:SetPoint(a[3], host, a[4])
+    line:SetWidth(EdgeFor(host))
+    d.edgeClients = d.edgeClients or setmetatable({}, { __mode = "k" })
+    d.edgeClients[line] = WIDTH_ONLY
+    S.TrackEdgeClients(host)
+    d.keVerticalLine = line
+    return line
 end
 
 -- A 1 px KE edge on the frame itself, for frames whose owner colors their own
@@ -1304,12 +1359,18 @@ function S.StatusBar(bar, inset)
 end
 
 -- A ColoredProgressBarTemplate bar is a Frame, not a StatusBar: a Fill
--- texture the mixin sizes, clipped by a Mask, over a track texture. The fill
--- keeps its own atlas, which Blizzard tints through SetVertexColor; the track
--- and the mask go, and the backdrop hugs the fill's row.
+-- texture the mixin sizes, clipped by a Mask, over a track texture. The track
+-- and the mask go, and the backdrop hugs the fill's row. The fill takes KE's
+-- bar texture, reapplied whenever Blizzard sets its atlas. A colored atlas
+-- becomes a tint, raised to offset the texture's gray.
 local COLORED_BAR_FILL_H = 15
+local COLORED_BAR_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\Statusbars\\KitnEssentials"
+local COLORED_BAR_TINT = {
+    ["common-stat-bar-blue"] = { 0.06, 0.36, 0.75 },
+    ["common-stat-bar-green"] = { 0.08, 0.68, 0.17 },
+}
 
-function S.ColoredBar(bar, dampen)
+function S.ColoredBar(bar)
     local fill = bar and bar.Fill
     if not fill or S.data(bar).keColoredBar then return end
     S.data(bar).keColoredBar = true
@@ -1328,17 +1389,23 @@ function S.ColoredBar(bar, dampen)
     end
     if bar.Text then S.SetFont(bar.Text) end
 
-    if type(dampen) ~= "number" then return end
-    local function Dampen(tex, r, g, b, a)
-        local d = S.data(tex)
-        if d.keDampening or type(r) ~= "number" then return end
-        d.keDampening = true
-        tex:SetVertexColor(r * dampen, g * dampen, b * dampen, a or 1)
-        d.keDampening = false
+    local tint
+    local tinting = false
+    local function ApplyTint()
+        if tinting or not tint then return end
+        tinting = true
+        fill:SetVertexColor(tint[1], tint[2], tint[3])
+        tinting = false
     end
-    hooksecurefunc(fill, "SetVertexColor", Dampen)
-    local r, g, b, a = fill:GetVertexColor()
-    if r then Dampen(fill, r, g, b, a) end
+    local function ApplyFill(_, atlas)
+        tint = COLORED_BAR_TINT[atlas]
+        fill:SetTexture(COLORED_BAR_TEX)
+        ApplyTint()
+    end
+    local atlas = fill:GetAtlas()
+    hooksecurefunc(fill, "SetAtlas", ApplyFill)
+    hooksecurefunc(fill, "SetVertexColor", ApplyTint)
+    ApplyFill(fill, atlas)
 end
 
 function S.ProgressFill(bar)
@@ -2019,7 +2086,7 @@ function S.Tab(tab)
                         local sd2 = S.data(s2)
                         if sd2.flushDone then return end
                         C_Timer.After(0, function()
-                            if sd2.flushDone or not s2:IsVisible() then return end
+                            if sd2.flushDone or sd2.keepRowAnchor or not s2:IsVisible() then return end
                             -- The measured edge is the first child's, and
                             -- Blizzard lets one tab hide while its system
                             -- stays shown. Neither refusal latches; the next
@@ -2105,6 +2172,7 @@ function S.Tab(tab)
                         end
                         if sys0.MarkDirty then sys0:MarkDirty() end
                         C_Timer.After(0, function()
+                            if sd0.keepRowAnchor then return end
                             local first = select(1, sys0:GetChildren())
                             local bd = first and S.GetBackdrop(first)
                             local owner = sys0:GetParent()
@@ -2312,9 +2380,20 @@ function S.SlotIcon(icon, border, withBackdrop)
     if border then S.IconBorder(border, S.GetBackdrop(icon)) end
 end
 
+-- Removes every mask on tex, for masks that have no key to remove them by.
+function S.ClearMasks(tex)
+    if not tex or not tex.GetNumMaskTextures or not tex.RemoveMaskTexture then return end
+    for i = tex:GetNumMaskTextures(), 1, -1 do
+        local m = tex:GetMaskTexture(i)
+        if m then tex:RemoveMaskTexture(m) end
+    end
+end
+
+local ICON_CROP = 0.08
+
 function S.Icon(icon, withBackdrop)
     if not icon or S.data(icon).keIconSkinned then return end
-    if icon.SetTexCoord then icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    if icon.SetTexCoord then icon:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP) end
 
     S.PixelSnap(icon)
     if withBackdrop then
@@ -2480,8 +2559,12 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
         end
         recenter()
         resize()
-        hooksecurefunc(icon, "SetPoint", function(_, point, _, _, x, y)
-            if point == "CENTER" and (not x or x == 0) and (not y or y == 0) then return end
+        -- Reads the resolved point: Blizzard's press and release use the
+        -- short SetPoint("CENTER", x, y) form, whose offsets are not the
+        -- 4th and 5th arguments.
+        hooksecurefunc(icon, "SetPoint", function()
+            local point, _, _, x, y = icon:GetPoint(1)
+            if point == "CENTER" and x == 0 and y == 0 and icon:GetNumPoints() == 1 then return end
             recenter()
         end)
         hooksecurefunc(icon, "SetSize", function(_, w, h)
@@ -2513,6 +2596,33 @@ local IN_PLACE_ICON = 22
 function S.SideTabsInPlace(tabs)
     if not tabs then return end
     for _, tab in ipairs(tabs) do S.SideTab(tab, nil, nil, IN_PLACE_ICON) end
+end
+
+-- Tabs whose icons are textures (spell, profession, portrait) instead of
+-- atlas glyphs: KE's crop and border, grown to fill the 30-wide tab.
+local FILL_ICON = 28
+-- Gap between such a column and its window's border.
+S.sideTabGap = 1
+
+-- Blizzard re-crops these icons to their baked frame on every check change,
+-- so KE's crop goes back on after it.
+local function KeepIconCrop(icon, left)
+    if left ~= ICON_CROP then
+        icon:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP)
+    end
+end
+
+function S.IconSideTabs(tabs)
+    if not tabs then return end
+    for _, tab in ipairs(tabs) do
+        S.SideTab(tab, nil, nil, FILL_ICON)
+        local icon = tab.Icon
+        if icon and not S.data(icon).keCropHooked then
+            S.data(icon).keCropHooked = true
+            S.Icon(icon, true)
+            hooksecurefunc(icon, "SetTexCoord", KeepIconCrop)
+        end
+    end
 end
 
 function S.NavCrumb(btn)

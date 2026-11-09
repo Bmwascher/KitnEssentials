@@ -92,6 +92,10 @@ local function SkinSpellBook(frame, book)
         book.HelpPlateButton.Ring:Hide()
     end
     if book.CategoryTabSystem then
+        -- Forever rebuilds these tabs on every spell update and the pool reuses
+        -- its buttons in no fixed order, so the first child can hold any slot.
+        -- Flushing the row by that child's edge would move it off the window.
+        if KE.IS_FOREVER then S.data(book.CategoryTabSystem).keepRowAnchor = true end
         for _, tab in ipairs({ book.CategoryTabSystem:GetChildren() }) do
             S.Tab(tab)
         end
@@ -115,6 +119,82 @@ local function SkinSpellBook(frame, book)
         S.Hover(rbtn)
     end
     S.data(book).skinned = true
+end
+
+local ART_DIM = 0.5
+local DIMMED_ART = {
+    "ClassBackground", "OverlayBackgroundRight", "OverlayBackgroundMid",
+    "Clouds1", "Clouds2", "AirParticlesClose", "AirParticlesFar",
+}
+local HIDDEN_ART = {
+    "Background", "BackgroundBorder", "DividerHorizontalLeft",
+    "DividerHorizontalRight", "DividerVerticalLeft", "DividerVerticalRight",
+}
+local HEADER_ART = { "MainRing", "TextBackground", "Divider" }
+local HEADER_BOX_W, HEADER_BOX_H = 24, 18
+local CURRENCY_ART = { "Border" }
+
+-- Dimmed by vertex color: several of these run looping alpha animations
+-- that own their alpha.
+local function DimTalentArt(talents)
+    for _, key in ipairs(DIMMED_ART) do
+        local region = talents[key]
+        if region then region:SetVertexColor(ART_DIM, ART_DIM, ART_DIM) end
+    end
+end
+
+-- Hidden by alpha: these regions anchor the tabs, headers, search box and
+-- Apply button.
+local function SkinTalentArt(talents)
+    S.Vanish(talents, HIDDEN_ART)
+    DimTalentArt(talents)
+    local d = S.data(talents)
+    if d.talentArt or not talents.UpdateSpecBackground then return end
+    d.talentArt = true
+    -- A spec change re-sets the painting's atlas.
+    hooksecurefunc(talents, "UpdateSpecBackground", DimTalentArt)
+end
+
+local function SkinTreeHeader(header)
+    local d = S.data(header)
+    if d.talentHeader then return end
+    d.talentHeader = true
+    local icon = header.Icon
+    if icon then
+        -- The round mask is unnamed, so every mask goes.
+        S.ClearMasks(icon)
+        S.Icon(icon, true)
+    end
+    S.Vanish(header, HEADER_ART)
+    S.SetFont(header.Name, 16, "")
+    S.SetFont(header.Text, 14, "OUTLINE")
+    -- The icon border is a frame above the header and would cover the
+    -- spent-points number, so the number moves into a box above that border.
+    local text = header.Text
+    if text and header.TextBackground then
+        local box = CreateFrame("Frame", nil, header)
+        box:SetFrameLevel(header:GetFrameLevel() + 3)
+        box:SetSize(HEADER_BOX_W, HEADER_BOX_H)
+        box:SetPoint("CENTER", header.TextBackground, "CENTER")
+        S.Backdrop(box)
+        text:SetParent(box)
+    end
+end
+
+local function SkinUnspentBox(cur)
+    local d = S.data(cur)
+    if d.talentCurrency then return end
+    d.talentCurrency = true
+    -- Alpha only: the layout frame sizes itself around this region.
+    S.Vanish(cur, CURRENCY_ART)
+    if cur.CurrentAmountContainer then S.Backdrop(cur.CurrentAmountContainer) end
+    S.SetFont(cur.UnspentLabel, 18, "")
+end
+
+local function SkinTreeHeaders(talents)
+    local pool = talents.treeHeaderPool
+    if not (pool and pool.EnumerateActive) then return end
+    for header in pool:EnumerateActive() do SkinTreeHeader(header) end
 end
 
 local function Skin()
@@ -182,6 +262,29 @@ local function Skin()
         end
         local hero = talents.HeroTalentsContainer
         if hero and hero.HeroSpecLabel then S.SetFont(hero.HeroSpecLabel, 16, "") end
+        if KE.IS_FOREVER then
+            S.TalentTree(talents)
+            SkinTalentArt(talents)
+            SkinTreeHeaders(talents)
+            if talents.ClassCurrencyDisplay then SkinUnspentBox(talents.ClassCurrencyDisplay) end
+            local d = S.data(talents)
+            if talents.RefreshTreeHeaders and not d.headerHook then
+                d.headerHook = true
+                hooksecurefunc(talents, "RefreshTreeHeaders", SkinTreeHeaders)
+            end
+            if talents.TabSystem then
+                -- Blizzard insets this row from the inner frame; the row flush
+                -- would move it to the window's edge.
+                S.data(talents.TabSystem).keepRowAnchor = true
+                for _, tab in ipairs({ talents.TabSystem:GetChildren() }) do
+                    S.Tab(tab)
+                end
+            end
+            S.TalentIconButton(talents.ResetButton)
+            S.TalentIconButton(talents.UndoButton)
+            local spec = talents.ActiveSpec
+            if spec and spec.ActivateButton then S.Button(spec.ActivateButton) end
+        end
     end
 
     SkinTalentDialog(_G.ClassTalentLoadoutImportDialog)

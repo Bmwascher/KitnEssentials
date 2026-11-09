@@ -109,6 +109,24 @@ local PANEL_HEIGHT = 109
 local BUTTON_HEIGHT = 20
 local BUTTON_WIDTH = PANEL_WIDTH - 20
 local TARGET_SIZE = 22
+local TEXT_SIZE = 13
+-- The dropdown template's 25px height plus the 5px gap above it.
+local DIFFICULTY_ROW_HEIGHT = 25 + 5
+
+-- Retail-only rows: the Vantus rune spell and the buff strip's spell ids do
+-- not exist on every client.
+local VANTUS_ADMITTED = not KE.IsFeatureAvailable or KE:IsFeatureAvailable("RaidControlVantus") == true
+local BUFFS_ADMITTED = not KE.IsFeatureAvailable or KE:IsFeatureAvailable("RaidControlBuffs") == true
+RC.VANTUS_ADMITTED, RC.BUFFS_ADMITTED = VANTUS_ADMITTED, BUFFS_ADMITTED
+
+-- The difficulty row shows only where the client offers a difficulty the
+-- player can pick; Blizzard's raid manager hides its own dropdown on the same
+-- test. A client without the predicate offers one.
+function RC.HasDifficultyRow()
+    local util = _G.DifficultyUtil
+    if not (util and util.HasAnyUserSelectableDifficulties) then return true end
+    return util.HasAnyUserSelectableDifficulties() and true or false
+end
 
 -- Bottom row: role-count plate on the left, Close filling the rest. Both
 -- widths come from these numbers, so the two always abut.
@@ -261,7 +279,7 @@ local function CreateUtilButton(name, parent, template, width, height, point, re
         -- as the floor: worst case is wrong typeface, never invisible
         -- controls.
         local text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        S.SetFont(text, 14, "")
+        S.SetFont(text, TEXT_SIZE, "")
         text:SetPoint("CENTER", btn, "CENTER", 0, 0)
         text:SetJustifyH("CENTER")
         text:SetText(btn.label)
@@ -297,7 +315,7 @@ local function CreateDropdown(name, parent, width, point, relativeto, point2, xO
 
     if label then
         dropdown.label = dropdown:CreateFontString(nil, "OVERLAY")
-        S.SetFont(dropdown.label, 14, "")
+        S.SetFont(dropdown.label, TEXT_SIZE, "")
         dropdown.label:SetPoint("LEFT", dropdown, "RIGHT", 4, 0)
         dropdown.label:SetText(label)
     end
@@ -334,7 +352,7 @@ local function CreateCheckBox(name, parent, size, point, relativeto, point2, xOf
     if box.Text then
         box.Text:SetPoint("LEFT", box, "RIGHT", 2, 0)
         box.Text:SetText(box.label)
-        S.SetFont(box.Text, 14, "")
+        S.SetFont(box.Text, TEXT_SIZE, "")
     end
 
     box:SetPoint(point, relativeto, point2, xOfs, yOfs)
@@ -646,7 +664,7 @@ function RC:CreateRoleIcons(panel)
         frame.texture = texture
 
         local Count = frame:CreateFontString(nil, "OVERLAY")
-        S.SetFont(Count, 14, "OUTLINE")
+        S.SetFont(Count, TEXT_SIZE, "OUTLINE")
         Count:SetPoint("LEFT", frame, "RIGHT", 1, 0)
         Count:SetText("0")
         frame.count = Count
@@ -1181,12 +1199,15 @@ end
 ---------------------------------------------------------------------------------
 -- Frames parked here are hidden for the session: Hide, mouse off, events off,
 -- statehidden for secure templates, and reparented so nothing re-shows them.
-local hiddenParent = CreateFrame("Frame")
-hiddenParent:Hide()
+local hiddenParent
 
 local function HideFrame(object)
     if type(object) == "string" then object = _G[object] end
     if not object then return end
+    if not hiddenParent then
+        hiddenParent = CreateFrame("Frame")
+        hiddenParent:Hide()
+    end
 
     if object.HideBase then
         object:HideBase(true) -- Edit Mode adds this fallback when it overrides Hide
@@ -1229,14 +1250,17 @@ function RC:Setup()
     -- Panel (secure base so the show button's snippet can drive it in combat)
     local panel = CreateFrame("Frame", "KE_RaidControlPanel", UIParent, "SecureHandlerBaseTemplate")
     S.Backdrop(panel)
-    -- Resize the panel by each added row instead of leaving dead space: the
-    -- Shared Notes and Vantus rows are BUTTON_HEIGHT + a 3px gap each, and
-    -- PANEL_HEIGHT excludes both.
+    -- Resize the panel by each conditional row instead of leaving dead space:
+    -- Shared Notes and Vantus rows are BUTTON_HEIGHT + a 3px gap, the
+    -- difficulty row DIFFICULTY_ROW_HEIGHT. PANEL_HEIGHT includes the
+    -- difficulty row and excludes the other two.
     local hasSharedNotes = _G.C_AddOns and _G.C_AddOns.IsAddOnLoaded("NorthernSkyRaidTools")
     local panelHeight = PANEL_HEIGHT
     if hasSharedNotes then panelHeight = panelHeight + (BUTTON_HEIGHT + 3) end
-    -- The Vantus row is unconditional and was not in PANEL_HEIGHT's baseline.
-    panelHeight = panelHeight + (BUTTON_HEIGHT + 3)
+    -- The Vantus row was not in PANEL_HEIGHT's baseline.
+    if VANTUS_ADMITTED then panelHeight = panelHeight + (BUTTON_HEIGHT + 3) end
+    local hasDifficulty = RC.HasDifficultyRow()
+    if not hasDifficulty then panelHeight = panelHeight - DIFFICULTY_ROW_HEIGHT end
     panel:SetSize(PANEL_WIDTH, panelHeight)
     -- Remembered so ApplyGroupContext subtracts from a FIXED number rather
     -- than from the live height -- reading the current size and adjusting it
@@ -1259,7 +1283,7 @@ function RC:Setup()
     local pos = db.Position
     local ShowButton = CreateUtilButton("KE_RaidControlShowButton", UIParent, "SecureHandlerClickTemplate",
         136, BUTTON_HEIGHT, nil, nil, nil, nil, nil, _G.RAID_CONTROL or "Raid Control", nil, nil, OnClick_ShowButton)
-    KE.Skins.SetFont(ShowButton.Text, 16, "")
+    KE.Skins.SetFont(ShowButton.Text, TEXT_SIZE + 2, "")
     if pos.bottom then
         ShowButton:SetPoint("BOTTOM", UIParent, "BOTTOM", pos.x or -400, -1)
     else
@@ -1347,17 +1371,20 @@ function RC:Setup()
         "20s", nil, OnEvent_CountdownButton, CountdownClick(20))
 
     -- Row 3: Dungeon Difficulty
-    local DifficultyDropdown = CreateDropdown("KE_RaidControlDifficulty", panel, 85,
-        "TOPLEFT", Countdown5Button, "BOTTOMLEFT", 0, -5, -- rows now share x=10
-        DIFFICULTY_LABEL,
-        -- GROUP_ROSTER_UPDATE as well as the difficulty event: converting a
-        -- party to a raid changes which difficulty the control reads, and both
-        -- the closed dropdown and its "(Party)"/"(Raid)" label have to follow.
-        { "PLAYER_DIFFICULTY_CHANGED", "GROUP_ROSTER_UPDATE" }, OnEvent_Difficulty, SetupDifficulty)
+    local assistAnchor = Countdown5Button
+    if hasDifficulty then
+        assistAnchor = CreateDropdown("KE_RaidControlDifficulty", panel, 85,
+            "TOPLEFT", Countdown5Button, "BOTTOMLEFT", 0, -5, -- rows now share x=10
+            DIFFICULTY_LABEL,
+            -- GROUP_ROSTER_UPDATE as well as the difficulty event: converting a
+            -- party to a raid changes which difficulty the control reads, and both
+            -- the closed dropdown and its "(Party)"/"(Raid)" label have to follow.
+            { "PLAYER_DIFFICULTY_CHANGED", "GROUP_ROSTER_UPDATE" }, OnEvent_Difficulty, SetupDifficulty)
+    end
 
     -- Everyone Assist
     local EveryoneAssist = CreateCheckBox("KE_RaidControlEveryoneAssist", panel, BUTTON_HEIGHT + 4,
-        "TOPLEFT", DifficultyDropdown, "BOTTOMLEFT", -4, -3,
+        "TOPLEFT", assistAnchor, "BOTTOMLEFT", -4, -3,
         _G.ALL_ASSIST_LABEL_LONG or "Everyone is Assistant", buttonEvents, OnEvent_EveryoneAssist, OnClick_EveryoneAssist)
 
     -- A restriction change has no widget event; RC:FollowRestrictions hands
@@ -1449,13 +1476,15 @@ function RC:Setup()
         end
     end
 
-    local VantusButton = CreateUtilButton("KE_RaidControlVantus", panel, nil,
-        BUTTON_WIDTH, BUTTON_HEIGHT, "TOPLEFT", lastUtilRow, "BOTTOMLEFT",
-        lastUtilXOfs, lastUtilYOfs,
-        "Check Vantus Runes", nil, nil, VantusRuneCheck)
-    raidOnly[#raidOnly + 1] = { h = BUTTON_HEIGHT + 3, VantusButton }
-    lastUtilRow = VantusButton
-    lastUtilXOfs, lastUtilYOfs = 0, -3
+    if VANTUS_ADMITTED then
+        local VantusButton = CreateUtilButton("KE_RaidControlVantus", panel, nil,
+            BUTTON_WIDTH, BUTTON_HEIGHT, "TOPLEFT", lastUtilRow, "BOTTOMLEFT",
+            lastUtilXOfs, lastUtilYOfs,
+            "Check Vantus Runes", nil, nil, VantusRuneCheck)
+        raidOnly[#raidOnly + 1] = { h = BUTTON_HEIGHT + 3, VantusButton }
+        lastUtilRow = VantusButton
+        lastUtilXOfs, lastUtilYOfs = 0, -3
+    end
 
     -- NSRT Shared Notes: opens NorthernSkyRaidTools' window on the
     -- SharedNotes tab. NSRT's internals are addon-private; the public
@@ -1503,9 +1532,11 @@ function RC:Setup()
     -- because hiding it costs the PANEL no height -- it never had any of the
     -- panel's; PositionSections simply drops it from the section chain and the
     -- markers close up against the panel.
-    local buffStrip = self:CreateBuffStrip(panel)
-    self:LayoutBuffStrip()
-    raidOnly[#raidOnly + 1] = { h = 0, buffStrip }
+    if BUFFS_ADMITTED then
+        local buffStrip = self:CreateBuffStrip(panel)
+        self:LayoutBuffStrip()
+        raidOnly[#raidOnly + 1] = { h = 0, buffStrip }
+    end
 
     -- Role check exists on Midnight, add the icon strip
     self:CreateRoleIcons(panel)

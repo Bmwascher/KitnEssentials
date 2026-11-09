@@ -83,7 +83,11 @@ local AVAILABILITY_FILE = "Core/Availability.lua"
 local PAGE_ROOTS = { "GUI/", "KitnEssentials_Options/" }
 local MODULE_ROOTS = { "Modules/", "Core/" }
 local OPTIONS_ROOT = "KitnEssentials_Options/"
-local TOCS = { "KitnEssentials.toc", "KitnEssentials_Options/KitnEssentials_Options.toc" }
+local TOCS = {
+    "KitnEssentials.toc",
+    "KitnEssentials_Options/KitnEssentials_Options.toc",
+    "KitnEssentials_Data/KitnEssentials_Data_Forever.toc",
+}
 local STRIP_CALLS = { TabbedContent = true, NestedTabs = true }
 -- The files that define the Register methods: their calls take the id as a
 -- parameter of the method and register nothing themselves.
@@ -107,7 +111,7 @@ local BUILDER_DEFAULTS = {
 local EXPAND_DEPTH = 8
 local CARD_SEP = " \194\183 "
 local REFRESH = "lua dev/scripts/file-map.lua --refresh"
-local REFRESH_INPUTS = "GUI Core Modules KitnEssentials_Options Libs KitnEssentials.toc "
+local REFRESH_INPUTS = "GUI Core Modules KitnEssentials_Options KitnEssentials_Data Libs KitnEssentials.toc "
     .. "dev/scripts/file-map.lua dev/scripts/load-list.lua dev/scripts/retail-only.lua"
 local STAMP_OPEN, STAMP_CLOSE = "<!-- file-map stamp\n", "-->\n"
 
@@ -443,7 +447,7 @@ local failures = {}
 local function fail(msg) failures[#failures + 1] = msg end
 
 local tracked, trackedSet = {}, {}
-for _, path in ipairs(commandLines("git ls-files -- Core GUI Modules KitnEssentials_Options")) do
+for _, path in ipairs(commandLines("git ls-files -- Core GUI Modules KitnEssentials_Options KitnEssentials_Data")) do
     tracked[#tracked + 1] = path
     trackedSet[path] = true
 end

@@ -1,0 +1,204 @@
+local KE = select(2, ...)
+local S = KE.Skins
+local _G = _G
+local ipairs = ipairs
+local hooksecurefunc = hooksecurefunc
+local unpack = unpack
+
+local LINE_ALPHA = 0.15
+-- The tree icons are painted discs: this inset keeps the square inscribed in
+-- the disc, so no round edge shows inside the border.
+local ICON_CROP = 0.146
+-- Card art rects overlap their neighbors and start past the window's left
+-- edge, so the plate sits inside them.
+local CARD_INSET = 8
+-- Unnamed in the node template, so it is found by its atlas.
+local RANK_ART = "Talents-Square-Box-c60"
+-- Holds a single-digit "rank/max" at the 14 pt outline font.
+local RANK_BOX_W, RANK_BOX_H = 30, 18
+
+local LINE_COLOR = { 1, 1, 1, LINE_ALPHA }
+
+local function DividerLine(divider)
+    if not divider then return end
+    if divider.VerticalDivider then divider.VerticalDivider:SetAlpha(0) end
+    S.VerticalLine(divider, "FROM_CENTER", LINE_COLOR)
+end
+
+-- Atlas space: the three icons share one sheet. A new atlas resets the crop.
+local function CropIcon(button)
+    S.CropAtlasEdges(button.NormalTexture, ICON_CROP, ICON_CROP)
+    S.CropAtlasEdges(button.PushedTexture, ICON_CROP, ICON_CROP)
+end
+
+local function SquareIcon(button)
+    if not button or S.data(button).keSquareIcon then return end
+    S.data(button).keSquareIcon = true
+    local normal, pushed, mask = button.NormalTexture, button.PushedTexture, button.CircleMask
+    -- A mask left on would clip the square's corners.
+    if mask then
+        if normal then normal:RemoveMaskTexture(mask) end
+        if pushed then pushed:RemoveMaskTexture(mask) end
+    end
+    if button.Ring then button.Ring:SetAlpha(0) end
+    -- Re-atlased on every selection refresh; the alpha survives it.
+    if button.HighlightTexture then button.HighlightTexture:SetAlpha(0) end
+    CropIcon(button)
+    if normal then
+        S.PixelSnap(normal)
+        local border = S.Backdrop(normal, -1, true)
+        if border then border:SetFrameLevel(button:GetFrameLevel() + 1) end
+    end
+    if button.SetIconAtlas then hooksecurefunc(button, "SetIconAtlas", CropIcon) end
+end
+
+local function SkinSelectedIcon(icon)
+    if not icon then return end
+    SquareIcon(icon)
+    -- A click toggles the checked state, which would draw a round ring.
+    if icon.CheckedTexture then icon.CheckedTexture:SetAlpha(0) end
+end
+
+local function PaintCard(button)
+    local d = S.data(button)
+    local plate, fill = d.kePlate, d.keFill
+    if not (plate and fill) then return end
+    if button:GetChecked() then
+        fill:Show()
+        S.PaintBrand(plate, "SetBackdropBorderColor", 1)
+    else
+        fill:Hide()
+        S.ForgetBrand(plate)
+        plate:SetBackdropBorderColor(unpack(S.borderColor))
+    end
+end
+
+local function SkinCard(button)
+    if not button or S.data(button).keTreeCard then return end
+    S.data(button).keTreeCard = true
+    local art = button.Background
+    if art then art:SetAlpha(0) end
+    if button.SelectedGlow then button.SelectedGlow:SetAlpha(0) end
+    SquareIcon(button)
+    local plate = S.Backdrop(button)
+    if not plate then return end
+    if art then
+        plate:ClearAllPoints()
+        plate:SetPoint("TOPLEFT", art, "TOPLEFT", CARD_INSET, -CARD_INSET)
+        plate:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", -CARD_INSET, CARD_INSET)
+        -- The button is only the icon's size; hover and click cover the plate.
+        local aw, ah = art:GetSize()
+        local bw, bh = button:GetSize()
+        if aw and ah and bw and bh then
+            local dx = (aw - 2 * CARD_INSET - bw) / 2
+            local dy = (ah - 2 * CARD_INSET - bh) / 2
+            button:SetHitRectInsets(-dx, -dx, -dy, -dy)
+        end
+    end
+    local fill = button:CreateTexture(nil, "BACKGROUND", nil, 1)
+    S.PaintBrand(fill, "SetColorTexture", S.palette.selectedA)
+    S.InsetToEdge(fill, plate)
+    fill:Hide()
+    S.data(button).kePlate, S.data(button).keFill = plate, fill
+    S.HoverWash(button)
+    if button.RefreshSelectionVisuals then
+        hooksecurefunc(button, "RefreshSelectionVisuals", PaintCard)
+    end
+    PaintCard(button)
+end
+
+local function SkinBadge(badge)
+    if not badge then return end
+    if badge.Background then badge.Background:SetAlpha(0) end
+    S.Backdrop(badge)
+end
+
+local function PointBar(summary)
+    local border = summary and summary.Border
+    if not border then return end
+    border:SetAlpha(0)
+    local plate = S.Backdrop(border)
+    if not plate then return end
+    -- The art is 37 tall around a whole-pixel center line, so its top and
+    -- bottom sit on half pixels.
+    plate:ClearAllPoints()
+    plate:SetPoint("TOPLEFT", border, "TOPLEFT", 0, -0.5)
+    plate:SetPoint("BOTTOMRIGHT", border, "BOTTOMRIGHT", 0, 0.5)
+end
+
+local rankBoxOwner = {}
+
+local function SkinRankBox(button)
+    local text = button and button.SpendText
+    if not text then return end
+    local d = S.data(button)
+    if d.keRankBox ~= nil then return end
+    d.keRankBox = false
+    local rankArt
+    for _, region in ipairs({ button:GetRegions() }) do
+        if region.IsObjectType and region:IsObjectType("Texture")
+            and region.GetAtlas and region:GetAtlas() == RANK_ART then
+            rankArt = region
+            break
+        end
+    end
+    -- Selection and large nodes use templates without this art.
+    if not rankArt then return end
+    rankArt:SetAlpha(0)
+    -- Centered where the rank text is centered, above the node's border art;
+    -- the text moves onto the box so it draws above the plate.
+    local box = CreateFrame("Frame", nil, button)
+    box:SetFrameLevel(button:GetFrameLevel() + 3)
+    box:SetSize(RANK_BOX_W, RANK_BOX_H)
+    box:SetPoint("CENTER", button, "BOTTOMRIGHT")
+    S.Backdrop(box)
+    text:SetParent(box)
+    S.SetFont(text, 14, "OUTLINE")
+    d.keRankBox = box
+end
+
+local function OnRankButtonAcquired(_, button)
+    SkinRankBox(button)
+end
+
+local function RankBoxes(traits)
+    local d = S.data(traits)
+    if d.keRankBoxes then return end
+    d.keRankBoxes = true
+    local event = traits.Event and traits.Event.TalentButtonAcquired
+    if event and traits.RegisterCallback then
+        traits:RegisterCallback(event, OnRankButtonAcquired, rankBoxOwner)
+    end
+    if traits.EnumerateAllTalentButtons then
+        for button in traits:EnumerateAllTalentButtons() do SkinRankBox(button) end
+    end
+end
+
+function S.LegacyTreePage()
+    local page = _G.LegacySystemFrame and _G.LegacySystemFrame.TreePage
+    if not page or S.data(page).skinned then return end
+    S.FontStrings(page)
+    if page.Background then page.Background:SetAlpha(0) end
+    DividerLine(page.VerticalDivider)
+    local selection = page.LegacyTreeSelectionPanel
+    if selection and selection.treeButtons then
+        for _, button in ipairs(selection.treeButtons) do SkinCard(button) end
+    end
+    local traits = page.LegacyTreeTraitPanel
+    if traits then
+        S.Button(traits.ApplyButton)
+        S.EditBox(traits.SearchBox)
+        SkinSelectedIcon(traits.SelectedTreeIcon)
+        SkinBadge(traits.SpentPointsFrame)
+        if S.TalentIconButton then
+            S.TalentIconButton(traits.ResetButton)
+            S.TalentIconButton(traits.UndoButton)
+        end
+        if S.TalentTree then S.TalentTree(traits) end
+        RankBoxes(traits)
+    end
+    local summary = page.LegacyTreePointSummary
+    PointBar(summary)
+    if summary and S.LegacyPointShield then S.LegacyPointShield(summary.Shield) end
+    S.data(page).skinned = true
+end

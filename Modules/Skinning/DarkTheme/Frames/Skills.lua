@@ -9,6 +9,7 @@ local function SkinPage()
     local detail = frame.SkillDetailFrame
     if detail then
         S.CharacterSidePane(detail)
+        S.CharacterPaneRows(detail)
         if detail.RankBar then S.ColoredBar(detail.RankBar) end
     end
     S.data(frame).skinned = true

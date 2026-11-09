@@ -473,3 +473,71 @@ describe("Tooltips EffectiveLineOptions", function()
         end
     end)
 end)
+
+-- The NPC level row keeps Blizzard's wording; only the number is wrapped,
+-- and a row that already carries a color is left alone on a re-run.
+describe("Tooltips ColorLevelToken", function()
+    local RED = { r = 1, g = 0, b = 0 }
+    local TT
+    before_each(function() TT = L.loadTooltips() end)
+
+    it("wraps the first occurrence of the level and keeps the rest of the row", function()
+        for _, row in ipairs({
+            { text = "Level 12 Beast (Elite) 12", token = "12", want = "Level |cffff000012|r Beast (Elite) 12" },
+            { text = "Level ?? Humanoid (Boss)", token = "??", want = "Level |cffff0000??|r Humanoid (Boss)" },
+        }) do
+            assert.equal(row.want, TT._ColorLevelToken(row.text, row.token, RED), row.token)
+        end
+    end)
+
+    it("leaves a row that is already colored", function()
+        assert.is_nil(TT._ColorLevelToken("Level |cffff000012|r Beast", "12", RED))
+    end)
+
+    it("leaves a row that does not show the level as a whole number", function()
+        for _, row in ipairs({
+            { text = "Level 13 Beast", token = "12" },
+            { text = "Level 18 Beast", token = "8" },
+            { text = "Level 123 Beast", token = "12" },
+        }) do
+            assert.is_nil(TT._ColorLevelToken(row.text, row.token, RED), row.token)
+        end
+    end)
+end)
+
+-- The difficulty color reads a skull's level of -1 as trivial gray.
+describe("Tooltips LevelConColor", function()
+    it("gives a skull level the impossible color without asking for a difficulty", function()
+        local asked = false
+        local impossible = { r = 1, g = 0.1, b = 0.1 }
+        local TT = L.loadTooltips({
+            GetCreatureDifficultyColor = function() asked = true; return { r = 0.5, g = 0.5, b = 0.5 } end,
+            QuestDifficultyColors = { impossible = impossible },
+        })
+        assert.equal(impossible, TT._LevelConColor(-1))
+        assert.is_false(asked)
+    end)
+
+    -- Forever asks its nameplate's rule with the level difference; retail
+    -- ignores that rule and keeps the quest-log color.
+    it("takes the nameplate rule on Forever and the difficulty color on retail", function()
+        local questLog = { r = 1, g = 1, b = 0 }
+        local plateColor = { r = 0, g = 1, b = 0 }
+        for _, row in ipairs({
+            { forever = true, want = plateColor, wantDiff = -3 },
+            { forever = false, want = questLog },
+        }) do
+            local gotDiff
+            local TT = L.loadTooltips({
+                forever = row.forever,
+                UnitEffectiveLevel = function() return 20 end,
+                GetCreatureDifficultyColor = function() return questLog end,
+                NameplateLevelFrameMixin = {
+                    GetDifficultyColor = function(_, diff) gotDiff = diff; return plateColor end,
+                },
+            })
+            assert.equal(row.want, TT._LevelConColor(17), tostring(row.forever))
+            assert.equal(row.wantDiff, gotDiff, tostring(row.forever))
+        end
+    end)
+end)

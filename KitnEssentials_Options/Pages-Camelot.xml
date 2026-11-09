@@ -9,6 +9,7 @@
     <Script file="Combat\GUI-CombatTexts.lua" />
     <Script file="Combat\GUI-Cursor.lua" />
     <Script file="Combat\GUI-FocusCastbar.lua" />
+    <Script file="Combat\GUI-SwingTimer.lua" />
     <Script file="Combat\GUI-RangeChecker.lua" />
     <Script file="Combat\StatusTexts\GUI-StatusTexts.lua" />
     <Script file="Combat\StatusTexts\GUI-HealerMana.lua" />
@@ -29,6 +30,7 @@
     <Script file="QoL\QualityOfLife\GUI-SpellAlerts.lua" />
     <Script file="Combat\StatusTexts\GUI-PlayerAbsorbs.lua" />
     <Script file="Combat\StatusTexts\GUI-NoMovementAlert.lua" />
+    <Script file="QoL\GroupTools\GUI-WorldMarkerCycler.lua" />
     <Script file="Combat\StatusTexts\GUI-PotionReady.lua" />
     <Script file="QoL\GroupTools\GUI-ReadyCheckConsumables.lua" />
     <Script file="DungeonTools\KicksCasts\GUI-DungeonCasts.lua" />
@@ -50,9 +52,12 @@
     <Script file="QoL\QualityOfLife\GUI-CopyAnything.lua" />
     <Script file="Skinning\DarkTheme\GUI-ColorPicker.lua" />
     <Script file="QoL\QualityOfLife\GUI-MoveFrames.lua" />
+    <Script file="Skinning\DarkTheme\GUI-RaidControl.lua" />
+    <Script file="QoL\QualityOfLife\GUI-RareAlert.lua" />
     <Script file="QoL\QualityOfLife\GUI-QualityOfLife.lua" />
     <Script file="QoL\GroupTools\GUI-GroupTools.lua" />
     <Script file="QoL\GUI-SecondaryStats.lua" />
+    <Script file="QoL\GUI-Scout.lua" />
     <Script file="Skinning\GUI-Tooltips.lua" />
     <Script file="Skinning\DarkTheme\GUI-BlizzardMessages.lua" />
     <Script file="Skinning\DarkTheme\GUI-UIWidgets.lua" />

@@ -23,8 +23,11 @@ local FOREVER_ALLOWED = {
     ProfilesReset = true,
     -- Dark Theme: the engine, Color Picker, the skins command, the page
     -- with the tabs that configure what loads, the Addon Skins card and the
-    -- role icon card. Raid Control and the Group Finder skin stay withheld.
+    -- role icon card. The Group Finder skin stays withheld.
     BlizzardFrames = true,
+    -- Raid Control: the module and its card. Its Vantus Rune row and raid
+    -- buff strip stay withheld.
+    RaidControl = true,
     ColorPicker = true,
     SkinAPI = true,
     SkinBlizzardFrames = true,
@@ -125,10 +128,10 @@ local FOREVER_ALLOWED = {
     KickTrackerPlates = true,
     FocusMarkerKick = true,
     -- QoL: the Quality of Life page with its Spell Alerts, Move Frames, Copy
-    -- Anything and Slash Commands tabs, Secondary Stats, and the Group Tools
-    -- row with its Ready Check tab. Great Vault Alert, Raid Notifications,
-    -- World Markers, the other QoL rows and the PI Macro Builder line stay
-    -- withheld.
+    -- Anything, Slash Commands and Rare Alert tabs, Secondary Stats, and the
+    -- Group Tools row with its Ready Check and World Markers tabs. Great Vault
+    -- Alert, Raid Notifications, the other QoL rows and the PI Macro Builder
+    -- line stay withheld.
     QualityOfLife = true,
     SpellAlerts = true,
     MoveFrames = true,
@@ -137,6 +140,8 @@ local FOREVER_ALLOWED = {
     SecondaryStats = true,
     GroupTools = true,
     ReadyCheckConsumables = true,
+    WorldMarkerCycler = true,
+    RareAlert = true,
     -- Combat: Combat Timer, Combat Texts, Cursor Effects with its Cursor and
     -- Taunt tabs, Player Crosshair, Range Display, Focus Castbar, Combat Res,
     -- the Class Tools row with its All Classes tab (Custom Cooldowns, DoT
@@ -181,8 +186,10 @@ local FOREVER_ALLOWED = {
     AutomationDruidStayInForm = true,
     CombatLogger = true,
     MerchantPages = true,
+    Scout = true,
     -- The Forever-only check id; see FOREVER_ONLY.
     ForeverOnlyProbe = true,
+    SwingTimer = true,
 }
 
 -- Refused on retail. A feature also needs a FOREVER_ALLOWED entry, load lines
@@ -190,6 +197,9 @@ local FOREVER_ALLOWED = {
 -- id ForeverOnlyProbe has no module, page or row.
 local FOREVER_ONLY = {
     ForeverOnlyProbe = true,
+    Scout = true,
+    RareAlert = true,
+    SwingTimer = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.

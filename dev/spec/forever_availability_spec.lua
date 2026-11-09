@@ -42,12 +42,12 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "CopyAnything",     want = true },
             { load = "baseline",            seed = BASELINE,             id = "SlashCommands",    want = true },
             { load = "baseline",            seed = BASELINE,             id = "SecondaryStats",   want = true },
-            -- Group Tools: the row and its Ready Check tab; the other two
-            -- tabs stay withheld.
+            -- Group Tools: the row and its Ready Check and World Markers
+            -- tabs; Raid Notifications stays withheld.
             { load = "baseline",            seed = BASELINE,             id = "GroupTools",            want = true },
             { load = "baseline",            seed = BASELINE,             id = "ReadyCheckConsumables", want = true },
             { load = "baseline",            seed = BASELINE,             id = "RaidNotifications",     want = false },
-            { load = "baseline",            seed = BASELINE,             id = "WorldMarkerCycler",     want = false },
+            { load = "baseline",            seed = BASELINE,             id = "WorldMarkerCycler",     want = true },
             -- Combat: every row, the Cursor tabs but Dispel, Class Tools with
             -- its All Classes tab and tools, and Status Texts with all its tabs
             -- are admitted; Dispel and the Class Tools class tabs are not.
@@ -80,6 +80,9 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "HuntersMark",      want = false },
             { load = "baseline",            seed = BASELINE,             id = "GreatVaultAlert",  want = false },
             { load = "baseline",            seed = BASELINE,             id = "PIMacroBuilder",   want = false },
+            { load = "baseline",            seed = BASELINE,             id = "RaidControl",       want = true },
+            { load = "baseline",            seed = BASELINE,             id = "RaidControlVantus", want = false },
+            { load = "baseline",            seed = BASELINE,             id = "RaidControlBuffs",  want = false },
             -- Dungeon Tools: eight modules, the Dungeon Alerts and Kicks &
             -- Casts rows and five tabs are admitted; the keystone reminders
             -- and group finder tab and Party Stops are not.

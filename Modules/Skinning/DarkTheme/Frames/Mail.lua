@@ -70,6 +70,13 @@ local function Skin()
         S.ArrowButton(_G.InboxNextPageButton, "right")
         _G.InboxNextPageButton:SetPoint("BOTTOMRIGHT", -80, 100)
     end
+    -- Forever names the page buttons by parentKey only and lays them out
+    -- differently, so they keep Blizzard's anchors.
+    local inbox = _G.InboxFrame
+    if inbox and not _G.InboxPrevPageButton then
+        S.ArrowButton(inbox.PrevPageButton, "left")
+        S.ArrowButton(inbox.NextPageButton, "right")
+    end
 
     S.Tabs("MailFrameTab", 2)
 

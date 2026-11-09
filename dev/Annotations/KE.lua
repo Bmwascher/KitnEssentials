@@ -213,11 +213,16 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field GUI table
 ---@field FramePool KE.FramePool
 ---@field CCTrackerRules table
+---@field ScoutRules table
+---@field ScoutData table
+---@field DataSources table<string, string>
+---@field BuildData fun(name: string): table?, string?
 ---@field CC_TRACKER_SEEDS table
 ---@field PartyStopsRules table
 ---@field PartyStopsData table
 ---@field PlateSlots table
 ---@field DoTTrackerRules table
+---@field SwingTimerRules table
 ---@field ShamanProcRules table
 ---@field ExecutionerRules table
 ---@field ImminentDemiseRules table
@@ -229,6 +234,7 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field GroupInspect KE.GroupInspect
 ---@field Context KE.Context
 ---@field FocusAnnounce table # Modules/DungeonTools/KicksCasts/FocusAnnounce.lua
+---@field Waypoint table?
 ---@field curves KE.Curves
 ---@field Skins table # Modules/Skinning/*.lua shared namespace (KE.Skins)
 ---@field msgContainer Frame? # message-popup singleton (Core/Widgets.lua)
@@ -1031,6 +1037,11 @@ function KE.Skins.GetSuppressionState(key) end
 ---@param border number[]? {r,g,b,a} or nil to leave unchanged
 function KE.Skins.SetSkinColors(bg, border) end
 
+--- Paints tex the border color now and again whenever the border color
+--- changes (KE.Skins.SetSkinColors with a border, KE.Skins.RefreshPalette).
+---@param tex Texture?  nil is ignored
+function KE.Skins.PaintBorder(tex) end
+
 --- Re-applies every registered string with no reload.
 ---@param face string?    LibSharedMedia font name, "" for the addon's own font, nil to leave unchanged
 ---@param size number?    base size 8-20, nil to leave unchanged
@@ -1044,12 +1055,25 @@ function KE.Skins.SetSkinFont(face, size, outline) end
 ---@return Frame? plate # nil when there is no owner or no plate
 function KE.Skins.RelevelPlate(owner, plate) end
 
+--- Removes every mask texture from tex.
+---@param tex Texture?  nil, or a region without mask methods, is ignored
+function KE.Skins.ClearMasks(tex) end
+
 --- A skin body returns this when its window or addon is missing, so verify
 --- reads "skipped (<reason>)" instead of "ok".
 ---@param reason string?  defaults to "no reason given"
 ---@return table sentinel
 ---@return string reason
 function KE.Skins.Skip(reason) end
+
+--- A vertical line one physical pixel wide on host, created once and returned
+--- on every call. Its width follows the host's scale; color and anchors are
+--- fixed at creation.
+---@param host Frame?  nil returns nil
+---@param align "LEFT"|"CENTER"|"FROM_CENTER"  LEFT: host's left edge; CENTER: centered; FROM_CENTER: left edge on the center line
+---@param color number[]  {r,g,b,a}
+---@return Texture? line
+function KE.Skins.VerticalLine(host, align, color) end
 
 -- ─── Skinning (Modules/Skinning/DarkTheme/Frames/LFG.lua) ──────────
 --- Repaints the Group Finder search rows and role count strips with the

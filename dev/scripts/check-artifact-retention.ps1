@@ -19,7 +19,8 @@
 #   [C] a review mirror whose commit is in main      - stale (note; a name
 #       suffix git cannot resolve is not a mirror)
 #   [D] a worktree whose branch is merged into main  - stale (note; never
-#       touched by -Archive, remove with `git worktree remove`)
+#       touched by -Archive, remove with `git worktree remove`; merged as
+#       defined below, so a branch with no commits of its own is not)
 #   [E] an entry larger than 50 MB                   - note
 #   [F] a keep entry whose branch is merged or whose date has passed - FAIL
 #       (the exemption has expired; delete the line or archive the entry)
@@ -60,6 +61,15 @@
 # cutover writes it as its last program-migration step; before it, programs
 # are loose files with no membership, and every program's folders would be
 # judged as one-offs.
+# Rule [D] calls a branch merged when main holds a commit the branch made: its
+# tip is reachable from main, and its reflog records it making a commit that
+# tip still contains (a commit, cherry-pick, revert, am, merge commit, or a
+# rebase or pull --rebase that replayed commits). Only the reflog shows what a
+# branch made, so a branch that made nothing is not merged, wherever it
+# started: still at its first commit, or fast-forwarded along main or onto a
+# branch main has merged since. A merged branch whose reflog has expired, or
+# kept only entries newer than its commits, is missed: a kept worktree costs
+# nothing, a removed one loses its ignored files.
 # The plugin's review worktrees under _worktrees/_review are detached, so rule
 # [D] cannot see them: the plugin's doctor lists them and its `round close`
 # removes them, before their feature folder is archived.
@@ -315,7 +325,24 @@ if ($gitOk -and (Test-Path -LiteralPath $mirrors)) {
 }
 $stale = @($stale | Select-Object -Unique)
 
-# [D] worktrees on merged branches
+# [D] worktrees on merged branches. Reachable from main is not enough: a
+# branch with no commits of its own sits on main as well.
+function Landed([string]$branch) {
+    $tip = @(GitLines @('rev-parse', "refs/heads/$branch"))
+    $log = @(GitLines @('reflog', 'show', '--format=%H %gs', "refs/heads/$branch"))
+    if (-not $script:gitOk -or -not $tip) { return $false }
+    foreach ($entry in $log) {
+        $sha, $subject = $entry -split ' ', 2
+        $own = ($subject -match '^(commit|cherry-pick|revert|am)\b') -or ($subject -match '^(merge|pull)\b[^:]*: Merge made by') -or
+               ($subject -match '^(rebase|pull)\b.*finish.* onto ([0-9a-f]{40})' -and $Matches[2] -ne $sha)
+        if (-not $own) { continue }
+        # A reflog entry keeps its commit, so any exit but yes or no is a git failure.
+        & git -C $root merge-base --is-ancestor $sha $tip[0] 2>$null
+        if ($LASTEXITCODE -eq 0) { return $true }
+        if ($LASTEXITCODE -ne 1) { $script:gitOk = $false; return $false }
+    }
+    return $false
+}
 if ($gitOk) {
     $wt = GitLines @('worktree', 'list', '--porcelain')
     $wtPath = ''
@@ -323,7 +350,7 @@ if ($gitOk) {
         if ($line -like 'worktree *') { $wtPath = $line.Substring(9) }
         elseif ($line -like 'branch refs/heads/*') {
             $b = $line.Substring(18)
-            if ($mergedBranches -contains $b -and $b -ne 'main' -and $wtPath -ne $root.Replace('\', '/')) {
+            if ($mergedBranches -contains $b -and $b -ne 'main' -and $wtPath -ne $root.Replace('\', '/') -and (Landed $b)) {
                 $notes += "[D] worktree on merged branch $b : $wtPath (git worktree remove)"
             }
         }

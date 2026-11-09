@@ -66,6 +66,7 @@ GUIFrame.sidebarConfig = {
                     HealerMana = { "healer", "healer mana", "mana", "oom", "raid", "dungeon", "party" },
                     NoMovementAlert = { "movement", "no movement alert", "movement alert", "alert", "cooldown" },
                 } },
+            { id = "SwingTimer",    text = "Swing Timer", keywords = { "swing", "swing timer", "auto attack", "auto shot", "melee", "hunter", "wand", "seal", "heroic strike", "cleave", "maul", "raptor strike", "target estimate", "parry" } },
         },
     },
     {
@@ -93,6 +94,7 @@ GUIFrame.sidebarConfig = {
             { id = "BonusRoll",         text = "Bonus Roll", keywords = { "bonus roll", "bonus", "coin", "roll", "pass", "auto pass", "auto-pass", "loot spec", "confirm", "seal" } },
             { id = "GroupTools",        text = "Group Tools", keywords = { "group", "raid tools", "utilities", "general", "raid", "raid notifications", "notification", "notifications", "alert", "gateway", "soulwell", "feast", "repair", "portal", "ready check", "consumables", "flask", "food", "rune", "missing", "world marker", "world markers", "marker", "raid marker", "cycle", "cycler" } },
             { id = "QualityOfLife",     text = "Quality of Life", keywords = { "quality of life", "qol", "spell alert opacity", "spell alert", "opacity", "proc", "alert", "glow", "overlay", "great vault alert", "great vault", "vault", "weekly", "reward", "chest", "copy anything", "copy", "spell id", "item id", "npc id", "aura id", "macro", "clipboard", "tooltip", "move frames", "move", "mover", "drag", "draggable", "reposition", "position", "window", "windows", "frame", "frames", "blizzard", "panel", "unlock", "slash", "slash command", "command", "commands", "shortcut", "reload" } },
+            { id = "Scout",             text = "Mob Scout", keywords = { "scout", "mob scout", "mob", "npc", "tooltip", "abilities", "ability", "armor", "immune", "immunity", "immunities", "resist", "resists", "tame", "tameable", "pet family", "control", "stun", "pull" } },
             { id = "SecondaryStats",    text = "Secondary Stats Display", keywords = { "secondary stats", "stats", "stat", "crit", "critical strike", "haste", "mastery", "versatility", "vers", "leech", "lifesteal", "avoidance", "speed", "rating", "percent", "readout", "display" } },
         },
     },

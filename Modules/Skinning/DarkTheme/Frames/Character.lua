@@ -14,17 +14,30 @@ local STAT_CATEGORIES = { "ItemLevelCategory", "AttributesCategory", "Enhancemen
 local ILVL_SIZE, HEADER_SIZE, ROW_SIZE = 20, 14, 12
 local HEADER_INSET = 6
 
--- The ammo slot draws an arrow overlay alone in an unnamed child frame. Found
--- by its atlas: the slot's own backdrop is a child frame too, and so is its
--- cooldown.
+-- The ammo slot's arrow overlay and the bronze divider between the panes each
+-- sit alone in a child frame with no name or key, so only the atlas finds them.
 local AMMO_ARROW_ATLAS = "UI-Character-Info-GearSlot-Arrow"
-local function HideAmmoArrow(button)
-    for _, child in ipairs({ button:GetChildren() }) do
+local PANE_DIVIDER_ATLAS = "common-framedivider"
+local PANE_LINE_COLOR = { 1, 1, 1, 0.15 }
+local function KillChildArt(parent, atlas)
+    for _, child in ipairs({ parent:GetChildren() }) do
         local region = child.GetRegions and child:GetRegions()
-        if region and region.GetAtlas and region:GetAtlas() == AMMO_ARROW_ATLAS then
+        if region and region.GetAtlas and region:GetAtlas() == atlas then
             S.KillTexture(region)
+            return child
         end
     end
+end
+
+-- Blizzard writes its page art onto these textures on every show and toggle,
+-- and the engine shows the normal texture after a click past any hide.
+local function PointPaneToggle(frame)
+    local button = frame.RightPaneToggleButton
+    local normal, pushed = button:GetNormalTexture(), button:GetPushedTexture()
+    if normal then normal:SetTexture(S.ClearTexture) end
+    if pushed then pushed:SetTexture(S.ClearTexture) end
+    S.ArrowTexture(S.data(button).arrow, frame:IsRightPaneCollapsed() and "right" or "left")
+    S.ArrowHoverSync(button)
 end
 
 local ItemLocation = ItemLocation
@@ -32,7 +45,7 @@ local ItemLocation = ItemLocation
 local ILVL_FONT = 13
 local TITLE_FONT = 13
 local STAT_GRAD_WIDTH = 80
-local STAT_GRAD_TEX = "Interface\\Buttons\\WHITE8x8"
+local FLAT_TEX = "Interface\\Buttons\\WHITE8x8"
 
 -- Slot item level and gem icons are drawn by CharacterPanel.lua, not here.
 
@@ -40,7 +53,7 @@ local STAT_GRAD_TEX = "Interface\\Buttons\\WHITE8x8"
 -- Reputation tab's treatment. Statistics headers carry no IsCollapsed and
 -- read their tree node instead.
 local LIST_ROW_FONT = 12
-local LIST_BAR_DAMPEN = 0.55
+local LIST_LINE_ATLAS = "UI-Character-Info-ScrollLine-Long"
 
 local function ListHeaderCollapsed(header)
     if not header then return false end
@@ -61,12 +74,36 @@ function S.CharacterToggleAtlas(button)
     end
 end
 
+-- Blizzard repaints these regions white on every refresh and sets the frame's
+-- alpha by state, which already covers hover. The fill goes flat, and a selected
+-- row takes the accent; an At War row keeps its red. False when the row has none.
+function S.CharacterRowHighlight(row)
+    local host = row.Content and row.Content.BackgroundHighlight
+    local regions = host and host.TextureRegions
+    if not regions then return false end
+    local painting = false
+    local function Paint(region)
+        if painting or not row.elementData or not row.IsSelected or not row:IsSelected() then return end
+        if row.IsAtWar and row:IsAtWar() then return end
+        local c = S.palette.brand
+        painting = true
+        region:SetVertexColor(c[1], c[2], c[3])
+        painting = false
+    end
+    for _, region in ipairs(regions) do
+        region:SetTexture(FLAT_TEX)
+        hooksecurefunc(region, "SetVertexColor", Paint)
+        Paint(region)
+    end
+    return true
+end
+
 function S.CharacterListRow(child)
     if not child or S.data(child).keListRow then return end
     S.data(child).keListRow = true
     -- StripTextures clears every texture region, so the hover is added after it.
     S.StripKeepingIcon(child, child.StateIcon)
-    S.RowHover(child)
+    if not S.CharacterRowHighlight(child) then S.RowHover(child) end
     if child.StateIcon then
         local bd = S.Backdrop(child)
         if bd then
@@ -84,8 +121,19 @@ function S.CharacterListRow(child)
     if content then
         -- A colored progress bar, though its object type is StatusBar: the fill
         -- is a texture the mixin sizes, so the StatusBar path would miss it.
-        if content.SkillsBar then S.ColoredBar(content.SkillsBar, LIST_BAR_DAMPEN) end
+        if content.SkillsBar then S.ColoredBar(content.SkillsBar) end
         S.FontStrings(content, LIST_ROW_FONT, "")
+    end
+end
+
+function S.CharacterListLines(scrollBox)
+    if not scrollBox or S.data(scrollBox).keListLines then return end
+    S.data(scrollBox).keListLines = true
+    for _, child in ipairs({ scrollBox:GetChildren() }) do
+        local region = child.GetRegions and child:GetRegions()
+        if region and region.GetAtlas and region:GetAtlas() == LIST_LINE_ATLAS then
+            region:SetAlpha(0)
+        end
     end
 end
 
@@ -93,14 +141,47 @@ function S.CharacterListPage(frame)
     if not frame then return end
     S.StripTextures(frame)
     if frame.ScrollBar then S.ScrollBar(frame.ScrollBar) end
-    if frame.ScrollBox then S.HookScrollBox(frame.ScrollBox, S.CharacterListRow) end
+    if frame.ScrollBox then
+        S.CharacterListLines(frame.ScrollBox)
+        S.HookScrollBox(frame.ScrollBox, S.CharacterListRow)
+    end
 end
 
+-- Alpha, not a strip: the row's size and its icon's anchor come from this art.
+local function SkinPaneRow(row)
+    if S.data(row).kePaneRow then return end
+    S.data(row).kePaneRow = true
+    if row.IconSlot then
+        row.IconSlot:SetAlpha(0)
+        S.Icon(row.Icon, true)
+    elseif row.Background then
+        row.Background:SetAlpha(0)
+        local bd = S.Backdrop(row)
+        if bd then
+            bd:ClearAllPoints()
+            bd:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -HEADER_INSET)
+            bd:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, HEADER_INSET)
+        end
+    end
+end
+
+local function SkinPaneRows(pane)
+    for _, row in ipairs({ pane.Content:GetChildren() }) do SkinPaneRow(row) end
+end
+
+-- Only the Skills and PvP panes add icon or category rows.
+function S.CharacterPaneRows(pane)
+    if not pane or not pane.Content or not pane.LayoutRows then return end
+    hooksecurefunc(pane, "LayoutRows", SkinPaneRows)
+    SkinPaneRows(pane)
+end
+
+-- Docked in the window's right half, so it shares the window's background and
+-- takes no backdrop of its own.
 function S.CharacterSidePane(pane)
     if not pane or S.data(pane).keSidePane then return end
     S.data(pane).keSidePane = true
     S.StripTextures(pane)
-    S.Backdrop(pane)
     if pane.CloseButton then S.CloseButton(pane.CloseButton) end
     if pane.DescriptionScrollBar then S.ScrollBar(pane.DescriptionScrollBar) end
 end
@@ -123,14 +204,14 @@ local function ColorizeStatPane(frame)
     local solid, clear = CreateColor(r, g, b, 0.25), CreateColor(r, g, b, 0)
 
     local right = frame:CreateTexture(nil, "BORDER")
-    right:SetTexture(STAT_GRAD_TEX)
+    right:SetTexture(FLAT_TEX)
     right:SetPoint("TOPLEFT", frame, "TOP")
     right:SetPoint("BOTTOMLEFT", frame, "BOTTOM")
     right:SetWidth(STAT_GRAD_WIDTH)
     right:SetGradient("HORIZONTAL", solid, clear)
 
     local left = frame:CreateTexture(nil, "BORDER")
-    left:SetTexture(STAT_GRAD_TEX)
+    left:SetTexture(FLAT_TEX)
     left:SetPoint("TOPRIGHT", frame, "TOP")
     left:SetPoint("BOTTOMRIGHT", frame, "BOTTOM")
     left:SetWidth(STAT_GRAD_WIDTH)
@@ -180,10 +261,44 @@ local function UpdateStatsPane()
     end
 end
 
+local IS_FOREVER = KE.IS_FOREVER == true
+local RESIST_ICON_SIZE = 17
+-- Clears the painted frame and its glow on every side.
+local RESIST_ICON_CROP = 0.25
+
+-- The five icons share one atlas sheet, so the crop is in atlas space. Each
+-- row Init sets the atlas at its full size and then resets the coords; this
+-- runs after that last call, so the crop and the size go back on.
+local function ApplyResistIcon(icon)
+    local d = S.data(icon)
+    if d.keResistApplying then return end
+    local atlas = icon:GetAtlas()
+    if not atlas or atlas == "" then return end
+    d.keResistApplying = true
+    S.CropAtlasEdges(icon, RESIST_ICON_CROP, RESIST_ICON_CROP)
+    icon:SetSize(RESIST_ICON_SIZE, RESIST_ICON_SIZE)
+    S.PixelSnap(icon)
+    d.keResistApplying = nil
+end
+
+-- Only the resistance rows' template carries an Icon.
+local function SkinResistIcon(row)
+    local icon = row.Icon
+    if not IS_FOREVER or not icon or S.data(icon).keResistIcon then return end
+    S.data(icon).keResistIcon = true
+    hooksecurefunc(icon, "SetTexCoord", ApplyResistIcon)
+    ApplyResistIcon(icon)
+    local border = S.Backdrop(icon, -1, true)
+    if border then border:SetFrameLevel(row:GetFrameLevel() + 1) end
+end
+
 -- A client that lists the stats in a ScrollBox: header rows carry a Title,
 -- stat rows a Label and a Value. The pooled pane above stays, hidden there.
 local function StyleStatsScrollRow(row)
-    if not row.Title then return StyleStatLine(row) end
+    if not row.Title then
+        SkinResistIcon(row)
+        return StyleStatLine(row)
+    end
     local d = S.data(row)
     if d.keStatHeader then return end
     d.keStatHeader = true
@@ -676,7 +791,12 @@ local function Skin()
         if button then
             S.ItemButton(button)
             if button.BorderFrame then S.StripTextures(button.BorderFrame) end
-            if slot == "Ammo" then HideAmmoArrow(button) end
+            if slot == "Ammo" then
+                KillChildArt(button, AMMO_ARROW_ATLAS)
+                -- Blizzard's count layer is below the raised icon, which would
+                -- leave only a long stack's leading digits showing.
+                if button.Count then button.Count:SetDrawLayer("OVERLAY") end
+            end
             if qualityBorders and button.IconBorder then
                 S.IconBorder(button.IconBorder, S.GetBackdrop(button))
             end
@@ -694,9 +814,29 @@ local function Skin()
 
     SkinStatsPane()
     SkinSidebarTabs()
-    if frame.ModeTabs then S.SideTabsInPlace(frame.ModeTabs.Tabs) end
+    -- The tabs chain inside ModeTabs, so moving it moves the column; -30 is
+    -- the XML's y.
+    local modeTabs = frame.ModeTabs
+    if modeTabs then
+        S.IconSideTabs(modeTabs.Tabs)
+        modeTabs:ClearAllPoints()
+        modeTabs:SetPoint("TOPLEFT", frame, "TOPRIGHT", S.sideTabGap, -30)
+    end
     if frame.LeftPaneHost then S.StripTextures(frame.LeftPaneHost) end
-    if frame.RightPaneHost then S.StripTextures(frame.RightPaneHost) end
+    if frame.RightPaneHost then
+        S.StripTextures(frame.RightPaneHost)
+        local dividerHost = KillChildArt(frame.RightPaneHost, PANE_DIVIDER_ATLAS)
+        -- Drawn on the divider's own frame, which Blizzard levels above the stats pane.
+        if dividerHost then S.VerticalLine(dividerHost, "LEFT", PANE_LINE_COLOR) end
+    end
+    local levelRow = _G.PaperDollFrame and _G.PaperDollFrame.TopBackgroundStripHost
+    if levelRow then S.StripTextures(levelRow) end
+    local paneToggle = frame.RightPaneToggleButton
+    if paneToggle and frame.UpdateRightPaneToggleButton and not S.data(paneToggle).skinned then
+        S.ArrowButton(paneToggle, "left")
+        hooksecurefunc(frame, "UpdateRightPaneToggleButton", PointPaneToggle)
+        PointPaneToggle(frame)
+    end
 
     SkinTitlesPane()
     SkinEquipmentManagerPane()

@@ -38,14 +38,6 @@ local function ZoomTexture(tex, zoom)
     d.zoomApplied = { zl, zr, zt, zb }
 end
 
-local function ClearMasks(tex)
-    if not tex or not tex.GetNumMaskTextures or not tex.RemoveMaskTexture then return end
-    for i = tex:GetNumMaskTextures(), 1, -1 do
-        local m = tex:GetMaskTexture(i)
-        if m then tex:RemoveMaskTexture(m) end
-    end
-end
-
 -- KitnCustomCrossv3 is a PLUS glyph -- KE draws it as an X by rotating 45
 -- degrees, and rests it at GUI white, so this hand-rolled close button reads
 -- as the same button as S.CloseButton and KE's own panel X.
@@ -88,7 +80,7 @@ local function SkinListButton(button)
         if button.Check and button.Check.SetAtlas then button.Check:SetAtlas("checkmark-minimal") end
         if button.Icon then
 
-            ClearMasks(button.Icon)
+            S.ClearMasks(button.Icon)
             ZoomTexture(button.Icon, ICON_ZOOM)
             local ibd = S.Backdrop(button.Icon)
             if ibd then
@@ -151,7 +143,7 @@ local function SkinIconGridButton(child)
     if child.DisableDrawLayer then child:DisableDrawLayer("BACKGROUND") end
     local icon = child.Icon or child.icon
     if icon then
-        ClearMasks(icon)
+        S.ClearMasks(icon)
         ZoomTexture(icon, ICON_ZOOM)
         local ibd = S.Backdrop(icon)
         if ibd then
@@ -319,7 +311,7 @@ local function SkinMainFrame()
                 end
                 if not tex then return end
                 S.data(child).skinned = true
-                ClearMasks(tex)
+                S.ClearMasks(tex)
 
                 ZoomTexture(tex, ICON_ZOOM)
                 local tbd = S.Backdrop(tex)

@@ -19,19 +19,23 @@ jobs:
         with:
           args: -d
 
-      # The settings pages refuse to load when the two addons report
-      # different versions, so both tocs must carry the same substituted line.
-      - name: Check both toc versions
+      # Every toc must carry the same substituted line. The settings pages refuse
+      # to load when they and the main addon report different versions. The data
+      # folder has no such gate: a data toc that is missing or differs means a
+      # broken move-folder or a suffix the packager did not substitute.
+      - name: Check the toc versions
         run: |
           zip=$(ls .release/*.zip | head -n 1)
           unzip -q "$zip" -d out
           ls out
           main=$(grep -m 1 '^## Version:' out/KitnEssentials/KitnEssentials.toc | tr -d '\r')
           pages=$(grep -m 1 '^## Version:' out/KitnEssentials_Options/KitnEssentials_Options.toc | tr -d '\r')
+          data=$(grep -m 1 '^## Version:' out/KitnEssentials_Data/KitnEssentials_Data_Forever.toc | tr -d '\r')
           echo "KitnEssentials:         $main"
           echo "KitnEssentials_Options: $pages"
-          if [ -z "$main" ] || [ "$main" != "$pages" ]; then
-            echo "::error::the two toc Version lines are missing or differ"
+          echo "KitnEssentials_Data:    $data"
+          if [ -z "$main" ] || [ "$main" != "$pages" ] || [ "$main" != "$data" ]; then
+            echo "::error::the toc Version lines are missing or differ"
             exit 1
           fi
           case "$main" in

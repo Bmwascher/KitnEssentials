@@ -6,6 +6,7 @@
          (Modules.xml). -->
     <Script file="Combat\CombatDataForever.lua" />
     <Script file="Combat\StatusTexts\NoMovementAlert.lua" />
+    <Script file="QoL\GroupTools\WorldMarkerCycler.lua" />
     <Script file="Combat\StatusTexts\PotionReady.lua" />
     <Script file="QoL\GroupTools\ReadyCheckConsumablesForever.lua" />
     <Script file="QoL\GroupTools\ReadyCheckConsumables.lua" />
@@ -28,6 +29,9 @@
     <Script file="Combat\Cursor.lua" />
     <Script file="Combat\CastbarHelpers.lua" />
     <Script file="Combat\FocusCastbar.lua" />
+    <Script file="Combat\SwingTimer\SwingTimerRules.lua" />
+    <Script file="Combat\SwingTimer\SwingTimer.lua" />
+    <Script file="Combat\SwingTimer\SwingTimerTarget.lua" />
     <Script file="Combat\RangeChecker.lua" />
     <Include file="AuraTracking\AuraEngine\AuraEngine.xml" />
     <Script file="AuraTracking\AuraExternals.lua" />
@@ -70,10 +74,16 @@
     <Script file="QoL\Automation\MerchantPages.lua" />
     <Script file="Skinning\DarkTheme\ColorPicker.lua" />
     <Script file="QoL\QualityOfLife\MoveFrames.lua" />
+    <Script file="Skinning\DarkTheme\RaidControl.lua" />
+    <Script file="QoL\QualityOfLife\RareAlert.lua" />
+    <Script file="QoL\QualityOfLife\RareAlertRules.lua" />
+    <Script file="QoL\QualityOfLife\RareAlertCard.lua" />
     <Script file="Skinning\DarkTheme\VehicleExit.lua" />
     <Script file="QoL\SecondaryStats\SecondaryStatsFormat.lua" />
     <Script file="QoL\SecondaryStats\SecondaryStatsForever.lua" />
     <Script file="QoL\SecondaryStats\SecondaryStats.lua" />
+    <Script file="QoL\Scout\ScoutRules.lua" />
+    <Script file="QoL\Scout\Scout.lua" />
     <Script file="Skinning\SkinAPI.lua" />
     <Script file="Skinning\DarkTheme\EUIWindows.lua" />
     <Script file="Skinning\DarkTheme\Dialogs.lua" />
