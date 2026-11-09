@@ -813,7 +813,7 @@ local Defaults = {
             LandSound = "None",
 
             Strata = "MEDIUM",
-            RoundPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 544, YOffset = -642 },
+            RoundPosition = { AnchorFrom = "CENTER", AnchorTo = "BOTTOM", XOffset = 544, YOffset = 78 },
             SimplePosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = -375 },
             AlertPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 150 },
         },
