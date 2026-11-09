@@ -125,7 +125,6 @@
     <Script file="QoL\Automation\MerchantPages.lua" />
     <Script file="Skinning\DarkTheme\ColorPicker.lua" />
     <Script file="QoL\QualityOfLife\MoveFrames.lua" />
-    <Script file="Skinning\DarkTheme\GroupSort.lua" />
     <Script file="Skinning\DarkTheme\RaidControl.lua" />
     <Script file="Skinning\DarkTheme\VehicleExit.lua" />
     <Script file="QoL\SecondaryStats\SecondaryStatsFormat.lua" />

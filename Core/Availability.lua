@@ -26,7 +26,7 @@ local FOREVER_ALLOWED = {
     -- role icon card. The Group Finder skin stays withheld.
     BlizzardFrames = true,
     -- Raid Control: the module and its card. Its Vantus Rune row and raid
-    -- buff strip stay withheld, and Group Sort does not load.
+    -- buff strip stay withheld.
     RaidControl = true,
     ColorPicker = true,
     SkinAPI = true,
