@@ -1402,8 +1402,9 @@ function RC:Setup()
     local lastUtilXOfs, lastUtilYOfs = 4, -3
 
     -- RAID-ONLY ROWS. The Vantus check, the note buttons and the buff strip
-    -- are all meaningless in a party -- runes and raid notes do not exist there -- so the panel drops them and shrinks
-    -- by exactly the rows it dropped.
+    -- are all meaningless in a party -- runes and raid notes do not exist
+    -- there -- so the panel drops them and shrinks by exactly the rows it
+    -- dropped.
     --
     -- One entry per ROW, not per button: the two note buttons share a row and
     -- together cost one row of height. `h` is that row's own cost.
