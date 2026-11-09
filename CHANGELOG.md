@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.26
+
+### Raid Control
+
+- Group Sort is removed: the Default Arrangement and Split Arrangement
+  buttons are gone from the Raid Control panel, and the panel is shorter
+  to match
+
+---
+
 ## v4.16.25
 
 ### Both clients
