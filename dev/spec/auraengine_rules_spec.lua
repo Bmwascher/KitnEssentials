@@ -79,21 +79,25 @@ describe("blocklist record conversion", function()
         assert.is_true(set[80354])
     end)
 
-    -- The alias is the ported behavior, and it is what makes the
-    -- do-not-mutate invariant necessary. A spec that only checked CONTENTS
-    -- would pass just as happily against a defensive copy, which is the
-    -- deviation the design forbids.
-    it("returns the shared constant set BY REFERENCE when the user has no entries", function()
+    it("holds every always-hidden spell with no saved rows", function()
         local R = L.loadAuraRules()
-        assert.is_true(R.BuildExcludeSpellIDs(nil) == R.HARDCODED_BLOCKLIST_SET)
-        assert.is_true(R.BuildExcludeSpellIDs({}) == R.HARDCODED_BLOCKLIST_SET)
+        for _, saved in ipairs({ { name = "nil" }, { name = "empty", rows = {} } }) do
+            local set = R.BuildExcludeSpellIDs(saved.rows)
+            for spellID in pairs(R.ALWAYS_HIDDEN_SPELLS) do
+                assert.is_true(set[spellID], saved.name .. " " .. spellID)
+            end
+        end
     end)
 
-    it("merges into a NEW set when the user has entries, leaving the constant untouched", function()
+    -- A shared result would let one caller's change reach every group.
+    it("returns a new set each call and never writes to the always-hidden table", function()
         local R = L.loadAuraRules()
-        local set = R.BuildExcludeSpellIDs({ [12345] = { enabled = true } })
-        assert.is_false(set == R.HARDCODED_BLOCKLIST_SET)
-        assert.is_nil(R.HARDCODED_BLOCKLIST_SET[12345])
+        local first = R.BuildExcludeSpellIDs(nil)
+        local withRow = R.BuildExcludeSpellIDs({ [12345] = { enabled = true } })
+        assert.is_false(first == R.ALWAYS_HIDDEN_SPELLS)
+        assert.is_false(first == R.BuildExcludeSpellIDs(nil))
+        assert.is_true(withRow[12345])
+        assert.is_nil(R.ALWAYS_HIDDEN_SPELLS[12345])
     end)
 end)
 

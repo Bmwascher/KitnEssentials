@@ -55,64 +55,45 @@ end
 local math_ceil = math.ceil
 local math_floor = math.floor
 
--- Applied unconditionally to every group, regardless of the user's own
--- blocklist. The container matches spell IDs only for helpful auras on
--- assistable units and harmful auras on non-assistable units, except for
--- never-secret spells, which match anywhere. Every entry here is a
--- never-secret nuisance aura, so it matches on friendly units; a boss debuff
--- on the player would not, which is why the list cannot be opened up to them.
-Rules.HARDCODED_BLOCKLIST = {
-    57723,   -- Exhaustion
-    390435,  -- Exhaustion
-    57724,   -- Sated
-    264689,  -- Fatigued
-    160455,  -- Fatigued
-    95809,   -- Insanity
-    80354,   -- Time Warp
-    26013,   -- Deserter
-    71041,   -- Dungeon Deserter
-    206151,  -- Challenger's Burden
-    1313593, -- Deserter
-    124255,  -- Stagger
+-- Spells every aura group hides, whatever the user's own blocklist holds.
+-- Spell-ID matching reaches friendly units only for spells the game never
+-- marks secret, and each of these is one of those; a boss debuff would not
+-- match on the player, so the list holds only this kind of aura.
+-- Read-only: the options page reads it to lock these rows on.
+Rules.ALWAYS_HIDDEN_SPELLS = {
+    -- Lockouts after a group haste effect
+    [57723]   = true, -- Exhaustion (Heroism)
+    [57724]   = true, -- Sated (Bloodlust)
+    [80354]   = true, -- Temporal Displacement (Time Warp)
+    [95809]   = true, -- Insanity (Ancient Hysteria)
+    [160455]  = true, -- Fatigued (Netherwinds)
+    [264689]  = true, -- Fatigued (Primal Rage)
+    [390435]  = true, -- Exhaustion (Fury of the Aspects)
+    -- Queue and keystone penalties
+    [26013]   = true, -- Deserter
+    [71041]   = true, -- Dungeon Deserter
+    [206151]  = true, -- Challenger's Burden
+    [1313593] = true, -- Deserter
+    -- Class mechanic shown as a debuff
+    [124255]  = true, -- Stagger
 }
 
--- Saved blocklist entries are RECORDS with an enabled flag, not a boolean
--- set, so a disabled row must not filter. The hardcoded entries are added after
--- the user's rows and therefore override a disabled row for the same id --
--- the GUI shows those rows as always-on for exactly this reason.
---
--- MERGE OR ALIAS, and never an unconditional fresh table: the constants merge
--- INTO the user's set when the user has entries, and the shared constant set is
--- returned BY REFERENCE when
--- they have none. Nothing may then mutate the returned table. A defensive
--- copy here would violate the merge-or-alias rule above: it makes the
--- no-entries case an unconditional fresh table.
-Rules.HARDCODED_BLOCKLIST_SET = {}
-for i = 1, #Rules.HARDCODED_BLOCKLIST do
-    Rules.HARDCODED_BLOCKLIST_SET[Rules.HARDCODED_BLOCKLIST[i]] = true
-end
-
+-- A new set on every call: the always-hidden spells, then each saved row
+-- that is switched on. A switched-off row adds nothing, but cannot remove an
+-- always-hidden spell. The caller hands the set to the aura container as is.
 function Rules.BuildExcludeSpellIDs(saved)
-    local set
-
-    if saved then
+    local exclude = {}
+    for spellID in pairs(Rules.ALWAYS_HIDDEN_SPELLS) do
+        exclude[spellID] = true
+    end
+    if type(saved) == "table" then
         for spellID, record in pairs(saved) do
             if type(record) == "table" and record.enabled ~= false then
-                set = set or {}
-                set[spellID] = true
+                exclude[spellID] = true
             end
         end
     end
-
-    if not set then
-        return Rules.HARDCODED_BLOCKLIST_SET
-    end
-
-    for i = 1, #Rules.HARDCODED_BLOCKLIST do
-        set[Rules.HARDCODED_BLOCKLIST[i]] = true
-    end
-
-    return set
+    return exclude
 end
 
 local function IsPositiveInteger(value)
@@ -130,10 +111,6 @@ Rules.IsIncluded = IsIncluded
 -- ALWAYS A TABLE, never nil. A nil includeSpellIDs means "no whitelist", and a
 -- group filtering plain HELPFUL with no whitelist shows every buff on the
 -- player. That failure is silent and reads as a flood rather than an error.
---
--- A FRESH table every call, unlike the exclude builder: there is no shared
--- constant set to alias here, so there is nothing to protect from mutation and
--- nothing to be gained by returning one.
 function Rules.BuildIncludeSpellIDs(saved)
     local set = {}
 
