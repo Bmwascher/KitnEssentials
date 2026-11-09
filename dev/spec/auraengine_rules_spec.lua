@@ -71,9 +71,9 @@ describe("blocklist record conversion", function()
         assert.is_nil(set[12345])
     end)
 
-    it("keeps a hardcoded id even when the user disabled its row", function()
-        -- 80354 Time Warp ships as a default row AND is hardcoded, so a
-        -- user can switch it off and it must still filter.
+    it("keeps an always-hidden spell even when the user switched its row off", function()
+        -- 80354 ships as a default row AND is always hidden, so a user can
+        -- switch it off and it must still filter.
         local R = L.loadAuraRules()
         local set = R.BuildExcludeSpellIDs({ [80354] = { label = "TW", enabled = false, default = true } })
         assert.is_true(set[80354])

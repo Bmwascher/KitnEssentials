@@ -56,9 +56,10 @@ local math_ceil = math.ceil
 local math_floor = math.floor
 
 -- Spells every aura group hides, whatever the user's own blocklist holds.
--- Spell-ID matching reaches friendly units only for spells the game never
--- marks secret, and each of these is one of those; a boss debuff would not
--- match on the player, so the list holds only this kind of aura.
+-- Spell-ID matching reaches a harmful aura on a friendly unit only when the
+-- game never marks that spell secret, and each of these is one of those; a
+-- boss debuff would not match on the player, so the list holds only this
+-- kind of aura.
 -- Read-only: the options page reads it to lock these rows on.
 Rules.ALWAYS_HIDDEN_SPELLS = {
     -- Lockouts after a group haste effect
