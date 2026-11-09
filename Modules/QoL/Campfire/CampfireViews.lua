@@ -18,7 +18,7 @@ local GameTooltip = GameTooltip
 local GetTime = GetTime
 local InCombatLockdown = InCombatLockdown
 local UIParent = UIParent
-local ceil, max = math.ceil, math.max
+local ceil, floor, max = math.ceil, math.floor, math.max
 local format = string.format
 local ipairs = ipairs
 
@@ -40,7 +40,8 @@ local LIST_GAP, LINE_HEIGHT, CHECK_GAP = 12, 18, 5
 local DOT_SIZE, DOT_GAP = 10, 4
 local LABEL_DROP = TRACK_OUT + 3
 local SIMPLE_FIRE, SIMPLE_LABEL_X, SIMPLE_GAP, SIMPLE_TIME_PAD, SIMPLE_TIME_GAP = 18, 29, 10, 10, 12
-local ALERT_HEIGHT, ALERT_FIRE, ALERT_GAP = 36, 25, 6
+-- The alert's fire sits centered above its text, sized from the text.
+local ALERT_FIRE_SHARE, ALERT_GAP = 2.2, 4
 local PANEL_DROP, PANEL_PAD = 4, 6
 local GRAY_ALPHA, DIM_ALPHA, HOT_ALPHA = 0.7, 0.6, 0.45
 local LANDING_DELAY, LANDING_FADE = 5, 0.4
@@ -752,7 +753,6 @@ end
 
 local function BuildAlert()
     local f = CreateFrame("Frame", "KE_CampfireAlert", UIParent)
-    f:SetSize(ALERT_FIRE, ALERT_HEIGHT)
     f:Hide()
     local level = f:GetFrameLevel()
 
@@ -769,8 +769,7 @@ local function BuildAlert()
     f.body:SetFrameLevel(level + 2)
 
     f.fire = NewFire(f.body, "ARTWORK")
-    f.fire:SetSize(ALERT_FIRE, ALERT_FIRE)
-    f.fire:SetPoint("LEFT", f.body, "LEFT", 0, 0)
+    f.fire:SetPoint("TOP", f.body, "TOP", 0, 0)
     f.hot = NewFire(f.body, "OVERLAY")
     f.hot:SetAllPoints(f.fire)
     f.hot:SetBlendMode("ADD")
@@ -778,7 +777,7 @@ local function BuildAlert()
     f.hot:Hide()
 
     f.text = f.body:CreateFontString(nil, "OVERLAY")
-    f.text:SetPoint("LEFT", f.fire, "RIGHT", ALERT_GAP, 0)
+    f.text:SetPoint("TOP", f.fire, "BOTTOM", 0, -ALERT_GAP)
 
     f.fadeIn = NewAlertFade(f, 0, 1, ALERT_IN)
     f.fadeOut = NewAlertFade(f, 1, 0, ALERT_OUT)
@@ -823,7 +822,7 @@ local function RenderAlert(r)
         return
     end
     f.text:SetText(KE:ColorTextByTheme("Camp Nearby") .. " " .. Colored(WHITE_CODE, r.alertText))
-    f:SetWidth(ALERT_FIRE + ALERT_GAP + f.text:GetStringWidth())
+    f:SetSize(max(f.fireSize, f.text:GetStringWidth()), f.fireSize + ALERT_GAP + f.text:GetStringHeight())
     f.sit:SetShown(r.clickable)
     if f.active then return end
     f.active = true
@@ -898,6 +897,10 @@ function Views.ApplySettings(db)
 
     local alert = Views.alert
     KE:ApplyFontToText(alert.text, db.FontFace, db.AlertTextSize, "OUTLINE")
+    local fire = floor(db.AlertTextSize * ALERT_FIRE_SHARE + 0.5)
+    alert.fireSize = fire
+    alert.fire:SetSize(fire, fire)
+    alert:SetSize(fire, fire + ALERT_GAP + db.AlertTextSize)
     KE:ApplyFramePosition(alert, db.AlertPosition, PLACEMENT)
 end
 

@@ -28,7 +28,7 @@ local ROUND_SCALE, ROUND_GAP = 0.55, 12
 local SIMPLE_SIZE, SIMPLE_GAP = 26, 4
 local KIT_LABEL, KIT_LABEL_SIZE, KIT_LABEL_GAP = "Light a Fire", 13, 3
 local REST_GONE_LABEL = "Missing"
-local COUNT_SIZE = 12
+local COUNT_SHARE, COUNT_MIN_SIZE = 0.36, 14
 local TIME_SHARE, TIME_MIN_SIZE = 0.32, 10
 -- The sample's Well-Rested time: a preview shows the bag with time on it, as live play does.
 local SAMPLE_REST_LEFT = 3000
@@ -104,7 +104,7 @@ end
 -- left: Well-Rested's seconds left, which sets the time's color; nil for no time.
 -- gone: Well-Rested read and absent.
 local function Style(frame, which, stacks, db, size, left, gone)
-    KE:ApplyFontToText(frame.count, db.FontFace, COUNT_SIZE, "OUTLINE")
+    KE:ApplyFontToText(frame.count, db.FontFace, max(COUNT_MIN_SIZE, size * COUNT_SHARE), "OUTLINE")
     KE:ApplyFontToText(frame.label, db.FontFace, KIT_LABEL_SIZE, db.FontOutline)
     KE:ApplyFontToText(frame.note, db.FontFace, KIT_LABEL_SIZE, db.FontOutline)
     KE:ApplyFontToText(frame.time, db.FontFace, max(TIME_MIN_SIZE, size * TIME_SHARE), "OUTLINE")

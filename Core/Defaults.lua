@@ -801,7 +801,7 @@ local Defaults = {
             SimpleWidth = 360,
             SimpleHeight = 26,
             SimpleTextSize = 12,
-            AlertTextSize = 17,
+            AlertTextSize = 20,
 
             FontFace = nil, -- nil: the global font
             FontOutline = "OUTLINE",
