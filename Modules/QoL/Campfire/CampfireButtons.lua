@@ -27,6 +27,7 @@ KE.CampfireButtons = Buttons
 local ROUND_SCALE, ROUND_GAP = 0.55, 12
 local SIMPLE_SIZE, SIMPLE_GAP = 26, 4
 local KIT_LABEL, KIT_LABEL_SIZE, KIT_LABEL_GAP = "Light a Fire", 13, 3
+local REST_GONE_LABEL = "Missing"
 local COUNT_SIZE = 12
 local TIME_SHARE, TIME_MIN_SIZE = 0.32, 10
 -- The sample's Well-Rested time: a preview shows the bag with time on it, as live play does.
@@ -54,6 +55,8 @@ local function Dress(frame)
     frame.count:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
     frame.label = frame:CreateFontString(nil, "OVERLAY")
     frame.label:SetPoint("TOP", frame, "BOTTOM", 0, -KIT_LABEL_GAP)
+    frame.note = frame:CreateFontString(nil, "OVERLAY")
+    frame.note:SetPoint("BOTTOM", frame, "TOP", 0, KIT_LABEL_GAP)
     frame.time = frame:CreateFontString(nil, "OVERLAY")
     frame.time:SetPoint("CENTER", frame, "CENTER", 0, 0)
 end
@@ -99,12 +102,16 @@ local function Place(frame, x, y, size)
 end
 
 -- left: Well-Rested's seconds left, which sets the time's color; nil for no time.
-local function Style(frame, which, stacks, db, size, left)
+-- gone: Well-Rested read and absent.
+local function Style(frame, which, stacks, db, size, left, gone)
     KE:ApplyFontToText(frame.count, db.FontFace, COUNT_SIZE, "OUTLINE")
     KE:ApplyFontToText(frame.label, db.FontFace, KIT_LABEL_SIZE, db.FontOutline)
+    KE:ApplyFontToText(frame.note, db.FontFace, KIT_LABEL_SIZE, db.FontOutline)
     KE:ApplyFontToText(frame.time, db.FontFace, max(TIME_MIN_SIZE, size * TIME_SHARE), "OUTLINE")
     frame.count:SetText((stacks and stacks > 0) and stacks or "")
     frame.label:SetText(which == "kit" and db.Shape == "ROUND" and KIT_LABEL or "")
+    frame.note:SetText(gone and REST_GONE_LABEL or "")
+    if gone then frame.note:SetTextColor(Views.KeyColor("bad")) end
     if left then frame.time:SetTextColor(Views.KeyColor(Rules.RingColorKey(left, false))) end
 end
 
@@ -169,7 +176,8 @@ function Buttons.Sync(wanted, kitItem, db, rest)
     Arm(button, wanted == "kit" and kitItem or Rules.SLEEPING_BAG)
     Place(button, x, y, size)
     local expiry = rest and rest.expiry
-    Style(button, wanted, rest and rest.stacks, db, size, expiry and expiry - GetTime())
+    button.restGone = button == bag and rest ~= nil and not expiry
+    Style(button, wanted, rest and rest.stacks, db, size, expiry and expiry - GetTime(), button.restGone)
     if button == bag then SetRestTime(button, rest) end
     if not button.driven then
         -- No show clause: outside combat it parses to nil and does nothing, so
@@ -186,9 +194,9 @@ end
 function Buttons.UpdateCooldown()
     local button = active
     if not button or InCombatLockdown() then return end
-    -- The bag stays in full color through its cooldown, with no sweep.
+    -- The bag ignores its cooldown, with no sweep, and goes gray only with Well-Rested gone.
     if button == bag then
-        button.icon:SetDesaturated(false)
+        button.icon:SetDesaturated(button.restGone)
         button.cooldownEnds = nil
         button.cooldown:Hide()
         return
