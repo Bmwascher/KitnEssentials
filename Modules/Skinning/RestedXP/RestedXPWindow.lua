@@ -39,8 +39,8 @@ local K = {
     GRIP_HIGHLIGHT = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight",
     GRIP_CORNER = "BOTTOMRIGHT",
     PERCENT = 100,
-    PAD = 10, BOX_PAD = 7, FOLD_W = 16, GAP = 5, TOP_GAP = 2, COG_SIZE = 14, FOLD_GROW = 4,
-    HEAD_PAD = 10, LIST_PAD = 6,
+    PAD = 10, BOX_PAD = 7, FOLD_W = 16, GAP = 5, TOP_GAP = 2, COG_SIZE = 14, FOLD_GROW = 8,
+    HEAD_PAD = 10, LIST_PAD = 6, ROW_GAP = 8, MARK_CLEAR = 3,
     BOX_TITLE_TEXT = 9, BOX_TITLE_HEIGHT = 19, BOX_TITLE_ROOM = 10,
     BAND_HEIGHT = 14, BAND_TEXT_X = 6, BAND_ALPHA = 0.92, TITLE_SLACK = 0.5,
     ICON_GAP = 5, GRIP_SIZE = 16, TIMER_ICON_INSET = 2,
@@ -976,8 +976,8 @@ local function Build()
     KE:AddBorders(f, colors.border)
     f.fold = CreateFrame("Button", nil, f)
     f.fold.text = Text(f.fold, Option("ListSize") + K.FOLD_GROW, "CENTER")
-    f.fold.text:SetAllPoints()
-    f.fold.text:SetJustifyV("MIDDLE")
+    -- Sized by its glyph, which is taller than the bar, so the glyph is never cut.
+    f.fold.text:SetPoint("CENTER", f.fold, "CENTER", 0, 0)
     f.fold:SetScript("OnClick", ToggleFold)
     f.cog = CreateFrame("Button", nil, f)
     f.cog:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -1636,7 +1636,13 @@ local function DrawTop(model, folded, width, topH)
     window.divider:SetPoint("TOPLEFT", window, "TOPLEFT", pad, below)
     window.divider:SetPoint("TOPRIGHT", window, "TOPRIGHT", -pad, below)
     window.divider:SetColorTexture(line[1], line[2], line[3], line[4])
-    return below - K.GAP
+    -- The mark is centered on the title's line, so a small title lifts it toward the
+    -- divider, and the row then starts lower.
+    local gap = K.ROW_GAP
+    if Option("ShowMark") then
+        gap = math_max(gap, K.MARK_SIZE / 2 + K.MARK_CLEAR - floor(Option("TitleSize") / 2))
+    end
+    return below - gap
 end
 
 -- Centered on the title's line. Returns the width it takes from the title.
