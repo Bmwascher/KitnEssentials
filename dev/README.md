@@ -313,7 +313,9 @@ lua dev/scripts/update-api-reference.lua
 ```
 
 One command: fast-forwards the `.wow-api-reference` clone (and the
-BlizzardInterfaceResources clone) to the live build, then reports every API
+BlizzardInterfaceResources clone) to the live build, fast-forwards the
+Forever clone beside it (`wow-api-reference-forever`, never part of the
+report), then reports every API
 change since the last update that intersects KE's used surface — removed or
 changed functions/events/enums you use, C-side global/CVar changes, and
 notable additions. Exit 1 means something you use changed — read the

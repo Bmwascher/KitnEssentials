@@ -7,6 +7,8 @@
 --
 -- Snapshot-diff (WowDoc changes_apidoc keying); exit 1 iff BREAKING-USED
 -- findings; snapshots only rewritten after a fully successful parse+diff.
+-- An update run also fast-forwards the Forever clone beside the Retail one;
+-- the report and the snapshots cover Retail only.
 
 local _script = (arg[0] or ""):gsub("/", "\\")
 local _dir = _script:match("^(.*\\)[^\\]+$") or ".\\dev\\scripts\\"
@@ -50,6 +52,11 @@ local BIR = WOWDEV .. "\\blizzard-interface-resources"
 local SNAPDIR = WOWDEV .. "\\api-drift-snapshots"
 local DOCS = REF .. "\\Interface\\AddOns\\Blizzard_APIDocumentationGenerated"
 local ADDONS = REF .. "\\Interface\\AddOns"
+local FOREVER = WOWDEV .. "\\wow-api-reference-forever"
+
+local function foreverBuild()
+    return (P.readAll(FOREVER .. "\\version.txt") or "unknown"):match("[^\r\n]+") or "unknown"
+end
 
 -- ---- step 1-2: fetch/merge (update mode only) ---------------------------
 if MODE == "update" then
@@ -70,6 +77,19 @@ if MODE == "update" then
            not execOk('git -C "' .. BIR .. '" reset --hard origin/live >nul') then
             print("NOTICE: BlizzardInterfaceResources update failed — using its last state")
         end
+    end
+    -- The Forever clone is read by hand and takes no part in the drift diff,
+    -- so a failed refresh is a notice and never aborts the run.
+    if execOk('git -C "' .. FOREVER .. '" rev-parse --git-dir >nul 2>nul') then
+        local before = foreverBuild()
+        if execOk('git -C "' .. FOREVER .. '" fetch origin forever')
+           and execOk('git -C "' .. FOREVER .. '" merge --ff-only origin/forever >nul') then
+            print(("[update] Forever reference: %s -> %s"):format(before, foreverBuild()))
+        else
+            print("NOTICE: Forever reference update failed — using its last state")
+        end
+    else
+        print("NOTICE: no Forever reference clone at " .. FOREVER .. " — skipped")
     end
 end
 
