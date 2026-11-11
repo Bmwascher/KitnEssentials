@@ -321,7 +321,8 @@ changed functions/events/enums you use, C-side global/CVar changes, and
 notable additions. Exit 1 means something you use changed — read the
 report before coding. `--report-only` re-prints without fetching;
 `--seed` re-baselines. Snapshots live in
-`KitnDev\tools\wow-reference\api-drift-snapshots\`, beside the two clones.
+`KitnDev\tools\wow-reference\api-drift-snapshots\`, beside the clones. A
+missing Forever clone is skipped with a notice; the script never creates it.
 
 ## Updating the embedded libraries
 

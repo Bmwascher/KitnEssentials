@@ -54,8 +54,8 @@ local DOCS = REF .. "\\Interface\\AddOns\\Blizzard_APIDocumentationGenerated"
 local ADDONS = REF .. "\\Interface\\AddOns"
 local FOREVER = WOWDEV .. "\\wow-api-reference-forever"
 
-local function foreverBuild()
-    return (P.readAll(FOREVER .. "\\version.txt") or "unknown"):match("[^\r\n]+") or "unknown"
+local function readBuild(clone)
+    return (P.readAll(clone .. "\\version.txt") or "unknown"):match("[^\r\n]+") or "unknown"
 end
 
 -- ---- step 1-2: fetch/merge (update mode only) ---------------------------
@@ -81,10 +81,10 @@ if MODE == "update" then
     -- The Forever clone is read by hand and takes no part in the drift diff,
     -- so a failed refresh is a notice and never aborts the run.
     if execOk('git -C "' .. FOREVER .. '" rev-parse --git-dir >nul 2>nul') then
-        local before = foreverBuild()
+        local before = readBuild(FOREVER)
         if execOk('git -C "' .. FOREVER .. '" fetch origin forever')
            and execOk('git -C "' .. FOREVER .. '" merge --ff-only origin/forever >nul') then
-            print(("[update] Forever reference: %s -> %s"):format(before, foreverBuild()))
+            print(("[update] Forever reference: %s -> %s"):format(before, readBuild(FOREVER)))
         else
             print("NOTICE: Forever reference update failed — using its last state")
         end
@@ -94,7 +94,7 @@ if MODE == "update" then
 end
 
 -- ---- step 3: parse current state -----------------------------------------
-local version = (P.readAll(REF .. "\\version.txt") or "unknown"):match("[^\r\n]+") or "unknown"
+local version = readBuild(REF)
 local docRes = P.collectDocTables(DOCS)
 assert(docRes.filesRead >= 500,
     ("only %d API-docs files read (expected >= 500) — reference damaged; snapshots untouched")
