@@ -98,7 +98,7 @@ describe("restedxp rules", function()
         assert.equals(7, model.list[model.first].index)
     end)
 
-    it("reads a row's text, icon and done state", function()
+    it("reads a row's text, icon, done and skipped state, and keeps its element", function()
         local function Row(element)
             local rxp = Rxp({ RXPFrame = { activeSteps = { { index = 1, active = true, elements = { element } } } } })
             Model.Stale()
@@ -112,6 +112,13 @@ describe("restedxp rules", function()
         assert.is_true(Row({ text = "raw", frame = { button = { GetChecked = function() return true end } } }).done)
         assert.is_true(Row({ text = "raw", completed = true }).done)
         assert.is_false(Row({ text = "raw" }).done)
+
+        local element = { text = "raw", skip = true }
+        local skipped = Row(element)
+        assert.is_true(skipped.done)
+        assert.is_true(skipped.skipped)
+        assert.equals(element, skipped.element)
+        assert.is_false(Row({ text = "raw", completed = true }).skipped)
     end)
 
     it("hides only the tag-along step it was asked to, until RestedXP retires it", function()
@@ -786,5 +793,19 @@ describe("restedxp rules", function()
             assert.equals(row.want, Model.Read(Rxp({ currentGuide = guide }), {}).group, tostring(row.want))
         end
         assert.is_nil(Model.NoGuide().group)
+    end)
+
+    it("flips a line's skip from its icon only where RestedXP's own checkbox would", function()
+        for _, row in ipairs({
+            { element = {}, want = true, name = "an open line" },
+            { element = { skip = true }, want = false, name = "a skipped line" },
+            { element = { completed = true, skip = true }, want = false, name = "finished and skipped" },
+            { element = { completed = true }, want = nil, name = "finished by the game" },
+            { element = { optional = true }, want = nil, name = "optional" },
+            { element = { textOnly = true }, want = nil, name = "text only, with no box" },
+            { want = nil, name = "no element" },
+        }) do
+            assert.equals(row.want, Rules.LineSkip(row.element), row.name)
+        end
     end)
 end)

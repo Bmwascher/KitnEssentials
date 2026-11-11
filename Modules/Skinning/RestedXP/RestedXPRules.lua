@@ -474,6 +474,16 @@ function Rules.PruneHidden(hidden)
     end
 end
 
+-- What a click on a line's icon makes its skip, as RestedXP's own checkbox decides:
+-- the box shows a finished or skipped line checked, and a click flips it. Nil where
+-- that click changes nothing: an optional line, a text-only line, which has no box,
+-- and a line the game finished that was not skipped.
+function Rules.LineSkip(element)
+    if type(element) ~= "table" or element.optional or element.textOnly then return nil end
+    if element.completed and not element.skip then return nil end
+    return not element.skip
+end
+
 function Rules.Parts(rxp)
     local arrow = Dig(rxp, "arrowFrame")
     local v2 = Dig(rxp, "v2")
