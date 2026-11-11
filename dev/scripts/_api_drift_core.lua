@@ -212,8 +212,9 @@ end
 function C.renderReport(ctx)
     local L = {}
     local function add(s) L[#L + 1] = s end
-    add(("api-drift: %s -> %s   [snapshot %s -> %s]")
-        :format(ctx.oldBuild, ctx.newBuild, ctx.oldDate, ctx.date))
+    add(("api-drift%s: %s -> %s   [snapshot %s -> %s]")
+        :format(ctx.client and (" (" .. ctx.client .. ")") or "",
+            ctx.oldBuild, ctx.newBuild, ctx.oldDate, ctx.date))
     add("")
     add(("[BREAKING-USED] (%d)"):format(#ctx.sections.breaking))
     for _, s in ipairs(ctx.sections.breaking) do add("  " .. s) end

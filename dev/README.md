@@ -312,19 +312,23 @@ two-digit year does not take the dot, because `8.6.10` is a version string;
 
 ```sh
 lua dev/scripts/update-api-reference.lua
+lua dev/scripts/update-api-reference.lua --client forever
 ```
 
-One command: fast-forwards the `.wow-api-reference` clone (and the
-BlizzardInterfaceResources clone) to the live build, fast-forwards the
-Forever clone beside it (`wow-api-reference-forever`, never part of the
-report), then reports every API
+The first command fast-forwards the `.wow-api-reference` clone (and the
+BlizzardInterfaceResources clone) to the live build, then reports every API
 change since the last update that intersects KE's used surface — removed or
 changed functions/events/enums you use, C-side global/CVar changes, and
 notable additions. Exit 1 means something you use changed — read the
 report before coding. `--report-only` re-prints without fetching;
 `--seed` re-baselines. Snapshots live in
-`KitnDev\tools\wow-reference\api-drift-snapshots\`, beside the clones. A
-missing Forever clone is skipped with a notice; the script never creates it.
+`KitnDev\tools\wow-reference\api-drift-snapshots\`, beside the clones.
+
+The second runs the same watch for the Forever client: it fast-forwards the
+Forever clone (`wow-api-reference-forever`), keeps its own snapshot, and
+counts as used only what the files in `load-list.lua --client camelot` use.
+It tracks no C-side dump, and it stops with an error when the clone is
+missing; the script never creates it.
 
 ## Two clients
 
@@ -381,7 +385,8 @@ replaced binary as `wowlua_ls.previous.exe`.
 ## Weekly checks (scheduled task)
 
 `dev/scripts/api-drift-weekly.ps1` runs every Tuesday: it updates wowlua-ls
-(re-running the checker after an update), then runs the API drift watch.
+(re-running the checker after an update), then runs the API drift watch for
+Retail and for Forever.
 Nothing pops up; when anything happened, it appends to
 `KitnDev weekly check <date>.txt` on the Desktop. Register it after a PC
 reset, from the primary checkout (a worktree path would register the

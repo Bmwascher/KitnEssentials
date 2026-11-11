@@ -3,10 +3,9 @@
 # 1. update-wowlua-ls.ps1 keeps the standalone wowlua-ls checker current; an
 #    update re-runs the checker, because a new release can raise warnings
 #    the pre-push gate then blocks.
-# 2. update-api-reference.lua runs the API drift watch; its one-shot report
-#    is archived to dev/docs/api-drift-reports/<date>.txt (gitignored). The
-#    same run refreshes the Forever reference clone; a refresh that did not
-#    happen is noted.
+# 2. update-api-reference.lua runs the API drift watch once per game client;
+#    each one-shot report is archived under dev/docs/api-drift-reports/
+#    (gitignored), <date>.txt for Retail and <date>-forever.txt for Forever.
 #
 # Nothing pops up. When either step has something to say (an update, a
 # finding, a failure) it is appended to "KitnDev weekly check <date>.txt" on
@@ -20,6 +19,8 @@
 #                 writes) and skip the wowlua-ls update
 #   -TestReport   write a sample Desktop note and exit (wiring check)
 #   -NoAutoTriage skip the headless analysis pass on findings
+#   -Client       Retail (default) or Forever. The Retail run starts the
+#                 Forever pass itself; the scheduled task needs no change.
 #
 # On BREAKING-USED findings the report is piped into a headless Claude Code
 # run (analysis-only: Read/Glob/Grep/Skill, no edits) that greps KE call
@@ -31,7 +32,8 @@
 param(
     [switch]$ReportOnly,
     [switch]$TestReport,
-    [switch]$NoAutoTriage
+    [switch]$NoAutoTriage,
+    [ValidateSet("Retail", "Forever")][string]$Client = "Retail"
 )
 
 $RepoRoot = Split-Path (Split-Path $PSScriptRoot)
@@ -47,7 +49,7 @@ if ($TestReport) {
     exit 0
 }
 
-if (-not $ReportOnly) {
+if (-not $ReportOnly -and $Client -eq "Retail") {
     # A child process, so an updater that throws cannot stop the drift watch.
     $wowluaLine = [string](& (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $PSScriptRoot "update-wowlua-ls.ps1") 2>&1 | Select-Object -Last 1)
     $wowluaCode = $LASTEXITCODE
@@ -78,29 +80,30 @@ if (-not (Test-Path $Lua)) {
 $ReportDir = Join-Path $RepoRoot "dev\docs\api-drift-reports"
 New-Item -ItemType Directory -Force -Path $ReportDir | Out-Null
 $Stamp = Get-Date -Format "yyyy-MM-dd_HHmm"
-$ReportFile = Join-Path $ReportDir "$Stamp.txt"
+$forever = $Client -eq "Forever"
+$label = if ($forever) { "WoW Forever API" } else { "WoW API" }
+$ReportFile = Join-Path $ReportDir $(if ($forever) { "$Stamp-forever.txt" } else { "$Stamp.txt" })
+
+# The Retail run starts the Forever pass as a child, so each client keeps its
+# own report, note and exit code, and one failing cannot stop the other.
+$foreverCode = 0
+if (-not $forever) {
+    $childArgs = @("-NoProfile", "-File", $PSCommandPath, "-Client", "Forever")
+    if ($ReportOnly) { $childArgs += "-ReportOnly" }
+    & (Get-Process -Id $PID).Path @childArgs
+    $foreverCode = $LASTEXITCODE
+}
 
 Set-Location $RepoRoot
 $scriptArgs = @("dev\scripts\update-api-reference.lua")
+if ($forever) { $scriptArgs += @("--client", "forever") }
 if ($ReportOnly) { $scriptArgs += "--report-only" }
 $output = & $Lua @scriptArgs 2>&1 | ForEach-Object { $_.ToString() }
 $code = $LASTEXITCODE
 $output | Set-Content -Path $ReportFile
 
-# update-api-reference.lua reports a Forever clone it could not refresh as a
-# NOTICE line and leaves its exit code alone, so the line is the only signal.
-$foreverLine = $output | Where-Object { $_ -match '^NOTICE: .*Forever reference' } | Select-Object -First 1
-if ($foreverLine) {
-    $foreverCause = if ($foreverLine -match 'no Forever reference clone') {
-        "The clone folder is missing."
-    } else {
-        "git fetch or the fast-forward failed (offline, or the clone diverged)."
-    }
-    Add-WeeklyNote "Forever reference NOT refreshed" "$foreverCause`r`nDetails: $ReportFile"
-}
-
 if ($code -eq 0) {
-    exit 0  # clean run (or additions-only) - report archived, no drift note
+    exit $foreverCode  # clean run (or additions-only) - report archived, no note
 }
 
 # exit 1 with a report header = real BREAKING-USED findings; the run already
@@ -110,7 +113,9 @@ if ($breakLine -and $breakLine -match '\((\d+)\)') {
     $n = $Matches[1]
     $summary = "Triage with /api-drift."
     $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
-    if (-not $NoAutoTriage -and $claudeCmd) {
+    # The headless pass reads the Retail reference, so Forever findings keep
+    # the manual summary.
+    if (-not $NoAutoTriage -and -not $forever -and $claudeCmd) {
         $triageFile = Join-Path $ReportDir "$Stamp-autotriage.txt"
         $promptFile = Join-Path $ReportDir "$Stamp-autotriage-prompt.txt"
         $reportText = $output -join "`r`n"
@@ -177,10 +182,10 @@ TRIAGE: none affect KE at runtime - <one-line reason>
         }
         # Timeout, nonzero exit, or no single verdict: manual summary.
     }
-    Add-WeeklyNote "WoW API drift: $n change(s) hit KE" "$summary`r`nFull report: $ReportFile`r`n`r`n$($output -join "`r`n")"
+    Add-WeeklyNote "$label drift: $n change(s) hit KE" "$summary`r`nFull report: $ReportFile`r`n`r`n$($output -join "`r`n")"
 } else {
     # exit != 0 with no report header = the script aborted (fetch failed,
     # damaged reference) - snapshots untouched, safe to rerun
-    Add-WeeklyNote "API drift watch FAILED" "Script aborted (offline? diverged clone?). Details: $ReportFile"
+    Add-WeeklyNote "$label drift watch FAILED" "Script aborted (offline? diverged or missing clone?). Details: $ReportFile"
 }
-exit $code
+exit ([Math]::Max($code, $foreverCode))

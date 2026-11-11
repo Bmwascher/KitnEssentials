@@ -1,14 +1,18 @@
--- update-api-reference.lua — update the local WoW API reference clones and
+-- update-api-reference.lua — update one local WoW API reference clone and
 -- report API changes since the last update that intersect KE's used surface.
 --
 --   lua dev/scripts/update-api-reference.lua                (from repo root)
 --   lua dev/scripts/update-api-reference.lua --report-only  (no fetch, no writes)
 --   lua dev/scripts/update-api-reference.lua --seed         (no fetch; write baseline)
+--   lua dev/scripts/update-api-reference.lua --client forever [--report-only | --seed]
 --
 -- Snapshot-diff (WowDoc changes_apidoc keying); exit 1 iff BREAKING-USED
 -- findings; snapshots only rewritten after a fully successful parse+diff.
--- An update run also fast-forwards the Forever clone beside the Retail one;
--- the report and the snapshots cover Retail only.
+--
+-- The default client is Retail: the `.wow-api-reference` clone, every KE
+-- source file and the C-side dump. `--client forever` runs the same watch on
+-- the Forever clone beside it, with its own snapshot, against only the files
+-- the Forever client loads; the C-side dump is not tracked there.
 
 local _script = (arg[0] or ""):gsub("/", "\\")
 local _dir = _script:match("^(.*\\)[^\\]+$") or ".\\dev\\scripts\\"
@@ -20,14 +24,17 @@ local C = dofile(_dir .. "_api_drift_core.lua")
 local allowOk, allow = pcall(dofile, _dir .. "luacheckrc-drift-allow.lua")
 local missingOk = (allowOk and type(allow) == "table" and allow.missing_ok) or {}
 
-local MODE = "update"
+local MODE, FOREVER = "update", false
 for i = 1, #arg do
     if arg[i] == "--report-only" then MODE = "report" end
     if arg[i] == "--seed" then MODE = "seed" end
+    if arg[i] == "--client" then
+        assert(arg[i + 1] == "retail" or arg[i + 1] == "forever", "--client takes retail or forever")
+        FOREVER = arg[i + 1] == "forever"
+    end
 end
 
 local ROOT = P.resolveRepoRoot(arg[0])
-local REF = ROOT .. "\\.wow-api-reference"
 
 -- 5.1/5.4 compat: os.execute returns number (5.1) or bool (5.2+)
 local function execOk(cmd)
@@ -43,29 +50,28 @@ local function popenLine(cmd)
     return line
 end
 
--- resolve the real clone dir (git -C follows the link), then its parent
-local refReal = popenLine('git -C "' .. REF .. '" rev-parse --show-toplevel 2>nul')
-assert(refReal and #refReal > 0, ".wow-api-reference is not a git checkout — see the memory note for setup")
-refReal = refReal:gsub("/", "\\")
-local WOWDEV = refReal:match("^(.*)\\[^\\]+$")
-local BIR = WOWDEV .. "\\blizzard-interface-resources"
-local SNAPDIR = WOWDEV .. "\\api-drift-snapshots"
+local clones = assert(P.referenceClones(ROOT),
+    ".wow-api-reference is not a git checkout — see the memory note for setup")
+local REF = FOREVER and clones.forever or clones.retail
+local BRANCH = FOREVER and "forever" or "live"
+local BIR = clones.parent .. "\\blizzard-interface-resources"
+local SNAPDIR = clones.parent .. "\\api-drift-snapshots"
+local DOCS_SNAPSHOT = FOREVER and "docs-snapshot-forever.lua" or "docs-snapshot.lua"
 local DOCS = REF .. "\\Interface\\AddOns\\Blizzard_APIDocumentationGenerated"
 local ADDONS = REF .. "\\Interface\\AddOns"
-local FOREVER = WOWDEV .. "\\wow-api-reference-forever"
-
-local function readBuild(clone)
-    return (P.readAll(clone .. "\\version.txt") or "unknown"):match("[^\r\n]+") or "unknown"
-end
+assert(execOk('git -C "' .. REF .. '" rev-parse --git-dir >nul 2>nul'),
+    "no reference clone at " .. REF)
 
 -- ---- step 1-2: fetch/merge (update mode only) ---------------------------
 if MODE == "update" then
-    print("[update] fetching " .. refReal .. " ...")
-    assert(execOk('git -C "' .. REF .. '" fetch origin'),
+    print("[update] fetching " .. REF .. " ...")
+    assert(execOk('git -C "' .. REF .. '" fetch origin ' .. BRANCH),
         "git fetch failed (offline?) — no state touched; retry or run --report-only")
-    assert(execOk('git -C "' .. REF .. '" merge --ff-only origin/live'),
-        "ff-only merge failed (diverged clone) — fix manually: git -C \"" .. refReal
+    assert(execOk('git -C "' .. REF .. '" merge --ff-only origin/' .. BRANCH),
+        "ff-only merge failed (diverged clone) — fix manually: git -C \"" .. REF
         .. "\" status")
+end
+if MODE == "update" and not FOREVER then
     if not execOk('git -C "' .. BIR .. '" rev-parse --git-dir >nul 2>nul') then
         print("[update] cloning BlizzardInterfaceResources (first run) ...")
         if not execOk('git clone --depth 1 --branch live '
@@ -78,24 +84,10 @@ if MODE == "update" then
             print("NOTICE: BlizzardInterfaceResources update failed — using its last state")
         end
     end
-    -- The Forever clone is read by hand and takes no part in the drift diff,
-    -- so a failed refresh is a notice and never aborts the run.
-    -- api-drift-weekly.ps1 matches the text of both NOTICE lines below.
-    if execOk('git -C "' .. FOREVER .. '" rev-parse --git-dir >nul 2>nul') then
-        local before = readBuild(FOREVER)
-        if execOk('git -C "' .. FOREVER .. '" fetch origin forever')
-           and execOk('git -C "' .. FOREVER .. '" merge --ff-only origin/forever >nul') then
-            print(("[update] Forever reference: %s -> %s"):format(before, readBuild(FOREVER)))
-        else
-            print("NOTICE: Forever reference update failed — using its last state")
-        end
-    else
-        print("NOTICE: no Forever reference clone at " .. FOREVER .. " — skipped")
-    end
 end
 
 -- ---- step 3: parse current state -----------------------------------------
-local version = readBuild(REF)
+local version = (P.readAll(REF .. "\\version.txt") or "unknown"):match("[^\r\n]+") or "unknown"
 local docRes = P.collectDocTables(DOCS)
 assert(docRes.filesRead >= 500,
     ("only %d API-docs files read (expected >= 500) — reference damaged; snapshots untouched")
@@ -110,7 +102,7 @@ local birFilesParsed = 0
 local birFileMap = { GlobalAPI = "globals", Events = "events", CVars = "cvars",
                      Frames = "frames", Mixins = "mixins" }
 for fname, key in pairs(birFileMap) do
-    local src = P.readAll(BIR .. "\\Resources\\" .. fname .. ".lua")
+    local src = not FOREVER and P.readAll(BIR .. "\\Resources\\" .. fname .. ".lua")
     if src then
         bir[key] = C.parseBIRSource(src, P.loadSandboxed)
         birFilesParsed = birFilesParsed + 1
@@ -120,19 +112,29 @@ local birVersion = popenLine('git -C "' .. BIR .. '" log -1 --format=%s 2>nul') 
 
 -- ---- step 4: used surface -------------------------------------------------
 local used = C.newUsedSurface()
+local keFiles = {}
+if FOREVER then
+    for _, rel in ipairs(P.loadedLuaFiles(ROOT, "camelot", arg[-1])) do
+        keFiles[#keFiles + 1] = ROOT .. "\\" .. rel:gsub("/", "\\")
+    end
+else
+    for _, sub in ipairs({ "Core", "Modules", "GUI", "KitnEssentials_Options" }) do
+        for _, f in ipairs(P.listFiles(ROOT .. "\\" .. sub, "*.lua")) do keFiles[#keFiles + 1] = f end
+    end
+end
 local nKeFiles = 0
-for _, sub in ipairs({ "Core", "Modules", "GUI", "KitnEssentials_Options" }) do
-    for _, f in ipairs(P.listFiles(ROOT .. "\\" .. sub, "*.lua")) do
-        local src = P.readAll(f)
-        if src then
-            nKeFiles = nKeFiles + 1
-            C.harvestUsedFromSource(src, used)
-        end
+for _, f in ipairs(keFiles) do
+    local src = P.readAll(f)
+    if src then
+        nKeFiles = nKeFiles + 1
+        C.harvestUsedFromSource(src, used)
     end
 end
 assert(nKeFiles >= 100, ("only %d KE files harvested — run from the repo root"):format(nKeFiles))
+-- .luacheckrc names every global KE uses on either client, so it would widen
+-- the Forever surface past the files Forever loads.
 local rcEnv = { files = {} }
-local rcSrc = P.readAll(ROOT .. "\\.luacheckrc")
+local rcSrc = not FOREVER and P.readAll(ROOT .. "\\.luacheckrc")
 if rcSrc then
     local chunk = P.loadSandboxed(rcSrc, "@.luacheckrc", rcEnv)
     if chunk then pcall(chunk) end
@@ -160,9 +162,14 @@ for _, k in ipairs({ "globals", "events", "cvars", "frames", "mixins" }) do
 end
 local newBirSnap = { build = birVersion, date = newDocsSnap.date, bir = birSets }
 
-local oldSrc = P.readAll(snapPath("docs-snapshot.lua"))
+local function writeSnapshots()
+    writeSnapshot(DOCS_SNAPSHOT, newDocsSnap)
+    if not FOREVER then writeSnapshot("bir-snapshot.lua", newBirSnap) end
+end
+
+local oldSrc = P.readAll(snapPath(DOCS_SNAPSHOT))
 local oldSnap = oldSrc and C.loadSnapshotFromString(oldSrc, P.loadSandboxed)
-local oldBirSrc = P.readAll(snapPath("bir-snapshot.lua"))
+local oldBirSrc = not FOREVER and P.readAll(snapPath("bir-snapshot.lua"))
 local oldBir = oldBirSrc and C.loadSnapshotFromString(oldBirSrc, P.loadSandboxed)
 
 if MODE == "seed" or not oldSnap then
@@ -171,8 +178,7 @@ if MODE == "seed" or not oldSnap then
         print("(--report-only never writes state; run without flags, or --seed)")
         os.exit(0)
     end
-    writeSnapshot("docs-snapshot.lua", newDocsSnap)
-    writeSnapshot("bir-snapshot.lua", newBirSnap)
+    writeSnapshots()
     print(("api-drift: baseline seeded at build %s (%d functions, %d events, %d enums)")
         :format(version, P.count(flat.functions), P.count(flat.events), P.count(flat.enums)))
     print("run again after the next reference update to get a report")
@@ -204,7 +210,9 @@ local cside = {}
 local csideGating = 0
 -- birFilesParsed == 0 must short-circuit: diffing a real old snapshot against
 -- empty parsed sets would report every known name as falsely REMOVED
-if birFilesParsed == 0 then
+-- Forever tracks no C-side dump and gets no notice line here: every cside
+-- line counts as a used-surface hit in [FYI].
+if not FOREVER and birFilesParsed == 0 then
     cside[#cside + 1] = "NOTICE: BlizzardInterfaceResources unavailable — section skipped"
 elseif oldBir and oldBir.bir then
     for _, k in ipairs({ "globals", "events", "cvars", "frames", "mixins" }) do
@@ -241,12 +249,14 @@ local fyiUsed = #breaking + #cside + #additions
 local buildNum = version:match("%.(%d+)$") or version
 local patch = version:match("^(%d+%.%d+%.%d+)") or version
 local lines, code = C.renderReport({
+    client = FOREVER and "Forever, C-side not tracked" or nil,
     oldBuild = oldSnap.build or "?", newBuild = version,
     oldDate = oldSnap.date or "?", date = newDocsSnap.date,
     sections = { breaking = breaking, cside = cside, additions = additions },
     csideGating = csideGating,
     fyiTotal = fyiTotal, fyiUsed = fyiUsed,
-    links = {
+    -- both sites index Retail builds only
+    links = FOREVER and {} or {
         "https://www.townlong-yak.com/framexml/" .. buildNum,
         "https://warcraft.wiki.gg/wiki/Patch_" .. patch .. "/API_changes",
     },
@@ -254,8 +264,5 @@ local lines, code = C.renderReport({
 for _, l in ipairs(lines) do print(l) end
 
 -- ---- step 7-8: persist (not in report mode), exit ---------------------------
-if MODE == "update" then
-    writeSnapshot("docs-snapshot.lua", newDocsSnap)
-    writeSnapshot("bir-snapshot.lua", newBirSnap)
-end
+if MODE == "update" then writeSnapshots() end
 os.exit(code)
