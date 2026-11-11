@@ -42,6 +42,7 @@ local K = {
     PAD = 10, BOX_PAD = 7, FOLD_W = 16, GAP = 5, TOP_GAP = 2, COG_SIZE = 14, FOLD_GROW = 4,
     HEAD_PAD = 10, LIST_PAD = 6,
     BOX_TITLE_TEXT = 9, BOX_TITLE_HEIGHT = 19, BOX_TITLE_ROOM = 10,
+    BAND_HEIGHT = 14, BAND_TEXT_X = 6, BAND_ALPHA = 0.92, TITLE_SLACK = 0.5,
     ICON_GAP = 5, GRIP_SIZE = 16, TIMER_ICON_INSET = 2,
     FIRST_GROW = 2, FIRST_ICON_GROW = 2, MARK_SIZE = 24, BAR_HEIGHT = 5, ICON_SIZE = 18,
     HOVER_ALPHA = 0.25, ICON_DONE_ALPHA = 0.5, DONE_ALPHA = 0.5, YARDS_ALPHA = 0.85,
@@ -111,6 +112,11 @@ local Timers = {
     starts = {},
     -- The order with no bar table. Never written.
     none = {},
+}
+-- The header band on Targets and Items, a table of fields for the same reason.
+local Band = {
+    -- Each frame given a band, to its fill and line.
+    of = setmetatable({}, { __mode = "k" }),
 }
 local Draw
 
@@ -426,26 +432,121 @@ local function SkinBox(part)
     border:SetShown(not back or back:IsShown())
 end
 
-local function KeepTitle(text)
-    if titleHome[text] then return end
+function Band.Shown(part)
+    if Has(part, "IsShown") then return part:IsShown() end
+end
+
+function Band.Show(part, shown)
+    if shown ~= nil and Has(part, "SetShown") then part:SetShown(shown) end
+end
+
+-- A frame's points, or nil when any value reads as a secret, which is neither
+-- compared nor kept.
+function Band.Points(frame)
+    local count = frame:GetNumPoints()
+    if Secret(count) then return nil end
+    local points = {}
+    for i = 1, count do
+        local point, relative, relativePoint, x, y = frame:GetPoint(i)
+        if Secret(point) or Secret(relative) or Secret(relativePoint) or Secret(x) or Secret(y) then return nil end
+        points[i] = { point, relative, relativePoint, x, y }
+    end
+    return points
+end
+
+-- On RestedXP's own background frame, so the band hides with RestedXP's Hide
+-- Background setting, and the buttons and the title draw over it. False where the
+-- frame has none.
+function Band.Paint(frame)
+    local host = frame.rxpBackground
+    if not Has(host, "CreateTexture") then return false end
+    local band = Band.of[frame]
+    if not band then
+        band = { fill = host:CreateTexture(nil, "BORDER"), line = host:CreateTexture(nil, "ARTWORK") }
+        band.fill:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
+        band.fill:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, 0)
+        band.line:SetPoint("BOTTOMLEFT", band.fill, "BOTTOMLEFT", 0, 0)
+        band.line:SetPoint("BOTTOMRIGHT", band.fill, "BOTTOMRIGHT", 0, 0)
+        Band.of[frame] = band
+    end
+    local box, accent = colors.box, colors.accent
+    band.fill:SetHeight(K.BAND_HEIGHT)
+    band.fill:SetColorTexture(box[1], box[2], box[3], K.BAND_ALPHA)
+    band.line:SetHeight(KE:GetPixelSize())
+    band.line:SetColorTexture(accent[1], accent[2], accent[3], 1)
+    band.fill:Show()
+    band.line:Show()
+    return true
+end
+
+function Band.Clear()
+    for _, band in pairs(Band.of) do
+        band.fill:Hide()
+        band.line:Hide()
+    end
+end
+
+-- RestedXP sizes these frames from their title only when it lays them out, so a title
+-- whose width changed asks for that once, by RestedXP's own call. Both return in
+-- combat, and the repaint runs only out of it.
+function Band.Layout(frame)
+    local rxp = _G.RXP
+    if frame == Dig(rxp, "activeItemFrame") then
+        if Has(rxp, "UpdateItemFrame") then Run("WindowLayout", rxp.UpdateItemFrame, frame) end
+        return
+    end
+    local targeting = Dig(rxp, "targeting")
+    if Has(targeting, "UpdateTargetFrame") then Run("WindowLayout", targeting.UpdateTargetFrame, targeting) end
+end
+
+-- First touch only: all that the repaint changes on a title, so turning off gives it
+-- back. RestedXP writes the words once, when it builds the frame.
+local function KeepTitle(title, text)
+    if titleHome[text] then return titleHome[text] end
     local font, size, flags = text:GetFont()
     local r, g, b, a = text:GetTextColor()
     local shadowX, shadowY = text:GetShadowOffset()
     local shadowR, shadowG, shadowB, shadowA = text:GetShadowColor()
+    local words = text:GetText()
+    if Secret(words) or type(words) ~= "string" then words = nil end
     titleHome[text] = {
         font = font, size = size, flags = flags, r = r, g = g, b = b, a = a,
         shadowX = shadowX, shadowY = shadowY, shadowR = shadowR, shadowG = shadowG, shadowB = shadowB, shadowA = shadowA,
+        title = title, words = words, caps = words and words:upper(),
+        mouse = title:IsMouseEnabled(), back = Band.Shown(title.rxpBackground), edge = Band.Shown(title.rxpBorder),
+        points = Band.Points(title),
     }
+    return titleHome[text]
 end
 
-local function SkinTitle(title)
-    SkinBox(title)
-    local text = title.text
-    if not Has(text, "GetFont") then return end
-    KeepTitle(text)
+-- RestedXP's own title, in caps, moves into a band across the frame's top. RestedXP
+-- sizes the frame from the title's width, so that stays its text's width plus room,
+-- set by one point and never stretched to the frame. A frame with no background of
+-- RestedXP's, or a title whose points read as secret, keeps its plate above the
+-- frame. Returns whether the title's width changed.
+local function SkinTitle(frame)
+    local title = frame.title
+    local text = Dig(title, "text")
+    if not Has(text, "GetFont") then return false end
+    local home = KeepTitle(title, text)
     Faced(text, K.BOX_TITLE_TEXT)
     Colored(text, "title")
-    title:SetSize(text:GetStringWidth() + K.BOX_TITLE_ROOM, K.BOX_TITLE_HEIGHT)
+    if home.points and Band.Paint(frame) then
+        local now = text:GetText()
+        if home.caps and (Secret(now) or now ~= home.caps) then text:SetText(home.caps) end
+        Band.Show(title.rxpBackground, false)
+        Band.Show(title.rxpBorder, false)
+        -- A press reaches the frame's own drag, and the buttons under the title.
+        title:EnableMouse(false)
+        title:ClearAllPoints()
+        title:SetPoint("LEFT", frame, "TOPLEFT", K.BAND_TEXT_X - K.BOX_TITLE_ROOM / 2, -K.BAND_HEIGHT / 2)
+    else
+        SkinBox(title)
+    end
+    local was, width = title:GetWidth(), text:GetStringWidth() + K.BOX_TITLE_ROOM
+    title:SetSize(width, K.BOX_TITLE_HEIGHT)
+    if Secret(was) then return false end
+    return was < width - K.TITLE_SLACK or was > width + K.TITLE_SLACK
 end
 
 local function SkinPlaceholders(frame)
@@ -471,7 +572,10 @@ local function RestorePlaceholders()
     end
 end
 
+-- The words go back before RestedXP's own UpdateVisuals, which sizes the title from
+-- its text.
 local function RestoreTitles()
+    Band.Clear()
     for text, home in pairs(titleHome) do
         titleHome[text] = nil
         dressed[text] = nil
@@ -479,13 +583,23 @@ local function RestoreTitles()
         if home.r then text:SetTextColor(home.r, home.g, home.b, home.a) end
         if home.shadowX then text:SetShadowOffset(home.shadowX, home.shadowY) end
         if home.shadowR then text:SetShadowColor(home.shadowR, home.shadowG, home.shadowB, home.shadowA) end
+        if home.words then text:SetText(home.words) end
+        local title = home.title
+        title:EnableMouse(home.mouse)
+        Band.Show(title.rxpBackground, home.back)
+        Band.Show(title.rxpBorder, home.edge)
+        if home.points then
+            title:ClearAllPoints()
+            for _, point in ipairs(home.points) do title:SetPoint(unpack(point, 1, 5)) end
+        end
     end
 end
 
 local function SkinFrame(frame)
     SkinBox(frame)
-    if frame.title then SkinTitle(frame.title) end
+    local resized = frame.title and SkinTitle(frame)
     SkinPlaceholders(frame)
+    if resized then Band.Layout(frame) end
 end
 
 local function SkinFrames()
@@ -545,7 +659,10 @@ local function PaintFrames()
         -- and color from its current theme, so it goes last, whichever way a theme
         -- reload and this teardown are ordered.
         RestoreTitles()
-        for _, frame in ipairs(frames) do SkinRestore(frame) end
+        for _, frame in ipairs(frames) do
+            SkinRestore(frame)
+            Band.Layout(frame)
+        end
     end
 end
 
@@ -1840,6 +1957,15 @@ function Window.HeldTimers()
     local count = 0
     for bar in pairs(Timers.taken) do
         if Run("WindowTimerHeld", Timers.Held, bar) then count = count + 1 end
+    end
+    return count
+end
+
+-- How many of Targets and Items show KE's header band now, for the smoke's macros.
+function Window.Banded()
+    local count = 0
+    for _, band in pairs(Band.of) do
+        if band.fill:IsShown() then count = count + 1 end
     end
     return count
 end
