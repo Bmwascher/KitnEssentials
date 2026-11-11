@@ -4,7 +4,7 @@ local KE = KitnEssentials:GetNamespace()
 KE.DataSources = KE.DataSources or {}
 KE.DataSources.TrainingRoute = [==[
 return {
-build = "1.60.1.70790",
+build = "1.60.1.70888",
 capitals = {
 [1453] = true,
 [1454] = true,
@@ -244,6 +244,7 @@ npcs = {
 { 2521, 43.6, 24.2, "Blademaster Ren", "Warrior Trainer", "WARRIOR", "AH" },
 { 2521, 45, 45.1, "Corsan Earthrazer", "Warrior Trainer", "WARRIOR", "AH" },
 { 2521, 45.2, 44.3, "Elayaa Easewind", "Hunter Trainer", "HUNTER", "AH" },
+{ 2521, 64, 75.1, "Lotheluum Starbreeze", "Druid Trainer", "DRUID", "AH" },
 { 2521, 43.2, 43.3, "Miriaan Mistblade", "Rogue Trainer", "ROGUE", "AH" },
 { 2521, 45.2, 44.3, "Naeluna Swiftmend", "Druid Trainer", "DRUID", "AH" },
 { 2521, 45.1, 45.8, "Shenaan Spellwind", "Mage Trainer", "MAGE", "AH" },

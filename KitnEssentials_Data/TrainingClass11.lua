@@ -4,7 +4,7 @@ local KE = KitnEssentials:GetNamespace()
 KE.DataSources = KE.DataSources or {}
 KE.DataSources.TrainingClass11 = [==[
 return {
-build = "1.60.1.70790",
+build = "1.60.1.70888",
 spells = {
 { 1, 1126, 10 },
 { 4, 774, 100 },
@@ -118,7 +118,7 @@ spells = {
 { 40, 8918, 10000, needs = 740 },
 { 40, 8929, 10000, needs = 8928 },
 { 40, 9000, 10000, needs = 8998 },
-{ 40, 9634, 10000 },
+{ 40, 9634, 10000, needs = 5487 },
 { 40, 16914, 10000 },
 { 40, 20719, 10000 },
 { 40, 20742, 10000, needs = 20739 },
@@ -210,7 +210,6 @@ weapons = {
 { 20, 200, masters = { "Archibald", "Woo Ping" } },
 },
 replaced = {
-[5487] = { 9634 },
 [9754] = { 411128 },
 [22829] = { 31018 },
 [22842] = { 22895, 22896 },

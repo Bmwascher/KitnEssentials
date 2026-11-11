@@ -4,7 +4,7 @@ local KE = KitnEssentials:GetNamespace()
 KE.DataSources = KE.DataSources or {}
 KE.DataSources.TrainingClass8 = [==[
 return {
-build = "1.60.1.70790",
+build = "1.60.1.70888",
 spells = {
 { 1, 1459, 10 },
 { 4, 116, 100 },
