@@ -153,7 +153,9 @@ Runs the comment and commit-message guards over the pushed range, then
 `luacheck` + `busted`, all blocking, before every push — each tool
 gates independently, so a machine missing one still runs the other. Also
 prints a non-blocking note when `.luacheckrc` drifts from the local WoW API
-reference (see `dev/scripts/check-luacheckrc-drift.lua`) and when `References/`
+reference (see `dev/scripts/check-luacheckrc-drift.lua`), when a file the
+Forever client loads uses a Retail-only API or Blizzard global
+(`dev/scripts/check-forever-api.lua`), and when `References/`
 breaks the folder rule (`dev/scripts/check-references-folders.lua`; the same
 check runs at Claude Code session start). Override a single
 push with `git push --no-verify`. If a tool isn't on PATH the hook skips it
@@ -323,6 +325,23 @@ report before coding. `--report-only` re-prints without fetching;
 `--seed` re-baselines. Snapshots live in
 `KitnDev\tools\wow-reference\api-drift-snapshots\`, beside the clones. A
 missing Forever clone is skipped with a notice; the script never creates it.
+
+## Two clients
+
+```sh
+lua dev/scripts/smoke-clients.lua [base]
+lua dev/scripts/check-forever-api.lua
+```
+
+`smoke-clients.lua` prints, for each file a branch changed against `base`
+(default `main`), whether Retail, Forever or both load it, and ends with the
+clients the branch must be smoked on.
+
+`check-forever-api.lua` reads every file the Forever client loads and reports
+a use of something only Retail has: an API the Forever docs lack, or a
+Blizzard global that Forever's own UI source defines in no file it loads. A
+use that is guarded at run time goes in `dev/scripts/forever-api-allow.lua`
+with its reason; exit 1 means an unlisted use, or a listed one that is gone.
 
 ## Updating the embedded libraries
 

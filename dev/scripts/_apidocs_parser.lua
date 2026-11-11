@@ -83,6 +83,40 @@ function P.resolveRepoRoot(arg0)
     return root
 end
 
+-- The reference clones sit side by side: the project junction resolves to the
+-- Retail clone, and the Forever clone is its sibling. Returns nil when the
+-- junction is not a git checkout.
+function P.referenceClones(root)
+    local p = io.popen('git -C "' .. root .. '\\.wow-api-reference" rev-parse --show-toplevel 2>nul')
+    local retail = p and p:read("*l")
+    if p then p:close() end
+    if not retail or retail == "" then return nil end
+    retail = retail:gsub("/", "\\")
+    local parent = retail:match("^(.*)\\[^\\]+$")
+    return { retail = retail, parent = parent, forever = parent .. "\\wow-api-reference-forever" }
+end
+
+-- Repo-relative .lua paths one client loads, in load order, from
+-- load-list.lua. Embedded libraries are left out: they are not KE's code.
+function P.loadedLuaFiles(root, client, interpreter)
+    interpreter = interpreter or "lua"
+    -- cmd.exe strips the outermost quote pair of a command that starts with one
+    local cmd = '"cd /d "' .. root .. '" && "' .. interpreter
+        .. '" dev\\scripts\\load-list.lua --client ' .. client .. ' 2>nul"'
+    local out = {}
+    local p = io.popen(cmd)
+    if p then
+        for line in p:lines() do
+            line = line:gsub("\r$", "")
+            if line:match("%.lua$") and not line:match("^Libs/") and not line:match("^[#<]") then
+                out[#out + 1] = line
+            end
+        end
+        p:close()
+    end
+    return out
+end
+
 -- PURE docs collector: sources = { {name=..., src=...}, ... }.
 -- Same permissive sandbox as before (stub with arithmetic metamethods).
 function P.collectDocTablesFromSources(sources)

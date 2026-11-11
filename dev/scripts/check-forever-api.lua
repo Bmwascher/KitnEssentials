@@ -1,0 +1,218 @@
+-- check-forever-api.lua: find Retail-only API and Blizzard globals in files
+-- the Forever client loads. .luacheckrc and the drift check validate against
+-- the Retail reference alone, so such a use passes them and fails only in game.
+--
+-- Run from the repo root with the local Lua interpreter (5.1 or 5.4):
+--   lua dev/scripts/check-forever-api.lua [--soft] [--verbose]
+--
+-- Subjects: every .lua in `load-list.lua --client camelot`, embedded libraries
+-- excluded. Two tiers, both against the Forever reference clone:
+--   tier 1: a C_Namespace.Function call, documented global function, Enum
+--           member or Register*Event literal that the Retail API docs have
+--           and the Forever API docs lack. The two doc sets differ little.
+--   tier 2: a .luacheckrc global that the Forever clone defines somewhere but
+--           in no file Forever loads (its addon is refused, or its manifest
+--           line is). _forever_load.lua holds the load rules.
+-- A finding prints as `<file>  <symbol>`; --verbose adds where tier 2 found
+-- the definition, and the manifest files that did not resolve.
+--
+-- Limits: a global the clone never defines by name (created in C, or built
+-- from $parent) is never reported, and the harvest reads comments and strings
+-- too. A use guarded at run time (a nil check, a KE.IS_FOREVER branch) is
+-- still reported: record it in dev/scripts/forever-api-allow.lua with the
+-- reason.
+--
+-- Exit 1 on a finding the allowlist does not cover, or on an allowlist entry
+-- that no longer matches anything; --soft forces exit 0. A missing clone is a
+-- notice and exit 0 (CI has no reference clones).
+
+local SOFT, VERBOSE = false, false
+for i = 1, #arg do
+    if arg[i] == "--soft" then SOFT = true end
+    if arg[i] == "--verbose" then VERBOSE = true end
+end
+
+local _script = (arg[0] or ""):gsub("/", "\\")
+local _dir = _script:match("^(.*\\)[^\\]+$") or ".\\dev\\scripts\\"
+local P = dofile(_dir .. "_apidocs_parser.lua")
+local C = dofile(_dir .. "_api_drift_core.lua")
+local L = dofile(_dir .. "_forever_load.lua")
+
+local ROOT = P.resolveRepoRoot(arg[0])
+local ADDONS_SUB = "\\Interface\\AddOns"
+local DOCS_SUB = ADDONS_SUB .. "\\Blizzard_APIDocumentationGenerated"
+
+local clones = P.referenceClones(ROOT)
+if not clones then
+    print("forever-api: .wow-api-reference is not a git checkout; skipped")
+    os.exit(0)
+end
+
+-- ---- tier 1: the two API doc sets -------------------------------------------
+local function flatDocs(clone)
+    local res = P.collectDocTables(clone .. DOCS_SUB)
+    if res.filesRead < 500 then return nil, res.filesRead end
+    return C.flattenDocs(res.tables)
+end
+
+local retail, retailRead = flatDocs(clones.retail)
+local forever, foreverRead = flatDocs(clones.forever)
+if not retail or not forever then
+    print(("forever-api: API docs not readable (Retail %s, Forever %s files); skipped")
+        :format(tostring(retail and "ok" or retailRead), tostring(forever and "ok" or foreverRead)))
+    os.exit(0)
+end
+
+local function retailOnly(kind, key)
+    return retail[kind][key] ~= nil and forever[kind][key] == nil
+end
+
+-- ---- tier 2: what the Forever client loads ---------------------------------
+local ADDONS = clones.forever .. ADDONS_SUB
+
+local function normalize(path)
+    local parts = {}
+    for part in path:gsub("/", "\\"):gmatch("[^\\]+") do
+        if part == ".." then parts[#parts] = nil elseif part ~= "." then parts[#parts + 1] = part end
+    end
+    return table.concat(parts, "\\")
+end
+
+local loaded, unresolved = {}, {}
+local function loadFile(path)
+    path = normalize(path)
+    local key = path:lower()
+    if loaded[key] then return end
+    local src = P.readAll(path)
+    if not src then
+        unresolved[#unresolved + 1] = path:sub(#ADDONS + 2)
+        return
+    end
+    loaded[key] = true
+    if key:match("%.xml$") then
+        local dir = path:match("^(.*)\\[^\\]+$")
+        for _, file in ipairs(L.xmlFiles(src)) do loadFile(dir .. "\\" .. file) end
+    end
+end
+
+for _, addon in ipairs(P.listDirs(ADDONS)) do
+    if not addon:find("Blizzard_APIDocumentation", 1, true) then
+        local dir = ADDONS .. "\\" .. addon
+        for _, name in ipairs({ addon .. ".toc", addon .. "_Mainline.toc" }) do
+            local toc = P.readAll(dir .. "\\" .. name)
+            if toc and L.headerAllows(toc) then
+                for _, file in ipairs(L.tocFiles(toc)) do loadFile(dir .. "\\" .. file) end
+            end
+        end
+    end
+end
+
+local defined, definedLoaded, definedIn, nSource = {}, {}, {}, 0
+for _, ext in ipairs({ "*.lua", "*.xml" }) do
+    for _, path in ipairs(P.listFiles(ADDONS, ext)) do
+        if not path:find("Blizzard_APIDocumentation", 1, true) then
+            local src = P.readAll(path)
+            if src then
+                nSource = nSource + 1
+                local own = {}
+                L.definitions(src, ext == "*.xml", own)
+                local isLoaded = loaded[normalize(path):lower()]
+                for id in pairs(own) do
+                    defined[id] = true
+                    if isLoaded then
+                        definedLoaded[id] = true
+                    else
+                        definedIn[id] = definedIn[id] or path:sub(#ADDONS + 2)
+                    end
+                end
+            end
+        end
+    end
+end
+if nSource < 1000 then
+    print(("forever-api: only %d Forever source files read (sparse clone?); skipped"):format(nSource))
+    os.exit(0)
+end
+
+local rcEnv = { files = {} }
+local rcChunk = P.loadSandboxed(assert(P.readAll(ROOT .. "\\.luacheckrc"), "cannot read .luacheckrc"),
+    "@.luacheckrc", rcEnv)
+assert(rcChunk, "cannot load .luacheckrc")()
+local rcNames = {}
+for _, sym in ipairs(P.rcSymbols(rcEnv.globals)) do rcNames[sym] = true end
+for _, sym in ipairs(P.rcSymbols(rcEnv.read_globals)) do rcNames[sym] = true end
+
+-- ---- the Forever-loaded KE files --------------------------------------------
+local allowOk, allow = pcall(dofile, _dir .. "forever-api-allow.lua")
+if not allowOk or type(allow) ~= "table" then allow = {} end
+
+local files = P.loadedLuaFiles(ROOT, "camelot", arg[-1])
+assert(#files >= 100, ("only %d Forever-loaded files listed: run from the repo root"):format(#files))
+
+local findings, allowed, usedAllow = {}, 0, {}
+for _, path in ipairs(files) do
+    local src = P.readAll(ROOT .. "\\" .. path:gsub("/", "\\"))
+    if src then
+        local used = C.newUsedSurface()
+        C.harvestUsedFromSource(src, used)
+        local hits, seen = {}, {}
+        local function hit(sym)
+            if not seen[sym] then
+                seen[sym] = true
+                hits[#hits + 1] = sym
+            end
+        end
+        for key in pairs(used.nsCalls) do
+            if retailOnly("functions", key) then hit(key) end
+        end
+        for key in pairs(used.enums) do
+            if retailOnly("enums", key) then hit(key) end
+        end
+        for ev in pairs(used.events) do
+            if retailOnly("events", ev) then hit("event " .. ev) end
+        end
+        for name in pairs(used.names) do
+            if retailOnly("functions", name) then hit(name) end
+            if rcNames[name] and defined[name] and not definedLoaded[name] then hit(name) end
+        end
+        table.sort(hits)
+        local fileAllow = allow[path] or {}
+        for _, sym in ipairs(hits) do
+            if fileAllow[sym] then
+                allowed = allowed + 1
+                usedAllow[path .. "\0" .. sym] = true
+            elseif VERBOSE and definedIn[sym] then
+                findings[#findings + 1] = path .. "  " .. sym .. "  (defined in " .. definedIn[sym] .. ")"
+            else
+                findings[#findings + 1] = path .. "  " .. sym
+            end
+        end
+    end
+end
+
+local stale = {}
+for path, syms in pairs(allow) do
+    for sym in pairs(syms) do
+        if not usedAllow[path .. "\0" .. sym] then stale[#stale + 1] = path .. "  " .. sym end
+    end
+end
+table.sort(stale)
+
+local function build(clone)
+    return (P.readAll(clone .. "\\version.txt") or "unknown"):match("[^\r\n]+") or "unknown"
+end
+
+print(("forever-api: %d Forever-loaded files, Retail %s vs Forever %s")
+    :format(#files, build(clones.retail), build(clones.forever)))
+print(("[RETAIL-ONLY] (%d)"):format(#findings))
+for _, line in ipairs(findings) do print("  " .. line) end
+print(("[STALE-ALLOW] (%d)"):format(#stale))
+for _, line in ipairs(stale) do print("  " .. line) end
+print(("allowlisted: %d"):format(allowed))
+if VERBOSE then
+    print(("[UNRESOLVED] (%d) manifest entries with no file in the Forever clone"):format(#unresolved))
+    for _, line in ipairs(unresolved) do print("  " .. line) end
+end
+
+if (#findings > 0 or #stale > 0) and not SOFT then os.exit(1) end
+os.exit(0)
