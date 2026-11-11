@@ -4,7 +4,9 @@
 #    update re-runs the checker, because a new release can raise warnings
 #    the pre-push gate then blocks.
 # 2. update-api-reference.lua runs the API drift watch; its one-shot report
-#    is archived to dev/docs/api-drift-reports/<date>.txt (gitignored).
+#    is archived to dev/docs/api-drift-reports/<date>.txt (gitignored). The
+#    same run refreshes the Forever reference clone; a refresh that did not
+#    happen is noted.
 #
 # Nothing pops up. When either step has something to say (an update, a
 # finding, a failure) it is appended to "KitnDev weekly check <date>.txt" on
@@ -85,8 +87,20 @@ $output = & $Lua @scriptArgs 2>&1 | ForEach-Object { $_.ToString() }
 $code = $LASTEXITCODE
 $output | Set-Content -Path $ReportFile
 
+# update-api-reference.lua reports a Forever clone it could not refresh as a
+# NOTICE line and leaves its exit code alone, so the line is the only signal.
+$foreverLine = $output | Where-Object { $_ -match '^NOTICE: .*Forever reference' } | Select-Object -First 1
+if ($foreverLine) {
+    $foreverCause = if ($foreverLine -match 'no Forever reference clone') {
+        "The clone folder is missing."
+    } else {
+        "git fetch or the fast-forward failed (offline, or the clone diverged)."
+    }
+    Add-WeeklyNote "Forever reference NOT refreshed" "$foreverCause The Retail drift watch still ran.`r`nDetails: $ReportFile"
+}
+
 if ($code -eq 0) {
-    exit 0  # clean run (or additions-only) - report archived, no note
+    exit 0  # clean run (or additions-only) - report archived, no drift note
 }
 
 # exit 1 with a report header = real BREAKING-USED findings; the run already
