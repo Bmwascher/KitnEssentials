@@ -33,6 +33,13 @@ local function Heading(rxp, guide, tint)
     return Rules.TintRange(title, tint)
 end
 
+-- Read as RestedXP's guide menu reads it: the display group where the guide has one.
+local function Group(guide)
+    local group = guide.groupdisplayname
+    if type(group) ~= "string" then group = guide.group end
+    return Rules.GuideGroupName(group)
+end
+
 local function ShownText(rxp, element, frame)
     local text = Dig(frame, "text")
     local shown = Has(text, "GetText") and text:GetText()
@@ -120,7 +127,10 @@ end
 function Model.Read(rxp, opts)
     local guide = rxp.currentGuide
     if not guide or guide.empty then return nil end
-    local model = { heading = Heading(rxp, guide, opts.tint or Same), steps = {}, current = {}, guide = guide }
+    local model = {
+        heading = Heading(rxp, guide, opts.tint or Same), group = Group(guide),
+        steps = {}, current = {}, guide = guide,
+    }
     local step = Has(rxp, "GetGuideProgress") and Run("WindowProgress", rxp.GetGuideProgress) or nil
     local total = type(guide.steps) == "table" and #guide.steps or 0
     if step and total > 0 then

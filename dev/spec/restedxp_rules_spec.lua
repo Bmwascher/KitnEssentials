@@ -756,4 +756,34 @@ describe("restedxp rules", function()
         for i, bar in ipairs(want) do assert.equals(bar, list[i], "bar " .. i) end
         assert.equals(0, #Rules.TimerOrder({}, owned, 10))
     end)
+
+    it("names the guide's group without the leading mark, RestedXP in front or the faction at the end", function()
+        for _, row in ipairs({
+            { "RestedXP Forever Dungeon Guide (A)", "Forever Dungeon Guide" },
+            { "RestedXP Forever Guide (H)", "Forever Guide" },
+            { "*RestedXP Speedrun Guide (A)", "Speedrun Guide" },
+            { "RestedXP Alliance Mage", "Alliance Mage" },
+            { "RXP Forever Dungeon Quests (A)", "RXP Forever Dungeon Quests" },
+            { "Forever (A) Guide", "Forever (A) Guide" },
+            { "RestedXP ", nil },
+            { "", nil },
+        }) do
+            assert.equals(row[2], Rules.GuideGroupName(row[1]), row[1])
+        end
+        assert.is_nil(Rules.GuideGroupName(nil))
+        assert.is_nil(Rules.GuideGroupName(42))
+    end)
+
+    it("reads the top bar's group from the guide's display group, else its group", function()
+        for _, row in ipairs({
+            { display = "RestedXP Speedrun Guide (A)", group = "RestedXP Forever Guide (A)", want = "Speedrun Guide" },
+            { group = "RestedXP Forever Dungeon Guide (A)", want = "Forever Dungeon Guide" },
+            { display = 7, group = "RestedXP Forever Guide (H)", want = "Forever Guide" },
+            { want = nil },
+        }) do
+            local guide = { title = "Wetlands", steps = Steps(60), groupdisplayname = row.display, group = row.group }
+            assert.equals(row.want, Model.Read(Rxp({ currentGuide = guide }), {}).group, tostring(row.want))
+        end
+        assert.is_nil(Model.NoGuide().group)
+    end)
 end)

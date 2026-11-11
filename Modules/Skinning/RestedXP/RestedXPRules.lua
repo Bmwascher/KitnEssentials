@@ -28,6 +28,7 @@ local COUNT_PATTERN = "(%d+)%s*/%s*(%d+)"
 local LEAD_ICON, LEAD_PLAIN = "^%s*(|T[^|]*|t)%s*", "^|T([^|:]+):%d+|t$"
 local LEAD_PATH, CONTENT_ID, CONTENT_DIR = "^|T([^|:]+)", "^%d+$", "interface[/\\]icons[/\\]"
 local TEXT_YARDS = "%d yd"
+local GROUP_MARK, GROUP_BRAND, GROUP_FACTION = "^%*", "^RestedXP ", " %([AH]%)$"
 
 ---------------------------------------------------------------------------------
 -- Colors
@@ -499,6 +500,15 @@ function Rules.TintRange(text, tint)
     place, range = text:match("^(.-)%s+(%d+%-%d+)$")
     if place then return place .. " " .. tint(range) end
     return text
+end
+
+-- The guide's group as the window's top bar names it: without the leading mark
+-- RestedXP gives some groups, the RestedXP in front, or the faction at the end.
+function Rules.GuideGroupName(group)
+    if type(group) ~= "string" then return nil end
+    local name = group:gsub(GROUP_MARK, ""):gsub(GROUP_BRAND, ""):gsub(GROUP_FACTION, "")
+    if name == "" then return nil end
+    return name
 end
 
 function Rules.Plain(text)
