@@ -47,7 +47,9 @@ function L.tocFiles(toc)
     for line in toc:gmatch("[^\r\n]+") do
         line = line:gsub("^%s+", "")
         if line ~= "" and line:sub(1, 1) ~= "#" and L.gateAllows(line) then
-            local file = line:gsub("^%[Family%]", "Mainline"):gsub("^%[Game%]", "Camelot")
+            -- the tokens can sit inside a file name; what is left in brackets
+            -- after them is the line's conditions
+            local file = line:gsub("%[Family%]", "Mainline"):gsub("%[Game%]", "Camelot")
             file = file:gsub("%s*%[.*$", ""):gsub("%s+$", "")
             if file ~= "" then out[#out + 1] = file end
         end
@@ -69,18 +71,20 @@ function L.xmlFiles(xml)
 end
 
 -- Global names a source file defines: a line-start or _G assignment, a
--- global function, a named XML object or an XML mixin. Adds them to set.
+-- line-start `function Name(`, a named XML object or an XML mixin. Adds them
+-- to set. Line-start only, so a local function or a method never counts.
 function L.definitions(src, isXml, set)
     if isXml then
         for id in src:gmatch('name="([A-Za-z_][A-Za-z0-9_]*)"') do set[id] = true end
         for id in src:gmatch('mixin="([A-Za-z_][A-Za-z0-9_]*)"') do set[id] = true end
         return
     end
+    -- gmatch has no anchor, so the leading newline stands in for line 1
+    src = "\n" .. src
     for id in src:gmatch("\n([A-Za-z_][A-Za-z0-9_]*)%s*=") do set[id] = true end
-    for id in src:gmatch("^([A-Za-z_][A-Za-z0-9_]*)%s*=") do set[id] = true end
+    for id in src:gmatch("\nfunction%s+([A-Za-z_][A-Za-z0-9_]*)%s*%(") do set[id] = true end
     for id in src:gmatch("_G%.([A-Za-z_][A-Za-z0-9_]*)%s*=") do set[id] = true end
     for id in src:gmatch('_G%["([A-Za-z_][A-Za-z0-9_]*)"%]%s*=') do set[id] = true end
-    for id in src:gmatch("function%s+([A-Za-z_][A-Za-z0-9_]*)%s*[%(%.:]") do set[id] = true end
 end
 
 return L

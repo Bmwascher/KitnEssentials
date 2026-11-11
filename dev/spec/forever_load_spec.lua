@@ -41,7 +41,22 @@ describe("Forever load rules (dev/scripts/_forever_load.lua)", function()
             "[Family]\\Skipped.lua\t[AllowLoadGameType mainline] [ExcludeLoadGameType camelot]",
             "Classic\\Util.lua [AllowLoadGameType classic]",
             "[Game]\\Util.lua [AllowLoadGameType camelot]",
+            "Shim_[Game].lua",
         }, "\r\n")
-        assert.same({ "Shared\\Base.lua", "Mainline\\Util.lua", "Camelot\\Util.lua" }, L.tocFiles(toc))
+        assert.same({ "Shared\\Base.lua", "Mainline\\Util.lua", "Camelot\\Util.lua", "Shim_Camelot.lua" },
+            L.tocFiles(toc))
+    end)
+
+    it("counts a Lua name as defined only where a global is made", function()
+        local set = {}
+        L.definitions(table.concat({
+            "FirstLine = {}",
+            "function GlobalFn(a) end",
+            "local function LocalFn() end",
+            "function Mixin:Method() end",
+            "    Indented = 1",
+            "_G.ViaG = 2",
+        }, "\n"), false, set)
+        assert.same({ FirstLine = true, GlobalFn = true, ViaG = true }, set)
     end)
 end)

@@ -242,8 +242,12 @@ fi
 if command -v lua >/dev/null 2>&1 \
     && [ -f dev/scripts/check-forever-api.lua ] \
     && [ -e .wow-api-reference/Interface/AddOns/Blizzard_APIDocumentationGenerated ]; then
-    if ! lua dev/scripts/check-forever-api.lua >/dev/null 2>&1; then
+    lua dev/scripts/check-forever-api.lua >/dev/null 2>&1
+    forever_rc=$?
+    if [ "$forever_rc" -eq 1 ]; then
         echo "[pre-push] note (non-blocking): a Forever-loaded file uses a Retail-only API or global — run: lua dev/scripts/check-forever-api.lua" >&2
+    elif [ "$forever_rc" -ne 0 ]; then
+        echo "[pre-push] note (non-blocking): the Forever API check could not run — run: lua dev/scripts/check-forever-api.lua" >&2
     fi
 fi
 

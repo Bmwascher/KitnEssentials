@@ -12,10 +12,12 @@
 -- list (an asset, a toc, a deleted file); it counts for both clients. The last
 -- line, `Smoke on: ...`, is the answer. Always exits 0.
 
-local _script = (arg[0] or ""):gsub("\\", "/")
-local _dir = _script:match("^(.*/)[^/]+$") or "dev/scripts/"
+local _script = (arg[0] or ""):gsub("/", "\\")
+local _dir = _script:match("^(.*\\)[^\\]+$") or ".\\dev\\scripts\\"
 local S = dofile(_dir .. "_smoke_clients.lua")
+local P = dofile(_dir .. "_apidocs_parser.lua")
 
+local ROOT = P.resolveRepoRoot(arg[0])
 local BASE = arg[1] or "main"
 
 local function commandLines(cmd)
@@ -31,23 +33,11 @@ local function commandLines(cmd)
     return out
 end
 
-local function luaCommand(args)
-    local interpreter = arg[-1] or "lua"
-    if not interpreter:find(" ", 1, true) then return interpreter .. " " .. args end
-    local cmd = '"' .. interpreter .. '" ' .. args
-    if package.config:sub(1, 1) == "\\" then cmd = '"' .. cmd .. '"' end
-    return cmd
-end
-
 local function loadSet(client)
-    local set, n = {}, 0
-    for _, line in ipairs(commandLines(luaCommand(_dir .. "load-list.lua --client " .. client .. " 2>&1"))) do
-        if not (line:match("^# ") or line:match("^<inline> ") or line:match("^MISSING")) then
-            set[line] = true
-            n = n + 1
-        end
-    end
-    assert(n >= 100, ("load-list.lua --client %s listed only %d files: run from the repo root"):format(client, n))
+    local set, list = {}, P.loadList(ROOT, client, arg[-1])
+    assert(#list >= 100,
+        ("load-list.lua --client %s listed only %d files: run from the repo root"):format(client, #list))
+    for _, path in ipairs(list) do set[path] = true end
     return set
 end
 

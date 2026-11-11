@@ -7,12 +7,14 @@
 --
 -- Subjects: every .lua in `load-list.lua --client camelot`, embedded libraries
 -- excluded. Two tiers, both against the Forever reference clone:
---   tier 1: a C_Namespace.Function call, documented global function, Enum
---           member or Register*Event literal that the Retail API docs have
---           and the Forever API docs lack. The two doc sets differ little.
---   tier 2: a .luacheckrc global that the Forever clone defines somewhere but
---           in no file Forever loads (its addon is refused, or its manifest
---           line is). _forever_load.lua holds the load rules.
+--   tier 1: a C_Namespace.Function call, Enum member or Register*Event
+--           literal that the Retail API docs have and the Forever API docs
+--           lack. The two doc sets differ little.
+--   tier 2: a .luacheckrc global that no file Forever loads defines, and
+--           that either the Forever clone defines in a file it does not load
+--           (its addon is refused, or its manifest line is) or the Retail
+--           docs alone list as a function. _forever_load.lua holds the load
+--           rules.
 -- A finding prints as `<file>  <symbol>`; --verbose adds where tier 2 found
 -- the definition, and the manifest files that did not resolve.
 --
@@ -23,8 +25,9 @@
 -- reason.
 --
 -- Exit 1 on a finding the allowlist does not cover, or on an allowlist entry
--- that no longer matches anything; --soft forces exit 0. A missing clone is a
--- notice and exit 0 (CI has no reference clones).
+-- that no longer matches anything; --soft turns that into exit 0. Exit 2 when
+-- the check could not run (an unreadable .luacheckrc or allowlist, no load
+-- list). A missing clone is a notice and exit 0 (CI has no reference clones).
 
 local SOFT, VERBOSE = false, false
 for i = 1, #arg do
@@ -37,6 +40,12 @@ local _dir = _script:match("^(.*\\)[^\\]+$") or ".\\dev\\scripts\\"
 local P = dofile(_dir .. "_apidocs_parser.lua")
 local C = dofile(_dir .. "_api_drift_core.lua")
 local L = dofile(_dir .. "_forever_load.lua")
+
+-- The check could not run. Exit 2 keeps this apart from a finding.
+local function fail(message)
+    print("forever-api: " .. message)
+    os.exit(2)
+end
 
 local ROOT = P.resolveRepoRoot(arg[0])
 local ADDONS_SUB = "\\Interface\\AddOns"
@@ -98,11 +107,12 @@ end
 for _, addon in ipairs(P.listDirs(ADDONS)) do
     if not addon:find("Blizzard_APIDocumentation", 1, true) then
         local dir = ADDONS .. "\\" .. addon
-        for _, name in ipairs({ addon .. ".toc", addon .. "_Mainline.toc" }) do
-            local toc = P.readAll(dir .. "\\" .. name)
-            if toc and L.headerAllows(toc) then
-                for _, file in ipairs(L.tocFiles(toc)) do loadFile(dir .. "\\" .. file) end
-            end
+        -- one manifest per addon: the plain one, or the mainline one where
+        -- the folder has no plain one
+        local toc = P.readAll(dir .. "\\" .. addon .. ".toc")
+            or P.readAll(dir .. "\\" .. addon .. "_Mainline.toc")
+        if toc and L.headerAllows(toc) then
+            for _, file in ipairs(L.tocFiles(toc)) do loadFile(dir .. "\\" .. file) end
         end
     end
 end
@@ -135,19 +145,27 @@ if nSource < 1000 then
 end
 
 local rcEnv = { files = {} }
-local rcChunk = P.loadSandboxed(assert(P.readAll(ROOT .. "\\.luacheckrc"), "cannot read .luacheckrc"),
-    "@.luacheckrc", rcEnv)
-assert(rcChunk, "cannot load .luacheckrc")()
+local rcSrc = P.readAll(ROOT .. "\\.luacheckrc")
+local rcChunk = rcSrc and P.loadSandboxed(rcSrc, "@.luacheckrc", rcEnv)
+if not (rcChunk and pcall(rcChunk)) then fail("cannot read or load .luacheckrc") end
 local rcNames = {}
 for _, sym in ipairs(P.rcSymbols(rcEnv.globals)) do rcNames[sym] = true end
 for _, sym in ipairs(P.rcSymbols(rcEnv.read_globals)) do rcNames[sym] = true end
 
 -- ---- the Forever-loaded KE files --------------------------------------------
-local allowOk, allow = pcall(dofile, _dir .. "forever-api-allow.lua")
-if not allowOk or type(allow) ~= "table" then allow = {} end
+local allow = {}
+if P.readAll(_dir .. "forever-api-allow.lua") then
+    local ok, result = pcall(dofile, _dir .. "forever-api-allow.lua")
+    if not ok or type(result) ~= "table" then
+        fail("forever-api-allow.lua does not load as a table: " .. tostring(result))
+    end
+    allow = result
+end
 
 local files = P.loadedLuaFiles(ROOT, "camelot", arg[-1])
-assert(#files >= 100, ("only %d Forever-loaded files listed: run from the repo root"):format(#files))
+if #files < 100 then
+    fail(("only %d Forever-loaded files listed: run from the repo root"):format(#files))
+end
 
 local findings, allowed, usedAllow = {}, 0, {}
 for _, path in ipairs(files) do
@@ -171,9 +189,13 @@ for _, path in ipairs(files) do
         for ev in pairs(used.events) do
             if retailOnly("events", ev) then hit("event " .. ev) end
         end
+        -- a bare name is harvested from locals, comments and strings too, so
+        -- it counts only as a declared global that no loaded file defines
         for name in pairs(used.names) do
-            if retailOnly("functions", name) then hit(name) end
-            if rcNames[name] and defined[name] and not definedLoaded[name] then hit(name) end
+            if rcNames[name] and not definedLoaded[name]
+                and (retailOnly("functions", name) or defined[name]) then
+                hit(name)
+            end
         end
         table.sort(hits)
         local fileAllow = allow[path] or {}
@@ -198,12 +220,8 @@ for path, syms in pairs(allow) do
 end
 table.sort(stale)
 
-local function build(clone)
-    return (P.readAll(clone .. "\\version.txt") or "unknown"):match("[^\r\n]+") or "unknown"
-end
-
 print(("forever-api: %d Forever-loaded files, Retail %s vs Forever %s")
-    :format(#files, build(clones.retail), build(clones.forever)))
+    :format(#files, P.readBuild(clones.retail), P.readBuild(clones.forever)))
 print(("[RETAIL-ONLY] (%d)"):format(#findings))
 for _, line in ipairs(findings) do print("  " .. line) end
 print(("[STALE-ALLOW] (%d)"):format(#stale))

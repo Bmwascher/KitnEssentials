@@ -96,9 +96,14 @@ function P.referenceClones(root)
     return { retail = retail, parent = parent, forever = parent .. "\\wow-api-reference-forever" }
 end
 
--- Repo-relative .lua paths one client loads, in load order, from
--- load-list.lua. Embedded libraries are left out: they are not KE's code.
-function P.loadedLuaFiles(root, client, interpreter)
+-- A clone's build, the first line of its version.txt.
+function P.readBuild(clone)
+    return (P.readAll(clone .. "\\version.txt") or "unknown"):match("[^\r\n]+") or "unknown"
+end
+
+-- Repo-relative paths one client loads, in load order, from load-list.lua:
+-- manifests and the files they pull in, without its marker lines.
+function P.loadList(root, client, interpreter)
     interpreter = interpreter or "lua"
     -- cmd.exe strips the outermost quote pair of a command that starts with one
     local cmd = '"cd /d "' .. root .. '" && "' .. interpreter
@@ -108,11 +113,19 @@ function P.loadedLuaFiles(root, client, interpreter)
     if p then
         for line in p:lines() do
             line = line:gsub("\r$", "")
-            if line:match("%.lua$") and not line:match("^Libs/") and not line:match("^[#<]") then
-                out[#out + 1] = line
-            end
+            if line ~= "" and not line:match("^[#<]") then out[#out + 1] = line end
         end
         p:close()
+    end
+    return out
+end
+
+-- The .lua files of P.loadList. Embedded libraries are left out: they are
+-- not KE's code.
+function P.loadedLuaFiles(root, client, interpreter)
+    local out = {}
+    for _, line in ipairs(P.loadList(root, client, interpreter)) do
+        if line:match("%.lua$") and not line:match("^Libs/") then out[#out + 1] = line end
     end
     return out
 end

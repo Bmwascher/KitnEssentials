@@ -87,7 +87,7 @@ if MODE == "update" and not FOREVER then
 end
 
 -- ---- step 3: parse current state -----------------------------------------
-local version = (P.readAll(REF .. "\\version.txt") or "unknown"):match("[^\r\n]+") or "unknown"
+local version = P.readBuild(REF)
 local docRes = P.collectDocTables(DOCS)
 assert(docRes.filesRead >= 500,
     ("only %d API-docs files read (expected >= 500) — reference damaged; snapshots untouched")
