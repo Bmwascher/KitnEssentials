@@ -12,7 +12,9 @@
 -- The default client is Retail: the `.wow-api-reference` clone, every KE
 -- source file and the C-side dump. `--client forever` runs the same watch on
 -- the Forever clone beside it, with its own snapshot, against only the files
--- the Forever client loads; the C-side dump is not tracked there.
+-- the Forever client loads; the C-side dump is not tracked there. Both modes
+-- locate the clones through the `.wow-api-reference` junction, so the Forever
+-- mode needs that junction too, though it reads nothing in the Retail clone.
 
 local _script = (arg[0] or ""):gsub("/", "\\")
 local _dir = _script:match("^(.*\\)[^\\]+$") or ".\\dev\\scripts\\"

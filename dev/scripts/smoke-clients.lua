@@ -10,7 +10,8 @@
 --   both | retail | forever | none | unlisted   <path>
 -- none is a file that never ships. unlisted is a shipped file in neither load
 -- list (an asset, a toc, a deleted file); it counts for both clients. The last
--- line, `Smoke on: ...`, is the answer. Always exits 0.
+-- line, `Smoke on: ...`, is the answer. Exits 0, or 2 with no answer when
+-- base names no commit.
 
 local _script = (arg[0] or ""):gsub("/", "\\")
 local _dir = _script:match("^(.*\\)[^\\]+$") or ".\\dev\\scripts\\"
@@ -43,10 +44,19 @@ end
 
 local retail, forever = loadSet("standard"), loadSet("camelot")
 
+-- 5.1/5.4 compat: os.execute returns number (5.1) or bool (5.2+)
+local baseOk = os.execute('git rev-parse --verify --quiet "' .. BASE .. '^{commit}" >nul 2>nul')
+if not (baseOk == true or baseOk == 0) then
+    print("smoke-clients: no commit named " .. BASE .. "; nothing compared")
+    os.exit(2)
+end
+
+-- --no-renames lists a moved file under both paths, so a shipped file moved
+-- out of the load lists still counts.
 local seen, changed = {}, {}
 for _, cmd in ipairs({
-    'git diff --name-only "' .. BASE .. '...HEAD"',
-    "git diff --name-only HEAD",
+    'git diff --no-renames --name-only "' .. BASE .. '...HEAD"',
+    "git diff --no-renames --name-only HEAD",
     "git ls-files --others --exclude-standard",
 }) do
     for _, path in ipairs(commandLines(cmd)) do

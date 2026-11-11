@@ -20,14 +20,18 @@
 --
 -- Limits: a global the clone never defines by name (created in C, or built
 -- from $parent) is never reported, and the harvest reads comments and strings
--- too. A use guarded at run time (a nil check, a KE.IS_FOREVER branch) is
--- still reported: record it in dev/scripts/forever-api-allow.lua with the
--- reason.
+-- too. A Lua definition counts only at the start of a line, because text
+-- matching cannot tell an indented global from a local; a global that a
+-- loaded file defines indented, and an unloaded file defines at line start,
+-- is therefore reported. A use guarded at run time (a nil check, a
+-- KE.IS_FOREVER branch) is reported too. Record either kind in
+-- dev/scripts/forever-api-allow.lua with the reason.
 --
 -- Exit 1 on a finding the allowlist does not cover, or on an allowlist entry
 -- that no longer matches anything; --soft turns that into exit 0. Exit 2 when
--- the check could not run (an unreadable .luacheckrc or allowlist, no load
--- list). A missing clone is a notice and exit 0 (CI has no reference clones).
+-- the check could not run (an unreadable .luacheckrc, a missing or malformed
+-- allowlist, no load list). A missing clone is a notice and exit 0 (CI has no
+-- reference clones).
 
 local SOFT, VERBOSE = false, false
 for i = 1, #arg do
@@ -153,13 +157,19 @@ for _, sym in ipairs(P.rcSymbols(rcEnv.globals)) do rcNames[sym] = true end
 for _, sym in ipairs(P.rcSymbols(rcEnv.read_globals)) do rcNames[sym] = true end
 
 -- ---- the Forever-loaded KE files --------------------------------------------
-local allow = {}
-if P.readAll(_dir .. "forever-api-allow.lua") then
-    local ok, result = pcall(dofile, _dir .. "forever-api-allow.lua")
-    if not ok or type(result) ~= "table" then
-        fail("forever-api-allow.lua does not load as a table: " .. tostring(result))
+local allowOk, allow = pcall(dofile, _dir .. "forever-api-allow.lua")
+if not allowOk or type(allow) ~= "table" then
+    fail("forever-api-allow.lua does not load as a table: " .. tostring(allow))
+end
+for path, syms in pairs(allow) do
+    if type(path) ~= "string" or type(syms) ~= "table" then
+        fail("forever-api-allow.lua: each entry is [\"file\"] = { symbol = \"reason\" }")
     end
-    allow = result
+    for sym, reason in pairs(syms) do
+        if type(sym) ~= "string" or type(reason) ~= "string" then
+            fail("forever-api-allow.lua: " .. path .. " needs symbol = \"reason\" pairs")
+        end
+    end
 end
 
 local files = P.loadedLuaFiles(ROOT, "camelot", arg[-1])
