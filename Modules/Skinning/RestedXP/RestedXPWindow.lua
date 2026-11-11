@@ -40,7 +40,7 @@ local K = {
     GRIP_HIGHLIGHT = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight",
     GRIP_CORNER = "BOTTOMRIGHT",
     PERCENT = 100,
-    PAD = 10, BOX_PAD = 7, FOLD_W = 16, GAP = 5, TOP_GAP = 2, COG_SIZE = 14, FOLD_GROW = 8,
+    PAD = 10, BOX_PAD = 7, FOLD_W = 16, GAP = 5, TOP_GAP = 2, COG_SIZE = 14, FOLD_GROW = 8, FOLD_LIFT = 0.1,
     HEAD_PAD = 10, LIST_PAD = 6, ROW_GAP = 8, MARK_CLEAR = 3,
     BOX_TITLE_TEXT = 9, BOX_TITLE_HEIGHT = 19, BOX_TITLE_ROOM = 10,
     BAND_HEIGHT = 14, BAND_TEXT_X = 6, BAND_ALPHA = 0.92, TITLE_SLACK = 0.5,
@@ -1725,7 +1725,10 @@ local function DrawFold(folded, topH)
     fold:SetSize(K.FOLD_W, topH)
     fold:ClearAllPoints()
     fold:SetPoint("TOPRIGHT", window, "TOPRIGHT", -K.PAD - K.FOLD_W - K.TOP_GAP, -K.PAD)
-    Faced(fold.text, Option("ListSize") + K.FOLD_GROW)
+    local size = Option("ListSize") + K.FOLD_GROW
+    Faced(fold.text, size)
+    -- The font draws - and + below its line's middle; lift them level with the cog.
+    fold.text:SetPoint("CENTER", fold, "CENTER", 0, floor(size * K.FOLD_LIFT + 0.5))
     fold.text:SetText(folded and K.TEXT_UNFOLD or K.TEXT_FOLD)
     Colored(fold.text, "line")
 end
