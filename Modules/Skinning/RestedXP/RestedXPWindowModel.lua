@@ -69,7 +69,7 @@ local function Row(rxp, element, opts)
     return {
         text = text, icon = glyph, done = done and true or false, source = Dig(frame, "text"),
         have = have, need = need, bags = bags, nested = nested,
-        element = element, skipped = element.skip == true,
+        element = element, skipped = Rules.LineSkipped(element),
     }
 end
 

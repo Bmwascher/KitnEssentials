@@ -781,7 +781,7 @@ end
 -- one. Its objectives are marked skipped, as RestedXP's own checkbox does.
 local function SkipObjectives(rxp, step)
     for _, element in ipairs(step.elements or {}) do
-        if not element.optional and not element.skip then Lines.Mark(element, true) end
+        if not element.optional and not element.skip and not element.completed then Lines.Mark(element, true) end
     end
     Lines.Updated(rxp)
 end
@@ -876,9 +876,19 @@ function Lines.Ring(hit, on)
     for _, texture in pairs(hit.borders) do texture:SetShown(on) end
 end
 
+-- RestedXP disables a line's box where its own click cannot act, also on a line not
+-- yet finished, so the icon follows that box while its row still holds the line.
+function Lines.Locked(element)
+    local frame = Dig(element, "frame")
+    local button = Dig(frame, "button")
+    if Dig(frame, "element") ~= element or not Has(button, "IsEnabled") then return false end
+    local enabled = button:IsEnabled()
+    return Secret(enabled) or enabled == false
+end
+
 -- Only a line RestedXP's own checkbox can change rings and gives a hint.
 function Lines.Enter(hit)
-    local skip = Rules.LineSkip(hit.element)
+    local skip = Rules.LineSkip(hit.element, Lines.Locked(hit.element))
     if skip == nil then return end
     local accent = colors.accent
     hit.ring:SetColorTexture(accent[1], accent[2], accent[3], K.RING_ALPHA)
@@ -896,7 +906,7 @@ end
 -- it back. The rule runs again here, since the line can finish after the hover.
 function Lines.Click(hit, button)
     if button == "RightButton" then return Menu() end
-    local skip = Rules.LineSkip(hit.element)
+    local skip = Rules.LineSkip(hit.element, Lines.Locked(hit.element))
     if skip == nil then return end
     Lines.Mark(hit.element, skip)
     Lines.Updated(_G.RXP)

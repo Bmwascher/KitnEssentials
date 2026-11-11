@@ -119,6 +119,8 @@ describe("restedxp rules", function()
         assert.is_true(skipped.skipped)
         assert.equals(element, skipped.element)
         assert.is_false(Row({ text = "raw", completed = true }).skipped)
+        -- RestedXP sets skip on every line it finishes.
+        assert.is_false(Row({ text = "raw", completed = true, skip = true }).skipped)
     end)
 
     it("hides only the tag-along step it was asked to, until RestedXP retires it", function()
@@ -795,17 +797,19 @@ describe("restedxp rules", function()
         assert.is_nil(Model.NoGuide().group)
     end)
 
-    it("flips a line's skip from its icon only where RestedXP's own checkbox would", function()
+    it("flips a line's skip only where RestedXP's checkbox can, and reads a skip only where it alone makes the line done", function()
         for _, row in ipairs({
-            { element = {}, want = true, name = "an open line" },
-            { element = { skip = true }, want = false, name = "a skipped line" },
-            { element = { completed = true, skip = true }, want = false, name = "finished and skipped" },
-            { element = { completed = true }, want = nil, name = "finished by the game" },
-            { element = { optional = true }, want = nil, name = "optional" },
-            { element = { textOnly = true }, want = nil, name = "text only, with no box" },
-            { want = nil, name = "no element" },
+            { element = {}, want = true, skipped = false, name = "an open line" },
+            { element = { skip = true }, want = false, skipped = true, name = "skipped, not finished" },
+            { element = { completed = true, skip = true }, want = nil, skipped = false, name = "finished, as RestedXP finishes" },
+            { element = { completed = true }, want = nil, skipped = false, name = "finished, with no skip" },
+            { element = { optional = true }, want = nil, skipped = false, name = "optional" },
+            { element = { textOnly = true, skip = true }, want = nil, skipped = false, name = "a reached text-only line" },
+            { element = {}, locked = true, want = nil, skipped = false, name = "a box RestedXP disabled" },
+            { want = nil, skipped = false, name = "no element" },
         }) do
-            assert.equals(row.want, Rules.LineSkip(row.element), row.name)
+            assert.equals(row.want, Rules.LineSkip(row.element, row.locked), row.name)
+            assert.equals(row.skipped, Rules.LineSkipped(row.element), row.name)
         end
     end)
 end)
