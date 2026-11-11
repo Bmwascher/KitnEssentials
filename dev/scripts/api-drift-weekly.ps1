@@ -96,7 +96,7 @@ if ($foreverLine) {
     } else {
         "git fetch or the fast-forward failed (offline, or the clone diverged)."
     }
-    Add-WeeklyNote "Forever reference NOT refreshed" "$foreverCause The Retail drift watch still ran.`r`nDetails: $ReportFile"
+    Add-WeeklyNote "Forever reference NOT refreshed" "$foreverCause`r`nDetails: $ReportFile"
 }
 
 if ($code -eq 0) {

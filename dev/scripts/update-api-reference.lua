@@ -80,6 +80,7 @@ if MODE == "update" then
     end
     -- The Forever clone is read by hand and takes no part in the drift diff,
     -- so a failed refresh is a notice and never aborts the run.
+    -- api-drift-weekly.ps1 matches the text of both NOTICE lines below.
     if execOk('git -C "' .. FOREVER .. '" rev-parse --git-dir >nul 2>nul') then
         local before = readBuild(FOREVER)
         if execOk('git -C "' .. FOREVER .. '" fetch origin forever')
