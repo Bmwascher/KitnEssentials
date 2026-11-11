@@ -519,11 +519,9 @@ local function KeepTitle(title, text)
     return titleHome[text]
 end
 
--- RestedXP's own title, in caps, moves into a band across the frame's top. RestedXP
--- sizes the frame from the title's width, so that stays its text's width plus room,
--- set by one point and never stretched to the frame. A frame with no background of
--- RestedXP's, or a title whose points read as secret, keeps its plate above the
--- frame. Returns whether the title's width changed.
+-- RestedXP sizes the frame from the title's width, so the title is never stretched to
+-- the frame. A frame with no background of RestedXP's, or a title whose points read as
+-- secret, keeps its plate. Returns whether the title's width changed.
 local function SkinTitle(frame)
     local title = frame.title
     local text = Dig(title, "text")
@@ -1605,7 +1603,6 @@ local function DrawBox(step, y, inner)
     return y + by - pad
 end
 
--- Just left of the cog, at the top bar's right end.
 local function DrawFold(folded, topH)
     local fold = window.fold
     fold:SetSize(K.FOLD_W, topH)
@@ -1616,8 +1613,7 @@ local function DrawFold(folded, topH)
     Colored(fold.text, "line")
 end
 
--- The guide's group at the left, the fold button and the menu's cog at the right end,
--- the cog last, and a divider under them. Returns where the chapter row starts.
+-- Returns where the chapter row starts.
 local function DrawTop(model, folded, width, topH)
     local pad, button = K.PAD, K.FOLD_W
     local line = colors.line
