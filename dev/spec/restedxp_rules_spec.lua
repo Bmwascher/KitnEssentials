@@ -219,6 +219,7 @@ describe("restedxp rules", function()
             { "WindowColors", nil, "accent" }, { "WindowColors", "palette", "accent" },
             { "WindowColors", "custom", "custom" }, { "FollowAccent", nil, false }, { "FollowAccent", true, true },
             { "ShowMark", nil, true }, { "ShowMark", false, false },
+            { "LineSkip", nil, true }, { "LineSkip", false, false },
             { "FontOutline", nil, "OUTLINE" }, { "FontOutline", "shadow", "shadow" },
         }) do
             assert.equals(row[3], Rules.Option(row[1], row[2]), row[1] .. " " .. tostring(row[2]))

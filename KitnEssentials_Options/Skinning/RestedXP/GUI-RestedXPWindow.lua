@@ -119,7 +119,7 @@ local function AddDisplay(scrollChild, yOffset, page)
         { { "Yards on the Step Box", "StepYards", true }, { "Flash When the Guide Moves On", "StepFlash", true } },
         { { "Keep the Objective When Folded", "FoldObjective", true }, { "Show Tooltips", "Tips", true } },
         { { "Show the KE Mark", "ShowMark", true }, { "Show Scroll Bar", "ScrollBar", false } },
-        { { "Lock Window", "Lock", false } },
+        { { "Lock Window", "Lock", false }, { "Click a Line's Icon to Skip It", "LineSkip", true } },
     }) do
         local last = i == 4
         local height = last and Theme.rowHeightLast or Theme.rowHeight

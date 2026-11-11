@@ -168,6 +168,7 @@ local OPTIONS = {
     StepFlash = Toggle(true),
     FoldObjective = Toggle(true),
     Tips = Toggle(true),
+    LineSkip = Toggle(true),
     ScrollBar = Toggle(false),
     Lock = Toggle(false),
     Folded = Toggle(false),

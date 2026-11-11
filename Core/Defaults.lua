@@ -2823,6 +2823,7 @@ local Defaults = {
             StepFlash = true,
             FoldObjective = true,
             Tips = true,
+            LineSkip = true,
             ScrollBar = false,
             Lock = false,
             Folded = false,
