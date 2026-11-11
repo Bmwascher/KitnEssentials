@@ -40,7 +40,7 @@ local K = {
     GRIP_HIGHLIGHT = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight",
     GRIP_CORNER = "BOTTOMRIGHT",
     PERCENT = 100,
-    PAD = 10, BOX_PAD = 7, FOLD_W = 16, GAP = 5, TOP_GAP = 2, COG_SIZE = 14, FOLD_GROW = 8, FOLD_LIFT = 0.1,
+    PAD = 10, TOP_PAD = 6, BOX_PAD = 7, FOLD_W = 16, GAP = 5, TOP_GAP = 2, COG_SIZE = 14, FOLD_GROW = 8, FOLD_LIFT = 0.1,
     HEAD_PAD = 10, LIST_PAD = 6, ROW_GAP = 8, MARK_CLEAR = 3,
     BOX_TITLE_TEXT = 10, BOX_TITLE_HEIGHT = 19, BOX_TITLE_ROOM = 10,
     BAND_HEIGHT = 14, BAND_TEXT_X = 6, BAND_ALPHA = 0.92, TITLE_SLACK = 0.5,
@@ -1724,7 +1724,7 @@ local function DrawFold(folded, topH)
     local fold = window.fold
     fold:SetSize(K.FOLD_W, topH)
     fold:ClearAllPoints()
-    fold:SetPoint("TOPRIGHT", window, "TOPRIGHT", -K.PAD - K.FOLD_W - K.TOP_GAP, -K.PAD)
+    fold:SetPoint("TOPRIGHT", window, "TOPRIGHT", -K.PAD - K.FOLD_W - K.TOP_GAP, -K.TOP_PAD)
     local size = Option("ListSize") + K.FOLD_GROW
     Faced(fold.text, size)
     -- The font draws - and + below its line's middle; lift them level with the cog.
@@ -1735,23 +1735,23 @@ end
 
 -- Returns where the chapter row starts.
 local function DrawTop(model, folded, width, topH)
-    local pad, button = K.PAD, K.FOLD_W
+    local pad, top, button = K.PAD, K.TOP_PAD, K.FOLD_W
     local line = colors.line
     local cog = window.cog
     cog:SetSize(button, topH)
     cog:ClearAllPoints()
-    cog:SetPoint("TOPRIGHT", window, "TOPRIGHT", -pad, -pad)
+    cog:SetPoint("TOPRIGHT", window, "TOPRIGHT", -pad, -top)
     cog.icon:SetVertexColor(line[1], line[2], line[3], line[4])
     DrawFold(folded, topH)
     local group = window.group
     group:ClearAllPoints()
-    group:SetPoint("LEFT", window, "TOPLEFT", pad, -pad - topH / 2)
+    group:SetPoint("LEFT", window, "TOPLEFT", pad, -top - topH / 2)
     -- A width of 0 would let the name run under the buttons.
     group:SetWidth(math_max(1, width - pad * 2 - button * 2 - K.TOP_GAP - K.GAP))
     Faced(group, Option("ListSize"))
     Colored(group, "muted")
     group:SetText(model.group or "")
-    local below = -pad - topH
+    local below = -top - topH
     window.divider:ClearAllPoints()
     window.divider:SetPoint("TOPLEFT", window, "TOPLEFT", pad, below)
     window.divider:SetPoint("TOPRIGHT", window, "TOPRIGHT", -pad, below)
