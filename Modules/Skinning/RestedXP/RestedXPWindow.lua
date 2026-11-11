@@ -54,12 +54,14 @@ local K = {
     SHADOW = { Enabled = true, OffsetX = 1, OffsetY = -1, Color = { 0, 0, 0, 0.9 } },
     TEXT_FOLD = "-", TEXT_UNFOLD = "+", TEXT_DOT = " \194\183 ",
     TEXT_YARDS = "\194\183 %d yd",
+    TEXT_STEP = "Step %d",
+    TEXT_NONE = "No guide selected",
     TEXT_SKIP = "Skip step",
-    TEXT_HIDE = "Hide this step",
-    TEXT_SHIFT = "Shift-click",
-    TEXT_MENU = "Right-click: menu",
-    TEXT_GO = "Go to step %d",
+    TEXT_HIDE = "Hide step",
+    TEXT_MENU = "Menu",
+    TEXT_GO = "Go to step",
     TEXT_PICK = "Pick a guide",
+    KEY_SHIFT = "Shift-click", KEY_CLICK = "Click", KEY_RIGHT = "Right-click",
     TEXT_NEXT = "NEXT STEPS",
     TIP_DIM = 0.7,
     WHEEL_LINES = 2,
@@ -796,42 +798,46 @@ local function CutText(fs)
     return fs:GetText()
 end
 
-local function TipHead(text, accent, under)
-    if under then
-        GameTooltip:AddLine(text, accent[1], accent[2], accent[3])
-    else
-        GameTooltip:SetText(text, accent[1], accent[2], accent[3])
-    end
-end
-
 local tipOwner
 
--- One tooltip per hover: a cut line's full text, then what a click does.
-local function Tip(owner, text, menu, plain, full)
+-- One tooltip per hover, in one style: a cut line's full text, else the heading in
+-- the accent, then each key in white beside its action in gray.
+local function Tip(owner, heading, full, key, action, key2, action2)
     if not Option("Tips") or GameTooltip:IsForbidden() then return end
-    local mode = Option("Skip")
-    local accent = Theme.Tokens().accent
-    local dim = K.TIP_DIM
     GameTooltip:SetOwner(owner, K.TIP_ANCHOR)
     tipOwner = owner
-    if full then GameTooltip:SetText(full, 1, 1, 1, 1, true) end
-    if plain then
-        TipHead(text, accent, full)
-    elseif mode == "off" then
-        if menu then TipHead(K.TEXT_MENU, accent, full) end
-    elseif text then
-        TipHead(text, accent, full)
-        if mode == "shift" then GameTooltip:AddLine(K.TEXT_SHIFT, dim, dim, dim) end
-        if menu then GameTooltip:AddLine(K.TEXT_MENU, dim, dim, dim) end
+    if full then
+        GameTooltip:SetText(full, 1, 1, 1, 1, true)
+    else
+        local accent = Theme.Tokens().accent
+        GameTooltip:SetText(heading, accent[1], accent[2], accent[3])
     end
+    local dim = K.TIP_DIM
+    if key then GameTooltip:AddDoubleLine(key, action, 1, 1, 1, dim, dim, dim) end
+    if key2 then GameTooltip:AddDoubleLine(key2, action2, 1, 1, 1, dim, dim, dim) end
     GameTooltip:Show()
+end
+
+-- The key that skips a step, or nil with Skipping Steps off.
+local function SkipKey()
+    local mode = Option("Skip")
+    if mode == "shift" then return K.KEY_SHIFT end
+    if mode == "click" then return K.KEY_CLICK end
+    return nil
+end
+
+local function StepHeading(step)
+    return K.TEXT_STEP:format(type(step) == "table" and step.index or 0)
 end
 
 -- The words say what the click does, by the rule the click uses.
 local function StepTip(owner, step)
     local rxp = _G.RXP
     local progress = Has(rxp, "GetGuideProgress") and Run("WindowProgress", rxp.GetGuideProgress) or nil
-    Tip(owner, Rules.TagAlong(step, progress) and K.TEXT_HIDE or K.TEXT_SKIP, true)
+    local key = SkipKey()
+    if not key then return Tip(owner, StepHeading(step), nil, K.KEY_RIGHT, K.TEXT_MENU) end
+    Tip(owner, StepHeading(step), nil, key, Rules.TagAlong(step, progress) and K.TEXT_HIDE or K.TEXT_SKIP,
+        K.KEY_RIGHT, K.TEXT_MENU)
 end
 
 -- A leave with no tooltip of this window's own leaves another owner's up. A row's
@@ -951,7 +957,7 @@ local function CutHit(f, fs)
     hit:EnableMouse(true)
     hit:SetScript("OnEnter", function(self)
         local full = CutText(fs)
-        if full then Tip(self, nil, false, false, full) end
+        if full then Tip(self, nil, full) end
     end)
     hit:SetScript("OnLeave", TipHide)
     hit:SetScript("OnMouseUp", MenuOnRight)
@@ -1090,17 +1096,19 @@ local function MakeHit(holder)
     end)
     hit:SetScript("OnEnter", function(self)
         local full = not self.menu and CutText(self.line) or nil
-        if not self.menu and Option("Skip") == "off" then
-            if full then Tip(self, nil, false, false, full) end
+        local key = SkipKey()
+        if not self.menu and not key then
+            if full then Tip(self, nil, full) end
             return
         end
         local accent = Theme.Tokens().accent
         self.shade:SetColorTexture(accent[1], accent[2], accent[3], K.HOVER_ALPHA)
         self.shade:Show()
         if self.menu then
-            Tip(self, K.TEXT_PICK, false, true)
+            Tip(self, K.TEXT_NONE, nil, K.KEY_CLICK, K.TEXT_PICK)
         else
-            Tip(self, K.TEXT_GO:format(self.index or 0), false, false, full)
+            -- A cut line's full text starts with its number, so it stands in for the heading.
+            Tip(self, K.TEXT_STEP:format(self.index or 0), full, key, K.TEXT_GO)
         end
     end)
     hit:SetScript("OnLeave", function(self)
