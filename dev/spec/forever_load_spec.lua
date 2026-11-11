@@ -56,7 +56,9 @@ describe("Forever load rules (dev/scripts/_forever_load.lua)", function()
             "function Mixin:Method() end",
             "    Indented = 1",
             "_G.ViaG = 2",
+            "_G[\"ViaDouble\"] = 3",
+            "_G['ViaSingle'] = 4",
         }, "\n"), false, set)
-        assert.same({ FirstLine = true, GlobalFn = true, ViaG = true }, set)
+        assert.same({ FirstLine = true, GlobalFn = true, ViaG = true, ViaDouble = true, ViaSingle = true }, set)
     end)
 end)

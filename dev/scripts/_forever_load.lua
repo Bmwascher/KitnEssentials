@@ -84,7 +84,7 @@ function L.definitions(src, isXml, set)
     for id in src:gmatch("\n([A-Za-z_][A-Za-z0-9_]*)%s*=") do set[id] = true end
     for id in src:gmatch("\nfunction%s+([A-Za-z_][A-Za-z0-9_]*)%s*%(") do set[id] = true end
     for id in src:gmatch("_G%.([A-Za-z_][A-Za-z0-9_]*)%s*=") do set[id] = true end
-    for id in src:gmatch('_G%["([A-Za-z_][A-Za-z0-9_]*)"%]%s*=') do set[id] = true end
+    for id in src:gmatch("_G%[[\"']([A-Za-z_][A-Za-z0-9_]*)[\"']%]%s*=") do set[id] = true end
 end
 
 return L
