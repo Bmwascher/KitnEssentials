@@ -33,12 +33,13 @@ local K = {
     MARK_RIM = "Interface\\AddOns\\KitnEssentials\\Media\\RestedXP\\Logo\\rim.tga",
     MARK_K = "Interface\\AddOns\\KitnEssentials\\Media\\RestedXP\\Logo\\k.tga",
     CLOCK = "Interface\\AddOns\\KitnEssentials\\Media\\RestedXP\\Icons\\clock.tga",
+    COG = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_settings.tga",
     GRIP_UP = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up",
     GRIP_DOWN = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down",
     GRIP_HIGHLIGHT = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight",
     GRIP_CORNER = "BOTTOMRIGHT",
     PERCENT = 100,
-    PAD = 10, BOX_PAD = 7, FOLD_W = 16, GAP = 5,
+    PAD = 10, BOX_PAD = 7, FOLD_W = 16, GAP = 5, TOP_GAP = 2, COG_SIZE = 14, FOLD_GROW = 4,
     HEAD_PAD = 10, LIST_PAD = 6,
     BOX_TITLE_TEXT = 9, BOX_TITLE_HEIGHT = 19, BOX_TITLE_ROOM = 10,
     ICON_GAP = 5, GRIP_SIZE = 16, TIMER_ICON_INSET = 2,
@@ -827,6 +828,22 @@ local function ToggleFold()
     Redraw()
 end
 
+-- Over a string the window may cut: its full text on hover, and the window's drag and
+-- menu.
+local function CutHit(f, fs)
+    local hit = CreateFrame("Frame", nil, f)
+    hit:SetAllPoints(fs)
+    hit:EnableMouse(true)
+    hit:SetScript("OnEnter", function(self)
+        local full = CutText(fs)
+        if full then Tip(self, nil, false, false, full) end
+    end)
+    hit:SetScript("OnLeave", TipHide)
+    hit:SetScript("OnMouseUp", MenuOnRight)
+    Draggable(hit)
+    return hit
+end
+
 local function Build()
     local f = CreateFrame("Frame", K.WINDOW_NAME, UIParent)
     f:SetFrameStrata(K.STRATA)
@@ -843,21 +860,25 @@ local function Build()
     f.back:SetAllPoints()
     KE:AddBorders(f, colors.border)
     f.fold = CreateFrame("Button", nil, f)
-    f.fold.text = Text(f.fold, Option("TitleSize"), "CENTER")
+    f.fold.text = Text(f.fold, Option("ListSize") + K.FOLD_GROW, "CENTER")
     f.fold.text:SetAllPoints()
+    f.fold.text:SetJustifyV("MIDDLE")
     f.fold:SetScript("OnClick", ToggleFold)
+    f.cog = CreateFrame("Button", nil, f)
+    f.cog:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    f.cog:SetScript("OnClick", Menu)
+    f.cog.icon = f.cog:CreateTexture(nil, "OVERLAY")
+    f.cog.icon:SetTexture(K.COG)
+    f.cog.icon:SetSize(K.COG_SIZE, K.COG_SIZE)
+    f.cog.icon:SetPoint("CENTER", f.cog, "CENTER", 0, 0)
+    f.group = Text(f, Option("ListSize"))
+    f.group:SetWordWrap(false)
+    f.groupHit = CutHit(f, f.group)
+    f.divider = f:CreateTexture(nil, "ARTWORK")
+    f.divider:SetHeight(KE:GetPixelSize())
     f.title = Text(f, Option("TitleSize"))
     f.title:SetWordWrap(false)
-    f.titleHit = CreateFrame("Frame", nil, f)
-    f.titleHit:SetAllPoints(f.title)
-    f.titleHit:EnableMouse(true)
-    f.titleHit:SetScript("OnEnter", function(self)
-        local full = CutText(f.title)
-        if full then Tip(self, nil, false, false, full) end
-    end)
-    f.titleHit:SetScript("OnLeave", TipHide)
-    f.titleHit:SetScript("OnMouseUp", MenuOnRight)
-    Draggable(f.titleHit)
+    f.titleHit = CutHit(f, f.title)
     f.progress = Text(f, Option("TitleSize"), "RIGHT")
     f.rim = f:CreateTexture(nil, "OVERLAY")
     f.rim:SetTexture(K.MARK_RIM)
@@ -1467,18 +1488,46 @@ local function DrawBox(step, y, inner)
     return y + by - pad
 end
 
-local function DrawFold(folded, headH)
+-- Just left of the cog, at the top bar's right end.
+local function DrawFold(folded, topH)
     local fold = window.fold
-    fold:SetSize(K.FOLD_W, headH)
+    fold:SetSize(K.FOLD_W, topH)
     fold:ClearAllPoints()
-    fold:SetPoint("TOPLEFT", window, "TOPLEFT", K.PAD, -K.PAD)
-    Faced(fold.text, Option("TitleSize"))
+    fold:SetPoint("TOPRIGHT", window, "TOPRIGHT", -K.PAD - K.FOLD_W - K.TOP_GAP, -K.PAD)
+    Faced(fold.text, Option("ListSize") + K.FOLD_GROW)
     fold.text:SetText(folded and K.TEXT_UNFOLD or K.TEXT_FOLD)
     Colored(fold.text, "line")
 end
 
+-- The guide's group at the left, the fold button and the menu's cog at the right end,
+-- the cog last, and a divider under them. Returns where the chapter row starts.
+local function DrawTop(model, folded, width, topH)
+    local pad, button = K.PAD, K.FOLD_W
+    local line = colors.line
+    local cog = window.cog
+    cog:SetSize(button, topH)
+    cog:ClearAllPoints()
+    cog:SetPoint("TOPRIGHT", window, "TOPRIGHT", -pad, -pad)
+    cog.icon:SetVertexColor(line[1], line[2], line[3], line[4])
+    DrawFold(folded, topH)
+    local group = window.group
+    group:ClearAllPoints()
+    group:SetPoint("LEFT", window, "TOPLEFT", pad, -pad - topH / 2)
+    -- A width of 0 would let the name run under the buttons.
+    group:SetWidth(math_max(1, width - pad * 2 - button * 2 - K.TOP_GAP - K.GAP))
+    Faced(group, Option("ListSize"))
+    Colored(group, "muted")
+    group:SetText(model.group or "")
+    local below = -pad - topH
+    window.divider:ClearAllPoints()
+    window.divider:SetPoint("TOPLEFT", window, "TOPLEFT", pad, below)
+    window.divider:SetPoint("TOPRIGHT", window, "TOPRIGHT", -pad, below)
+    window.divider:SetColorTexture(line[1], line[2], line[3], line[4])
+    return below - K.GAP
+end
+
 -- Centered on the title's line. Returns the width it takes from the title.
-local function DrawMark(x, titleSize)
+local function DrawMark(x, top, titleSize)
     local shown = Option("ShowMark")
     window.rim:SetShown(shown)
     window.k:SetShown(shown)
@@ -1486,7 +1535,7 @@ local function DrawMark(x, titleSize)
     local muted, accent = colors.muted, colors.accent
     window.rim:SetVertexColor(muted[1], muted[2], muted[3])
     window.k:SetVertexColor(accent[1], accent[2], accent[3])
-    local size, y = K.MARK_SIZE, -K.PAD - titleSize / 2
+    local size, y = K.MARK_SIZE, top - titleSize / 2
     window.rim:ClearAllPoints()
     window.rim:SetPoint("CENTER", window, "TOPLEFT", x + size / 2, y)
     window.k:ClearAllPoints()
@@ -1494,12 +1543,11 @@ local function DrawMark(x, titleSize)
     return size + K.GAP
 end
 
-local function DrawHeader(model, folded, width, headH)
-    DrawFold(folded, headH)
-    local pad, foldW, gap = K.PAD, K.FOLD_W, K.GAP
+local function DrawHeader(model, width, top)
+    local pad, gap = K.PAD, K.GAP
     local size = Option("TitleSize")
     window.progress:ClearAllPoints()
-    window.progress:SetPoint("TOPRIGHT", window, "TOPRIGHT", -pad, -pad)
+    window.progress:SetPoint("TOPRIGHT", window, "TOPRIGHT", -pad, top)
     Faced(window.progress, size)
     if model.step then
         window.progress:SetText(Tint("accent", ("%d/%d"):format(model.step, model.total)) .. K.TEXT_DOT
@@ -1509,10 +1557,9 @@ local function DrawHeader(model, folded, width, headH)
     end
     -- A color escape is opaque, so the percent takes the string's color and alpha.
     Colored(window.progress, "title")
-    local x = pad + foldW + gap
-    x = x + DrawMark(x, size)
+    local x = pad + DrawMark(pad, top, size)
     window.title:ClearAllPoints()
-    window.title:SetPoint("TOPLEFT", window, "TOPLEFT", x, -pad)
+    window.title:SetPoint("TOPLEFT", window, "TOPLEFT", x, top)
     -- A width of 0 would let the string run under the progress.
     window.title:SetWidth(math_max(1, width - x - pad - window.progress:GetStringWidth() - gap))
     Faced(window.title, size)
@@ -1692,8 +1739,9 @@ function Draw()
     local listH = Option("ListSize") + K.LIST_PAD
     if not sizing then window:SetWidth(width) end
     DrawPanel()
-    DrawHeader(model, folded, width, headH)
-    local y = DrawLine(model, -K.PAD - headH)
+    local top = DrawTop(model, folded, width, listH)
+    DrawHeader(model, width, top)
+    local y = DrawLine(model, top - headH)
     window.track:Hide()
     window.thumb:Hide()
     window.wheel:Hide()
