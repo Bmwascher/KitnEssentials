@@ -34,6 +34,7 @@ local K = {
     MARK_K = "Interface\\AddOns\\KitnEssentials\\Media\\RestedXP\\Logo\\k.tga",
     CLOCK = "Interface\\AddOns\\KitnEssentials\\Media\\RestedXP\\Icons\\clock.tga",
     COG = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_settings.tga",
+    CHECK = "Interface\\AddOns\\KitnEssentials\\Media\\RestedXP\\Icons\\complete.tga",
     GRIP_UP = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up",
     GRIP_DOWN = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down",
     GRIP_HIGHLIGHT = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight",
@@ -46,7 +47,7 @@ local K = {
     ICON_GAP = 5, GRIP_SIZE = 16, TIMER_ICON_INSET = 2,
     FIRST_GROW = 2, FIRST_ICON_GROW = 2, MARK_SIZE = 24, BAR_HEIGHT = 5, ICON_SIZE = 18,
     HOVER_ALPHA = 0.25, ICON_DONE_ALPHA = 0.5, DONE_ALPHA = 0.5, YARDS_ALPHA = 0.85,
-    COUNT_GAP = 2,
+    COUNT_GAP = 2, CHECK_SIZE = 10, CHECK_OUT = 2, RING_ALPHA = 0.15,
     REDRAW_GAP = 0.1,
     GUIDE_ROW_WIDGET = "RXPV2GuideStepsItem",
     FLASH_FROM = 0.4, FLASH_SECONDS = 0.55,
@@ -62,6 +63,7 @@ local K = {
     TEXT_GO = "Go to step",
     TEXT_PICK = "Pick a guide",
     KEY_SHIFT = "Shift-click", KEY_CLICK = "Click", KEY_RIGHT = "Right-click",
+    TEXT_LINE = "Skip this line", TEXT_UNSKIP = "Undo skip",
     TEXT_NEXT = "NEXT STEPS",
     TIP_DIM = 0.7,
     WHEEL_LINES = 2,
@@ -120,6 +122,8 @@ local Band = {
     -- Each frame given a band, to its fill and line.
     of = setmetatable({}, { __mode = "k" }),
 }
+-- Skipping one line from its icon, a table of fields for the same reason.
+local Lines = {}
 local Draw
 
 local function DB()
@@ -753,17 +757,33 @@ local function GoTo(index)
     Run("WindowGo", _G.RXP.SetStep, index)
 end
 
+-- As RestedXP's own checkbox marks a line: its OnComplete runs as it turns skipped,
+-- then the flag is set. RestedXP's own box, under this window, is set to match where
+-- its row still holds this line, because a row's done look reads that box first.
+function Lines.Mark(element, skip)
+    if skip and not element.skip and type(element.OnComplete) == "function" then
+        Run("WindowComplete", element.OnComplete, element)
+    end
+    element.skip = skip
+    local frame = element.frame
+    local button = Dig(frame, "button")
+    if Dig(frame, "element") == element and Has(button, "SetChecked") then
+        Run("WindowLineBox", button.SetChecked, button, skip or element.completed == true)
+    end
+end
+
+function Lines.Updated(rxp)
+    rxp.updateSteps = true
+    if Has(rxp, "UpdateMap") then Run("WindowMap", rxp.UpdateMap) end
+end
+
 -- A sticky step is not the guide's progress, so moving on would skip the wrong
 -- one. Its objectives are marked skipped, as RestedXP's own checkbox does.
 local function SkipObjectives(rxp, step)
     for _, element in ipairs(step.elements or {}) do
-        if not element.optional and not element.skip then
-            element.skip = true
-            if type(element.OnComplete) == "function" then Run("WindowComplete", element.OnComplete, element) end
-        end
+        if not element.optional and not element.skip then Lines.Mark(element, true) end
     end
-    rxp.updateSteps = true
-    if Has(rxp, "UpdateMap") then Run("WindowMap", rxp.UpdateMap) end
+    Lines.Updated(rxp)
 end
 
 local function SkipStep(step)
@@ -846,6 +866,80 @@ local function TipHide()
     local owner = tipOwner
     tipOwner = nil
     if owner and not GameTooltip:IsForbidden() and GameTooltip:GetOwner() == owner then GameTooltip:Hide() end
+end
+
+---------------------------------------------------------------------------------
+-- Skipping one line from its icon
+---------------------------------------------------------------------------------
+function Lines.Ring(hit, on)
+    hit.ring:SetShown(on)
+    for _, texture in pairs(hit.borders) do texture:SetShown(on) end
+end
+
+-- Only a line RestedXP's own checkbox can change rings and gives a hint.
+function Lines.Enter(hit)
+    local skip = Rules.LineSkip(hit.element)
+    if skip == nil then return end
+    local accent = colors.accent
+    hit.ring:SetColorTexture(accent[1], accent[2], accent[3], K.RING_ALPHA)
+    hit:SetBorderColor(accent[1], accent[2], accent[3], 1)
+    Lines.Ring(hit, true)
+    Tip(hit, StepHeading(hit.step), nil, K.KEY_CLICK, skip and K.TEXT_LINE or K.TEXT_UNSKIP, K.KEY_RIGHT, K.TEXT_MENU)
+end
+
+function Lines.Leave(hit)
+    Lines.Ring(hit, false)
+    TipHide()
+end
+
+-- One line and never its step, in every Skipping Steps mode; a second click takes
+-- it back. The rule runs again here, since the line can finish after the hover.
+function Lines.Click(hit, button)
+    if button == "RightButton" then return Menu() end
+    local skip = Rules.LineSkip(hit.element)
+    if skip == nil then return end
+    Lines.Mark(hit.element, skip)
+    Lines.Updated(_G.RXP)
+    Refresh()
+end
+
+-- Over the icon alone and above its row, so a click there never reaches the row.
+function Lines.Make(row)
+    local hit = CreateFrame("Button", nil, row)
+    hit:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    hit.ring = hit:CreateTexture(nil, "BACKGROUND")
+    hit.ring:SetAllPoints()
+    KE:AddBorders(hit, colors.accent)
+    hit:SetScript("OnClick", Lines.Click)
+    hit:SetScript("OnEnter", Lines.Enter)
+    hit:SetScript("OnLeave", Lines.Leave)
+    Draggable(hit)
+    Lines.Ring(hit, false)
+    hit:Hide()
+    return hit
+end
+
+-- Every draw sets the hit and the check from this row alone, so a pooled row never
+-- keeps another line's look or target. size is the icon's, or nil with no icon.
+function Lines.Draw(item, row, size)
+    local hit, check = item.lineHit, item.check
+    hit.element, hit.step = row.element, row.step
+    Lines.Ring(hit, false)
+    local clickable = size ~= nil and Option("LineSkip")
+    if clickable then
+        hit:ClearAllPoints()
+        hit:SetPoint("TOPLEFT", item, "TOPLEFT", 0, 0)
+        hit:SetSize(size, size)
+    end
+    hit:SetShown(clickable)
+    local checked = size ~= nil and row.skipped == true
+    if checked then
+        local accent = colors.accent
+        check:SetVertexColor(accent[1], accent[2], accent[3])
+        check:ClearAllPoints()
+        check:SetPoint("BOTTOMRIGHT", item, "TOPLEFT", size + K.CHECK_OUT, -size - K.CHECK_OUT)
+    end
+    check:SetShown(checked)
 end
 
 ---------------------------------------------------------------------------------
@@ -1072,6 +1166,10 @@ local function MakeRow(holder)
     row:SetScript("OnLeave", TipHide)
     row.icon = Text(row, K.ICON_SIZE)
     row.glyph = row:CreateTexture(nil, "OVERLAY")
+    row.check = row:CreateTexture(nil, "OVERLAY", nil, 1)
+    row.check:SetTexture(K.CHECK)
+    row.check:SetSize(K.CHECK_SIZE, K.CHECK_SIZE)
+    row.lineHit = Lines.Make(row)
     row.meter = MakeBar(row)
     row.text = Text(row, Option("StepSize"))
     row.text:SetWordWrap(true)
@@ -1563,6 +1661,7 @@ local function DrawRow(parent, row, x, y, width, first)
     item.icon:SetPoint("TOPLEFT", item, "TOPLEFT", 0, 0)
     Faced(item.icon, iconSize)
     DrawIcon(item, row, iconSize)
+    Lines.Draw(item, row, hasIcon and iconSize or nil)
     item.text:ClearAllPoints()
     item.text:SetPoint("TOPLEFT", item, "TOPLEFT", iconW, -drop)
     item.text:SetWidth(textWidth)
