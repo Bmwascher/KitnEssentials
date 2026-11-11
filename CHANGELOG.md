@@ -1,5 +1,26 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.28
+
+### WoW Forever only
+
+- **NEW:** RestedXP Guides theme, in Skinning, off by default. RestedXP
+  Guides takes KitnEssentials' look: one guide window in your accent, with
+  a top bar naming the guide, a fold button and a cog for RestedXP's menu,
+  the chapter and your progress, KitnEssentials step icons, and the
+  waypoint arrow with KitnEssentials' text
+- Hover a line's icon in a step and click it to skip just that line, as
+  RestedXP's own checkbox does; a skipped line dims and takes a small
+  check. A switch beside Lock Window turns it off
+- Tooltips show each key beside its action, and the Active Targets and
+  Active Items frames get a header band
+- Set Up This Character changes RestedXP's settings to match, after a
+  preview, and a new character is set up on its own while Set Up New
+  Characters is on. Undo Setup puts them back, and turning the theme off
+  restores everything
+
+---
+
 ## v4.16.27
 
 ### WoW Forever only
