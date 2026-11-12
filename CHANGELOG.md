@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.29
+
+### WoW Forever only
+
+- RestedXP Guides theme: a guide line that says "Click here" now opens
+  its link in a box to copy, and a line that loads the next guide loads
+  it. Shift-click still skips the step where Skipping Steps allows it
+
+---
+
 ## v4.16.28
 
 ### WoW Forever only
