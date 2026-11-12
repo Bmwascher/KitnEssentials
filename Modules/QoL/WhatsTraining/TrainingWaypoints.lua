@@ -60,10 +60,9 @@ local function Nearest(list)
     return Rules.NearestStop(list, T.side, Here(), WorldPos, IsCapital)
 end
 
-local function NameAndPlace(npc)
+local function MapName(npc)
     local info = C_Map.GetMapInfo(npc[1])
-    local place = info and info.name
-    return npc[4] .. (place and (", " .. place) or "")
+    return info and info.name or nil
 end
 
 function Route.Narrow(data)
@@ -91,16 +90,17 @@ function Route.Ready()
     return trainers ~= nil
 end
 
--- The footer's text. Nil: the list failed to load, and the footer says nothing.
+-- The footer's text, and for a stop its map apart, so the panel can break the line
+-- there. Nil: the list failed to load, and the footer says nothing.
 function Route.Footer()
     if Route.failed then return nil end
     if not trainers then return TEXT_AFTER_COMBAT end
     local npc = Nearest(trainers)
     if not npc then return TEXT_NO_TRAINER end
-    return "Nearest listed: " .. NameAndPlace(npc)
+    return "Nearest trainer: " .. npc[4], MapName(npc)
 end
 
--- A weapon row's second line: who teaches it, and where the nearest one is.
+-- A weapon row's second line: who teaches it, and for a master the map apart.
 function Route.WeaponText(weapon)
     if not weapon.masters then return TEXT_CLASS_TRAINER end
     if not masters then return TEXT_SOME_MASTER end
@@ -111,5 +111,5 @@ function Route.WeaponText(weapon)
     end
     local npc = Nearest(list)
     if not npc then return TEXT_NO_MASTER end
-    return "Weapon master: " .. NameAndPlace(npc)
+    return "Weapon master: " .. npc[4], MapName(npc)
 end

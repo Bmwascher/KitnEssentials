@@ -32,6 +32,9 @@ local MAX_STOPS, STOPS_TOP, STOP_HEIGHT, READ_HEIGHT = 3, 88, 14, 18
 local ROW_HEIGHT, SECTION_HEIGHT, ICON_SIZE = 30, 20, 22
 local NEED, GAP, PIN_INSET = 308, 8, 66
 local SCROLLBAR_ROOM, SWAP_NAMES_ROOM = 8, 30
+local SMALL_LINE_HEIGHT, ICON_TOP = 14, (ROW_HEIGHT - ICON_SIZE) / 2
+local FOOTER_LINE_WIDTH = WIDTH - 2 * PAD
+local WEAPON_LINE_WIDTH = WIDTH - 2 * PAD - SCROLLBAR_ROOM - ICON_SIZE - 6
 local BOOK_BUTTON_WIDTH, BOOK_BUTTON_HEIGHT = 150, 26
 local DATA_DELAY = 0.1
 local WHITE = "Interface\\Buttons\\WHITE8X8"
@@ -335,8 +338,25 @@ local function WidenSecondLine(row)
     row.sub:SetPoint("RIGHT", row, "RIGHT", 0, 0)
 end
 
+-- One line when lead and map fit the room, else the map on a line of its own. A width
+-- that reads secret takes two lines. True when the text took two.
+local function SetLeadAndMap(text, room, lead, map)
+    text:SetWordWrap(false)
+    if not (lead and map) then
+        text:SetText(lead and T.Paint("muted", lead) or "")
+        return false
+    end
+    text:SetText(T.Paint("muted", lead .. ", " .. map))
+    local width = text:GetUnboundedStringWidth()
+    if not issecretvalue(width) and width and width <= room then return false end
+    text:SetWordWrap(true)
+    text:SetText(T.Paint("muted", lead .. ",\n" .. map))
+    return true
+end
+
 local function FillRow(row, item)
     row.item = item
+    row.sub:SetWordWrap(false)
     row.price:ClearAllPoints()
     row.price:SetPoint("RIGHT", row, "RIGHT", 0, 0)
     row.price:SetText(item.right or "")
@@ -360,8 +380,12 @@ local function FillRow(row, item)
         WidenSecondLine(row)
         row.name:SetText(T.NameOf(item.weapon[2]) or "")
         T.Route.Ensure()
-        row.sub:SetText(T.Paint("muted", T.Route.WeaponText(item.weapon)))
-        return ROW_HEIGHT
+        if not SetLeadAndMap(row.sub, WEAPON_LINE_WIDTH, T.Route.WeaponText(item.weapon)) then return ROW_HEIGHT end
+        -- The icon and name keep the places a one-line row gives them.
+        row.icon:ClearAllPoints()
+        row.icon:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -ICON_TOP)
+        row.sub:SetPoint("BOTTOMLEFT", row.icon, "BOTTOMRIGHT", 6, -SMALL_LINE_HEIGHT)
+        return ROW_HEIGHT + SMALL_LINE_HEIGHT
     end
     if item.kind == "offer" then
         local offer = item.offer
@@ -612,6 +636,7 @@ end
 local function DrawTrainerFooter()
     local footer = frame.footer
     local picked, leaves, label, canBuy = T.Learn.Footer()
+    footer.left:SetWordWrap(false)
     footer.left:SetText(picked)
     footer.right:SetText(leaves)
     footer.left:ClearAllPoints()
@@ -632,12 +657,11 @@ local function DrawAwayFooter()
     footer.learn:Hide()
     footer.right:SetText("")
     T.Route.Ensure()
-    local text = T.Route.Footer()
-    footer.left:SetText(text and T.Paint("muted", text) or "")
+    local split = SetLeadAndMap(footer.left, FOOTER_LINE_WIDTH, T.Route.Footer())
     footer.left:ClearAllPoints()
     footer.left:SetPoint("BOTTOMLEFT", footer, "BOTTOMLEFT", PAD, y + 4)
     footer.left:SetPoint("RIGHT", footer, "RIGHT", -PAD, 0)
-    y = y + 26
+    y = y + 26 + (split and SMALL_LINE_HEIGHT or 0)
     local count = #T.Swap.swaps
     if count > 0 then
         footer.swapNames:SetText(T.Paint("muted", concat(T.Swap.Names(), ", ")
