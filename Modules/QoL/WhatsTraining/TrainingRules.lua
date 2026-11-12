@@ -413,6 +413,29 @@ function Rules.Milestones(plan, level)
     return stops
 end
 
+-- Where the running priced total first passes the gold. A row at or below the level
+-- counts at the level, and a row of TRAIN NOW is this visit. Nil when the gold covers
+-- every priced spell.
+function Rules.GoldEnd(plan)
+    local at = plan.goldAt
+    if not at then return nil end
+    return max(at.level, plan.level), at.state == "now"
+end
+
+-- The stops in order, with a line carrying the gold's end before the first stop at or
+-- past it.
+function Rules.Ladder(stops, endLevel)
+    local lines, placed = {}, false
+    for _, stop in ipairs(stops) do
+        if endLevel and not placed and stop.level >= endLevel then
+            lines[#lines + 1] = { goldEnd = endLevel }
+            placed = true
+        end
+        lines[#lines + 1] = stop
+    end
+    return lines
+end
+
 function Rules.ReadCount(rows, prices)
     local read = 0
     for _, row in ipairs(rows) do
@@ -740,12 +763,22 @@ function Rules.Coins(copper, paint)
     return concat(parts, " ")
 end
 
+local function UnpricedTail(count)
+    return count > 0 and (" + " .. count .. " unpriced") or ""
+end
+
 function Rules.TotalText(copper, approx, unpriced, coins)
     local count = unpriced or 0
     if copper == 0 and count > 0 then return count .. " unpriced" end
-    local text = (approx and "~" or "") .. coins(copper)
-    if count > 0 then text = text .. " + " .. count .. " unpriced" end
-    return text
+    return (approx and "~" or "") .. coins(copper) .. UnpricedTail(count)
+end
+
+-- What the gold leaves after a running cost, or lacks. Its unpriced spells are in
+-- neither figure, so their count rides along, even when the two are equal.
+function Rules.Balance(copper, approx, unpriced, gold, coins)
+    local short = copper > gold
+    local text = Rules.TotalText(short and copper - gold or gold - copper, approx, 0, coins)
+    return short, text .. (short and " short" or " spare") .. UnpricedTail(unpriced or 0)
 end
 
 local function CostText(section, coins)

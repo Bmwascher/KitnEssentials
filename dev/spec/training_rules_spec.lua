@@ -330,6 +330,47 @@ describe("What's Training rules", function()
         assert.equals(1, gated.priced[1][2])
     end)
 
+    it("Balance says what the gold leaves or lacks, with the cost's mark and its unpriced count", function()
+        local function coins(copper) return tostring(copper) end
+        for _, row in ipairs({
+            { name = "spare", copper = 100, gold = 150, short = false, want = "50 spare" },
+            { name = "short, marked, unpriced", copper = 300, approx = true, unpriced = 3, gold = 100, short = true, want = "~200 short + 3 unpriced" },
+            { name = "even, unpriced", copper = 100, unpriced = 1, gold = 100, short = false, want = "0 spare + 1 unpriced" },
+        }) do
+            local short, text = Rules.Balance(row.copper, row.approx, row.unpriced, row.gold, coins)
+            assert.equals(row.short, short, row.name)
+            assert.equals(row.want, text, row.name)
+        end
+    end)
+
+    it("GoldEnd names where the gold runs out, and Ladder puts that line before the first stop it reaches", function()
+        assert.is_nil(Rules.GoldEnd(simplePlan({ { 10, 1, 100 }, { 45, 2, 200 } }, 10, 1000)))
+        for _, row in ipairs({
+            { name = "this visit", rows = { { 10, 1, 100 } }, gold = 50, level = 10, thisVisit = true },
+            { name = "a missing rank below the level", rows = { { 8, 1, 100, needs = 9 } }, gold = 50, level = 10, thisVisit = false },
+            { name = "the next two levels", rows = { { 11, 1, 100 } }, gold = 50, level = 11, thisVisit = false },
+            { name = "a later level", rows = { { 10, 1, 100 }, { 45, 2, 200 } }, gold = 150, level = 45, thisVisit = false },
+        }) do
+            local level, thisVisit = Rules.GoldEnd(simplePlan(row.rows, 10, row.gold))
+            assert.equals(row.level, level, row.name)
+            assert.equals(row.thisVisit, thisVisit, row.name)
+        end
+
+        local stops = { { level = 40 }, { level = 50 }, { level = 60 } }
+        for _, row in ipairs({
+            { name = "gold enough", want = { 40, 50, 60 } },
+            { name = "in this visit", endLevel = 10, want = { "end 10", 40, 50, 60 } },
+            { name = "at a stop's own level", endLevel = 40, want = { "end 40", 40, 50, 60 } },
+            { name = "between stops", endLevel = 46, want = { 40, "end 46", 50, 60 } },
+        }) do
+            local lines = {}
+            for index, line in ipairs(Rules.Ladder(stops, row.endLevel)) do
+                lines[index] = line.goldEnd and ("end " .. line.goldEnd) or line.level
+            end
+            assert.same(row.want, lines, row.name)
+        end
+    end)
+
     it("Skip leaves totals and default ticks, covers all ranks by name, and stops", function()
         local rows = { { 10, 1, 100 }, { 10, 2, 200 }, { 10, 3, 300 } }
         local names = { "Rend", "Rend", "Cleave" }
