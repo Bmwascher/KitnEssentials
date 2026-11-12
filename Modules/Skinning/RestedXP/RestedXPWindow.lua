@@ -934,9 +934,9 @@ end
 
 -- One line and never its step, in every Skipping Steps mode; a second click takes
 -- it back. The rule runs again here, since the line can finish after the hover.
+-- The icon of a link or next-guide line answers as the rest of its line does.
 function Lines.Click(hit, button)
     if button == "RightButton" then return Menu() end
-    -- The icon of a link or next-guide line answers as the rest of its line does.
     if Rules.LineClick(hit.element) then return StepClick(hit:GetParent(), button) end
     local skip = Rules.LineSkip(hit.element, Lines.Locked(hit.element))
     if skip == nil then return end
@@ -945,7 +945,8 @@ function Lines.Click(hit, button)
     Refresh()
 end
 
--- Over the icon alone and above its row, so a click there never reaches the row.
+-- Over the icon alone and above its row, so a click there reaches the row only on a
+-- link or next-guide line.
 function Lines.Make(row)
     local hit = CreateFrame("Button", nil, row)
     hit:RegisterForClicks("LeftButtonUp", "RightButtonUp")

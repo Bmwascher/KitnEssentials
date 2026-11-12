@@ -821,6 +821,7 @@ describe("restedxp rules", function()
             { element = { tag = "link", url = "" }, name = "a link with no address" },
             { element = { tag = "link" }, name = "a link with no url" },
             { element = { tag = "clicknext" }, name = "a next guide with no guide" },
+            { element = { tag = "clicknext", next = "" }, name = "a next guide with an empty guide" },
             { element = { tag = "next", next = "36-38 Stranglethorn Vale" }, name = "a plain next, not clickable" },
             { element = { url = url }, name = "an address with no tag" },
             { element = {}, name = "an open line" },
