@@ -837,6 +837,9 @@ local function BuildBlock()
     local block = CreateFrame("Frame", nil, frame)
     block:SetPoint("TOPLEFT", frame.search, "BOTTOMLEFT", 0, -PAD)
     block:SetPoint("TOPRIGHT", frame.search, "BOTTOMRIGHT", 0, -PAD)
+    -- The list hangs from the block's bottom, which a block with no height does not have.
+    -- DrawBlock sets the real height once a plan exists.
+    block:SetHeight(SMALL_LINE_HEIGHT)
     block.title = MakeText(block, "small")
     block.total = MakeText(block, "small")
     block.have = MakeText(block, "small")
