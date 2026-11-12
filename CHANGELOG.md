@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.30
+
+### WoW Forever only
+
+- RestedXP Guides theme: hovering a step under NEXT STEPS shows its
+  number and its full text, with a divider above the click hint
+
+---
+
 ## v4.16.29
 
 ### WoW Forever only
