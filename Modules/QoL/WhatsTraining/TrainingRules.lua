@@ -111,7 +111,8 @@ end
 ---------------------------------------------------------------------------------
 -- Trainer services
 ---------------------------------------------------------------------------------
--- Finds the kind and icon by what they are, so it holds for either value order.
+-- Finds the kind and icon by what they are, so it holds for either value order. The
+-- fifth value is the rank text the window shows beside the name, such as "Rank 2".
 function Rules.ReadService(...)
     local kind, icon
     for i = 2, select("#", ...) do
@@ -122,8 +123,9 @@ function Rules.ReadService(...)
             if not icon and value > 1000 then icon = value end
         end
     end
-    local level = select(4, ...)
-    return (...), kind, icon, type(level) == "number" and level or nil
+    local level, rank = select(4, ...)
+    if type(rank) ~= "string" or rank == "" or KINDS[rank] then rank = nil end
+    return (...), kind, icon, type(level) == "number" and level or nil, rank
 end
 
 function Rules.ServiceOpen(kind, level, playerLevel, isKnown)
@@ -579,7 +581,7 @@ function Rules.Offers(services, ctx)
             if kind or (level > 0 and not known) then
                 local offer = {
                     index = service.index, key = key, name = service.name, level = level, kind = kind,
-                    icon = service.icon, cost = service.cost, isProfession = service.isProfession == true,
+                    icon = service.icon, rank = service.rank, cost = service.cost, isProfession = service.isProfession == true,
                     id = row and row[2] or nil, needs = row and row.needs or nil, talent = row and row.talent or nil,
                 }
                 if Rules.ServiceOpen(kind, level, ctx.level, known) then

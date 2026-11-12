@@ -55,11 +55,11 @@ function Read.Services()
     local services = {}
     if not (GetNumTrainerServices and GetTrainerServiceInfo and GetTrainerServiceCost) then return services end
     for index = 1, GetNumTrainerServices() or 0 do
-        local name, kind, icon, level = Rules.ReadService(GetTrainerServiceInfo(index))
+        local name, kind, icon, level, rank = Rules.ReadService(GetTrainerServiceInfo(index))
         if name then
             local cost, isProfession = GetTrainerServiceCost(index)
             services[#services + 1] = {
-                index = index, name = name, kind = kind, icon = icon, level = level or 0,
+                index = index, name = name, kind = kind, icon = icon, level = level or 0, rank = rank,
                 cost = type(cost) == "number" and cost or nil, isProfession = isProfession == true,
             }
         end

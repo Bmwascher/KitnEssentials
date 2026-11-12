@@ -138,7 +138,8 @@ end
 local function OfferLine(offer)
     if offer.isProfession then return "Uses a profession slot" end
     local entry = offer.id and T.plan and T.plan.entry[offer.id]
-    if not entry then return "" end
+    -- A pet trainer's or weapon master's row: the rank the window shows beside its name.
+    if not entry then return offer.rank or "" end
     local parts = {}
     local rank = C_Spell.GetSpellSubtext(entry.id)
     if rank and rank ~= "" then parts[#parts + 1] = rank end

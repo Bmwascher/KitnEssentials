@@ -48,18 +48,21 @@ describe("What's Training rules", function()
         end
     end)
 
-    it("ReadService finds the kind, icon and level in either value order", function()
+    it("ReadService finds the kind, icon and level in either value order, and the rank text fifth", function()
         for _, row in ipairs({
-            { name = "standard", args = { "Rend", "available", 132155, 4, "Rank 1" }, kind = "available", icon = 132155, level = 4 },
+            { name = "standard", args = { "Rend", "available", 132155, 4, "Rank 1" }, kind = "available", icon = 132155, level = 4, rank = "Rank 1" },
             { name = "other order", args = { "Rend", 132155, "available", 4 }, kind = "available", icon = 132155, level = 4 },
             { name = "missing kind", args = { "Rend", "Rank 1", 132155, 4 }, icon = 132155, level = 4 },
             { name = "header", args = { "Spells", "header" }, kind = "header" },
+            { name = "an empty rank text", args = { "Growl", "available", 132270, 1, "" }, kind = "available", icon = 132270, level = 1 },
+            { name = "a kind in the fifth place", args = { "Growl", 132270, 1, 1, "available" }, kind = "available", icon = 132270, level = 1 },
         }) do
-            local name, kind, icon, level = Rules.ReadService(unpack(row.args))
+            local name, kind, icon, level, rank = Rules.ReadService(unpack(row.args))
             assert.equals(row.args[1], name, row.name)
             assert.equals(row.kind, kind, row.name)
             assert.equals(row.icon, icon, row.name)
             assert.equals(row.level, level, row.name)
+            assert.equals(row.rank, rank, row.name)
         end
     end)
 
@@ -492,7 +495,7 @@ describe("What's Training rules", function()
     it("Offers, DefaultTick and CanTick read a window with or without class rows", function()
         local byKey = Rules.SpellsByKey({ { 4, 100, 0 }, { 10, 101, 0, needs = 100 } }, function() return "Rend" end)
         local open, waiting = Rules.Offers({
-            { index = 1, name = "Rend", level = 4, kind = "available", icon = 1, cost = 100 },
+            { index = 1, name = "Rend", level = 4, kind = "available", icon = 1, cost = 100, rank = "Rank 1" },
             { index = 2, name = "Rend", level = 10, kind = "unavailable", cost = 200 },
             { index = 3, name = "Mining", level = 0, kind = "available", cost = 50, isProfession = true },
             { index = 4, name = "Used", level = 1, kind = "used" },
@@ -508,6 +511,8 @@ describe("What's Training rules", function()
         assert.equals(100, waiting[1].needs)
         assert.is_nil(open[3].id)
         assert.equals(10, open[3].cost)
+        assert.equals("Rank 1", open[1].rank)
+        assert.is_nil(open[3].rank)
 
         assert.is_true(Rules.DefaultTick(open[1], {}))
         assert.is_false(Rules.DefaultTick(open[1], { [100] = true }))
