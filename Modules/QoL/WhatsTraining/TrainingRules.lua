@@ -11,7 +11,7 @@ local KE = select(2, ...)
 local Rules = {}
 KE.TrainingRules = Rules
 
-local floor, max, min, sqrt = math.floor, math.max, math.min, math.sqrt
+local floor, max, min = math.floor, math.max, math.min
 local ipairs, pairs, select, tonumber, type = ipairs, pairs, select, tonumber, type
 local concat, sort = table.concat, table.sort
 
@@ -360,39 +360,6 @@ function Rules.Plan(rows, ctx)
         end
     end
     return plan
-end
-
--- Priced spells alone past the gold is certain. Short of that, an unpriced spell
--- could still spend what is left, so the gold cannot be said to cover it.
-function Rules.GoldLook(copper, unpriced, gold)
-    if copper > gold then return "short" end
-    if unpriced > 0 then return "unknown" end
-    return "covered"
-end
-
-function Rules.Bars(plan, gold)
-    local byLevel, bars = {}, {}
-    for _, entry in ipairs(plan.leveled) do
-        local level = max(entry.level, plan.level)
-        local bar = byLevel[level]
-        if not bar then
-            bar = { level = level, copper = 0, unpriced = 0 }
-            byLevel[level] = bar
-            bars[#bars + 1] = bar
-        end
-        bar.copper = bar.copper + entry.copper
-        if entry.mark == "none" then bar.unpriced = bar.unpriced + 1 end
-    end
-    sort(bars, function(a, b) return a.level < b.level end)
-    local top, running, unpriced = 0, 0, 0
-    for _, bar in ipairs(bars) do top = max(top, bar.copper) end
-    for _, bar in ipairs(bars) do
-        running = running + bar.copper
-        unpriced = unpriced + bar.unpriced
-        bar.look = Rules.GoldLook(running, unpriced, gold)
-        bar.height = top > 0 and sqrt(bar.copper) / sqrt(top) or 0
-    end
-    return bars
 end
 
 function Rules.Milestones(plan, level)

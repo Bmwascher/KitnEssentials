@@ -274,7 +274,7 @@ describe("What's Training rules", function()
         end
     end)
 
-    it("Milestones, Bars and ReadCount read thresholds at and above the level, and each bar's look", function()
+    it("Milestones and ReadCount read thresholds at and above the level, and the rows a read count counts", function()
         local plan = simplePlan({ { 35, 1, 100 }, { 45, 2, 200 }, { 55, 3, 300 } }, 10, 150)
         local stops = Rules.Milestones(plan, 10)
         assert.equals(3, #stops)
@@ -288,35 +288,6 @@ describe("What's Training rules", function()
         assert.equals(100, unpricedStop.copper)
         assert.is_true(unpricedStop.approx)
         assert.equals(1, unpricedStop.unpriced)
-
-        local bars = Rules.Bars(plan, 150)
-        assert.equals(3, #bars)
-        assert.equals("covered", bars[1].look)
-        assert.equals("short", bars[2].look)
-        assert.equals(1, bars[3].height)
-        assert.equals(10, Rules.Bars(simplePlan({ { 5, 1, 100 } }, 10, 0), 0)[1].level)
-        for _, row in ipairs({
-            { name = "only unknown, no gold", rows = { { 35, 1, 0 } }, gold = 0, want = { "unknown" } },
-            { name = "known, then unknown", rows = { { 35, 1, 100 }, { 45, 2, 0 } }, gold = 150, want = { "covered", "unknown" } },
-            { name = "unknown, then known in reach", rows = { { 35, 1, 0 }, { 45, 2, 100 } }, gold = 150, want = { "unknown", "unknown" } },
-            { name = "unknown, then known past the gold", rows = { { 35, 1, 0 }, { 45, 2, 200 } }, gold = 150, want = { "unknown", "short" } },
-            { name = "both in one bar, in reach", rows = { { 35, 1, 100 }, { 35, 2, 0 } }, gold = 150, want = { "unknown" } },
-            { name = "both in one bar, past the gold", rows = { { 35, 1, 200 }, { 35, 2, 0 } }, gold = 150, want = { "short" } },
-        }) do
-            local looks = {}
-            for index, bar in ipairs(Rules.Bars(simplePlan(row.rows, 10, row.gold), row.gold)) do looks[index] = bar.look end
-            assert.same(row.want, looks, row.name)
-        end
-        for _, row in ipairs({
-            { copper = 0, unpriced = 0, gold = 0, want = "covered" },
-            { copper = 100, unpriced = 0, gold = 100, want = "covered" },
-            { copper = 100, unpriced = 0, gold = 50, want = "short" },
-            { copper = 100, unpriced = 1, gold = 100, want = "unknown" },
-            { copper = 100, unpriced = 1, gold = 50, want = "short" },
-            { copper = 0, unpriced = 1, gold = 0, want = "unknown" },
-        }) do
-            assert.equals(row.want, Rules.GoldLook(row.copper, row.unpriced, row.gold))
-        end
 
         local read, total = Rules.ReadCount({ { 1, 1 }, { 1, 2 } }, { [1] = 5 })
         assert.equals(1, read)
