@@ -33,7 +33,7 @@ local ROW_HEIGHT, SECTION_HEIGHT, ICON_SIZE = 30, 20, 22
 local NEED, GAP, PIN_INSET = 308, 8, 66
 local SCROLLBAR_ROOM, SWAP_NAMES_ROOM = 8, 30
 local SMALL_LINE_HEIGHT, ICON_TOP = 14, (ROW_HEIGHT - ICON_SIZE) / 2
-local FOOTER_LINE_WIDTH = WIDTH - 2 * PAD
+local FOOTER_LINE_WIDTH, FOOTER_TEXT_GAP = WIDTH - 2 * PAD, 8
 local WEAPON_LINE_WIDTH = WIDTH - 2 * PAD - SCROLLBAR_ROOM - ICON_SIZE - 6
 local BOOK_BUTTON_WIDTH, BOOK_BUTTON_HEIGHT = 150, 26
 local DATA_DELAY = 0.1
@@ -345,6 +345,13 @@ local function WidenSecondLine(row)
     row.sub:SetPoint("RIGHT", row, "RIGHT", 0, 0)
 end
 
+-- The width a string's text renders at, or nil when it reads secret.
+local function TextWidth(text)
+    local width = text:GetUnboundedStringWidth()
+    if issecretvalue(width) then return nil end
+    return width
+end
+
 -- One line when lead and map fit the room, else the map on a line of its own. A width
 -- that reads secret takes two lines. True when the text took two.
 local function SetLeadAndMap(text, room, lead, map)
@@ -354,8 +361,8 @@ local function SetLeadAndMap(text, room, lead, map)
         return false
     end
     text:SetText(T.Paint("muted", lead .. ", " .. map))
-    local width = text:GetUnboundedStringWidth()
-    if not issecretvalue(width) and width and width <= room then return false end
+    local width = TextWidth(text)
+    if width and width <= room then return false end
     text:SetWordWrap(true)
     text:SetText(T.Paint("muted", lead .. ",\n" .. map))
     return true
@@ -654,17 +661,25 @@ local function DrawTrainerFooter()
     footer.left:SetWordWrap(false)
     footer.left:SetText(picked)
     footer.right:SetText(leaves)
+    local pickedWidth, leavesWidth = TextWidth(footer.left), TextWidth(footer.right)
+    -- Side by side only when both fit; otherwise, or with a secret width, the second
+    -- text takes the line above.
+    local oneLine = pickedWidth and leavesWidth and pickedWidth + FOOTER_TEXT_GAP + leavesWidth <= FOOTER_LINE_WIDTH
     footer.left:ClearAllPoints()
     footer.left:SetPoint("BOTTOMLEFT", footer, "BOTTOMLEFT", PAD, 36)
     footer.right:ClearAllPoints()
-    footer.right:SetPoint("BOTTOMRIGHT", footer, "BOTTOMRIGHT", -PAD, 36)
+    if oneLine then
+        footer.right:SetPoint("BOTTOMRIGHT", footer, "BOTTOMRIGHT", -PAD, 36)
+    else
+        footer.right:SetPoint("BOTTOMLEFT", footer, "BOTTOMLEFT", PAD, 36 + SMALL_LINE_HEIGHT)
+    end
     footer.learn.text:SetText(label)
     footer.learn:SetEnabled(canBuy)
     footer.learn:Show()
     footer.update:Hide()
     footer.swapTitle:SetText("")
     footer.swapNames:SetText("")
-    footer:SetHeight(56)
+    footer:SetHeight(oneLine and 56 or 56 + SMALL_LINE_HEIGHT)
 end
 
 local function DrawAwayFooter()
