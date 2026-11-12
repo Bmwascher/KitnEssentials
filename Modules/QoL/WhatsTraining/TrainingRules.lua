@@ -614,6 +614,13 @@ function Rules.CanTick(offer, freeSlots)
     return not offer.isProfession or freeSlots > 0
 end
 
+-- Tick all gives each open service the tick a new window gives it; untick all clears them.
+function Rules.TickAll(offers, on, skipped, freeSlots, ticks)
+    for _, offer in ipairs(offers) do
+        ticks[offer.key] = on == true and Rules.DefaultTick(offer, skipped) and Rules.CanTick(offer, freeSlots)
+    end
+end
+
 -- A service with no quoted cost is never bought: an unknown price is not a free one.
 function Rules.BuyPlan(offers, ticks, budget, freeSlots)
     local rows, cost, slots = {}, 0, freeSlots

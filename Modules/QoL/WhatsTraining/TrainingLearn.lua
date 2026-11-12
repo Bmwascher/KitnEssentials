@@ -99,6 +99,18 @@ function Learn.Toggle(offer)
     Recompute()
 end
 
+function Learn.SetAll(on)
+    Rules.TickAll(open, on, T.Store().skipped, FreeSlots(), ticks)
+    Recompute()
+end
+
+function Learn.AnyTicked()
+    for _, offer in ipairs(open) do
+        if ticks[offer.key] then return true end
+    end
+    return false
+end
+
 function Learn.CostText(cost)
     if not cost then return "Price unknown" end
     if IsPetTrainer() then return cost .. " training points" end

@@ -518,6 +518,19 @@ describe("What's Training rules", function()
         assert.is_true(Rules.CanTick(open[1], 0))
     end)
 
+    it("TickAll gives each open service its opening tick, or clears every one", function()
+        local offers = { { key = "a", id = 1 }, { key = "b", id = 2 }, { key = "c", isProfession = true }, { key = "d" } }
+        for _, row in ipairs({
+            { name = "tick all", on = true, want = { a = true, b = false, c = false, d = true } },
+            { name = "untick all", on = false, want = { a = false, b = false, c = false, d = false } },
+        }) do
+            local ticks = { a = false, b = true, c = true, d = false, other = true }
+            Rules.TickAll(offers, row.on, { [2] = true }, 1, ticks)
+            for key, want in pairs(row.want) do assert.equals(want, ticks[key], row.name .. ", " .. key) end
+            assert.is_true(ticks.other, row.name .. ", a key no offer holds")
+        end
+    end)
+
     it("BuyPlan keeps to the budget and slots, and BuyOrder runs last index first", function()
         local offers = {
             { index = 1, key = "a", cost = 100 },

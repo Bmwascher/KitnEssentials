@@ -40,6 +40,8 @@ local DATA_DELAY = 0.1
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 local FALLBACK_ICON = 134400
 local CLOSE_GLYPH = "x"
+local TIP_UNTICK_ALL = "Click to untick every spell."
+local TIP_TICK_ALL = "Click to tick every spell but skipped spells and new professions."
 
 local HEX = {
     gold = "ffd100", silver = "c8c8d0", copper = "eda55f", amber = "e6bf4d",
@@ -208,7 +210,12 @@ local function OnRowClick(self, button)
     local item = self.item
     if not item then return end
     if item.kind == "section" then
-        if item.toggle then
+        if item.action then
+            item.action()
+            -- Its tooltip would still name the click just done.
+            GameTooltip:Hide()
+            Panel.QueueDraw()
+        elseif item.toggle then
             state.open[item.key] = not state.open[item.key]
             Panel.QueueDraw()
         end
@@ -241,9 +248,9 @@ local function OnRowEnter(self)
     local item = self.item
     if not item then return end
     if item.kind == "section" or item.kind == "text" then
-        if IsCut(self.name) then
+        if item.tip or IsCut(self.name) then
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(self.name:GetText(), 1, 1, 1, 1, true)
+            GameTooltip:SetText(item.tip or self.name:GetText(), 1, 1, 1, 1, true)
             GameTooltip:Show()
         end
         return
@@ -526,11 +533,19 @@ local function EarlierRank(offer, listed)
     return entry and entry.state == "quest" and "quest" or "elsewhere"
 end
 
+local function TickEvery() T.Learn.SetAll(true) end
+local function UntickEvery() T.Learn.SetAll(false) end
+
 local function BuildTrainerItems()
     local items = {}
     local open, waiting = T.Learn.Offers()
     if #open > 0 then
-        AddSection(items, "now", ("TRAIN NOW (%d)"):format(#open))
+        local anyTicked = T.Learn.AnyTicked()
+        local label = anyTicked and "Untick all" or "Tick all"
+        AddSection(items, "now", ("TRAIN NOW (%d)"):format(#open), T.Paint("accent", label))
+        local header = items[#items]
+        header.action = anyTicked and UntickEvery or TickEvery
+        header.tip = anyTicked and TIP_UNTICK_ALL or TIP_TICK_ALL
         for _, offer in ipairs(open) do
             local cost = T.Learn.CostText(offer.cost)
             local ticked = T.Learn.IsTicked(offer)
