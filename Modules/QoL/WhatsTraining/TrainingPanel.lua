@@ -28,6 +28,7 @@ T.Panel = Panel
 local WIDTH, ALONE_HEIGHT = 300, 643
 local HEADER_HEIGHT, SEARCH_HEIGHT, PAD = 32, 22, 8
 local MAX_STOPS, HAIRLINE_GAP, LADDER_GAP, READ_GAP = 3, 3, 8, 4
+local GOLD_RULE_INSET = 2
 local ROW_HEIGHT, SECTION_HEIGHT, ICON_SIZE = 30, 20, 22
 local NEED, GAP, PIN_INSET = 308, 8, 66
 local SCROLLBAR_ROOM, SWAP_NAMES_ROOM = 8, 30
@@ -264,6 +265,7 @@ local function OnRowEnter(self)
         for _, entry in ipairs(item.group.rows) do
             GameTooltip:AddLine(T.NameOf(entry.id) or "", 1, 1, 1)
         end
+        GameTooltip:AddLine(T.Paint("muted", "By then ") .. item.byThen, 1, 1, 1)
     elseif item.offer and GameTooltip.SetTrainerService then
         GameTooltip:SetTrainerService(item.offer.index)
     else
@@ -396,8 +398,8 @@ local function FillRow(row, item)
         WidenSecondLine(row)
         row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -2)
         row.sub:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 2)
-        row.name:SetText("Level " .. item.group.level)
-        row.sub:SetText(#item.group.rows .. (#item.group.rows == 1 and " spell" or " spells") .. item.byThen)
+        row.name:SetText("Level " .. item.group.level .. T.Paint("muted", " (" .. #item.group.rows .. ")"))
+        row.sub:SetText(item.balance)
         return ROW_HEIGHT
     end
     if item.kind == "weapon" then
@@ -434,6 +436,7 @@ end
 
 local function DrawItems(items)
     local y, content = 0, frame.content
+    content.goldRule:Hide()
     for index, item in ipairs(items) do
         local row = GetRow(index)
         local height = FillRow(row, item)
@@ -442,6 +445,11 @@ local function DrawItems(items)
         row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
         row:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -y)
         row:Show()
+        if item.rule then
+            content.goldRule:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -GOLD_RULE_INSET)
+            content.goldRule:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, -GOLD_RULE_INSET)
+            content.goldRule:Show()
+        end
         y = y + height
     end
     for index = #items + 1, #rows do
@@ -468,6 +476,7 @@ end
 
 local function AddGoldLine(items, plan)
     AddText(items, T.Paint("amber", "your " .. T.Coins(plan.gold) .. " ends here, priced spells"))
+    items[#items].rule = true
 end
 
 local function AddEntries(items, plan, section, dim)
@@ -511,14 +520,17 @@ local function BuildAwayItems(plan)
             .. Rules.TotalText(plan.neededBy, plan.neededApprox, plan.neededUnpriced, T.Coins))
     end
     if #plan.later > 0 then
-        AddSection(items, "later", ("LATER LEVELS (%d)"):format(#plan.later))
+        local endLevel = Rules.GoldEnd(plan)
+        local past = endLevel and endLevel < plan.later[1].level
+        AddSection(items, "later", ("LATER LEVELS (%d)"):format(#plan.later),
+            past and T.Paint("amber", "past your gold") or nil)
         for _, group in ipairs(plan.later) do
             if plan.goldAt == group then AddGoldLine(items, plan) end
             items[#items + 1] = {
                 kind = "later", group = group,
                 right = SectionTotal(group),
-                byThen = T.Paint("muted", ", by then ")
-                    .. Rules.TotalText(group.byThen, group.byThenApprox, group.byThenUnpriced, T.Coins),
+                balance = BalanceText(group.byThen, group.byThenApprox, group.byThenUnpriced, plan.gold),
+                byThen = Rules.TotalText(group.byThen, group.byThenApprox, group.byThenUnpriced, T.Coins),
             }
         end
     end
@@ -862,6 +874,10 @@ local function BuildScroll()
     local scroll = CreateFrame("ScrollFrame", nil, frame)
     local content = CreateFrame("Frame", nil, scroll)
     content:SetSize(WIDTH - 2 * PAD - SCROLLBAR_ROOM, 1)
+    content.goldRule = content:CreateTexture(nil, "ARTWORK")
+    content.goldRule:SetHeight(1)
+    content.goldRule:SetColorTexture(AMBER_COLOR[1], AMBER_COLOR[2], AMBER_COLOR[3], 1)
+    content.goldRule:Hide()
     scroll:SetScrollChild(content)
     frame.scroll, frame.content = scroll, content
     if KE.GUI and KE.GUI.CreateScrollbar then
