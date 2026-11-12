@@ -68,7 +68,7 @@ local K = {
     TEXT_LINK_TITLE = "RestedXP link", TEXT_LINK_HINT = "Press %s to copy", TEXT_COPY_KEY = "Ctrl-C",
     TEXT_CLOSE = "Close",
     TEXT_NEXT = "NEXT STEPS",
-    TIP_DIM = 0.7,
+    TIP_DIM = 0.7, RULE_ALPHA = 0.15, RULE_RISE = 1, RULE_INSET = 9,
     WHEEL_LINES = 2,
     LABEL_LINES = 1,
     SCROLL_W = 2, SCROLL_GAP = 4, SCROLL_MIN = 12,
@@ -839,14 +839,37 @@ local function CutText(fs)
     return fs:GetText()
 end
 
-local tipOwner
+local tipOwner, tipRule
+
+local function HideRule()
+    if tipRule then tipRule:Hide() end
+end
+
+-- KE's tooltip divider over a line: made on first use, and hidden whenever the
+-- tooltip clears or hides, whoever owns it next.
+local function ShowRule(index)
+    local line = GameTooltip:GetLeftLine(index)
+    if not line then return end
+    if not tipRule then
+        tipRule = GameTooltip:CreateTexture(nil, "ARTWORK")
+        tipRule:SetColorTexture(1, 1, 1, K.RULE_ALPHA)
+        GameTooltip:HookScript("OnTooltipCleared", HideRule)
+        GameTooltip:HookScript("OnHide", HideRule)
+    end
+    tipRule:SetHeight(KE:GetPixelSize())
+    tipRule:ClearAllPoints()
+    tipRule:SetPoint("LEFT", line, "TOPLEFT", 0, K.RULE_RISE)
+    tipRule:SetPoint("RIGHT", GameTooltip, "RIGHT", -K.RULE_INSET, 0)
+    tipRule:Show()
+end
 
 -- One tooltip per hover, in one style: the heading in the accent and under it any full
--- text in white, or that text alone with no heading; then each key in white beside its
--- action in gray.
+-- text in white, ruled off from the keys, or that text alone with no heading; then each
+-- key in white beside its action in gray.
 local function Tip(owner, heading, full, key, action, key2, action2, key3, action3)
     if not Option("Tips") or GameTooltip:IsForbidden() then return end
     GameTooltip:SetOwner(owner, K.TIP_ANCHOR)
+    HideRule()
     tipOwner = owner
     if heading then
         local accent = Theme.Tokens().accent
@@ -860,6 +883,7 @@ local function Tip(owner, heading, full, key, action, key2, action2, key3, actio
     if key2 then GameTooltip:AddDoubleLine(key2, action2, 1, 1, 1, dim, dim, dim) end
     if key3 then GameTooltip:AddDoubleLine(key3, action3, 1, 1, 1, dim, dim, dim) end
     GameTooltip:Show()
+    if heading and full and key then ShowRule(3) end
 end
 
 -- The key that skips a step, or nil with Skipping Steps off.
@@ -1238,7 +1262,8 @@ local function MakeHit(holder)
         if MaySkip() then GoTo(self.index) end
     end)
     hit:SetScript("OnEnter", function(self)
-        local full = not self.menu and CutText(self.line) and self.words or nil
+        local words = self.words
+        local full = not self.menu and words ~= "" and words or nil
         local heading = K.TEXT_STEP:format(self.index or 0)
         local key = SkipKey()
         if not self.menu and not key then
@@ -1887,7 +1912,7 @@ local function ListLine(y, inner, listH, text, index, menu, look, barred, words)
     hit:ClearAllPoints()
     hit:SetPoint("TOPLEFT", window, "TOPLEFT", K.PAD, y)
     hit:SetSize(inner, listH)
-    hit.index, hit.menu, hit.line, hit.words = index, menu, line, words
+    hit.index, hit.menu, hit.words = index, menu, words
     hit.shade:Hide()
     return y - listH
 end
