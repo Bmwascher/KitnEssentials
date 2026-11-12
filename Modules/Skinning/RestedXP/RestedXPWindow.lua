@@ -841,17 +841,18 @@ end
 
 local tipOwner
 
--- One tooltip per hover, in one style: a cut line's full text, else the heading in
--- the accent, then each key in white beside its action in gray.
+-- One tooltip per hover, in one style: the heading in the accent, a cut string's full
+-- text in white, then each key in white beside its action in gray.
 local function Tip(owner, heading, full, key, action, key2, action2, key3, action3)
     if not Option("Tips") or GameTooltip:IsForbidden() then return end
     GameTooltip:SetOwner(owner, K.TIP_ANCHOR)
     tipOwner = owner
-    if full then
-        GameTooltip:SetText(full, 1, 1, 1, 1, true)
-    else
+    if heading then
         local accent = Theme.Tokens().accent
         GameTooltip:SetText(heading, accent[1], accent[2], accent[3])
+        if full then GameTooltip:AddLine(full, 1, 1, 1, true) end
+    else
+        GameTooltip:SetText(full, 1, 1, 1, 1, true)
     end
     local dim = K.TIP_DIM
     if key then GameTooltip:AddDoubleLine(key, action, 1, 1, 1, dim, dim, dim) end
@@ -1236,10 +1237,11 @@ local function MakeHit(holder)
         if MaySkip() then GoTo(self.index) end
     end)
     hit:SetScript("OnEnter", function(self)
-        local full = not self.menu and CutText(self.line) or nil
+        local full = not self.menu and CutText(self.line) and self.words or nil
+        local heading = K.TEXT_STEP:format(self.index or 0)
         local key = SkipKey()
         if not self.menu and not key then
-            if full then Tip(self, nil, full) end
+            if full then Tip(self, heading, full) end
             return
         end
         local accent = Theme.Tokens().accent
@@ -1248,8 +1250,7 @@ local function MakeHit(holder)
         if self.menu then
             Tip(self, K.TEXT_NONE, nil, K.KEY_CLICK, K.TEXT_PICK)
         else
-            -- A cut line's full text starts with its number, so it stands in for the heading.
-            Tip(self, K.TEXT_STEP:format(self.index or 0), full, key, K.TEXT_GO)
+            Tip(self, heading, full, key, K.TEXT_GO)
         end
     end)
     hit:SetScript("OnLeave", function(self)
@@ -1871,7 +1872,7 @@ local function DrawPanel()
     for _, texture in pairs(window.borders) do texture:SetShown(showEdge) end
 end
 
-local function ListLine(y, inner, listH, text, index, menu, look, barred)
+local function ListLine(y, inner, listH, text, index, menu, look, barred, words)
     local line = Pools().line:Acquire(window).row
     linesDrawn = linesDrawn + 1
     line:ClearAllPoints()
@@ -1885,7 +1886,7 @@ local function ListLine(y, inner, listH, text, index, menu, look, barred)
     hit:ClearAllPoints()
     hit:SetPoint("TOPLEFT", window, "TOPLEFT", K.PAD, y)
     hit:SetSize(inner, listH)
-    hit.index, hit.menu, hit.line = index, menu, line
+    hit.index, hit.menu, hit.line, hit.words = index, menu, line, words
     hit.shade:Hide()
     return y - listH
 end
@@ -1929,8 +1930,9 @@ local function DrawSteps(model, y, inner, listH)
     for i = top, last do
         local entry = list[i]
         local look = model.current[entry.index] and "current" or entry.done and "done" or nil
-        y = ListLine(y, inner, listH, ("%d  %s"):format(entry.index, Model.LineText(entry)), entry.index, false,
-            look, barred)
+        local words = Model.LineText(entry)
+        y = ListLine(y, inner, listH, ("%d  %s"):format(entry.index, words), entry.index, false, look, barred,
+            words)
     end
     window.track:SetShown(barred)
     window.thumb:SetShown(barred)
