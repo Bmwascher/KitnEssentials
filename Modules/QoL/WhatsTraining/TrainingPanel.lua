@@ -19,7 +19,7 @@ local InCombatLockdown = InCombatLockdown
 local IsShiftKeyDown = IsShiftKeyDown
 local MenuUtil = MenuUtil
 local UIParent = UIParent
-local ipairs, issecretvalue, min = ipairs, issecretvalue, math.min
+local ipairs, issecretvalue = ipairs, issecretvalue
 local concat = table.concat
 
 local Panel = {}
@@ -27,13 +27,12 @@ T.Panel = Panel
 
 local WIDTH, ALONE_HEIGHT = 300, 643
 local HEADER_HEIGHT, SEARCH_HEIGHT, PAD = 32, 22, 8
-local BLOCK_HEIGHT, BARS_HEIGHT = 124, 26
-local MAX_STOPS, STOPS_TOP, STOP_HEIGHT, READ_HEIGHT = 3, 88, 14, 18
+local MAX_STOPS, HAIRLINE_GAP, LADDER_GAP, READ_GAP = 3, 3, 8, 4
 local ROW_HEIGHT, SECTION_HEIGHT, ICON_SIZE = 30, 20, 22
 local NEED, GAP, PIN_INSET = 308, 8, 66
 local SCROLLBAR_ROOM, SWAP_NAMES_ROOM = 8, 30
 local SMALL_LINE_HEIGHT, ICON_TOP = 14, (ROW_HEIGHT - ICON_SIZE) / 2
-local FOOTER_LINE_WIDTH, FOOTER_TEXT_GAP = WIDTH - 2 * PAD, 8
+local LINE_WIDTH, TEXT_GAP = WIDTH - 2 * PAD, 8
 local WEAPON_LINE_WIDTH = WIDTH - 2 * PAD - SCROLLBAR_ROOM - ICON_SIZE - 6
 local BOOK_BUTTON_WIDTH, BOOK_BUTTON_HEIGHT = 150, 26
 local DATA_DELAY = 0.1
@@ -51,8 +50,6 @@ local WINDOW_COLOR = { 0.031, 0.031, 0.031, 0.98 }
 local FIELD_COLOR = { 0.075, 0.075, 0.075, 1 }
 local BORDER_COLOR = { 0.188, 0.188, 0.188, 1 }
 local AMBER_COLOR = { 0.902, 0.749, 0.302, 1 }
-local UNKNOWN_COLOR = { 0.612, 0.612, 0.612, 1 }
-local UNKNOWN_BAR_HEIGHT = 4
 local BACKDROP = { bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 }
 
 local frame, bookButton
@@ -60,7 +57,7 @@ local bookHooked, trainerHooked = false, false
 local bookAnchored, placeAfterCombat = false, false
 local anchoredTo
 local drawQueued, dataQueued = false, false
-local rows, barTextures = {}, {}
+local rows = {}
 local gains, requested = {}, {}
 
 local state = {
@@ -106,6 +103,11 @@ end
 
 local function SectionTotal(section)
     return Rules.TotalText(section.copper, section.approx, section.unpriced, T.Coins)
+end
+
+local function BalanceText(copper, approx, unpriced, gold)
+    local short, text = Rules.Balance(copper, approx, unpriced, gold, T.Coins)
+    return short and T.Paint("amber", text) or text
 end
 
 local function PriceText(entry)
@@ -353,6 +355,14 @@ local function TextWidth(text)
     return width
 end
 
+-- True when a left and a right text fit one line of the panel's inner width with a gap
+-- between them. A width that reads secret never fits.
+local function FitsOneLine(left, right)
+    local leftWidth, rightWidth = TextWidth(left), TextWidth(right)
+    if not (leftWidth and rightWidth) then return false end
+    return leftWidth + TEXT_GAP + rightWidth <= LINE_WIDTH
+end
+
 -- One line when lead and map fit the room, else the map on a line of its own. A width
 -- that reads secret takes two lines. True when the text took two.
 local function SetLeadAndMap(text, room, lead, map)
@@ -593,62 +603,64 @@ end
 ---------------------------------------------------------------------------------
 -- The block above the list
 ---------------------------------------------------------------------------------
-local function LookColor(look)
-    if look == "short" then return AMBER_COLOR end
-    if look == "unknown" then return UNKNOWN_COLOR end
-    return KE.Theme.accent
+-- A left and a right text on one line when both fit, else the right text on the line
+-- below, so the two never meet. Returns the top of the next line.
+local function PlacePair(left, right, top)
+    local block = frame.block
+    local rightTop = FitsOneLine(left, right) and top or top + SMALL_LINE_HEIGHT
+    left:ClearAllPoints()
+    left:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -top)
+    right:ClearAllPoints()
+    right:SetPoint("TOPRIGHT", block, "TOPRIGHT", 0, -rightTop)
+    return rightTop + SMALL_LINE_HEIGHT
 end
 
-local function DrawBars(plan)
-    local block = frame.block
-    local bars = Rules.Bars(plan, plan.gold)
-    local width = (WIDTH - 2 * PAD) / (#bars > 0 and #bars or 1)
-    for index, bar in ipairs(bars) do
-        local texture = barTextures[index]
-        if not texture then
-            texture = block.bars:CreateTexture(nil, "ARTWORK")
-            barTextures[index] = texture
+-- The stops, each with what the gold leaves or lacks by then, and where the gold runs
+-- out before the first stop it reaches. Returns the top of the next line.
+local function DrawLadder(plan, top)
+    local block, used = frame.block, 0
+    local endLevel, thisVisit = Rules.GoldEnd(plan)
+    block.goldEnd:Hide()
+    block.goldEndRule:Hide()
+    for _, line in ipairs(Rules.Ladder(Rules.Milestones(plan, plan.level), endLevel)) do
+        if line.goldEnd then
+            local where = thisVisit and "in this visit" or ("at level " .. line.goldEnd)
+            block.goldEnd:SetText(T.Paint("amber", "gold runs out " .. where .. ", priced spells"))
+            block.goldEnd:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -(top + 1))
+            block.goldEnd:SetPoint("TOPRIGHT", block, "TOPRIGHT", 0, -(top + 1))
+            block.goldEndRule:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -top)
+            block.goldEndRule:SetPoint("TOPRIGHT", block, "TOPRIGHT", 0, -top)
+            block.goldEnd:Show()
+            block.goldEndRule:Show()
+            top = top + SMALL_LINE_HEIGHT
+        else
+            used = used + 1
+            local stop = block.stops[used]
+            stop.left:SetText(T.Paint("muted", "To " .. line.level))
+            stop.right:SetText(BalanceText(line.copper, line.approx, line.unpriced, plan.gold))
+            top = PlacePair(stop.left, stop.right, top)
         end
-        local color = LookColor(bar.look)
-        texture:SetColorTexture(color[1], color[2], color[3], 1)
-        texture:ClearAllPoints()
-        texture:SetPoint("BOTTOMLEFT", block.bars, "BOTTOMLEFT", (index - 1) * width, 0)
-        -- An unpriced spell adds no height, and its bar must still be seen.
-        local least = bar.look == "unknown" and UNKNOWN_BAR_HEIGHT or 1
-        local height = bar.height * BARS_HEIGHT
-        texture:SetSize(width > 2 and width - 1 or 1, height > least and height or least)
-        texture:Show()
     end
-    for index = #bars + 1, #barTextures do barTextures[index]:Hide() end
-    block.axisLow:SetText(#bars > 0 and (T.Paint("muted", tostring(bars[1].level))) or "")
-    block.axisHigh:SetText(#bars > 0 and (T.Paint("muted", tostring(bars[#bars].level))) or "")
+    for index = used + 1, MAX_STOPS do
+        block.stops[index].left:SetText("")
+        block.stops[index].right:SetText("")
+    end
+    return top
 end
 
 local function DrawBlock(plan)
     local block, now, gold = frame.block, plan.now, plan.gold
     block.title:SetText(T.Paint("muted", ("THIS VISIT, %d %s"):format(#now.rows, #now.rows == 1 and "SPELL" or "SPELLS")))
     block.total:SetText(SectionTotal(now))
-    local share = now.copper > 0 and min(1, gold / now.copper) or 1
-    local look = Rules.GoldLook(now.copper, now.unpriced, gold)
-    local short = look == "short"
-    local color = LookColor(look)
-    block.goldFill:SetColorTexture(color[1], color[2], color[3], 1)
-    block.goldFill:SetWidth(share > 0 and share * (WIDTH - 2 * PAD) or 1)
+    local top = PlacePair(block.title, block.total, 0)
     block.have:SetText("You have " .. T.Coins(gold))
-    local mark = (now.approx or now.unpriced > 0) and "~" or ""
-    block.spare:SetText(short and (mark .. T.Coins(now.copper - gold) .. " short")
-        or (mark .. T.Coins(gold - now.copper) .. " spare"))
-    DrawBars(plan)
-    local stops = Rules.Milestones(plan, plan.level)
-    for index, text in ipairs(block.stops) do
-        local stop = stops[index]
-        text:SetText(stop and (T.Paint("muted", "To " .. stop.level .. " ")
-            .. Rules.TotalText(stop.copper, stop.approx, stop.unpriced, T.Coins)) or "")
-    end
-    local readTop = STOPS_TOP + #stops * STOP_HEIGHT + 4
-    block.readCount:ClearAllPoints()
-    block.readCount:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -readTop)
-    block:SetHeight(readTop + READ_HEIGHT)
+    block.spare:SetText(BalanceText(now.copper, now.approx, now.unpriced, gold))
+    top = PlacePair(block.have, block.spare, top)
+    block.hairline:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -(top + HAIRLINE_GAP))
+    block.hairline:SetPoint("TOPRIGHT", block, "TOPRIGHT", 0, -(top + HAIRLINE_GAP))
+    top = DrawLadder(plan, top + LADDER_GAP) + READ_GAP
+    block.readCount:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -top)
+    block:SetHeight(top + SMALL_LINE_HEIGHT)
     local read, total = Rules.ReadCount(plan.priced, T.Store().prices)
     block.readCount:SetText(read < total and T.Paint("muted", ("%d of %d prices read"):format(read, total)) or "")
 end
@@ -662,10 +674,8 @@ local function DrawTrainerFooter()
     footer.left:SetWordWrap(false)
     footer.left:SetText(picked)
     footer.right:SetText(leaves)
-    local pickedWidth, leavesWidth = TextWidth(footer.left), TextWidth(footer.right)
-    -- Side by side only when both fit; otherwise, or with a secret width, the second
-    -- text takes the line above.
-    local oneLine = pickedWidth and leavesWidth and pickedWidth + FOOTER_TEXT_GAP + leavesWidth <= FOOTER_LINE_WIDTH
+    -- Side by side only when both fit; otherwise the second text takes the line above.
+    local oneLine = FitsOneLine(footer.left, footer.right)
     footer.left:ClearAllPoints()
     footer.left:SetPoint("BOTTOMLEFT", footer, "BOTTOMLEFT", PAD, 36)
     footer.right:ClearAllPoints()
@@ -688,7 +698,7 @@ local function DrawAwayFooter()
     footer.learn:Hide()
     footer.right:SetText("")
     T.Route.Ensure()
-    local split = SetLeadAndMap(footer.left, FOOTER_LINE_WIDTH, T.Route.Footer())
+    local split = SetLeadAndMap(footer.left, LINE_WIDTH, T.Route.Footer())
     footer.left:ClearAllPoints()
     footer.left:SetPoint("BOTTOMLEFT", footer, "BOTTOMLEFT", PAD, y + 4)
     footer.left:SetPoint("RIGHT", footer, "RIGHT", -PAD, 0)
@@ -813,39 +823,21 @@ local function BuildBlock()
     local block = CreateFrame("Frame", nil, frame)
     block:SetPoint("TOPLEFT", frame.search, "BOTTOMLEFT", 0, -PAD)
     block:SetPoint("TOPRIGHT", frame.search, "BOTTOMRIGHT", 0, -PAD)
-    block:SetHeight(BLOCK_HEIGHT)
     block.title = MakeText(block, "small")
-    block.title:SetPoint("TOPLEFT", block, "TOPLEFT", 0, 0)
     block.total = MakeText(block, "small")
-    block.total:SetPoint("TOPRIGHT", block, "TOPRIGHT", 0, 0)
-    local goldBack = block:CreateTexture(nil, "BACKGROUND")
-    goldBack:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -16)
-    goldBack:SetPoint("TOPRIGHT", block, "TOPRIGHT", 0, -16)
-    goldBack:SetHeight(6)
-    goldBack:SetColorTexture(FIELD_COLOR[1], FIELD_COLOR[2], FIELD_COLOR[3], 1)
-    block.goldFill = block:CreateTexture(nil, "ARTWORK")
-    block.goldFill:SetPoint("TOPLEFT", goldBack, "TOPLEFT", 0, 0)
-    block.goldFill:SetHeight(6)
     block.have = MakeText(block, "small")
-    block.have:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -26)
     block.spare = MakeText(block, "small")
-    block.spare:SetPoint("TOPRIGHT", block, "TOPRIGHT", 0, -26)
-    block.bars = CreateFrame("Frame", nil, block)
-    block.bars:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -44)
-    block.bars:SetPoint("TOPRIGHT", block, "TOPRIGHT", 0, -44)
-    block.bars:SetHeight(BARS_HEIGHT)
-    block.axisLow = MakeText(block, "small")
-    block.axisLow:SetPoint("TOPLEFT", block.bars, "BOTTOMLEFT", 0, -2)
-    block.axisHigh = MakeText(block, "small")
-    block.axisHigh:SetPoint("TOPRIGHT", block.bars, "BOTTOMRIGHT", 0, -2)
+    block.hairline = block:CreateTexture(nil, "ARTWORK")
+    block.hairline:SetHeight(1)
+    block.hairline:SetColorTexture(BORDER_COLOR[1], BORDER_COLOR[2], BORDER_COLOR[3], 1)
     block.stops = {}
     for index = 1, MAX_STOPS do
-        local top = -(STOPS_TOP + (index - 1) * STOP_HEIGHT)
-        local stop = MakeText(block, "small")
-        stop:SetPoint("TOPLEFT", block, "TOPLEFT", 0, top)
-        stop:SetPoint("TOPRIGHT", block, "TOPRIGHT", 0, top)
-        block.stops[index] = stop
+        block.stops[index] = { left = MakeText(block, "small"), right = MakeText(block, "small") }
     end
+    block.goldEndRule = block:CreateTexture(nil, "ARTWORK")
+    block.goldEndRule:SetHeight(1)
+    block.goldEndRule:SetColorTexture(AMBER_COLOR[1], AMBER_COLOR[2], AMBER_COLOR[3], 1)
+    block.goldEnd = MakeText(block, "small")
     block.readCount = MakeText(block, "small")
     frame.block = block
 end
