@@ -491,6 +491,16 @@ function Rules.LineSkipped(element)
     return type(element) == "table" and element.skip == true and not element.completed and not element.textOnly
 end
 
+-- A line's own click, which RestedXP binds only in its older guide window: "link"
+-- and the address to copy, or "next" for a line that loads the next guide.
+function Rules.LineClick(element)
+    if type(element) ~= "table" then return nil end
+    local tag = element.tag
+    if tag == "link" and type(element.url) == "string" and element.url ~= "" then return "link", element.url end
+    if tag == "clicknext" and type(element.next) == "string" and element.next ~= "" then return "next" end
+    return nil
+end
+
 function Rules.Parts(rxp)
     local arrow = Dig(rxp, "arrowFrame")
     local v2 = Dig(rxp, "v2")

@@ -812,4 +812,23 @@ describe("restedxp rules", function()
             assert.equals(row.skipped, Rules.LineSkipped(row.element), row.name)
         end
     end)
+
+    it("gives a line its own click only for a link with an address or a next-guide line with a guide", function()
+        local url = "https://www.youtube.com/watch?v=H-IwZ6P-ldY"
+        for _, row in ipairs({
+            { element = { tag = "link", url = url, textOnly = true }, kind = "link", url = url, name = "a link" },
+            { element = { tag = "clicknext", next = "36-38 Stranglethorn Vale" }, kind = "next", name = "a next guide" },
+            { element = { tag = "link", url = "" }, name = "a link with no address" },
+            { element = { tag = "link" }, name = "a link with no url" },
+            { element = { tag = "clicknext" }, name = "a next guide with no guide" },
+            { element = { tag = "next", next = "36-38 Stranglethorn Vale" }, name = "a plain next, not clickable" },
+            { element = { url = url }, name = "an address with no tag" },
+            { element = {}, name = "an open line" },
+            { name = "no element" },
+        }) do
+            local kind, address = Rules.LineClick(row.element)
+            assert.equals(row.kind, kind, row.name)
+            assert.equals(row.url, address, row.name)
+        end
+    end)
 end)

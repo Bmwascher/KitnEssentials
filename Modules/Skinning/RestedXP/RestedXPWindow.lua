@@ -64,6 +64,9 @@ local K = {
     TEXT_PICK = "Pick a guide",
     KEY_SHIFT = "Shift-click", KEY_CLICK = "Click", KEY_RIGHT = "Right-click",
     TEXT_LINE = "Skip this line", TEXT_UNSKIP = "Undo skip",
+    TEXT_LINK = "Copy the link", TEXT_NEXT_GUIDE = "Load the next guide",
+    TEXT_LINK_TITLE = "RestedXP link", TEXT_LINK_HINT = "Press %s to copy", TEXT_COPY_KEY = "Ctrl-C",
+    TEXT_CLOSE = "Close",
     TEXT_NEXT = "NEXT STEPS",
     TIP_DIM = 0.7,
     WHEEL_LINES = 2,
@@ -806,8 +809,26 @@ local function MaySkip()
     return mode == "click" or (mode == "shift" and IsShiftKeyDown())
 end
 
+-- A link or next-guide line takes a click as RestedXP's older window does; a
+-- Shift-click there still skips wherever Skipping Steps would skip.
+function Lines.Act(row)
+    local element = row.element
+    local kind, url = Rules.LineClick(element)
+    if not kind or (IsShiftKeyDown() and MaySkip()) then return false end
+    if kind == "link" then
+        KE:CreatePrompt(K.TEXT_LINK_TITLE, url, true, K.TEXT_LINK_HINT:format(KE:ColorTextByTheme(K.TEXT_COPY_KEY)),
+            false, nil, nil, nil, nil, nil, nil, nil, K.TEXT_CLOSE)
+        return true
+    end
+    -- RestedXP loads the next guide from the frame still bound to the line.
+    local frame, load = Dig(element, "frame"), Dig(_G.RXP, "functions", "next")
+    if Dig(frame, "element") == element and type(load) == "function" then Run("WindowNextGuide", load, frame) end
+    return true
+end
+
 local function StepClick(self, button)
     if button == "RightButton" then return Menu() end
+    if Lines.Act(self) then return end
     if MaySkip() then SkipStep(self.step) end
 end
 
@@ -822,7 +843,7 @@ local tipOwner
 
 -- One tooltip per hover, in one style: a cut line's full text, else the heading in
 -- the accent, then each key in white beside its action in gray.
-local function Tip(owner, heading, full, key, action, key2, action2)
+local function Tip(owner, heading, full, key, action, key2, action2, key3, action3)
     if not Option("Tips") or GameTooltip:IsForbidden() then return end
     GameTooltip:SetOwner(owner, K.TIP_ANCHOR)
     tipOwner = owner
@@ -835,6 +856,7 @@ local function Tip(owner, heading, full, key, action, key2, action2)
     local dim = K.TIP_DIM
     if key then GameTooltip:AddDoubleLine(key, action, 1, 1, 1, dim, dim, dim) end
     if key2 then GameTooltip:AddDoubleLine(key2, action2, 1, 1, 1, dim, dim, dim) end
+    if key3 then GameTooltip:AddDoubleLine(key3, action3, 1, 1, 1, dim, dim, dim) end
     GameTooltip:Show()
 end
 
@@ -851,13 +873,19 @@ local function StepHeading(step)
 end
 
 -- The words say what the click does, by the rule the click uses.
-local function StepTip(owner, step)
+local function StepTip(owner, step, element)
     local rxp = _G.RXP
     local progress = Has(rxp, "GetGuideProgress") and Run("WindowProgress", rxp.GetGuideProgress) or nil
     local key = SkipKey()
+    local skip = Rules.TagAlong(step, progress) and K.TEXT_HIDE or K.TEXT_SKIP
+    local kind = Rules.LineClick(element)
+    if kind then
+        local own = kind == "link" and K.TEXT_LINK or K.TEXT_NEXT_GUIDE
+        if not key then return Tip(owner, StepHeading(step), nil, K.KEY_CLICK, own, K.KEY_RIGHT, K.TEXT_MENU) end
+        return Tip(owner, StepHeading(step), nil, K.KEY_CLICK, own, K.KEY_SHIFT, skip, K.KEY_RIGHT, K.TEXT_MENU)
+    end
     if not key then return Tip(owner, StepHeading(step), nil, K.KEY_RIGHT, K.TEXT_MENU) end
-    Tip(owner, StepHeading(step), nil, key, Rules.TagAlong(step, progress) and K.TEXT_HIDE or K.TEXT_SKIP,
-        K.KEY_RIGHT, K.TEXT_MENU)
+    Tip(owner, StepHeading(step), nil, key, skip, K.KEY_RIGHT, K.TEXT_MENU)
 end
 
 -- A leave with no tooltip of this window's own leaves another owner's up. A row's
@@ -886,8 +914,10 @@ function Lines.Locked(element)
     return Secret(enabled) or enabled == false
 end
 
--- Only a line RestedXP's own checkbox can change rings and gives a hint.
+-- Only a line RestedXP's own checkbox can change rings and gives a hint; a link or
+-- next-guide line gives its line's hint.
 function Lines.Enter(hit)
+    if Rules.LineClick(hit.element) then return StepTip(hit, hit.step, hit.element) end
     local skip = Rules.LineSkip(hit.element, Lines.Locked(hit.element))
     if skip == nil then return end
     local accent = colors.accent
@@ -906,6 +936,8 @@ end
 -- it back. The rule runs again here, since the line can finish after the hover.
 function Lines.Click(hit, button)
     if button == "RightButton" then return Menu() end
+    -- The icon of a link or next-guide line answers as the rest of its line does.
+    if Rules.LineClick(hit.element) then return StepClick(hit:GetParent(), button) end
     local skip = Rules.LineSkip(hit.element, Lines.Locked(hit.element))
     if skip == nil then return end
     Lines.Mark(hit.element, skip)
@@ -1172,7 +1204,7 @@ local function MakeRow(holder)
     row:SetScript("OnHyperlinkLeave", LinkLeave)
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row:SetScript("OnClick", StepClick)
-    row:SetScript("OnEnter", function(self) StepTip(self.box or self, self.step) end)
+    row:SetScript("OnEnter", function(self) StepTip(self.box or self, self.step, self.element) end)
     row:SetScript("OnLeave", TipHide)
     row.icon = Text(row, K.ICON_SIZE)
     row.glyph = row:CreateTexture(nil, "OVERLAY")
@@ -1653,7 +1685,7 @@ end
 local function DrawRow(parent, row, x, y, width, first)
     local item = Pools().row:Acquire(parent)
     item.box = parent ~= window and parent or nil
-    item.step = row.step
+    item.step, item.element = row.step, row.element
     item:ClearAllPoints()
     item:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     item:SetWidth(width)
