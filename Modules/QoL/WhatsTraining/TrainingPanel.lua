@@ -141,7 +141,7 @@ end
 local function OfferLine(offer)
     if offer.isProfession then return "Uses a profession slot" end
     local entry = offer.id and T.plan and T.plan.entry[offer.id]
-    -- A pet trainer's or weapon master's row: the rank the window shows beside its name.
+    -- Any row with no planned-list entry: the rank the window shows beside its name.
     if not entry then return offer.rank or "" end
     local parts = {}
     local rank = C_Spell.GetSpellSubtext(entry.id)
@@ -215,6 +215,8 @@ local function OnRowClick(self, button)
     if not item then return end
     if item.kind == "section" then
         if item.action then
+            -- A stray right-click or shift-click must not untick every row.
+            if button ~= "LeftButton" or IsShiftKeyDown() then return end
             item.action()
             -- Its tooltip would still name the click just done.
             GameTooltip:Hide()
