@@ -839,10 +839,13 @@ local function CutText(fs)
     return fs:GetText()
 end
 
-local tipOwner, tipRule
+local tipOwner, tipRule, ruleShown
 
 local function HideRule()
-    if tipRule then tipRule:Hide() end
+    if not ruleShown then return end
+    ruleShown = false
+    tipRule:Hide()
+    tipRule:ClearAllPoints()
 end
 
 -- KE's tooltip divider over a line: made on first use, and hidden whenever the
@@ -861,6 +864,7 @@ local function ShowRule(index)
     tipRule:SetPoint("LEFT", line, "TOPLEFT", 0, K.RULE_RISE)
     tipRule:SetPoint("RIGHT", GameTooltip, "RIGHT", -K.RULE_INSET, 0)
     tipRule:Show()
+    ruleShown = true
 end
 
 -- One tooltip per hover, in one style: the heading in the accent and under it any full
