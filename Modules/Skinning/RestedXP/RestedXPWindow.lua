@@ -841,8 +841,9 @@ end
 
 local tipOwner
 
--- One tooltip per hover, in one style: the heading in the accent, a cut string's full
--- text in white, then each key in white beside its action in gray.
+-- One tooltip per hover, in one style: the heading in the accent and under it any full
+-- text in white, or that text alone with no heading; then each key in white beside its
+-- action in gray.
 local function Tip(owner, heading, full, key, action, key2, action2, key3, action3)
     if not Option("Tips") or GameTooltip:IsForbidden() then return end
     GameTooltip:SetOwner(owner, K.TIP_ANCHOR)
