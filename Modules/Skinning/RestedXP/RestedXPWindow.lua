@@ -68,7 +68,7 @@ local K = {
     TEXT_LINK_TITLE = "RestedXP link", TEXT_LINK_HINT = "Press %s to copy", TEXT_COPY_KEY = "Ctrl-C",
     TEXT_CLOSE = "Close",
     TEXT_NEXT = "NEXT STEPS",
-    TIP_DIM = 0.7, RULE_ALPHA = 0.15, RULE_RISE = 1, RULE_INSET = 9,
+    TIP_DIM = 0.7, RULE_ALPHA = 0.15, RULE_INSET = 9, TEXT_GAP = " ",
     WHEEL_LINES = 2,
     LABEL_LINES = 1,
     SCROLL_W = 2, SCROLL_GAP = 4, SCROLL_MIN = 12,
@@ -848,8 +848,8 @@ local function HideRule()
     tipRule:ClearAllPoints()
 end
 
--- KE's tooltip divider over a line: made on first use, and hidden whenever the
--- tooltip clears or hides, whoever owns it next.
+-- KE's tooltip divider across the middle of a blank line: made on first use, and hidden
+-- whenever the tooltip clears or hides, whoever owns it next.
 local function ShowRule(index)
     local line = GameTooltip:GetLeftLine(index)
     if not line then return end
@@ -861,7 +861,7 @@ local function ShowRule(index)
     end
     tipRule:SetHeight(KE:GetPixelSize())
     tipRule:ClearAllPoints()
-    tipRule:SetPoint("LEFT", line, "TOPLEFT", 0, K.RULE_RISE)
+    tipRule:SetPoint("LEFT", line, "LEFT")
     tipRule:SetPoint("RIGHT", GameTooltip, "RIGHT", -K.RULE_INSET, 0)
     tipRule:Show()
     ruleShown = true
@@ -882,12 +882,14 @@ local function Tip(owner, heading, full, key, action, key2, action2, key3, actio
     else
         GameTooltip:SetText(full, 1, 1, 1, 1, true)
     end
+    local ruled = heading and full and key
+    if ruled then GameTooltip:AddLine(K.TEXT_GAP) end
     local dim = K.TIP_DIM
     if key then GameTooltip:AddDoubleLine(key, action, 1, 1, 1, dim, dim, dim) end
     if key2 then GameTooltip:AddDoubleLine(key2, action2, 1, 1, 1, dim, dim, dim) end
     if key3 then GameTooltip:AddDoubleLine(key3, action3, 1, 1, 1, dim, dim, dim) end
     GameTooltip:Show()
-    if heading and full and key then ShowRule(3) end
+    if ruled then ShowRule(3) end
 end
 
 -- The key that skips a step, or nil with Skipping Steps off.
