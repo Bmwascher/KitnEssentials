@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.31
+
+### WoW Forever only
+
+- RestedXP Guides theme: the Guide Import popup now matches the theme,
+  larger, with Import and Imported guides cards, a status line and the
+  KitnUI bar
+
+---
+
 ## v4.16.30
 
 ### WoW Forever only
