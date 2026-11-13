@@ -33,6 +33,8 @@ local ROW_HEIGHT, SECTION_HEIGHT, ICON_SIZE = 30, 20, 22
 local NEED, GAP, PIN_INSET = 308, 8, 66
 local SCROLLBAR_ROOM, SWAP_NAMES_ROOM = 8, 30
 local SMALL_LINE_HEIGHT, ICON_TOP = 14, (ROW_HEIGHT - ICON_SIZE) / 2
+-- How far a row's name sits above its icon's top, and its second line below the icon's bottom.
+local LINE_SPREAD = 1
 local LINE_WIDTH, TEXT_GAP = WIDTH - 2 * PAD, 8
 local WEAPON_LINE_WIDTH = WIDTH - 2 * PAD - SCROLLBAR_ROOM - ICON_SIZE - 6
 local BOOK_BUTTON_WIDTH, BOOK_BUTTON_HEIGHT = 150, 26
@@ -324,10 +326,10 @@ local function LayoutSpellRow(row, hasBox, iconFile, dim)
     row.icon:ClearAllPoints()
     row.icon:SetPoint("LEFT", row, "LEFT", hasBox and 16 or 0, 0)
     row.name:ClearAllPoints()
-    row.name:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 6, 0)
+    row.name:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 6, LINE_SPREAD)
     row.name:SetPoint("RIGHT", row.price, "LEFT", -4, 0)
     row.sub:ClearAllPoints()
-    row.sub:SetPoint("BOTTOMLEFT", row.icon, "BOTTOMRIGHT", 6, 0)
+    row.sub:SetPoint("BOTTOMLEFT", row.icon, "BOTTOMRIGHT", 6, -LINE_SPREAD)
     row.sub:SetPoint("RIGHT", row.price, "LEFT", -4, 0)
     row.sub:Show()
     local alpha = dim and 0.5 or 1
@@ -398,8 +400,8 @@ local function FillRow(row, item)
         LayoutSpellRow(row, false, nil, false)
         row.icon:Hide()
         WidenSecondLine(row)
-        row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -2)
-        row.sub:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 2)
+        row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
+        row.sub:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 1)
         row.name:SetText("Level " .. item.group.level .. T.Paint("muted", " (" .. #item.group.rows .. ")"))
         row.sub:SetText(item.balance)
         return ROW_HEIGHT
@@ -413,7 +415,7 @@ local function FillRow(row, item)
         -- The icon and name keep the places a one-line row gives them.
         row.icon:ClearAllPoints()
         row.icon:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -ICON_TOP)
-        row.sub:SetPoint("BOTTOMLEFT", row.icon, "BOTTOMRIGHT", 6, -SMALL_LINE_HEIGHT)
+        row.sub:SetPoint("BOTTOMLEFT", row.icon, "BOTTOMRIGHT", 6, -SMALL_LINE_HEIGHT - LINE_SPREAD)
         return ROW_HEIGHT + SMALL_LINE_HEIGHT
     end
     if item.kind == "offer" then
