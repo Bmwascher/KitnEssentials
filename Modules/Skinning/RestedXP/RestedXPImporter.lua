@@ -202,6 +202,21 @@ local function Span(region, frame, place)
     region:SetHeight(Snap(place[4]))
 end
 
+-- An open list keeps the width it opened with, so a scale change closes it first.
+local function CloseList(dropdown)
+    if dropdown and dropdown.open and Has(dropdown.pullout, "Close") then dropdown.pullout:Close() end
+end
+
+-- RestedXP grows its popup about its center; the restore anchors it there again,
+-- where it stands on screen.
+local function Center(frame)
+    local x, y = frame:GetCenter()
+    local ux, uy = UIParent:GetCenter()
+    if not (x and ux) then return end
+    frame:ClearAllPoints()
+    frame:SetPoint("CENTER", UIParent, "CENTER", x - ux, y - uy)
+end
+
 -- The popup's top left on the grid, so every place measured from it lands there too.
 local function Pin(frame)
     local left, top = frame:GetLeft(), frame:GetTop()
@@ -403,6 +418,7 @@ end
 local function Dress(w, importer, frame)
     if not home.rule then Build(w, importer, frame) end
     dressed = true
+    CloseList(w.currentGuides)
     Rescale(frame, K.SCALE)
     Pin(frame)
     local pullout = Dig(w.currentGuides, "pullout", "frame")
@@ -573,7 +589,9 @@ local function Restore()
     local importer = Dig(w, "import")
     local frame = Dig(importer, "frame")
     if not frame then return end
+    CloseList(w.currentGuides)
     Rescale(frame, 1)
+    Center(frame)
     local pullout = Dig(w.currentGuides, "pullout", "frame")
     if pullout and home.pullout then pullout:SetScale(home.pullout) end
     if Has(w.currentGuides, "SetPulloutWidth") then w.currentGuides:SetPulloutWidth(nil) end
