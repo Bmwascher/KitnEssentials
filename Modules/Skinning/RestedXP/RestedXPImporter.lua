@@ -648,10 +648,9 @@ local function Paint()
     end
     px = KE:GetPixelSize() / K.SCALE
     if not dressed then Dress(w, importer, frame) end
-    if not colors then
-        colors = Theme.WindowColors()
-        Refont(importer.title:GetFont())
-    end
+    -- A confirm's paint can read the colors first, so the font is checked apart.
+    colors = colors or Theme.WindowColors()
+    Refont(importer.title:GetFont())
     local theme, text, muted, accent = KE.Theme, colors.text, colors.muted, colors.accent
 
     Layout(w, frame)
@@ -801,7 +800,11 @@ end
 
 -- A confirm already open at a start or a recolor; the paint skips a hidden one.
 local function RepaintConfirms()
-    for popup in pairs(confirms) do OnConfirm(popup) end
+    local w = Widgets()
+    if not w then return end
+    for _, key in ipairs(CONFIRM_KEYS) do
+        if w[key] then OnConfirm(w[key]) end
+    end
 end
 
 function Importer.Start()
