@@ -1,8 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Modules/Skinning/RestedXP/RestedXPImporter.lua          ║
--- ║  Purpose: RestedXP's Guide Import popup in KE's look:    ║
+-- ║  Purpose: RestedXP's Guide Import popup and its          ║
+-- ║           Purge and Remove confirms in KE's look:        ║
 -- ║           larger, in two cards, with a state chip, on    ║
--- ║           RestedXP's own frame and widgets.              ║
+-- ║           RestedXP's own frames and widgets.             ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -41,6 +42,7 @@ local K = {
     RELOAD = { 26, 204, 220, 24 }, PURGE = { 254, 204, 220, 24 },
     BAR_AT = { 18, 261, 18, 8 }, STATUS_LIFT = 5,
     HEIGHT = 282, HISTORY_PAD = 10,
+    CONFIRM_TITLE_X = 8,
     DANGER = { 1, 0.35, 0.29, 1 },
     TEXT_IMPORT = "IMPORT", TEXT_GUIDES = "IMPORTED GUIDES",
     TEXT_HINT = "Paste a guide string here (Ctrl+V)",
@@ -58,12 +60,16 @@ local K = {
 }
 local BUTTON_KEYS = { "importButton", "importSplicedString", "purgeButton", "reloadButton", "deleteButton" }
 local HIDDEN_KEYS = { "importLabel", "guidesLabel", "progressLabel" }
+-- RestedXP's Purge and Remove confirms: one popup type, Yes first and No second.
+local CONFIRM_KEYS = { "purgeConfirmation", "deleteConfirmation" }
 
 local active, hooked, dressed, colors, px, idleShown
 -- RestedXP's frames this file gave hover scripts, to what each one is.
 local owned = setmetatable({}, { __mode = "k" })
 -- What RestedXP had before the first dress, and what this file added.
 local home = { points = {} }
+-- Each confirm popup this file has readied, to its own regions and kept places.
+local confirms = {}
 
 local function Widgets()
     return Dig(_G.RXP, "guideImporter", "widgets")
@@ -163,15 +169,40 @@ local function Own(frame, kind)
     owned[frame] = kind
 end
 
+-- KE's cross on a RestedXP close button, and RestedXP's own art back on it.
+local function Cross(close, frame)
+    close:SetNormalTexture(K.CROSS)
+    close:SetPushedTexture(K.CROSS)
+    close:GetNormalTexture():SetRotation(math_rad(K.CROSS_TURN))
+    close:GetPushedTexture():SetRotation(math_rad(K.CROSS_TURN))
+    close:SetSize(K.CROSS_SIZE, K.CROSS_SIZE)
+    close:ClearAllPoints()
+    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -K.CROSS_INSET, -K.CROSS_INSET)
+    Unlit(close, 0)
+    Own(close, "cross")
+end
+
+local function Uncross(close, art)
+    close:SetNormalTexture(art)
+    close:SetPushedTexture(art)
+    for _, texture in ipairs({ close:GetNormalTexture(), close:GetPushedTexture() }) do
+        texture:SetRotation(0)
+        texture:SetDesaturated(false)
+        texture:SetVertexColor(1, 1, 1, 1)
+    end
+    Unlit(close, 1)
+end
+
 ---------------------------------------------------------------------------------
 -- Places
 ---------------------------------------------------------------------------------
 -- Kept once, at the first dress, and put back by the restore.
-local function Keep(region)
-    if not region or home.points[region] then return end
+local function Keep(region, points)
+    points = points or home.points
+    if not region or points[region] then return end
     local kept = { width = region:GetWidth(), height = region:GetHeight() }
     for i = 1, region:GetNumPoints() do kept[i] = { region:GetPoint(i) } end
-    home.points[region] = kept
+    points[region] = kept
 end
 
 -- A font string sizes to its text, so only frames take their kept size back.
@@ -316,6 +347,137 @@ local function Hint(edit)
 end
 
 ---------------------------------------------------------------------------------
+-- Confirms: RestedXP's Purge and Remove popups, at the import popup's scale
+---------------------------------------------------------------------------------
+-- RestedXP does not keep the close button: it is the one button child that is
+-- neither Yes nor No.
+local function FindClose(frame, buttons)
+    for _, child in ipairs({ frame:GetChildren() }) do
+        if child:IsObjectType("Button") and child ~= buttons[1] and child ~= buttons[2] then return child end
+    end
+end
+
+-- RestedXP themes a confirm when it makes it, so its backdrop is there from then.
+local function Confirmable(popup)
+    local frame = popup and popup.frame
+    return Has(popup, "UpdateSubTheme") and frame and popup.title and popup.message and popup.buttons
+        and popup.buttons[2] and frame.rxpBackground and Dig(frame, "rxpBorder", "textures", 4) and true or false
+end
+
+local OnConfirm
+
+-- Each confirm keeps what it needs to be painted and put back, whether or not the
+-- import popup was ever dressed. A refresh while one is shown repaints it; its show
+-- repaints it after RestedXP's.
+local function ConfirmBuild(popup)
+    local frame = popup.frame
+    local edge = frame.rxpBorder.textures[1]
+    local look = { points = {}, close = FindClose(frame, popup.buttons) }
+    look.edge, look.snap, look.bias = edge:GetHeight(), edge:IsSnappingToPixelGrid(), edge:GetTexelSnappingBias()
+    -- RestedXP's fill frame shares this frame's level, so its order against regions
+    -- drawn here is not fixed; it is hidden and this fill takes its place.
+    look.fill = frame:CreateTexture(nil, "BACKGROUND")
+    look.fill:SetAllPoints()
+    look.band = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
+    look.rule = frame:CreateTexture(nil, "ARTWORK")
+    look.rule:SetPoint("TOPLEFT", look.band, "BOTTOMLEFT")
+    look.rule:SetPoint("TOPRIGHT", look.band, "BOTTOMRIGHT")
+    for _, region in ipairs({ look.fill, look.band, look.rule }) do region:Hide() end
+    Keep(popup.title, look.points)
+    Keep(look.close, look.points)
+    local art = look.close and look.close:GetNormalTexture()
+    look.art = art and art:GetTexture()
+    confirms[popup] = look
+
+    hooksecurefunc(popup, "UpdateSubTheme", OnConfirm)
+    frame:HookScript("OnShow", function() OnConfirm(popup) end)
+    frame:HookScript("OnDragStop", function(self)
+        if active and look.dressed then Run("ConfirmPin", Pin, self) end
+    end)
+    return look
+end
+
+-- Runs after RestedXP's own repaint, which comes with every show.
+local function ConfirmPaint(popup)
+    if not (active and Confirmable(popup) and popup.frame:IsShown()) then return end
+    local frame, buttons = popup.frame, popup.buttons
+    local look = confirms[popup] or ConfirmBuild(popup)
+    local close = look.close
+    if not close then return end
+    px = KE:GetPixelSize() / K.SCALE
+    colors = colors or Theme.WindowColors()
+    if not look.dressed then
+        look.dressed = true
+        Rescale(frame, K.SCALE)
+        Pin(frame)
+        if frame.rxpShadow then frame.rxpShadow:Hide() end
+        frame.rxpBackground:Hide()
+        for _, region in ipairs({ look.fill, look.band, look.rule }) do region:Show() end
+        Cross(close, frame)
+        for _, button in ipairs(buttons) do
+            Unlit(button, 0)
+            Own(button, "button")
+        end
+    end
+
+    -- It sits over the import popup, so its panel is opaque.
+    local panel = colors.panel or KE.db.profile.SkinRestedXP.PanelColor
+    look.fill:SetColorTexture(panel[1], panel[2], panel[3], 1)
+    local band, line = KE.Theme.bgMedium, colors.line
+    look.band:ClearAllPoints()
+    look.band:SetPoint("TOPLEFT", frame, "TOPLEFT", px, -px)
+    look.band:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -px, -px)
+    look.band:SetHeight(Snap(K.HEADER))
+    look.band:SetColorTexture(band[1], band[2], band[3], 1)
+    look.rule:SetHeight(px)
+    look.rule:SetColorTexture(line[1], line[2], line[3], line[4])
+    Loose(look.rule)
+    for _, texture in ipairs(frame.rxpBorder.textures) do Color(texture, colors.border) end
+    Edges(frame, px)
+
+    popup.title:ClearAllPoints()
+    popup.title:SetPoint("LEFT", look.band, "LEFT", K.CONFIRM_TITLE_X, 0)
+    Ink(popup.title, colors.accent)
+    Ink(popup.message, colors.text)
+    Lit(close, "cross", close:IsMouseOver())
+    for i, button in ipairs(buttons) do
+        Lit(button, "button", button:IsMouseOver())
+        if button.text then Ink(button.text, i == 1 and K.DANGER or colors.text) end
+    end
+end
+
+local function ConfirmRestore(popup, look)
+    if not look.dressed then return end
+    look.dressed = false
+    local frame = popup.frame
+    Unscale(frame)
+    if frame.rxpShadow then frame.rxpShadow:Show() end
+    frame.rxpBackground:Show()
+    for _, region in ipairs({ look.fill, look.band, look.rule }) do region:Hide() end
+    for region, kept in pairs(look.points) do PutBack(region, kept) end
+    Uncross(look.close, look.art)
+    for _, button in ipairs(popup.buttons) do
+        Unlit(button, 1)
+        Edges(button, look.edge, look.snap, look.bias)
+    end
+    Edges(frame, look.edge, look.snap, look.bias)
+    Run("ConfirmRepaint", popup.UpdateSubTheme, popup)
+end
+
+OnConfirm = function(popup)
+    if active then Run("ConfirmPaint", ConfirmPaint, popup) end
+end
+
+-- RestedXP makes both confirms with the import popup, so its first dress readies them
+-- for their first show.
+local function HookConfirms(w)
+    for _, key in ipairs(CONFIRM_KEYS) do
+        local popup = w[key]
+        if not confirms[popup] and Confirmable(popup) then ConfirmBuild(popup) end
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Dress: once per start, on the first paint with the popup shown
 ---------------------------------------------------------------------------------
 local function Label(parent, size, justify)
@@ -425,6 +587,7 @@ local function Build(w, importer, frame)
     frame:HookScript("OnDragStop", function(self)
         if active and dressed then Run("ImporterPin", Pin, self) end
     end)
+    HookConfirms(w)
 end
 
 local function Dress(w, importer, frame)
@@ -462,16 +625,7 @@ local function Dress(w, importer, frame)
         w.purgeButton:SetText(K.TEXT_PURGE)
     end
 
-    local close = importer.closebutton
-    close:SetNormalTexture(K.CROSS)
-    close:SetPushedTexture(K.CROSS)
-    close:GetNormalTexture():SetRotation(math_rad(K.CROSS_TURN))
-    close:GetPushedTexture():SetRotation(math_rad(K.CROSS_TURN))
-    close:SetSize(K.CROSS_SIZE, K.CROSS_SIZE)
-    close:ClearAllPoints()
-    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -K.CROSS_INSET, -K.CROSS_INSET)
-    Unlit(close, 0)
-    Own(close, "cross")
+    Cross(importer.closebutton, frame)
 
     w.progress:SetStatusBarTexture(KE:GetStatusbarPath(K.BAR))
     w.progress:GetStatusBarTexture():SetDrawLayer("ARTWORK")
@@ -504,10 +658,9 @@ local function Paint()
     end
     px = KE:GetPixelSize() / K.SCALE
     if not dressed then Dress(w, importer, frame) end
-    if not colors then
-        colors = Theme.WindowColors()
-        Refont(importer.title:GetFont())
-    end
+    -- A confirm's paint can read the colors first, so the font is checked apart.
+    colors = colors or Theme.WindowColors()
+    Refont(importer.title:GetFont())
     local theme, text, muted, accent = KE.Theme, colors.text, colors.muted, colors.accent
 
     Layout(w, frame)
@@ -629,15 +782,7 @@ local function Restore()
         idleShown = false
     end
 
-    local close = importer.closebutton
-    close:SetNormalTexture(home.close)
-    close:SetPushedTexture(home.close)
-    for _, texture in ipairs({ close:GetNormalTexture(), close:GetPushedTexture() }) do
-        texture:SetRotation(0)
-        texture:SetDesaturated(false)
-        texture:SetVertexColor(1, 1, 1, 1)
-    end
-    Unlit(close, 1)
+    Uncross(importer.closebutton, home.close)
 
     for _, key in ipairs(BUTTON_KEYS) do
         Unlit(w[key].frame, 1)
@@ -663,6 +808,15 @@ local function Repaint()
     if active then Run("ImporterPaint", Paint) end
 end
 
+-- A confirm already open at a start or a recolor; the paint skips a hidden one.
+local function RepaintConfirms()
+    local w = Widgets()
+    if not w then return end
+    for _, key in ipairs(CONFIRM_KEYS) do
+        if w[key] then OnConfirm(w[key]) end
+    end
+end
+
 function Importer.Start()
     if active then return end
     local guideImporter = Dig(_G.RXP, "guideImporter")
@@ -676,12 +830,14 @@ function Importer.Start()
         if Has(v2, "ApplyDropdownTheme") then hooksecurefunc(v2, "ApplyDropdownTheme", OnDropdownTheme) end
     end
     Repaint()
+    RepaintConfirms()
 end
 
 function Importer.Stop()
     if not active then return end
     active = false
     Run("ImporterRestore", Restore)
+    for popup, look in pairs(confirms) do Run("ConfirmRestore", ConfirmRestore, popup, look) end
 end
 
 -- The colors are read at start, here, and at each show of the popup.
@@ -689,5 +845,6 @@ function Importer.Recolor()
     if not active then return end
     colors = nil
     Repaint()
+    RepaintConfirms()
 end
 
