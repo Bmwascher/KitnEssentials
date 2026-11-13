@@ -108,8 +108,8 @@ local function Unlit(button, alpha)
     if glow then glow:SetAlpha(alpha) end
 end
 
--- A button lifts its plate and takes an accent edge under the mouse; Import keeps an
--- accent edge whenever it can import; the cross and the arrow turn the accent.
+-- Under the mouse a button takes KE's lighter plate and an accent edge; Import keeps
+-- an accent edge whenever it can import; the cross and the arrow turn the accent.
 local function Lit(frame, kind, hover)
     local on = frame:IsEnabled()
     hover = hover and on
@@ -238,9 +238,16 @@ local function State()
     return K.TEXT_WAITING, colors.muted, true
 end
 
-local function Hint()
-    local edit = Dig(Widgets(), "importBox", "editBox")
-    if not (home.hint and edit) then return end
+-- The edit box's scripts pass it in; a paste can run this once per character, and
+-- the box has focus then.
+local function Hint(edit)
+    if not home.hint then return end
+    if edit and edit:HasFocus() then
+        home.hint:Hide()
+        return
+    end
+    edit = edit or Dig(Widgets(), "importBox", "editBox")
+    if not edit then return end
     home.hint:SetShown(active and dressed and edit:GetText() == "" and not edit:HasFocus())
 end
 
@@ -535,6 +542,7 @@ local function Restore()
     close:SetPushedTexture(home.close)
     for _, texture in ipairs({ close:GetNormalTexture(), close:GetPushedTexture() }) do
         texture:SetRotation(0)
+        texture:SetDesaturated(false)
         texture:SetVertexColor(1, 1, 1, 1)
     end
     Unlit(close, 1)
