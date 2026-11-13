@@ -27,7 +27,7 @@ T.Panel = Panel
 
 local WIDTH, ALONE_HEIGHT = 300, 643
 local HEADER_HEIGHT, SEARCH_HEIGHT, PAD = 32, 22, 8
-local MAX_STOPS, HAIRLINE_GAP, LADDER_GAP, READ_GAP = 3, 3, 8, 4
+local MAX_STOPS, HAIRLINE_GAP, LADDER_GAP, READ_GAP, GOLD_END_GAP = 3, 3, 8, 4, 4
 local GOLD_RULE_INSET = 2
 local ROW_HEIGHT, SECTION_HEIGHT, ICON_SIZE = 30, 20, 22
 local NEED, GAP, PIN_INSET = 308, 8, 66
@@ -646,7 +646,8 @@ local function DrawLadder(plan, top)
             block.goldEndRule:SetPoint("TOPRIGHT", block, "TOPRIGHT", 0, -top)
             block.goldEnd:Show()
             block.goldEndRule:Show()
-            top = top + SMALL_LINE_HEIGHT
+            -- Rules.Ladder puts this line only before a stop, so the gap always has one below it.
+            top = top + SMALL_LINE_HEIGHT + GOLD_END_GAP
         else
             used = used + 1
             local stop = block.stops[used]
