@@ -134,14 +134,16 @@ function Learn.Footer()
     local mark = unknown > 0 and "~" or ""
     local leaves = left >= 0 and ("Leaves " .. mark .. Learn.CostText(left)) or (mark .. Learn.CostText(-left) .. " short")
     local count = #planned
-    local label = Rules.LearnLabel(count, Learn.CostText(plannedCost), #ticked, unknown)
+    local label, canBuy = Rules.LearnLabel(count, Learn.CostText(plannedCost), #ticked, unknown, IsPetTrainer())
     local pickedText = "Picked " .. Learn.CostText(picked)
     if unknown > 0 then pickedText = pickedText .. " + " .. unknown .. " unpriced" end
     quoted = planned
-    return pickedText, leaves, label, count > 0
+    return pickedText, leaves, label, canBuy
 end
 
 function Learn.Buy()
+    -- The game refuses an addon's purchase at a Beast Training window; only its own Train button buys there.
+    if IsPetTrainer() then return end
     if InCombatLockdown() then
         KE:Print("Learn does nothing in combat. Buy after the fight.")
         return

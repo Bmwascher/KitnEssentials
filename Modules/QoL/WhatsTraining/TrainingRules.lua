@@ -632,13 +632,16 @@ function Rules.OfferStands(offer, name, kind, level, cost)
         and (level or 0) == offer.level and cost == offer.cost
 end
 
--- With nothing to buy it says why, and a row with no price is not called out of reach.
-function Rules.LearnLabel(count, costText, ticked, unknown)
-    if count > 0 then return ("Learn %d for %s"):format(count, costText) end
-    if ticked == 0 then return "Nothing picked" end
-    if unknown == ticked then return "No priced spell picked" end
-    if unknown > 0 then return "No priced spell you can afford" end
-    return "Nothing you can afford"
+-- The button's words, and whether it can be clicked. With nothing to buy it says why,
+-- and a row with no price is not called out of reach. The game refuses an addon's
+-- purchase at a Beast Training window, so there the panel plans and never buys.
+function Rules.LearnLabel(count, costText, ticked, unknown, petWindow)
+    if petWindow then return "Train in the pet window", false end
+    if count > 0 then return ("Learn %d for %s"):format(count, costText), true end
+    if ticked == 0 then return "Nothing picked", false end
+    if unknown == ticked then return "No priced spell picked", false end
+    if unknown > 0 then return "No priced spell you can afford", false end
+    return "Nothing you can afford", false
 end
 
 -- earlier: "quest" or "elsewhere" when this window does not list the earlier rank.

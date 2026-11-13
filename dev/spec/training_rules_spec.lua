@@ -655,15 +655,16 @@ describe("What's Training rules", function()
         end
     end)
 
-    it("LearnLabel says why nothing can be bought, and claims nothing about an unknown price", function()
+    it("LearnLabel says why nothing can be bought, claims nothing about an unknown price, and never buys at a Beast Training window", function()
         for _, row in ipairs({
-            { name = "a plan", count = 2, ticked = 3, unknown = 1, want = "Learn 2 for 300" },
-            { name = "nothing ticked", count = 0, ticked = 0, unknown = 0, want = "Nothing picked" },
-            { name = "only unknown prices", count = 0, ticked = 2, unknown = 2, want = "No priced spell picked" },
-            { name = "both, none fits", count = 0, ticked = 2, unknown = 1, want = "No priced spell you can afford" },
-            { name = "priced, none fits", count = 0, ticked = 2, unknown = 0, want = "Nothing you can afford" },
+            { name = "a Beast Training window, a plan", count = 1, ticked = 1, unknown = 0, pet = true, want = { "Train in the pet window", false } },
+            { name = "a plan", count = 2, ticked = 3, unknown = 1, want = { "Learn 2 for 300", true } },
+            { name = "nothing ticked", count = 0, ticked = 0, unknown = 0, want = { "Nothing picked", false } },
+            { name = "only unknown prices", count = 0, ticked = 2, unknown = 2, want = { "No priced spell picked", false } },
+            { name = "both, none fits", count = 0, ticked = 2, unknown = 1, want = { "No priced spell you can afford", false } },
+            { name = "priced, none fits", count = 0, ticked = 2, unknown = 0, want = { "Nothing you can afford", false } },
         }) do
-            assert.equals(row.want, Rules.LearnLabel(row.count, "300", row.ticked, row.unknown), row.name)
+            assert.same(row.want, { Rules.LearnLabel(row.count, "300", row.ticked, row.unknown, row.pet) }, row.name)
         end
     end)
 

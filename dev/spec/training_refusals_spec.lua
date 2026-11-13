@@ -68,7 +68,7 @@ describe("What's Training Update Bars", function()
 end)
 
 describe("What's Training Learn", function()
-    it("buys last index first, only out of combat, and never more than the button quoted", function()
+    it("buys last index first, only out of combat, never more than the button quoted, and never at a Beast Training window", function()
         for _, row in ipairs({
             { name = "out of combat", want = { 2, 1 } },
             { name = "in combat", combat = true, want = {}, says = "combat" },
@@ -77,6 +77,7 @@ describe("What's Training Learn", function()
             { name = "money that rose after the quote", money = 100, moneyNow = 300, want = { 1 } },
             { name = "money that fell after the quote", moneyNow = 100, want = { 1 } },
             { name = "no quote shown yet", noQuote = true, want = {} },
+            { name = "a Beast Training window", pet = true, want = {} },
         }) do
             local KE = newKE()
             local bought = {}
@@ -88,6 +89,9 @@ describe("What's Training Learn", function()
             _G.BuyTrainerService = function(index) bought[#bought + 1] = index end
             _G.GetTrainerServiceInfo = function(index) return names[index], "available", 100001, 4 end
             _G.GetTrainerServiceCost = function(index) return costs[index], false end
+            _G.Enum.TrainerType = { General = 0, Pet = 3 }
+            _G.C_Trainer = { GetTrainerType = function() return row.pet and 3 or 0 end }
+            _G.C_PetInfo = { GetPetTrainingPoints = function() return money, 0 end }
             helpers.loadModule("Modules/QoL/WhatsTraining/TrainingLearn.lua", KE)
             local Learn = KE.Training.Learn
             local services = {}
