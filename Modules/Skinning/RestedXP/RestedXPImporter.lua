@@ -440,6 +440,11 @@ local function Dress(w, importer, frame)
     end
     -- KE's 1-pixel edge reads as a band over RestedXP's soft shadow.
     if frame.rxpShadow then frame.rxpShadow:Hide() end
+    -- KE's Ace3 dark skin plates the dropdown's template, which draws a second, inset
+    -- box inside this field.
+    local skins = KE.Skins
+    home.plate = Has(skins, "GetBackdrop") and skins.GetBackdrop(w.currentGuides.dropdown) or nil
+    if home.plate then home.plate:Hide() end
     for _, part in ipairs({ home.rule, home.rim, home.k, home.version }) do part:Show() end
     ShowCards(true)
 
@@ -608,6 +613,7 @@ local function Restore()
     if Has(w.currentGuides, "SetPulloutWidth") then w.currentGuides:SetPulloutWidth(nil) end
     if home.width then w.import:SetWidth(home.width) end
     if frame.rxpShadow then frame.rxpShadow:Show() end
+    if home.plate then home.plate:Show() end
     for _, part in ipairs({ home.rule, home.rim, home.k, home.version, home.hint }) do part:Hide() end
     ShowCards(false)
     for region, kept in pairs(home.points) do PutBack(region, kept) end
