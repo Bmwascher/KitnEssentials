@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.32
+
+### WoW Forever only
+
+- **NEW:** What's Training, in Quality of Life, off by default. A panel
+  lists every spell your class still has to learn, what each one costs,
+  and whether your gold covers the next trainer visit. It sits beside the
+  spellbook or a trainer, or opens alone with /kes training
+- Learn from it at any trainer, where it replaces Train All while it is
+  on. At your pet's Beast Training window it plans what the training
+  points cover, and Blizzard's Train button buys
+- A level-up shows a toast and a chat line, and old ranks on your bars
+  swap only when you click
+
+---
+
 ## v4.16.31
 
 ### WoW Forever only
