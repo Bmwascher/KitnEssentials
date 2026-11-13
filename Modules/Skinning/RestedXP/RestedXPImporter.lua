@@ -8,9 +8,9 @@
 ---@class KE
 local KE = select(2, ...)
 
-local GetLocale, hooksecurefunc = GetLocale, hooksecurefunc
+local GetLocale, hooksecurefunc, UIParent = GetLocale, hooksecurefunc, UIParent
 local ipairs, pairs, setmetatable, type = ipairs, pairs, setmetatable, type
-local math_rad, tonumber = math.rad, tonumber
+local floor, math_rad, tonumber = math.floor, math.rad, tonumber
 
 local Safe, Theme = KE.RestedXPSafe, KE.RestedXPTheme
 local Has, Dig, Run = Safe.Has, Safe.Dig, Safe.Run
@@ -31,7 +31,9 @@ local K = {
     BAND = 14, BAND_ALPHA = 0.92, BAND_TEXT_X = 6, CARD_ALPHA = 0.55,
     LABEL_SIZE = 8, HINT_SIZE = 9,
     CARD_IMPORT = { 18, 28, 464, 112 }, CARD_GUIDES = { 18, 150, 464, 86 },
-    PASTE = { 26, 44, 26, 58 },
+    WIDTH = 500, HEADER = 18,
+    -- The paste box's frame, and its field: RestedXP insets the field 4 units.
+    PASTE = { 26, 44, 26, 58 }, FIELD = { 26, 48, 26, 50 },
     IMPORT = { 26, 106, 296, 24 }, IMPORT_ALONE = 448, SPLICE = { 330, 106, 144, 24 },
     LIST = { 26, 172, 154, 24 }, DELETE = { 354, 172, 120, 24 },
     -- The open list draws a little smaller than the popup, at the field's width.
@@ -179,19 +181,33 @@ local function PutBack(region, kept)
     if region:GetObjectType() ~= "FontString" then region:SetSize(kept.width, kept.height) end
 end
 
+-- A place on the physical pixel grid at the popup's scale, where px is one pixel. A
+-- 1-pixel edge on a half pixel draws two pixels or none, snapped or not.
+local function Snap(v)
+    return floor(v / px + 0.5) * px
+end
+
 local function At(region, frame, x, y, width, height)
     region:ClearAllPoints()
-    region:SetPoint("TOPLEFT", frame, "TOPLEFT", x, -y)
-    if width then region:SetWidth(width) end
-    if height then region:SetHeight(height) end
+    region:SetPoint("TOPLEFT", frame, "TOPLEFT", Snap(x), -Snap(y))
+    if width then region:SetWidth(Snap(width)) end
+    if height then region:SetHeight(Snap(height)) end
 end
 
 -- Spans the popup between a left and a right inset.
 local function Span(region, frame, place)
     region:ClearAllPoints()
-    region:SetPoint("TOPLEFT", frame, "TOPLEFT", place[1], -place[2])
-    region:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -place[3], -place[2])
-    region:SetHeight(place[4])
+    region:SetPoint("TOPLEFT", frame, "TOPLEFT", Snap(place[1]), -Snap(place[2]))
+    region:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -Snap(place[3]), -Snap(place[2]))
+    region:SetHeight(Snap(place[4]))
+end
+
+-- The popup's top left on the grid, so every place measured from it lands there too.
+local function Pin(frame)
+    local left, top = frame:GetLeft(), frame:GetTop()
+    if not (left and top) then return end
+    frame:ClearAllPoints()
+    frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", Snap(left), Snap(top))
 end
 
 -- A scale change keeps a dragged popup where it is on screen.
@@ -205,7 +221,18 @@ local function Rescale(frame, scale)
 end
 
 local function Layout(w, frame)
+    w.import:SetWidth(Snap(K.WIDTH))
+    local header = frame.importerHeader
+    header:ClearAllPoints()
+    header:SetPoint("TOPLEFT", frame, "TOPLEFT", px, -px)
+    header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -px, -px)
+    header:SetHeight(Snap(K.HEADER))
+    for i, card in ipairs(home.cards) do
+        local place = i == 1 and K.CARD_IMPORT or K.CARD_GUIDES
+        At(card.fill, frame, place[1], place[2], place[3], place[4])
+    end
     Span(w.importBox.frame, frame, K.PASTE)
+    Span(w.importBox.background, frame, K.FIELD)
     local import, splice = w.importButton.frame, w.importSplicedString.frame
     At(import, frame, K.IMPORT[1], K.IMPORT[2], splice:IsShown() and K.IMPORT[3] or K.IMPORT_ALONE, K.IMPORT[4])
     At(splice, frame, K.SPLICE[1], K.SPLICE[2], K.SPLICE[3], K.SPLICE[4])
@@ -224,7 +251,7 @@ local function Layout(w, frame)
     w.import.description:Hide()
     local history = w.history
     local extra = history and history:IsShown() and history:GetHeight() + K.HISTORY_PAD or 0
-    w.import:SetHeight(K.HEIGHT + extra)
+    w.import:SetHeight(Snap(K.HEIGHT + extra))
 end
 
 ---------------------------------------------------------------------------------
@@ -333,7 +360,9 @@ local function Build(w, importer, frame)
     home.edge, home.snap, home.bias = edge:GetHeight(), edge:IsSnappingToPixelGrid(), edge:GetTexelSnappingBias()
     home.title = importer.title:GetText()
     home.reload, home.purge = w.reloadButton.text:GetText(), w.purgeButton.text:GetText()
-    for _, region in ipairs({ close, importer.title, w.importBox.frame, w.importButton.frame,
+    home.width = frame:GetWidth()
+    for _, region in ipairs({ close, importer.title, frame.importerHeader, w.importBox.frame,
+        w.importBox.background, w.importButton.frame,
         w.importSplicedString.frame, w.currentGuides.frame, w.deleteButton.frame, w.reloadButton.frame,
         w.purgeButton.frame, w.progress, w.progressText }) do
         Keep(region)
@@ -366,12 +395,16 @@ local function Build(w, importer, frame)
     -- RestedXP's open refreshes the popup again after its show, which then reads the
     -- colors fresh.
     frame:HookScript("OnShow", function() colors = nil end)
+    frame:HookScript("OnDragStop", function(self)
+        if active and dressed then Run("ImporterPin", Pin, self) end
+    end)
 end
 
 local function Dress(w, importer, frame)
     if not home.rule then Build(w, importer, frame) end
     dressed = true
     Rescale(frame, K.SCALE)
+    Pin(frame)
     local pullout = Dig(w.currentGuides, "pullout", "frame")
     if pullout then
         home.pullout = home.pullout or pullout:GetScale()
@@ -424,7 +457,7 @@ end
 ---------------------------------------------------------------------------------
 -- Runs after every RestedXP refresh of the shown popup: its open, its repaint, a
 -- focus or a pick, and each import step. RestedXP imports one guide per frame and
--- refreshes after each, so during an import this runs once a frame: about 160
+-- refreshes after each, so during an import this runs once a frame: about 250
 -- setters, a count of the saved guides and no table made, beside RestedXP's own
 -- refresh, which rebuilds the dropdown's list every time.
 local function Paint()
@@ -436,12 +469,12 @@ local function Paint()
             and w.currentGuides.button and w.deleteButton and w.importSplicedString) then
         return
     end
+    px = KE:GetPixelSize() / K.SCALE
     if not dressed then Dress(w, importer, frame) end
     if not colors then
         colors = Theme.WindowColors()
         Refont(importer.title:GetFont())
     end
-    px = KE:GetPixelSize() / K.SCALE
     local theme, text, muted, accent = KE.Theme, colors.text, colors.muted, colors.accent
 
     Layout(w, frame)
@@ -457,7 +490,9 @@ local function Paint()
     Edges(frame, px)
     local line = colors.line
     home.rule:SetHeight(px)
+    -- SetColorTexture turns the grid snap back on, so each recolor turns it off.
     home.rule:SetColorTexture(line[1], line[2], line[3], line[4])
+    Loose(home.rule)
     Color(home.rim, muted)
     Color(home.k, accent)
     Ink(importer.title, accent)
@@ -469,6 +504,7 @@ local function Paint()
         card.band:SetColorTexture(band[1], band[2], band[3], K.BAND_ALPHA)
         for i, side in ipairs(card.edges) do
             side:SetColorTexture(edge[1], edge[2], edge[3], 1)
+            Loose(side)
             if i <= 2 then side:SetHeight(px) else side:SetWidth(px) end
         end
         Ink(card.title, muted)
@@ -541,6 +577,7 @@ local function Restore()
     local pullout = Dig(w.currentGuides, "pullout", "frame")
     if pullout and home.pullout then pullout:SetScale(home.pullout) end
     if Has(w.currentGuides, "SetPulloutWidth") then w.currentGuides:SetPulloutWidth(nil) end
+    if home.width then w.import:SetWidth(home.width) end
     if frame.rxpShadow then frame.rxpShadow:Show() end
     for _, part in ipairs({ home.rule, home.rim, home.k, home.version, home.hint }) do part:Hide() end
     ShowCards(false)
