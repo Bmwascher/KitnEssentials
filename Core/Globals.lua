@@ -322,6 +322,7 @@ local HELP_ENTRIES = {
     { text = "mt [clearsplits]", feature = "MythicPlusTimer" },
     { text = "skins [verify | rerun <key>]", feature = "SkinAPI" },
     { text = "trash", feature = "DungeonTrash" },
+    { text = "training", feature = "WhatsTraining" },
     { text = "conflicts" },
     { text = "resetgui" },
 }
@@ -368,6 +369,16 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
             dm:HandleSlash(dmRest)
         end
         return
+    end
+
+    -- /kes training toggles the What's Training panel. A client without the
+    -- module falls through to the usual text.
+    if msg:lower() == "training" then
+        local training = KitnEssentials and KitnEssentials:GetModule("WhatsTraining", true)
+        if training then
+            training:HandleSlash()
+            return
+        end
     end
 
     -- /kes mt opens the Mythic+ Timer GUI page (matches /kes dm's module route).

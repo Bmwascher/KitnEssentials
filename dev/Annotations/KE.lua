@@ -215,6 +215,9 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field CCTrackerRules table
 ---@field ScoutRules table
 ---@field ScoutData table
+---@field TrainingRules table
+---@field Training table
+---@field TrainingOwnsTrainer fun(): boolean
 ---@field DataSources table<string, string>
 ---@field BuildData fun(name: string): table?, string?
 ---@field CC_TRACKER_SEEDS table

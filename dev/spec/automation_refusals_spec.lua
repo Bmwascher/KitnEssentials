@@ -755,6 +755,41 @@ describe("Automation effective-state predicates (Task 3 Step 10b)", function()
         end)
     end
 
+    describe("Train All beside a feature that owns the trainer window", function()
+        for _, path in ipairs(paths) do
+            if path.key == "TrainAllButton" then
+                for _, owner in ipairs({
+                    { label = "an owner answering true refuses", fn = function() return true end, active = false },
+                    { label = "an owner answering false acts", fn = function() return false end, active = true },
+                    { label = "no owner acts", active = true },
+                }) do
+                    it(path.name .. ": " .. owner.label, function()
+                        local fx = installedFixture()
+                        local captured = path.capture(fx)
+                        assert.is_not_nil(captured)
+                        normalizeAndClear(fx)
+                        fx.KE.TrainingOwnsTrainer = owner.fn
+                        path.check(fx, captured, owner.active)
+                    end)
+                end
+            end
+        end
+
+        it("RefreshTrainAll hides the button when an owner appears and returns it when the owner goes", function()
+            local fx = installedFixture()
+            normalizeAndClear(fx)
+            fx.KE.TrainingOwnsTrainer = function() return true end
+            fx.AU:RefreshTrainAll()
+            assert.equals(1, fx.findFrameCalls("KE_TrainAllButton", "Hide"))
+            assert.equals(0, fx.findFrameCalls("KE_TrainAllButton", "Show"))
+            fx.clearLedger()
+            fx.KE.TrainingOwnsTrainer = nil
+            fx.AU:RefreshTrainAll()
+            assert.is_true(fx.findFrameCalls("KE_TrainAllButton", "Show") >= 1)
+            assert.is_true(fx.AU.db.TrainAllButton)
+        end)
+    end)
+
     -- OmniumRefreshShown: not capturable (nothing stores a handle to it, and
     -- SetupOmniumButton is a file-local a spec cannot call either). Reached
     -- through TeardownPorts for the master-off state (ApplySettings returns

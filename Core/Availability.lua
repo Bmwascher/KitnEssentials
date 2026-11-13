@@ -193,6 +193,8 @@ local FOREVER_ALLOWED = {
     SkinRestedXPGeneral = true,
     SkinRestedXPArrow = true,
     SkinRestedXPWindow = true,
+    -- QoL: What's Training, Forever only.
+    WhatsTraining = true,
     -- The Forever-only check id; see FOREVER_ONLY.
     ForeverOnlyProbe = true,
     SwingTimer = true,
@@ -206,6 +208,7 @@ local FOREVER_ONLY = {
     SkinRestedXPGeneral = true,
     SkinRestedXPArrow = true,
     SkinRestedXPWindow = true,
+    WhatsTraining = true,
     ForeverOnlyProbe = true,
     Campfire = true,
     Scout = true,

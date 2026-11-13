@@ -949,7 +949,8 @@ GUIFrame:RegisterContent("AutomationVendors", function(scrollChild, yOffset)
 
         local trainAllCheck = GUIFrame:CreateCheckbox(row2, "Train All Button", {
             value = db.TrainAllButton == true,
-            tooltip = "Adds a Train All button to the class trainer window that buys every skill you can afford, respecting your gold and free profession slots.",
+            tooltip = "Adds a Train All button to the class trainer window that buys every skill you can afford, respecting your gold and free profession slots."
+                .. (KE:IsBaselineLoad() and " Hidden while What's Training is on: its Learn button does this job." or ""),
             callback = function(checked) db.TrainAllButton = checked; ApplySettings() end,
         })
         row2:AddWidget(trainAllCheck, 0.5)

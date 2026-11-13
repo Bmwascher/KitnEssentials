@@ -3257,6 +3257,15 @@ if KE.BASELINE_LOAD then
         DetailsKey = "ctrl",
         DetailsPosition = "above",
     }
+    Defaults.profile.WhatsTraining = {
+        Enabled = false,
+        OpenWithBook = true,
+        Toast = true,
+        ChatLine = true,
+        RankSwap = true,
+        Position = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -300, YOffset = 0 },
+        ToastPosition = { AnchorFrom = "TOP", AnchorTo = "TOP", XOffset = 0, YOffset = -140 },
+    }
 end
 
 -- Copies, never aliases: each module saves its own list, and one shipped

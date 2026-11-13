@@ -2677,8 +2677,16 @@ end
 
 local trainBtn
 local trainAllInstalled = false
+
+-- A feature that buys from the trainer window itself stands in for this button.
+-- The owner is absent on a client that does not load it.
+local function TrainAllWanted()
+    if not (AU.db.Enabled and AU.db.TrainAllButton) then return false end
+    return not (KE.TrainingOwnsTrainer and KE.TrainingOwnsTrainer())
+end
+
 local function SetupTrainAllButton()
-    local on = AU.db.Enabled and AU.db.TrainAllButton
+    local on = TrainAllWanted()
 
     if not trainAllInstalled then
         if not on then return end
@@ -2717,7 +2725,7 @@ local function SetupTrainAllButton()
 
         local function RefreshButton()
             if not trainBtn then return end
-            if not (AU.db.Enabled and AU.db.TrainAllButton) then
+            if not TrainAllWanted() then
                 trainBtn:Hide(); return
             end
             local n = TrainableSummary()
@@ -2726,7 +2734,7 @@ local function SetupTrainAllButton()
         end
 
         local function SpawnButton()
-            if not (AU.db.Enabled and AU.db.TrainAllButton) then return end
+            if not TrainAllWanted() then return end
             if not ClassTrainerFrame or not ClassTrainerTrainButton then return end
             if trainBtn then trainBtn:Show(); RefreshButton(); return end
 
@@ -2795,6 +2803,12 @@ local function SetupTrainAllButton()
     else
         if trainBtn then trainBtn:Hide() end
     end
+end
+
+-- For a feature that changes who owns the trainer window. ApplySettings would
+-- rerun every other setup in this module.
+function AU:RefreshTrainAll()
+    SetupTrainAllButton()
 end
 
 -- Hide Transform Items --

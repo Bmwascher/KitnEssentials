@@ -88,6 +88,14 @@
     <Script file="QoL\Campfire\Campfire.lua" />
     <Script file="QoL\Scout\ScoutRules.lua" />
     <Script file="QoL\Scout\Scout.lua" />
+    <Script file="QoL\WhatsTraining\TrainingRules.lua" />
+    <Script file="QoL\WhatsTraining\TrainingRead.lua" />
+    <Script file="QoL\WhatsTraining\TrainingWaypoints.lua" />
+    <Script file="QoL\WhatsTraining\TrainingRankSwap.lua" />
+    <Script file="QoL\WhatsTraining\TrainingLearn.lua" />
+    <Script file="QoL\WhatsTraining\TrainingPanel.lua" />
+    <Script file="QoL\WhatsTraining\TrainingToast.lua" />
+    <Script file="QoL\WhatsTraining\WhatsTraining.lua" />
     <Script file="Skinning\SkinAPI.lua" />
     <Script file="Skinning\DarkTheme\EUIWindows.lua" />
     <Script file="Skinning\DarkTheme\Dialogs.lua" />
