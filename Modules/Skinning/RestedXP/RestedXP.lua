@@ -21,6 +21,7 @@ local pairs, pcall, type = pairs, pcall, type
 
 local Safe, Rules, Theme = KE.RestedXPSafe, KE.RestedXPRules, KE.RestedXPTheme
 local Arrow, Icons, Setup, Window = KE.RestedXPArrow, KE.RestedXPIcons, KE.RestedXPSetup, KE.RestedXPWindow
+local Importer = KE.RestedXPImporter
 
 local RXP_ADDON = "RXPGuides"
 local PART_SITES = {
@@ -29,6 +30,7 @@ local PART_SITES = {
     Icons = "icons table",
     Setup = "saved profile",
     Window = "guide window calls",
+    Importer = "guide import calls",
 }
 local TEXT_ICONS_BACK = "RestedXP's own step icons come back after a reload."
 local TEXT_ICONS_COLOR = "RestedXP's step icons take the new color after a reload."
@@ -100,6 +102,7 @@ local function StartParts(self)
     else
         Window.Stop()
     end
+    if self.parts.Importer then Importer.Start() end
     -- This Character's line reads the window.
     if Window.IsActive() ~= wasRunning then Setup.ProfileChanged() end
 end
@@ -143,6 +146,7 @@ function M:ThemeChanged()
     if self.parts.Theme then asked = Theme.Refresh() end
     Arrow.Paint()
     Window.Recolor()
+    Importer.Recolor()
     if not asked then AskIfIconsStale() end
 end
 
@@ -168,6 +172,7 @@ function M:ResetToDefaults()
 end
 
 function M:OnDisable()
+    Importer.Stop()
     Window.Stop()
     Arrow.Stop()
     Setup.RestoreTheme()

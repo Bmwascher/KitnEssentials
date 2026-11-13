@@ -646,11 +646,12 @@ describe("restedxp rules", function()
                 arrowFrame = { texture = {}, text = {}, UpdateVisuals = Call },
                 v2 = { IsGuideWindowEnabled = Call, BuildGuideStepsSnapshot = Call },
                 RXPFrame = { activeSteps = {} },
+                guideImporter = { UpdateImportUI = Call, UpdateTheme = Call },
             }
         end
 
         local all = Rules.Parts(Full())
-        assert.same({ Theme = true, Arrow = true, Icons = true, Setup = true, Window = true }, all)
+        assert.same({ Theme = true, Arrow = true, Icons = true, Setup = true, Window = true, Importer = true }, all)
 
         for _, row in ipairs({
             { name = "RegisterTheme", off = "Theme", cut = function(r) r.RegisterTheme = nil end },
@@ -661,6 +662,7 @@ describe("restedxp rules", function()
             { name = "profile name", off = "Setup", cut = function(r) r.settings.GetSettingsDB = nil end },
             { name = "snapshot", off = "Window", cut = function(r) r.v2.BuildGuideStepsSnapshot = nil end },
             { name = "active steps", off = "Window", cut = function(r) r.RXPFrame.activeSteps = nil end },
+            { name = "import refresh", off = "Importer", cut = function(r) r.guideImporter.UpdateImportUI = nil end },
         }) do
             local rxp = Full()
             row.cut(rxp)

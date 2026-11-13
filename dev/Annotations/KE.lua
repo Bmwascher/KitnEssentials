@@ -238,6 +238,7 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field RestedXPSetup table
 ---@field RestedXPWindowModel table
 ---@field RestedXPWindow table
+---@field RestedXPImporter table
 ---@field PositionCardRules table
 ---@field DOT_TRACKER_SEEDS table
 ---@field CDMIcons table

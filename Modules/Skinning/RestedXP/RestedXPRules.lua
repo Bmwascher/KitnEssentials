@@ -506,6 +506,7 @@ function Rules.Parts(rxp)
     local v2 = Dig(rxp, "v2")
     local settings = Dig(rxp, "settings")
     local hasProfile = type(Dig(settings, "profile")) == "table"
+    local importer = Dig(rxp, "guideImporter")
     return {
         Theme = Has(rxp, "RegisterTheme") and Has(rxp, "ReloadTheme") and hasProfile,
         Arrow = Has(arrow, "UpdateVisuals") and type(Dig(arrow, "texture")) == "table"
@@ -515,6 +516,7 @@ function Rules.Parts(rxp)
         Window = Has(v2, "IsGuideWindowEnabled") and Has(v2, "BuildGuideStepsSnapshot")
             and Has(rxp, "GetGuideProgress") and Has(rxp, "SetStep")
             and type(Dig(rxp, "RXPFrame", "activeSteps")) == "table",
+        Importer = Has(importer, "UpdateImportUI") and Has(importer, "UpdateTheme"),
     }
 end
 
