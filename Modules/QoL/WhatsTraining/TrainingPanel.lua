@@ -1182,7 +1182,11 @@ function Panel.InstallTrainer()
     trainer:HookScript("OnShow", function()
         if T.active then C_Timer.After(0, Panel.Refresh) end
     end)
+    -- A trainer window opened by a spell closes with no TRAINER_CLOSED. The handler's
+    -- guard makes whichever of this hook and the event comes second do nothing.
     trainer:HookScript("OnHide", function()
-        if T.active then C_Timer.After(0, Panel.Refresh) end
+        if not T.active then return end
+        T.module:TRAINER_CLOSED()
+        C_Timer.After(0, Panel.Refresh)
     end)
 end
