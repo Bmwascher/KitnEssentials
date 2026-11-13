@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.33
+
+### WoW Forever only
+
+- RestedXP Guides theme: the Purge and Remove confirmations from the
+  Guide Import popup now match the theme, at the popup's size, with Yes
+  in red
+
+---
+
 ## v4.16.32
 
 ### WoW Forever only
