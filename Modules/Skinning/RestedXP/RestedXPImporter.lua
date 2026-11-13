@@ -401,7 +401,7 @@ end
 ---------------------------------------------------------------------------------
 -- Runs after every RestedXP refresh of the shown popup: its open, its repaint, a
 -- focus or a pick, and each import step. RestedXP imports one guide per frame and
--- refreshes after each, so during an import this runs once a frame: about 110
+-- refreshes after each, so during an import this runs once a frame: about 160
 -- setters, a count of the saved guides and no table made, beside RestedXP's own
 -- refresh, which rebuilds the dropdown's list every time.
 local function Paint()
@@ -458,11 +458,14 @@ local function Paint()
     Ink(home.hint, muted)
     Hint()
 
+    -- RestedXP owns the status line; the idle words fill it only while it is empty.
     local status = w.progressText
-    if idle and (status:GetText() or "") == "" then
+    local current = status:GetText() or ""
+    if current ~= K.TEXT_IDLE then idleShown = false end
+    if idle and current == "" then
         status:SetText(K.TEXT_IDLE)
         idleShown = true
-    elseif idleShown and not idle and status:GetText() == K.TEXT_IDLE then
+    elseif idleShown and not idle then
         status:SetText("")
         idleShown = false
     end
