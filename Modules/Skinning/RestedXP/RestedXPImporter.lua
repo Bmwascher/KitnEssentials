@@ -68,7 +68,7 @@ local active, hooked, dressed, colors, px, idleShown
 local owned = setmetatable({}, { __mode = "k" })
 -- What RestedXP had before the first dress, and what this file added.
 local home = { points = {} }
--- Each confirm popup this file has painted, to its own regions and kept places.
+-- Each confirm popup this file has readied, to its own regions and kept places.
 local confirms = {}
 
 local function Widgets()
