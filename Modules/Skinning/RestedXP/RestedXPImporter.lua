@@ -36,7 +36,7 @@ local K = {
     LIST = { 26, 172, 154, 24 }, DELETE = { 354, 172, 120, 24 },
     -- The open list draws a little smaller than the popup, at the field's width.
     LIST_SCALE = 1.2,
-    RELOAD = { 26, 204, 140, 24 }, PURGE = { 334, 204, 140, 24 },
+    RELOAD = { 26, 204, 220, 24 }, PURGE = { 254, 204, 220, 24 },
     BAR_AT = { 18, 261, 18, 8 }, STATUS_LIFT = 5,
     HEIGHT = 282, HISTORY_PAD = 10,
     DANGER = { 1, 0.35, 0.29, 1 },
