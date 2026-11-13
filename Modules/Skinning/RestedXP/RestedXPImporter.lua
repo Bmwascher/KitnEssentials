@@ -284,6 +284,21 @@ local function Card(frame, place, words)
     return card
 end
 
+-- RestedXP's theme font, at each show and recolor.
+local function Refont(path)
+    if not path or path == home.font then return end
+    home.font = path
+    local labels = { home.version, home.hint }
+    for _, card in ipairs(home.cards) do
+        labels[#labels + 1] = card.title
+        labels[#labels + 1] = card.chip
+    end
+    for _, label in ipairs(labels) do
+        local _, size = label:GetFont()
+        label:SetFont(path, size or K.LABEL_SIZE, "")
+    end
+end
+
 local function ShowCards(shown)
     for _, card in ipairs(home.cards) do
         for _, region in ipairs(card.regions) do region:SetShown(shown) end
@@ -399,7 +414,10 @@ local function Paint()
         return
     end
     if not dressed then Dress(w, importer, frame) end
-    colors = colors or Theme.WindowColors()
+    if not colors then
+        colors = Theme.WindowColors()
+        Refont(importer.title:GetFont())
+    end
     px = KE:GetPixelSize() / K.SCALE
     local theme, text, muted, accent = KE.Theme, colors.text, colors.muted, colors.accent
 
@@ -443,12 +461,12 @@ local function Paint()
     local status = w.progressText
     if idle and (status:GetText() or "") == "" then
         status:SetText(K.TEXT_IDLE)
-        Ink(status, muted)
         idleShown = true
     elseif idleShown and not idle and status:GetText() == K.TEXT_IDLE then
         status:SetText("")
         idleShown = false
     end
+    if idleShown then Ink(status, muted) end
 
     Box(w.importBox.background, theme.bgMedium, theme.border)
     Box(w.currentGuides.frame, theme.bgMedium, theme.border)
