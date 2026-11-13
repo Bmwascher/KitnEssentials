@@ -29,11 +29,13 @@ local K = {
     CROSS_SIZE = 12, CROSS_INSET = 3, CROSS_TURN = 45,
     MARK_SIZE = 14, MARK_X = 4, TITLE_X = 22, VERSION_X = 20,
     BAND = 14, BAND_ALPHA = 0.92, BAND_TEXT_X = 6, CARD_ALPHA = 0.55,
-    LABEL_SIZE = 8, HINT_SIZE = 9, HINT_X = 8,
+    LABEL_SIZE = 8, HINT_SIZE = 9,
     CARD_IMPORT = { 18, 28, 464, 112 }, CARD_GUIDES = { 18, 150, 464, 86 },
     PASTE = { 26, 44, 26, 58 },
     IMPORT = { 26, 106, 296, 24 }, IMPORT_ALONE = 448, SPLICE = { 330, 106, 144, 24 },
-    LIST = { 26, 172, 122, 24 }, DELETE = { 386, 172, 88, 24 },
+    LIST = { 26, 172, 154, 24 }, DELETE = { 354, 172, 120, 24 },
+    -- The open list draws a little smaller than the popup, at the field's width.
+    LIST_SCALE = 1.2,
     RELOAD = { 26, 204, 140, 24 }, PURGE = { 334, 204, 140, 24 },
     BAR_AT = { 18, 261, 18, 8 }, STATUS_LIFT = 5,
     HEIGHT = 282, HISTORY_PAD = 10,
@@ -73,14 +75,23 @@ local function Ink(text, color)
     text:SetTextColor(color[1], color[2], color[3], color[4] or 1)
 end
 
+-- KE's borders: one physical pixel, never snapped to the grid, which at a
+-- fractional scale draws some sides two pixels wide and drops others.
+local function Loose(texture, snap, bias)
+    texture:SetTexelSnappingBias(bias or 0)
+    texture:SetSnapToPixelGrid(snap or false)
+end
+
 -- RestedXP's backdrop is a fill frame and four edge textures: top, bottom, left, right.
-local function Edges(frame, size)
+-- With no snap given they take KE's; the restore passes RestedXP's back.
+local function Edges(frame, size, snap, bias)
     local edges = Dig(frame, "rxpBorder", "textures")
     if not (edges and edges[4]) then return end
     edges[1]:SetHeight(size)
     edges[2]:SetHeight(size)
     edges[3]:SetWidth(size)
     edges[4]:SetWidth(size)
+    for _, edge in ipairs(edges) do Loose(edge, snap, bias) end
 end
 
 local function Box(frame, fill, edge)
@@ -278,6 +289,7 @@ local function Card(frame, place, words)
     card.edges = {}
     for i, side in ipairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
         local edge = Add(frame:CreateTexture(nil, "BORDER"))
+        Loose(edge)
         local across = side == "TOP" or side == "BOTTOM"
         edge:SetPoint(across and side .. "LEFT" or "TOP" .. side, card.fill)
         edge:SetPoint(across and side .. "RIGHT" or "BOTTOM" .. side, card.fill)
@@ -317,7 +329,8 @@ local function Build(w, importer, frame)
     home.font = importer.title:GetFont()
     home.close = close:GetNormalTexture():GetTexture()
     home.bar = w.progress:GetStatusBarTexture():GetTexture()
-    home.edge = Dig(frame, "rxpBorder", "textures", 1):GetHeight()
+    local edge = Dig(frame, "rxpBorder", "textures", 1)
+    home.edge, home.snap, home.bias = edge:GetHeight(), edge:IsSnappingToPixelGrid(), edge:GetTexelSnappingBias()
     home.title = importer.title:GetText()
     home.reload, home.purge = w.reloadButton.text:GetText(), w.purgeButton.text:GetText()
     for _, region in ipairs({ close, importer.title, w.importBox.frame, w.importButton.frame,
@@ -328,6 +341,7 @@ local function Build(w, importer, frame)
 
     local header = frame.importerHeader
     home.rule = frame:CreateTexture(nil, "ARTWORK")
+    Loose(home.rule)
     home.rule:SetPoint("TOPLEFT", header, "BOTTOMLEFT")
     home.rule:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT")
     home.rim = frame:CreateTexture(nil, "OVERLAY")
@@ -343,8 +357,8 @@ local function Build(w, importer, frame)
     home.cards = { Card(frame, K.CARD_IMPORT, K.TEXT_IMPORT), Card(frame, K.CARD_GUIDES, K.TEXT_GUIDES) }
 
     local edit = w.importBox.editBox
-    home.hint = Label(edit, K.HINT_SIZE, "LEFT")
-    home.hint:SetPoint("LEFT", edit, "LEFT", K.HINT_X, 0)
+    home.hint = Label(edit, K.HINT_SIZE, "CENTER")
+    home.hint:SetPoint("CENTER", edit, "CENTER")
     home.hint:SetText(K.TEXT_HINT)
     for _, script in ipairs({ "OnEditFocusGained", "OnEditFocusLost", "OnTextChanged" }) do
         edit:HookScript(script, Hint)
@@ -361,8 +375,10 @@ local function Dress(w, importer, frame)
     local pullout = Dig(w.currentGuides, "pullout", "frame")
     if pullout then
         home.pullout = home.pullout or pullout:GetScale()
-        pullout:SetScale(K.SCALE)
+        pullout:SetScale(K.LIST_SCALE)
     end
+    -- KE's 1-pixel edge reads as a band over RestedXP's soft shadow.
+    if frame.rxpShadow then frame.rxpShadow:Hide() end
     for _, part in ipairs({ home.rule, home.rim, home.k, home.version }) do part:Show() end
     ShowCards(true)
 
@@ -429,6 +445,8 @@ local function Paint()
     local theme, text, muted, accent = KE.Theme, colors.text, colors.muted, colors.accent
 
     Layout(w, frame)
+    local list = w.currentGuides
+    if Has(list, "SetPulloutWidth") then list:SetPulloutWidth(list.frame:GetWidth() * K.SCALE / K.LIST_SCALE) end
     local panel = colors.panel or KE.db.profile.SkinRestedXP.PanelColor
     frame.importerBackground:SetColorTexture(panel[1], panel[2], panel[3], panel[4] or 1)
     if frame.importerBody then frame.importerBody:SetColorTexture(panel[1], panel[2], panel[3], panel[4] or 1) end
@@ -522,6 +540,8 @@ local function Restore()
     Rescale(frame, 1)
     local pullout = Dig(w.currentGuides, "pullout", "frame")
     if pullout and home.pullout then pullout:SetScale(home.pullout) end
+    if Has(w.currentGuides, "SetPulloutWidth") then w.currentGuides:SetPulloutWidth(nil) end
+    if frame.rxpShadow then frame.rxpShadow:Show() end
     for _, part in ipairs({ home.rule, home.rim, home.k, home.version, home.hint }) do part:Hide() end
     ShowCards(false)
     for region, kept in pairs(home.points) do PutBack(region, kept) end
@@ -549,13 +569,13 @@ local function Restore()
 
     for _, key in ipairs(BUTTON_KEYS) do
         Unlit(w[key].frame, 1)
-        Edges(w[key].frame, home.edge)
+        Edges(w[key].frame, home.edge, home.snap, home.bias)
     end
     local arrow = w.currentGuides.button
     Unlit(arrow, 1)
     Tint(arrow, K.WHITE, false)
     for _, boxed in ipairs({ frame, w.importBox.background, w.currentGuides.frame, w.progress }) do
-        Edges(boxed, home.edge)
+        Edges(boxed, home.edge, home.snap, home.bias)
     end
     w.progress:SetStatusBarTexture(home.bar)
     w.progress:GetStatusBarTexture():SetDrawLayer("ARTWORK")
