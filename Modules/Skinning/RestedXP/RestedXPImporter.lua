@@ -207,16 +207,6 @@ local function CloseList(dropdown)
     if dropdown and dropdown.open and Has(dropdown.pullout, "Close") then dropdown.pullout:Close() end
 end
 
--- RestedXP grows its popup about its center; the restore anchors it there again,
--- where it stands on screen.
-local function Center(frame)
-    local x, y = frame:GetCenter()
-    local ux, uy = UIParent:GetCenter()
-    if not (x and ux) then return end
-    frame:ClearAllPoints()
-    frame:SetPoint("CENTER", UIParent, "CENTER", x - ux, y - uy)
-end
-
 -- The popup's top left on the grid, so every place measured from it lands there too.
 local function Pin(frame)
     local left, top = frame:GetLeft(), frame:GetTop()
@@ -235,6 +225,19 @@ local function Rescale(frame, scale)
     for _, p in ipairs(points) do frame:SetPoint(p[1], p[2], p[3], (p[4] or 0) * ratio, (p[5] or 0) * ratio) end
 end
 
+-- Back to scale 1, anchored by its center the way RestedXP grows it, with that center
+-- kept where it stands on screen. The center is read at the old scale, whose units
+-- times the scale are UIParent's.
+local function Unscale(frame)
+    local x, y = frame:GetCenter()
+    local ux, uy = UIParent:GetCenter()
+    if not (x and ux) then return Rescale(frame, 1) end
+    local scale = frame:GetScale()
+    frame:SetScale(1)
+    frame:ClearAllPoints()
+    frame:SetPoint("CENTER", UIParent, "CENTER", x * scale - ux, y * scale - uy)
+end
+
 local function Layout(w, frame)
     w.import:SetWidth(Snap(K.WIDTH))
     local header = frame.importerHeader
@@ -242,6 +245,14 @@ local function Layout(w, frame)
     header:SetPoint("TOPLEFT", frame, "TOPLEFT", px, -px)
     header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -px, -px)
     header:SetHeight(Snap(K.HEADER))
+    -- RestedXP insets its body fill 1 unit, half a pixel past the 1-pixel edge here.
+    local body = frame.importerBody
+    if body then
+        body:ClearAllPoints()
+        body:SetPoint("TOPLEFT", header, "BOTTOMLEFT")
+        body:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT")
+        body:SetPoint("BOTTOM", frame, "BOTTOM", 0, px)
+    end
     for i, card in ipairs(home.cards) do
         local place = i == 1 and K.CARD_IMPORT or K.CARD_GUIDES
         At(card.fill, frame, place[1], place[2], place[3], place[4])
@@ -382,6 +393,7 @@ local function Build(w, importer, frame)
         w.purgeButton.frame, w.progress, w.progressText }) do
         Keep(region)
     end
+    Keep(frame.importerBody)
 
     local header = frame.importerHeader
     home.rule = frame:CreateTexture(nil, "ARTWORK")
@@ -590,8 +602,7 @@ local function Restore()
     local frame = Dig(importer, "frame")
     if not frame then return end
     CloseList(w.currentGuides)
-    Rescale(frame, 1)
-    Center(frame)
+    Unscale(frame)
     local pullout = Dig(w.currentGuides, "pullout", "frame")
     if pullout and home.pullout then pullout:SetScale(home.pullout) end
     if Has(w.currentGuides, "SetPulloutWidth") then w.currentGuides:SetPulloutWidth(nil) end
