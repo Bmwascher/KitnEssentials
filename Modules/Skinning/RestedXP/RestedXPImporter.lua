@@ -357,9 +357,23 @@ local function FindClose(frame, buttons)
     end
 end
 
+-- RestedXP themes a confirm when it makes it, so its backdrop is there from then.
+local function Confirmable(popup)
+    local frame = popup and popup.frame
+    return Has(popup, "UpdateSubTheme") and frame and popup.title and popup.message and popup.buttons
+        and popup.buttons[2] and frame.rxpBackground and Dig(frame, "rxpBorder", "textures", 4) and true or false
+end
+
+local OnConfirm
+
+-- Each confirm keeps what it needs to be painted and put back, whether or not the
+-- import popup was ever dressed. A refresh while one is shown repaints it; its show
+-- repaints it after RestedXP's.
 local function ConfirmBuild(popup)
     local frame = popup.frame
+    local edge = frame.rxpBorder.textures[1]
     local look = { points = {}, close = FindClose(frame, popup.buttons) }
+    look.edge, look.snap, look.bias = edge:GetHeight(), edge:IsSnappingToPixelGrid(), edge:GetTexelSnappingBias()
     -- RestedXP's fill frame shares this frame's level, so its order against regions
     -- drawn here is not fixed; it is hidden and this fill takes its place.
     look.fill = frame:CreateTexture(nil, "BACKGROUND")
@@ -368,21 +382,25 @@ local function ConfirmBuild(popup)
     look.rule = frame:CreateTexture(nil, "ARTWORK")
     look.rule:SetPoint("TOPLEFT", look.band, "BOTTOMLEFT")
     look.rule:SetPoint("TOPRIGHT", look.band, "BOTTOMRIGHT")
+    for _, region in ipairs({ look.fill, look.band, look.rule }) do region:Hide() end
     Keep(popup.title, look.points)
     Keep(look.close, look.points)
     local art = look.close and look.close:GetNormalTexture()
     look.art = art and art:GetTexture()
     confirms[popup] = look
+
+    hooksecurefunc(popup, "UpdateSubTheme", OnConfirm)
+    frame:HookScript("OnShow", function() OnConfirm(popup) end)
+    frame:HookScript("OnDragStop", function(self)
+        if active and look.dressed then Run("ConfirmPin", Pin, self) end
+    end)
     return look
 end
 
 -- Runs after RestedXP's own repaint, which comes with every show.
 local function ConfirmPaint(popup)
+    if not (active and Confirmable(popup) and popup.frame:IsShown()) then return end
     local frame, buttons = popup.frame, popup.buttons
-    if not (active and frame and frame:IsShown() and popup.title and popup.message and buttons and buttons[2]
-            and frame.rxpBackground and Dig(frame, "rxpBorder", "textures", 4)) then
-        return
-    end
     local look = confirms[popup] or ConfirmBuild(popup)
     local close = look.close
     if not close then return end
@@ -440,30 +458,22 @@ local function ConfirmRestore(popup, look)
     Uncross(look.close, look.art)
     for _, button in ipairs(popup.buttons) do
         Unlit(button, 1)
-        Edges(button, home.edge, home.snap, home.bias)
+        Edges(button, look.edge, look.snap, look.bias)
     end
-    Edges(frame, home.edge, home.snap, home.bias)
+    Edges(frame, look.edge, look.snap, look.bias)
     Run("ConfirmRepaint", popup.UpdateSubTheme, popup)
 end
 
-local function OnConfirm(popup)
+OnConfirm = function(popup)
     if active then Run("ConfirmPaint", ConfirmPaint, popup) end
 end
 
--- RestedXP makes both confirms with the import popup, so its first dress hooks them.
--- A refresh while one is shown repaints it; its show repaints it after RestedXP's.
+-- RestedXP makes both confirms with the import popup, so its first dress readies them
+-- for their first show.
 local function HookConfirms(w)
     for _, key in ipairs(CONFIRM_KEYS) do
         local popup = w[key]
-        local frame = popup and popup.frame
-        if Has(popup, "UpdateSubTheme") and frame then
-            hooksecurefunc(popup, "UpdateSubTheme", OnConfirm)
-            frame:HookScript("OnShow", function() OnConfirm(popup) end)
-            frame:HookScript("OnDragStop", function(self)
-                local look = confirms[popup]
-                if active and look and look.dressed then Run("ConfirmPin", Pin, self) end
-            end)
-        end
+        if not confirms[popup] and Confirmable(popup) then ConfirmBuild(popup) end
     end
 end
 
