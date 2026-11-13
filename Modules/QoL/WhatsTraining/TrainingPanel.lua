@@ -109,8 +109,8 @@ local function SectionTotal(section)
 end
 
 local function BalanceText(copper, approx, unpriced, gold)
-    local short, text = Rules.Balance(copper, approx, unpriced, gold, T.Coins)
-    return short and T.Paint("amber", text) or text
+    local _, text = Rules.Balance(copper, approx, unpriced, gold, T.Coins, T.Paint)
+    return text
 end
 
 local function PriceText(entry)
@@ -479,7 +479,8 @@ local function AddText(items, text)
 end
 
 local function AddGoldLine(items, plan)
-    AddText(items, T.Paint("amber", "your " .. T.Coins(plan.gold) .. " ends here, priced spells"))
+    -- Only the words take the warning color, so the amount reads in its coin colors.
+    AddText(items, T.Paint("amber", "your ") .. T.Coins(plan.gold) .. T.Paint("amber", " ends here, priced spells"))
     items[#items].rule = true
 end
 

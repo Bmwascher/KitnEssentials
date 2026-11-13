@@ -301,14 +301,14 @@ describe("What's Training rules", function()
         assert.equals(1, gated.priced[1][2])
     end)
 
-    it("Balance says what the gold leaves or lacks, with the cost's mark and its unpriced count", function()
+    it("Balance says what the gold leaves or lacks, with the cost's mark and its unpriced count, and paints only a shortfall's words", function()
         local function coins(copper) return tostring(copper) end
         for _, row in ipairs({
             { name = "spare", copper = 100, gold = 150, short = false, want = "50 spare" },
-            { name = "short, marked, unpriced", copper = 300, approx = true, unpriced = 3, gold = 100, short = true, want = "~200 short + 3 unpriced" },
+            { name = "short, marked, unpriced", copper = 300, approx = true, unpriced = 3, gold = 100, short = true, want = "~200<amber: short + 3 unpriced>" },
             { name = "even, unpriced", copper = 100, unpriced = 1, gold = 100, short = false, want = "0 spare + 1 unpriced" },
         }) do
-            local short, text = Rules.Balance(row.copper, row.approx, row.unpriced, row.gold, coins)
+            local short, text = Rules.Balance(row.copper, row.approx, row.unpriced, row.gold, coins, paint)
             assert.equals(row.short, short, row.name)
             assert.equals(row.want, text, row.name)
         end

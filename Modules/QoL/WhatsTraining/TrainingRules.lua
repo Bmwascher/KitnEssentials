@@ -741,11 +741,13 @@ function Rules.TotalText(copper, approx, unpriced, coins)
 end
 
 -- What the gold leaves after a running cost, or lacks. Its unpriced spells are in
--- neither figure, so their count rides along, even when the two are equal.
-function Rules.Balance(copper, approx, unpriced, gold, coins)
+-- neither figure, so their count rides along, even when the two are equal. A shortfall
+-- paints only its words amber, so the amount keeps its coin colors.
+function Rules.Balance(copper, approx, unpriced, gold, coins, paint)
     local short = copper > gold
-    local text = Rules.TotalText(short and copper - gold or gold - copper, approx, 0, coins)
-    return short, text .. (short and " short" or " spare") .. UnpricedTail(unpriced or 0)
+    local amount = Rules.TotalText(short and copper - gold or gold - copper, approx, 0, coins)
+    if not short then return false, amount .. " spare" .. UnpricedTail(unpriced or 0) end
+    return true, amount .. paint("amber", " short" .. UnpricedTail(unpriced or 0))
 end
 
 local function CostText(section, coins)
