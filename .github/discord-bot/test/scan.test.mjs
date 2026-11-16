@@ -94,15 +94,6 @@ test('a busy run greets eight posts and leaves the rest for the next run', async
   assert.deepEqual([second.greeted.length, second.left], [3, 0]);
 });
 
-test('after a gap in scanning, recently archived posts are caught up too', async () => {
-  const kv = started(T0);
-  const archived = archivedPost(T0 + 1000, T0 + 2 * HOUR);
-  const f = discord({ archived: [archived] });
-  await scan(baseEnv(kv), { fetch: f, now: () => T0 + 10 * 60000, log: () => {} });
-  assert.equal(f.find('GET', /archived/).length, 0, 'a normal interval reads active posts only');
-  await scan(baseEnv(kv), { fetch: f, now: () => T0 + 3 * HOUR, log: () => {} });
-  assert.equal(f.find('POST', new RegExp(`/channels/${archived.id}/messages$`)).length, 1);
-});
 
 test('the daily check lists posts waiting too long with no status or Answered tag', async () => {
   const kv = started(T0, { last: T0 + 5 * 24 * HOUR - 60000 });
@@ -192,29 +183,7 @@ test('a post that already shows the button (its record was lost) is not messaged
   assert.deepEqual(JSON.parse(kv.m.get(`thread:${a}`)), { greeting: 'old1' });
 });
 
-test('catch-up keeps going until every archived post is handled', async () => {
-  const kv = started(T0);
-  const archived = Array.from({ length: 9 }, (_, i) => archivedPost(T0 + 1000 * (i + 1), T0 + 2 * HOUR - 1000 * i));
-  const f = discord({ archived });
-  const first = await scan(baseEnv(kv), { fetch: f, now: () => T0 + 3 * HOUR, log: () => {} });
-  assert.deepEqual([first.greeted.length, first.left], [8, 1]);
-  assert.equal((stateOf(kv).caught || {})['900'], undefined, 'not caught up yet');
-  const second = await scan(baseEnv(kv), { fetch: f, now: () => T0 + 3 * HOUR + 5 * 60000, log: () => {} });
-  assert.equal(second.greeted.length, 1);
-  assert.equal(stateOf(kv).caught['900'], T0 + 3 * HOUR + 5 * 60000);
-  await scan(baseEnv(kv), { fetch: f, now: () => T0 + 3 * HOUR + 10 * 60000, log: () => {} });
-  assert.equal(f.find('GET', /archived/).length, 2, 'caught up: the next run reads active posts only');
-});
 
-test('catch-up follows the archived pages back to the last time it caught up', async () => {
-  const kv = started(T0, { caught: { 900: T0 } });
-  const archived = Array.from({ length: 5 }, (_, i) => archivedPost(T0 + 1000 * (i + 1), T0 + 2 * HOUR - 60000 * i));
-  const f = discord({ archived, pageSize: 2 });
-  const r = await scan(baseEnv(kv), { fetch: f, now: () => T0 + 3 * HOUR, log: () => {} });
-  assert.equal(r.greeted.length, 5);
-  assert.equal(f.find('GET', /archived/).length, 3);
-  assert.match(f.find('GET', /archived/)[1].url, /before=/);
-});
 
 test('posts already handled are not read from KV again', async () => {
   const kv = started(T0);
@@ -268,38 +237,11 @@ test('a post that keeps failing is given up on after six runs, and newer posts a
   assert.deepEqual(r.greeted, [newest.id]);
 });
 
-test('a forum whose archived posts cannot be read does not hold back the others', async () => {
-  const kv = started(T0);
-  const f2 = discord({ active: [{ id: idAt(T0 + 1000), parent_id: '900' }, { id: idAt(T0 + 2000), parent_id: '901' }] });
-  const env = { ...baseEnv(kv), FORUMS: '{"900":{},"901":{}}' };
-  const r = await scan(env, { fetch: f2, now: () => T0 + 3 * HOUR, log: () => {} });
-  assert.equal(r.greeted.length, 2, 'active posts in both forums are greeted');
-  assert.equal(stateOf(kv).caught['900'], T0 + 3 * HOUR);
-  assert.equal(stateOf(kv).caught['901'], undefined);
-  assert.equal(stateOf(kv).through['901'], undefined, 'no mark in a forum whose archive was not read');
-  assert.match(stateOf(kv).error.text, /forum 901/);
-});
 
-test('more archived posts than the pages hold are reported, and catch-up still finishes', async () => {
-  const kv = started(T0);
-  const archived = Array.from({ length: 7 }, (_, i) => archivedPost(T0 + 1000 * (i + 1), T0 + 2 * HOUR - 60000 * i));
-  const f = discord({ archived, pageSize: 2 });
-  await scan(baseEnv(kv), { fetch: f, now: () => T0 + 3 * HOUR, log: () => {} });
-  assert.equal(f.find('GET', /archived/).length, 3);
-  assert.match(stateOf(kv).error.text, /too many to read/);
-  assert.equal(stateOf(kv).caught['900'], T0 + 3 * HOUR);
-});
 
-test('a post closed by hand before the scan saw it is left closed', async () => {
-  const kv = started(T0);
-  const byHand = archivedPost(T0 + 1000, T0 + 120000);
-  const f = discord({ archived: [byHand] });
-  await scan(baseEnv(kv), { fetch: f, now: () => T0 + 3 * HOUR, log: () => {} });
-  assert.deepEqual(sends(f), []);
-});
 
 test('a scan writes KV state once per run when nothing is new', async () => {
-  const kv = started(T0, { caught: { 900: T0 } });
+  const kv = started(T0);
   let writes = 0;
   const put = kv.put;
   kv.put = async (k, v) => { writes++; return put(k, v); };
@@ -318,30 +260,8 @@ test('the daily check says nothing about archive pages when nothing is waiting',
   assert.deepEqual(out, []);
 });
 
-test('reading many forums never uses up the calls the greetings need, and forums take turns', async () => {
-  const forums = Array.from({ length: 12 }, (_, i) => String(910 + i));
-  const kv = started(T0);
-  const pages = {};
-  const f = fakeFetch([
-    ['GET', /\/guilds\/1\/threads\/active$/, () => ({ threads: [{ id: idAt(T0 + 1000), parent_id: '910' }] })],
-    ['GET', /\/threads\/archived\/public/, (b, url) => {
-      const id = /channels\/(\d+)\//.exec(url)[1];
-      pages[id] = (pages[id] || 0) + 1;
-      // Every forum needs all three pages.
-      return { threads: [{ id: idAt(T0 - 1000), parent_id: id, thread_metadata: { archived: true, auto_archive_duration: 60, archive_timestamp: new Date(T0 + 2 * HOUR).toISOString() } }], has_more: true };
-    }],
-    ['GET', /\/messages\?/, () => []],
-    ['POST', /\/messages$/, () => ({ id: 'm1' })],
-  ]);
-  const env = { ...baseEnv(kv), FORUMS: JSON.stringify(Object.fromEntries(forums.map((id) => [id, {}]))) };
-  const r = await scan(env, { fetch: f, now: () => T0 + 3 * HOUR, log: () => {} });
-  assert.equal(r.greeted.length, 1);
-  assert.ok(Object.keys(pages).length < 12, 'one run cannot read every forum');
-  await scan(env, { fetch: f, now: () => T0 + 3 * HOUR + 5 * 60000, log: () => {} });
-  assert.equal(Object.keys(pages).length, 12, 'every forum got its catch-up across two runs');
-});
 
-test('the greeting limit counts tries, so lost answers do not let a run send more than eight', async () => {
+test('the greeting limit counts tries, not successful sends', async () => {
   const kv = started(T0);
   const active = Array.from({ length: 12 }, (_, i) => ({ id: idAt(T0 + 1000 * (i + 1)), parent_id: '900' }));
   const refuse = Object.fromEntries(active.map((t) => [t.id, 500]));
@@ -362,4 +282,36 @@ test('the daily check reports whether its message really went out', async () => 
   const r = await daily({ ...baseEnv(kv), MOD_CHANNEL_ID: '555' }, { fetch: f, now: () => T0 + 3 * HOUR, log: () => {} });
   assert.equal(r.alerted, true);
   assert.equal(r.posted, false);
+});
+
+test('the daily check says when its archive read was cut short, even with nothing on its list', async () => {
+  const kv = started(T0, { last: T0 + 30 * 24 * HOUR });
+  const archived = Array.from({ length: 400 }, (_, i) => archivedPost(T0 + 1000 * (i + 1), T0 + 29 * 24 * HOUR - 60000 * i));
+  for (const a of archived) a.applied_tags = ['s-ans'];
+  const f = discord({ archived });
+  const out = [];
+  await daily(baseEnv(kv), { fetch: f, now: () => T0 + 30 * 24 * HOUR, log: (s) => out.push(s) });
+  assert.match(out.join('\n'), /Only the most recently archived posts were checked \(300 per forum, from the last 30 days\)/);
+});
+
+test('the scan only ever messages open posts: archived ones are left alone, even after a gap', async () => {
+  const kv = started(T0);
+  const archived = archivedPost(T0 + 1000, T0 + 2 * HOUR);
+  const f = discord({ active: [{ ...archived }], archived: [archived] });
+  await scan(baseEnv(kv), { fetch: f, now: () => T0 + 3 * HOUR, log: () => {} });
+  assert.deepEqual(sends(f), []);
+  assert.equal(f.find('GET', /archived/).length, 0, 'the scan never reads archived lists');
+});
+
+test('a forum with many handled posts never holds back a new post in another forum', async () => {
+  const kv = started(T0);
+  const active = Array.from({ length: 70 }, (_, i) => ({ id: idAt(T0 + 1000 * (i + 1)), parent_id: '900' }));
+  const f = discord({ active });
+  const env = { ...baseEnv(kv), FORUMS: '{"900":{},"901":{}}' };
+  let t = T0;
+  for (let run = 0; run < 10; run++) await scan(env, { fetch: f, now: () => (t += 5 * 60000), log: () => {} });
+  const other = { id: idAt(T0 + 500000), parent_id: '901' };
+  active.push(other);
+  const r = await scan(env, { fetch: f, now: () => (t += 5 * 60000), log: () => {} });
+  assert.deepEqual(r.greeted, [other.id]);
 });

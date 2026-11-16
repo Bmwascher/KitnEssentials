@@ -1,7 +1,8 @@
 # Discord bot: forum posts to GitHub issues
 
-Every new post in the configured forums gets one message from the bot with a
-**Send to GitHub** button. Someone with an approved role (or a moderator)
+Every new, open post in the configured forums gets one message from the bot
+with a **Send to GitHub** button (a post closed before the bot saw it gets
+none). Someone with an approved role (or a moderator)
 presses it, checks a short form, and the bot files the issue in the repo the
 form names. The button's message turns into "tracked as KE #17" and the post
 is tagged **Triaged**. Moderators can still right-click any post > **Apps >
@@ -22,6 +23,8 @@ it along:
 | `needs-info` label added | (unchanged) | Pings the reporter for details |
 
 A PR that closes or goes back to draft puts the post back to Triaged, quietly.
+"A fix is up" is said once while the issue stays open, however many PRs come
+and go.
 
 How the release state is kept: the fix is the commit that last closed the
 issue (reopening drops it). When a release tag holds that commit, the workflow
@@ -33,16 +36,15 @@ until the answer holds. Whichever run moves the post sends the message for
 where it moved, once: the workflow leaves a hidden note on the issue for it,
 only the run whose note came first sends it, and a message that stopped being
 true before it went out is dropped. A daily sweep lists anything still out of
-step, a post with no status tag included, in the job summary (and, with
-`SWEEP_MODE=fix`, repairs it and sends any message whose send failed, if it is
-still true).
+step in the job summary, a post with no status tag and a message whose send
+failed included (and, with `SWEEP_MODE=fix`, repairs the labels and tags). The
+sweep never messages anyone.
 
 Every day the Worker also lists posts older than `STALE_DAYS` that have no
 status tag and no `Answered` tag in `MOD_CHANNEL_ID`, and warns there first if
 the post scan has stopped, or hit a problem with some post or forum in the last
 day. A post the bot may not message (locked, or no permission) is skipped; one
-that fails six runs in a row is given up on. A post closed by hand before the
-scan saw it is left closed.
+that fails six runs in a row is given up on.
 
 Two halves, no always-on server:
 
