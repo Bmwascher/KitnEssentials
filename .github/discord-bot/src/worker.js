@@ -321,7 +321,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     if (!normClient(v.client)) problems.push('Client must be Retail, Forever or All.');
     if (!normType(v.type)) problems.push('Type must be Bug or Feature.');
     if (!String(v.title || '').trim()) problems.push('Title is empty.');
-    if (problems.length) return reply(`Nothing was created. ${problems.join(' ')} Right-click the post to try again.`);
+    if (problems.length) return reply(`Nothing was created. ${problems.join(' ')} Press the button or right-click the post to try again.`);
 
     ctx.waitUntil(fileIssue(interaction, env, deps));
     return json({ type: 5, data: { flags: EPHEMERAL } });

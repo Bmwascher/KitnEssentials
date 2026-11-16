@@ -15,24 +15,30 @@ it along:
 | --- | --- | --- |
 | Filed | Triaged | "Thanks! This is now tracked as KE #17..." |
 | Open, with a non-draft PR that will close it, from someone with a repo role | In progress | "A fix is up and being tested." |
-| Closed by a commit or a merged PR | Fixed, next update | "The fix is merged and will be in the next update." |
-| A release tag holds every fix commit | Shipped | "The fix landed in KitnEssentials v5.0.120..." (post stays open) |
+| Closed by a commit or a merged PR in this repo | Fixed, next update | "The fix is merged and will be in the next update." |
+| A release tag holds that commit | Shipped | "The fix landed in KitnEssentials v5.0.120..." (post stays open) |
 | Closed by hand | Closed | "Marked as done." |
 | Closed as not planned / duplicate | Closed | Short reason |
 | `needs-info` label added | (unchanged) | Pings the reporter for details |
 
 A PR that closes or goes back to draft puts the post back to Triaged, quietly.
 
-How the release state is kept: the workflow writes a comment on the issue for
-each fix commit and for each release that shipped it, and the
-`pending-release` and `shipped` labels always follow from those comments.
-Runs that overlap on one issue each read again after writing until the answer
-holds. A daily sweep lists anything still out of step (and, with
-`SWEEP_MODE=fix`, repairs it).
+How the release state is kept: the fix is the commit that last closed the
+issue (reopening drops it). When a release tag holds that commit, the workflow
+writes a comment on the issue naming the release; if that comment is ever
+missing, it is rebuilt from the release tags. The `pending-release` and
+`shipped` labels always follow from these, so a release label added by hand is
+taken off again. Runs that overlap on one issue each read again after writing
+until the answer holds, and each message to the post is sent once: the
+workflow leaves a hidden note on the issue for it, and only the run whose note
+came first sends it. A daily sweep lists anything still out of step, a post
+with no status tag included, in the job summary (and, with `SWEEP_MODE=fix`,
+repairs it).
 
 Every day the Worker also lists posts older than `STALE_DAYS` that have no
-status tag and no `Answered` tag in `MOD_CHANNEL_ID`, and warns there if the
-post scan has stopped.
+status tag and no `Answered` tag in `MOD_CHANNEL_ID`, and warns there first if
+the post scan has stopped or keeps failing on some post or forum. A post the
+bot may not message (locked, or no permission) is skipped, never retried.
 
 Two halves, no always-on server:
 
@@ -88,7 +94,8 @@ KitnEssentials) before the real ones. Roughly 45 minutes.
    commented `[[kv_namespaces]]` lines of `wrangler.toml`. In `wrangler.toml`
    set `REPOS` to `{"KE":"<you>/<test-repo>"}`, `FORUMS` to the forum map,
    `GUILD_ID`, `APPROVED_ROLE_IDS` (a test role) and `MOD_CHANNEL_ID`.
-   `FORUMS` is required: while it is empty the bot does nothing anywhere.
+   `FORUMS` is required: while it is empty (and the older `FORUM_CHANNEL_IDS`
+   is empty too) the bot does nothing anywhere.
    `npm run deploy` prints a URL. The first scan only starts its clock, so
    posts made before it never get a message.
 6. **Point Discord at it.** Developer portal > General Information >
