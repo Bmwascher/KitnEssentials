@@ -389,3 +389,15 @@ test('each closing phase has its own end: past the report, the lock is still rel
     assert.equal(base.find('DELETE', /labels\/discord-lock-700$/).length, 1, 'released before 29 s');
   } finally { clock.restore(); }
 });
+
+test('a create that succeeded with a cut-off answer is not reported as nothing created', async () => {
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['POST', /\/issues$/, () => new Response('{"number": 1', { status: 201 })],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst', log: () => {} });
+  const [res] = await Promise.all(ctx.jobs);
+  assert.equal(res.uncertain, true);
+  assert.doesNotMatch(f.find('PATCH', /\/webhooks\//)[0].body.content, /Nothing was created/);
+  assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 0, 'the lock stays');
+});

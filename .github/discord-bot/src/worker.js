@@ -58,7 +58,8 @@ export function config(env) {
 // A write whose result is unknown: no answer (time limit, network failure) or
 // a GitHub server error, which can come after the write was applied.
 export function unknownOutcome(e) {
-  return /TimeoutError|AbortError|TypeError/.test(e.name) || /-> 5\d\d /.test(e.message);
+  // SyntaxError: a success whose body was cut off, so the write did happen.
+  return /TimeoutError|AbortError|TypeError|SyntaxError/.test(e.name) || /-> 5\d\d /.test(e.message);
 }
 
 function canUse(member) {

@@ -334,3 +334,28 @@ test('In progress written while a merge landed is put back to Fixed', async () =
   const tags = f.find('PATCH', /channels\/700$/).map((c) => c.body.applied_tags.at(-1));
   assert.deepEqual(tags, ['s-prog', 's-fix']);
 });
+
+test('a fix merged while a ship runs is pending again, not left with neither label', async () => {
+  let reads = 0;
+  const f = fakeFetch(routes({}, [
+    ['GET', /\/issues\?state=all.*labels=pending-release/, () => [issue(17)]],
+    ['GET', /\/issues\/17\/comments/, () => (++reads === 1
+      ? [{ user: BOT, body: '<!-- discord-fixed-in: aaaaaaa -->' }]
+      : [{ user: BOT, body: '<!-- discord-fixed-in: aaaaaaa -->' }, { user: BOT, body: '<!-- discord-fixed-in: bbbbbbb -->' }])],
+    ['GET', /\/compare\/aaaaaaa\.\.\.v5\.0\.6$/, () => ({ status: 'ahead' })],
+    ['GET', /\/compare\/bbbbbbb\.\.\.v5\.0\.6$/, () => ({ status: 'behind' })],
+  ]));
+  await run({ eventName: 'push', fetchImpl: f, env, log: quiet, payload: { ref: 'refs/tags/v5.0.6', repository } });
+  const ops = f.calls.filter((c) => /issues\/17\/labels/.test(c.url))
+    .map((c) => `${c.method} ${c.method === 'POST' ? c.body.labels[0] : c.url.split('/').pop()}`);
+  assert.deepEqual(ops, ['POST shipped', 'DELETE pending-release', 'POST pending-release', 'DELETE shipped']);
+  assert.equal(f.find('PATCH', /channels\/700$/).at(-1).body.applied_tags.at(-1), 's-fix');
+});
+
+test('a merge adds pending-release even when the issue already showed it', async () => {
+  // Read mid-ship: both labels, so a ship may be about to remove pending.
+  const f = fakeFetch(routes({ 17: issue(17, { labels: [{ name: 'from-discord' }, { name: 'pending-release' }, { name: 'shipped' }] }) }));
+  await run({ eventName: PR, fetchImpl: f, env, log: quiet,
+    payload: { action: 'closed', repository, pull_request: pr({ merged: true, merge_commit_sha: 'ccc1234' }) } });
+  assert.deepEqual(f.find('POST', /issues\/17\/labels$/)[0].body, { labels: ['pending-release'] });
+});

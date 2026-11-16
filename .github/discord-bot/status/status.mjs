@@ -76,6 +76,22 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     return r.status === 'ahead' || r.status === 'identical';
   }
 
+  // Removes `pending-release` once a tag holds every fix in `shas`, then reads
+  // the records again: a merge that recorded a new fix while this ran may
+  // already have added its label, which this removal just took away.
+  async function dropPending(issue, shas, target, tag) {
+    await gh.removeLabel(repo, issue.number, LABELS.pendingRelease);
+    for (const sha of (await fixesOf(issue)).filter((s) => !shas.includes(s))) {
+      if (await tagContains(sha, target)) continue;
+      log(`#${issue.number}: fix ${sha.slice(0, 7)} merged during the ship and is not in ${tag}: pending again`);
+      await gh.addLabels(repo, issue.number, [LABELS.pendingRelease]);
+      await gh.removeLabel(repo, issue.number, LABELS.shipped);
+      const m = parseMarker(issue.body);
+      await discord.setStatus(m.threadId, STATUS.fixed).catch((e) => { if (!/-> 404 /.test(e.message)) throw e; });
+      return;
+    }
+  }
+
   // Issues a PR says it closes. A number that is not an issue (404) is
   // skipped; any other read error fails the job at the end.
   async function linkedIssues(pr) {
@@ -138,7 +154,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
             });
           }
         }
-        if (!hasLabel(issue, LABELS.pendingRelease)) await gh.addLabels(repo, issue.number, [LABELS.pendingRelease]);
+        // Always added, even when the read showed it: a ship running now may be
+        // about to remove it (see dropPending).
+        await gh.addLabels(repo, issue.number, [LABELS.pendingRelease]);
         await notify(issue, STATUS.fixed, MESSAGES.fixed());
       });
     }
@@ -150,6 +168,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     } else if (!pattern.test(tag)) {
       log(`tag ${tag} is not a release tag, nothing to do`);
     } else {
+      const target = payload.after || tag;
       const pending = (await gh.issuesWithLabel(repo, LABELS.pendingRelease)).filter(eligible);
       await each(pending, async (issue) => {
         // Ship only when this tag contains every recorded fix, so a rerun of an
@@ -158,7 +177,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         const shas = await fixesOf(issue);
         let inTag = true;
         for (const sha of shas) {
-          if (!(await tagContains(sha, payload.after || tag))) {
+          if (!(await tagContains(sha, target))) {
             log(`#${issue.number}: fix ${sha.slice(0, 7)} is not in ${tag}, still pending`);
             inTag = false;
             break;
@@ -167,7 +186,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         // Both labels: a ship that stopped after telling the player (finish it
         // quietly), or a newer fix that raced a ship (it is pending again).
         if (hasLabel(issue, LABELS.shipped)) {
-          await gh.removeLabel(repo, issue.number, inTag ? LABELS.pendingRelease : LABELS.shipped);
+          if (inTag) await dropPending(issue, shas, target, tag);
+          else await gh.removeLabel(repo, issue.number, LABELS.shipped);
           return;
         }
         if (!inTag) return;
@@ -182,7 +202,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         }
         // Add before remove: a failure in between leaves both labels, never none.
         await gh.addLabels(repo, issue.number, [LABELS.shipped]);
-        await gh.removeLabel(repo, issue.number, LABELS.pendingRelease);
+        await dropPending(issue, shas, target, tag);
       });
     }
   } else if (eventName === 'issues') {
