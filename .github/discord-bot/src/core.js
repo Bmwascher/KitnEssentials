@@ -107,12 +107,13 @@ export function parseMarker(body) {
   return { threadId: m[1], reporterId: m[2] && m[2] !== 'unknown' ? m[2] : null };
 }
 
-export function buildBody({ content, reporterName, threadUrl, client, attachments, threadId, reporterId, sentBy }) {
+export function buildBody({ content, reporterName, threadUrl, client, attachments, threadId, reporterId, sentBy, templateLine }) {
   const lines = ['## Report', '', quote(content), ''];
   lines.push(`Reported by **${neutralize(reporterName)}** in [the Discord post](${threadUrl}) · client ${client}`);
   if (attachments && attachments.length) {
     lines.push('', `${attachments.length} attachment(s) on the Discord post (open the post to see them; Discord image links expire).`);
   }
+  if (templateLine) lines.push('', `Template check (advisory): ${templateLine}`);
   if (sentBy) lines.push('', `_Sent from Discord by ${neutralize(sentBy)}._`);
   lines.push('', marker({ threadId, reporterId }));
   return lines.join('\n');
@@ -187,4 +188,85 @@ export function timedFetch(fetchImpl, ms, deadline = Infinity) {
     if (left <= 0) throw new Error(`out of time before ${init.method || 'GET'} ${url}`);
     return fetchImpl(url, { ...init, signal: AbortSignal.timeout(left) });
   };
+}
+
+// FORUMS is JSON keyed by forum channel id; each value may name the client and
+// type every post there has: {"123":{"client":"Retail","type":"Bug"}}. A value
+// of {} means "guess from the post's tags". The older FORUM_CHANNEL_IDS (a
+// comma list) still works and guesses for every forum. Broken JSON gives no
+// forums, so the bot works nowhere rather than everywhere.
+export function parseForums(env) {
+  const out = {};
+  if (env.FORUMS && String(env.FORUMS).trim()) {
+    let raw;
+    try { raw = JSON.parse(String(env.FORUMS)); } catch { return out; }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+    for (const [id, v] of Object.entries(raw)) {
+      if (!/^\d+$/.test(id)) continue;
+      const o = v && typeof v === 'object' ? v : {};
+      out[id] = { client: normClient(o.client), type: normType(o.type) };
+    }
+    return out;
+  }
+  for (const id of String(env.FORUM_CHANNEL_IDS || '').split(',').map((s) => s.trim()).filter(Boolean)) {
+    out[id] = { client: null, type: null };
+  }
+  return out;
+}
+
+// Role ids allowed to press the thread button (comma list). Empty: nobody.
+export function parseRoleIds(raw) {
+  return String(raw || '').split(',').map((s) => s.trim()).filter((s) => /^\d+$/.test(s));
+}
+
+// A Discord id's creation time in epoch ms.
+export function snowflakeMs(id) {
+  return Number(BigInt(id) >> 22n) + 1420070400000;
+}
+
+// The template fields each kind of post should fill. TEMPLATES (JSON, same
+// shape) replaces these.
+export const DEFAULT_TEMPLATES = {
+  Bug: ['Version', 'Issue Details', 'Steps to Reproduce', 'Supporting Screenshots'],
+  Feature: ['Category', 'Summary', 'Detailed Description'],
+};
+
+export function parseTemplates(raw) {
+  if (!raw || !String(raw).trim()) return DEFAULT_TEMPLATES;
+  try {
+    const t = JSON.parse(String(raw));
+    if (t && typeof t === 'object' && !Array.isArray(t)) return t;
+  } catch { /* fall through */ }
+  return DEFAULT_TEMPLATES;
+}
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const isHint = (s) => /^\*?\s*\(.*\)\s*\*?$/.test(s) || /^\d+\.\s*$/.test(s);
+
+// Advisory check of a post against its template: for each field, "present"
+// (labeled and answered), "missing" (labeled, left empty) or "unsure" (no
+// label found; the player may have answered in their own words). A field
+// about screenshots counts as present when the post has an attachment.
+export function templateCheck(content, fields, attachments = 0) {
+  const text = String(content || '');
+  const lines = text.split('\n');
+  // A label may carry words before the field name ("Addon Version:").
+  const labels = fields.map((f) => new RegExp(`^\\W*(?:[a-z][\\w ]*\\s)?${escapeRe(f)}[^:\\n]*:\\**`, 'i'));
+  return fields.map((field, k) => {
+    if (/screenshot|image|visual/i.test(field) && attachments > 0) return { field, state: 'present' };
+    const at = lines.findIndex((l) => labels[k].test(l.trim()));
+    if (at < 0) return { field, state: 'unsure' };
+    const rest = [lines[at].trim().replace(labels[k], '').trim()];
+    for (let i = at + 1; i < lines.length; i++) {
+      const l = lines[i].trim();
+      if (labels.some((re) => re.test(l))) break;
+      rest.push(l);
+    }
+    const answer = rest.filter((l) => l && !isHint(l));
+    return { field, state: answer.length ? 'present' : 'missing' };
+  });
+}
+
+export function templateSummary(check) {
+  return check.map((c) => `${c.field} ${c.state}`).join(' · ');
 }

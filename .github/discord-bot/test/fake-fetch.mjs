@@ -30,6 +30,12 @@ export function stall(init, onAbort = () => {}) {
   });
 }
 
+// Workers KV with only the two calls the bot makes.
+export function fakeKv(init = {}) {
+  const m = new Map(Object.entries(init));
+  return { m, get: async (k) => (m.has(k) ? m.get(k) : null), put: async (k, v) => { m.set(k, String(v)); } };
+}
+
 // A help forum with client and type tags, plus the bot's status tags.
 export const FORUM = {
   id: '900',
