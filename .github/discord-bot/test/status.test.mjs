@@ -288,7 +288,8 @@ test('a ship that stopped after telling the player is finished without telling a
   const done = await run({ eventName: 'push', fetchImpl: f, env, log: quiet, payload: { ref: 'refs/tags/v5.0.2', repository } });
   assert.equal(done.length, 0);
   assert.equal(f.find('DELETE', /issues\/17\/labels\/pending-release/).length, 1);
-  assert.equal(f.calls.filter((c) => /discord\.com/.test(c.url)).length, 0);
+  assert.equal(f.find('POST', /discord\.com.*messages$/).length, 0, 'no second message');
+  assert.equal(f.find('PATCH', /channels\/700$/).at(-1).body.applied_tags.at(-1), 's-ship', 'the post says Shipped');
 });
 
 test('shipping adds the shipped label before it removes pending-release', async () => {
@@ -358,4 +359,15 @@ test('a merge adds pending-release even when the issue already showed it', async
   await run({ eventName: PR, fetchImpl: f, env, log: quiet,
     payload: { action: 'closed', repository, pull_request: pr({ merged: true, merge_commit_sha: 'ccc1234' }) } });
   assert.deepEqual(f.find('POST', /issues\/17\/labels$/)[0].body, { labels: ['pending-release'] });
+});
+
+test('an annotated tag is checked against the commit it points at', async () => {
+  const f = fakeFetch(routes({}, [
+    ['GET', /\/issues\?state=all.*labels=pending-release/, () => [issue(17)]],
+    ['GET', /\/issues\/17\/comments/, () => [{ user: BOT, body: '<!-- discord-fixed-in: bbbbbbb -->' }]],
+    ['GET', /\/compare\/bbbbbbb\.\.\.c0ffee1$/, () => ({ status: 'ahead' })],
+  ]));
+  const done = await run({ eventName: 'push', fetchImpl: f, env, log: quiet,
+    payload: { ref: 'refs/tags/v5.0.7', created: true, after: '7a90b1e', head_commit: { id: 'c0ffee1' }, repository } });
+  assert.equal(done.length, 1);
 });

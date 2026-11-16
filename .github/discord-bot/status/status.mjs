@@ -168,7 +168,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     } else if (!pattern.test(tag)) {
       log(`tag ${tag} is not a release tag, nothing to do`);
     } else {
-      const target = payload.after || tag;
+      // The tagged commit: for an annotated tag `after` is the tag object, so
+      // head_commit comes first.
+      const target = (payload.head_commit && payload.head_commit.id) || payload.after || tag;
       const pending = (await gh.issuesWithLabel(repo, LABELS.pendingRelease)).filter(eligible);
       await each(pending, async (issue) => {
         // Ship only when this tag contains every recorded fix, so a rerun of an
@@ -186,8 +188,15 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         // Both labels: a ship that stopped after telling the player (finish it
         // quietly), or a newer fix that raced a ship (it is pending again).
         if (hasLabel(issue, LABELS.shipped)) {
-          if (inTag) await dropPending(issue, shas, target, tag);
-          else await gh.removeLabel(repo, issue.number, LABELS.shipped);
+          if (!inTag) {
+            await gh.removeLabel(repo, issue.number, LABELS.shipped);
+            return;
+          }
+          // The post may say Fixed (a fix merged during an earlier ship): set
+          // Shipped without a second message.
+          const m = parseMarker(issue.body);
+          await discord.setStatus(m.threadId, STATUS.shipped).catch((e) => { if (!/-> 404 /.test(e.message)) throw e; });
+          await dropPending(issue, shas, target, tag);
           return;
         }
         if (!inTag) return;
