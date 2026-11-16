@@ -1,24 +1,32 @@
 name: Discord status
 
-# Moves a forum post along (In progress -> Fixed -> Shipped) when the GitHub
-# issue the bot made from it moves. Only touches issues labeled
-# `from-discord`. Does nothing until the DISCORD_BOT_TOKEN secret is set.
+# Keeps each forum post the bot made in step with its GitHub issue: the
+# issue's state, its recorded fix commits and release tags, and its open PRs
+# decide the post's status tag (Triaged, In progress, Fixed, Shipped, Closed).
+# Only touches issues labeled `from-discord`. Does nothing until the
+# DISCORD_BOT_TOKEN secret is set.
 # pull_request_target (not pull_request) so contributor PRs from forks still
 # update Discord; it runs this repo's own script and never checks out PR code.
-# The script acts on a PR only when its author has a role on the repo.
+# Only a PR whose author has a role on the repo shows as In progress.
 on:
   pull_request_target:
-    types: [opened, reopened, ready_for_review, closed]
+    types: [opened, reopened, ready_for_review, converted_to_draft, closed]
   issues:
-    types: [closed, labeled]
+    types: [closed, reopened, labeled]
   push:
     # Test copy: KitnEssentials' own v* tags publish real releases, so the
     # "shipped" step is tried with throwaway discord-test-* tags instead.
     tags: ['discord-test-*']
+  # The daily sweep: lists (or, with SWEEP_MODE=fix, repairs) every post and
+  # label that is out of step. It never messages players.
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
   issues: write
+  pull-requests: read
 
 jobs:
   status:
@@ -27,8 +35,9 @@ jobs:
     if: >-
       (github.event_name != 'issues' || github.event.action != 'labeled' || github.event.label.name == 'needs-info') &&
       (github.event_name != 'push' || (github.event.created && !github.event.deleted))
-    # Release tags run one at a time so two never ship the same issue; one PR's
-    # events run in order (opened before closed); everything else runs alone.
+    # Release tags run one at a time; one PR's events run in order; everything
+    # else runs alone. Runs on one issue may still overlap: each rereads after
+    # writing until it agrees, and the sweep repairs what a failure left.
     # GitHub keeps one waiting run per group: a third tag in quick succession
     # replaces the waiting one, whose fixes then ship with the newer tag.
     concurrency:
@@ -47,5 +56,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          # Optional repository variable: which tags are releases.
+          # Optional repository variables: which tags are releases, and
+          # whether the sweep only reports (default) or also repairs (fix).
           RELEASE_TAG_PATTERN: ${{ vars.RELEASE_TAG_PATTERN || '^discord-test-' }}
+          SWEEP_MODE: ${{ vars.SWEEP_MODE || 'report' }}
