@@ -315,3 +315,13 @@ test('a forum with many handled posts never holds back a new post in another for
   const r = await scan(env, { fetch: f, now: () => (t += 5 * 60000), log: () => {} });
   assert.deepEqual(r.greeted, [other.id]);
 });
+
+test('the daily check keeps its warnings when a long list is cut to fit', async () => {
+  const kv = started(T0, { last: T0 + 30 * 24 * HOUR });
+  const archived = Array.from({ length: 400 }, (_, i) => archivedPost(T0 + 1000 * (i + 1), T0 + 29 * 24 * HOUR - 60000 * i));
+  for (const a of archived) { a.applied_tags = []; a.name = 'a post with a long enough title to fill the message quickly '.repeat(2); }
+  const f = discord({ archived });
+  const out = [];
+  await daily(baseEnv(kv), { fetch: f, now: () => T0 + 30 * 24 * HOUR, log: (s) => out.push(s) });
+  assert.match(out.join('\n'), /Only the most recently archived posts were checked/);
+});

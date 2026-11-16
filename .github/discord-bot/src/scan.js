@@ -267,16 +267,17 @@ export async function daily(env, deps = {}) {
     const answered = tags.find((x) => x.name.toLowerCase() === ANSWERED);
     return !(answered && (t.applied_tags || []).includes(answered.id));
   });
+  // The warnings go first, so the length limit can only cut the list. An
+  // incomplete search cannot say nothing is waiting, so they go out even with
+  // an empty list.
   const lines = [];
+  if (unread.length) lines.push(`Could not read ${[...new Set(unread)].join(', ')}, so this list may be short. Check the bot's access there.`);
+  if (cut) lines.push(`Only the most recently archived posts were checked (${DAILY_ARCHIVE_PAGES * 50} per forum, from the last ${DAILY_ARCHIVED_MS / 86400000} days); older ones may also be waiting.`);
   if (waiting.length) {
-    lines.push(`${waiting.length} post(s) older than ${Math.round(staleMs / 86400000)} days with no status or "Answered" tag:`);
+    lines.push(`${waiting.length} post(s) older than ${Math.round(staleMs / 86400000)} days with no status or "Answered" tag (archived posts from the last ${DAILY_ARCHIVED_MS / 86400000} days):`);
     for (const t of waiting.slice(0, 20)) lines.push(`- ${t.name || t.id}: https://discord.com/channels/${env.GUILD_ID}/${t.id}`);
     if (waiting.length > 20) lines.push(`- and ${waiting.length - 20} more`);
   }
-  // An incomplete search cannot say nothing is waiting, so this goes out even
-  // with an empty list.
-  if (cut) lines.push(`Only the most recently archived posts were checked (${DAILY_ARCHIVE_PAGES * 50} per forum, from the last ${DAILY_ARCHIVED_MS / 86400000} days); older ones may also be waiting.`);
-  if (unread.length) lines.push(`Could not read ${[...new Set(unread)].join(', ')}, so this list may be short. Check the bot's access there.`);
 
   if (lines.length) await post(lines.join('\n'));
   return { waiting: waiting.length, alerted, unread, posted };

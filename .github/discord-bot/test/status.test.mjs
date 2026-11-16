@@ -332,6 +332,7 @@ test('a failed write fails the job, and the next sweep repairs what it left', as
 test('needs-info reopens an archived post, then pings only the reporter', async () => {
   const w = world();
   const i = w.issue(17);
+  i.labels.add('needs-info');
   await go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, labels: [{ name: 'from-discord' }] } });
   assert.equal(w.threads.get('717').archived, false);
   const m = w.threads.get('717').messages[0];
@@ -520,6 +521,7 @@ test('a PR that closes an issue in another repo leaves this repo\'s issue of tha
 test('a rerun of the needs-info event pings the reporter once', async () => {
   const w = world();
   const i = w.issue(17);
+  i.labels.add('needs-info');
   const ev = { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } };
   await go(w, 'issues', ev);
   await go(w, 'issues', ev);
@@ -641,4 +643,14 @@ test('more release tags than the pages hold fail the sweep rather than unship th
   w.tags.push({ name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } });
   await assert.rejects(run({ eventName: 'schedule', payload: {}, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: quiet }));
   assert.deepEqual(labels(w, 17), ['shipped']);
+});
+
+test('a needs-info event that runs after the label was taken off pings no one', async () => {
+  const w = world();
+  const i = w.issue(17);
+  await go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } });
+  assert.deepEqual(w.said('717'), []);
+  i.labels.add('needs-info');
+  await go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:05:00Z' } });
+  assert.equal(w.said('717').length, 1);
 });

@@ -395,7 +395,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const n = payload.issue.number;
     if (payload.action === 'labeled' && payload.label && payload.label.name === LABELS.needsInfo) {
       const issue = await botIssue(n);
-      const m = issue && parseMarker(issue.body);
+      // A label taken off before this run started asks for nothing.
+      const m = issue && hasLabel(issue, LABELS.needsInfo) && parseMarker(issue.body);
       if (m) {
         const text = MESSAGES.needsInfo(m.reporterId);
         // One ping per labeling: a rerun of the event finds the note.
