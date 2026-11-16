@@ -118,7 +118,7 @@ test('a reopened issue drops its release label and goes back to Triaged', async 
 
 // ---- Shipped ---------------------------------------------------------------
 
-test('a release tag holding every fix ships the issue and names the version, once', async () => {
+test('a release tag holding the fix ships the issue and names the version, once', async () => {
   const w = world();
   w.issue(17);
   w.close(17, 'completed', 'aaaaaaa1');
@@ -340,7 +340,7 @@ test('needs-info reopens an archived post, then pings only the reporter', async 
   assert.deepEqual(m.allowed_mentions, { parse: [], users: ['42'] });
 });
 
-// ---- Round 1 review --------------------------------------------------------------
+// ---- Message ownership, closing commits, missing tags -----------------------------
 
 test('a merged PR and the close it causes, in either order, tell the player once: Fixed', async () => {
   for (const prFirst of [true, false]) {
@@ -516,7 +516,7 @@ test('a PR that closes an issue in another repo leaves this repo\'s issue of tha
   assert.deepEqual(w.said('717'), []);
 });
 
-// ---- Round 2 review --------------------------------------------------------------
+// ---- Stale and failed messages, paging, re-checks --------------------------------
 
 test('a rerun of the needs-info event pings the reporter once', async () => {
   const w = world();

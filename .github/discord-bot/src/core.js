@@ -205,7 +205,8 @@ export function parseForums(env) {
   return out;
 }
 
-// Role ids allowed to press the thread button (comma list). Empty: nobody.
+// Role ids allowed to press the thread button (comma list), besides
+// moderators. Empty: moderators only.
 export function parseRoleIds(raw) {
   return String(raw || '').split(',').map((s) => s.trim()).filter((s) => /^\d+$/.test(s));
 }

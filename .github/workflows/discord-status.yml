@@ -1,7 +1,7 @@
 name: Discord status
 
 # Keeps each forum post the bot made in step with its GitHub issue: the
-# issue's state, its recorded fix commits and release tags, and its open PRs
+# issue's state, the commit that closed it, the release tags, and its open PRs
 # decide the post's status tag (Triaged, In progress, Fixed, Shipped, Closed).
 # Only touches issues labeled `from-discord`. Does nothing until the
 # DISCORD_BOT_TOKEN secret is set.

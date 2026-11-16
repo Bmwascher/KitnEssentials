@@ -129,7 +129,7 @@ test('the Worker runs the daily check on its daily cron and the scan otherwise',
   assert.equal(f.find('GET', /\/guilds\/1\/threads\/active$/).length, 1, 'the daily check read the posts');
 });
 
-// ---- Round 1 review --------------------------------------------------------------
+// ---- Refused and failing posts, duplicates, budgets ----------------------------
 
 const sends = (f) => f.find('POST', /\/channels\/\d+\/messages$/).map((c) => /channels\/(\d+)\//.exec(c.url)[1]);
 
@@ -218,7 +218,7 @@ test('the daily check posts the scan alert even when a forum cannot be read, and
   assert.match(posted[1], /Could not read forum 901/);
 });
 
-// ---- Round 2 review --------------------------------------------------------------
+// ---- Progress marks, archived posts, the daily check -----------------------------
 
 test('a post that keeps failing is given up on after six runs, and newer posts are never held back', async () => {
   const kv = started(T0);

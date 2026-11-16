@@ -33,14 +33,15 @@ missing, it is rebuilt from the release tags. The `pending-release` and
 `shipped` labels always follow from these, so a release label added by hand is
 taken off again. Runs that overlap on one issue each read again after writing
 until the answer holds. Whichever run moves the post sends the message for
-where it moved, once: the workflow leaves a hidden note on the issue for it,
+where it moved, once: the workflow leaves a short comment on the issue for it,
 only the run whose note came first sends it, and a message that stopped being
 true before its last check is dropped (one overtaken in the moment between
 that check and the send still goes out; the next message corrects it). A
 daily sweep lists anything still out of step in the job summary, a post with
 no status tag and a message whose send failed included (and, with
 `SWEEP_MODE=fix`, repairs the labels and tags). The sweep never messages
-anyone.
+anyone. To clear a listed message (sent by hand, or not needed), edit that
+comment and add `<!-- discord-sent -->` at its end.
 
 Every day the Worker also lists posts older than `STALE_DAYS` that have no
 status tag and no `Answered` tag (open posts, and posts archived in the last
