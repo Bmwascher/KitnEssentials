@@ -654,3 +654,15 @@ test('a needs-info event that runs after the label was taken off pings no one', 
   await go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:05:00Z' } });
   assert.equal(w.said('717').length, 1);
 });
+
+test('a needs-info label taken off while the run claims its ping sends nothing', async () => {
+  const w = world();
+  const i = w.issue(17);
+  i.labels.add('needs-info');
+  w.hooks.push(['POST', /issues\/17\/comments$/, async (call) => {
+    if (/discord-told: needs-info/.test(call.body.body)) i.labels.delete('needs-info');
+  }]);
+  await go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } });
+  assert.deepEqual(w.said('717'), []);
+  assert.ok(i.comments.some((c) => /discord-dropped/.test(c.body)));
+});

@@ -401,7 +401,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         const text = MESSAGES.needsInfo(m.reporterId);
         // One ping per labeling: a rerun of the event finds the note.
         const note = await claim(n, `needs-info-${String(payload.issue.updated_at || 'once').replace(/\W/g, '')}`, text, null);
-        if (note) {
+        if (note && !hasLabel(await gh.getIssue(repo, n), LABELS.needsInfo)) {
+          await settleNote(note, 'dropped');
+        } else if (note) {
           // A locked post does not unarchive on a new message; reopen it first.
           await discord.unarchive(m.threadId);
           await deliver(n, m.threadId, note, text, null, m.reporterId ? [m.reporterId] : []);
