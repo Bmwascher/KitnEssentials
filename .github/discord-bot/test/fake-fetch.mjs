@@ -16,6 +16,20 @@ export function fakeFetch(routes) {
   return fn;
 }
 
+// A call that never answers until its signal aborts. AbortSignal.timeout's
+// timer does not keep Node running, and a real stalled request holds a
+// socket that does; the interval stands in for that socket.
+export function stall(init, onAbort = () => {}) {
+  return new Promise((_, reject) => {
+    const keep = setInterval(() => {}, 1000);
+    init.signal.addEventListener('abort', () => {
+      clearInterval(keep);
+      onAbort();
+      reject(init.signal.reason);
+    });
+  });
+}
+
 // A help forum with client and type tags, plus the bot's status tags.
 export const FORUM = {
   id: '900',

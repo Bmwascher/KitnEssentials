@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from '../src/core.js';
+import { stall } from './fake-fetch.mjs';
 
 test('title follows [ONE][Client][Module] Title', () => {
   assert.equal(C.buildTitle({ repoKey: 'ONE', client: 'Retail', module: 'Bags', title: ' Icons overlap ' }),
@@ -85,7 +86,7 @@ test('REPOS is required', () => {
 });
 
 test('a timed fetch gives up on a stalled call and refuses past its deadline', async () => {
-  const never = (_, init) => new Promise((_r, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))));
-  await assert.rejects(C.timedFetch(never, 30)('https://x'), /aborted/);
+  const never = (_, init) => stall(init);
+  await assert.rejects(C.timedFetch(never, 30)('https://x'), (e) => e.name === 'TimeoutError');
   await assert.rejects(C.timedFetch(never, 1000, Date.now() - 1)('https://x'), /out of time/);
 });

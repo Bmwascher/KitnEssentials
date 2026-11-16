@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, createVerify } from 'node:crypto';
 import { handle, COMMAND_NAME } from '../src/worker.js';
 import { importAppKey, appJwt } from '../src/github.js';
-import { fakeFetch, FORUM } from './fake-fetch.mjs';
+import { fakeFetch, FORUM, stall } from './fake-fetch.mjs';
 
 const keys = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
 const pubHex = Buffer.from(await crypto.subtle.exportKey('raw', keys.publicKey)).toString('hex');
@@ -268,7 +268,7 @@ test('a stalled call ends the send with a report to the mod', async () => {
   const base = fakeFetch(discordRoutes(githubRoutes()));
   // The issue list never answers; only the call's own time limit ends it.
   const stall = (url, init = {}) => (/issues\?state=all/.test(url)
-    ? new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)))
+    ? stall(init)
     : base(url, init));
   const ctx = ctxFor();
   const t0 = Date.now();
@@ -297,7 +297,7 @@ test('the lock is released even after the filing ran out of time', async () => {
 test('a create that got no answer is reported as maybe created, not as nothing', async () => {
   const base = fakeFetch(discordRoutes(githubRoutes()));
   const hang = (url, init = {}) => (init.method === 'POST' && /\/issues$/.test(url)
-    ? new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)))
+    ? stall(init)
     : base(url, init));
   const ctx = ctxFor();
   await handle(await signed(submit()), env, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
@@ -314,7 +314,7 @@ test('a create that answered late is found again and reported as created', async
     ['GET', /issues\?state=all.*labels=from-discord/, () => (++looks <= 2 ? [] : [{ number: 17, html_url: 'u/17', body: '<!-- discord-thread: 700 reporter: 42 -->' }])],
   ])));
   const hang = (url, init = {}) => (init.method === 'POST' && /\/issues$/.test(url)
-    ? new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)))
+    ? stall(init)
     : base(url, init));
   const ctx = ctxFor();
   await handle(await signed(submit()), env, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
@@ -339,7 +339,7 @@ test('a server error on create is an unknown outcome too', async () => {
 test('a lock claim with no answer is reported with the label to clear', async () => {
   const base = fakeFetch(discordRoutes(githubRoutes()));
   const hang = (url, init = {}) => (init.method === 'POST' && /\/labels$/.test(url)
-    ? new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)))
+    ? stall(init)
     : base(url, init));
   const ctx = ctxFor();
   await handle(await signed(submit()), env, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
@@ -363,7 +363,7 @@ test('each closing phase has its own end: a late re-check is skipped but the rep
   try {
     const base = fakeFetch(discordRoutes(githubRoutes()));
     const hang = (url, init = {}) => (init.method === 'POST' && /\/issues$/.test(url)
-      ? new Promise((_, reject) => init.signal.addEventListener('abort', () => { clock.at(21000); reject(init.signal.reason); }))
+      ? stall(init, () => clock.at(21000))
       : base(url, init));
     const ctx = ctxFor();
     await handle(await signed(submit()), env, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
@@ -380,7 +380,7 @@ test('each closing phase has its own end: past the report, the lock is still rel
   try {
     const base = fakeFetch(discordRoutes(githubRoutes()));
     const hang = (url, init = {}) => (/\/messages\/800$/.test(url)
-      ? new Promise((_, reject) => init.signal.addEventListener('abort', () => { clock.at(26000); reject(init.signal.reason); }))
+      ? stall(init, () => clock.at(26000))
       : base(url, init));
     const ctx = ctxFor();
     await handle(await signed(submit()), env, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
