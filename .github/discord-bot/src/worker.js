@@ -12,9 +12,14 @@ export const COMMAND_NAME = 'Send to GitHub';
 const EPHEMERAL = 64;
 // Discord wants the first answer within 3 s; the form's lookups get 1.5 s.
 const FORM_LOOKUP_MS = 1500;
-// Workers cancel waitUntil work about 30 s after the response. The filing's
-// calls all end by 17 s; reporting back and releasing the lock get 5 s each.
-const FILE_BUDGET_MS = 17000;
+// Workers cancel waitUntil work about 30 s after the response, so every phase
+// has a hard end, counted from the start: the filing's calls by 15 s, a
+// re-check of an unknown create by 20 s, the report to the moderator by 25 s,
+// the lock's release by 29 s.
+const FILE_BUDGET_MS = 15000;
+const RECHECK_BY_MS = 20000;
+const REPORT_BY_MS = 25000;
+const RELEASE_BY_MS = 29000;
 const CALL_MS = 8000;
 const TAIL_MS = 5000;
 // Signed requests older than this are refused (a captured one cannot be replayed later).
@@ -129,11 +134,12 @@ export async function fileIssue(interaction, env, deps) {
   const type = normType(v.type);
   const log = deps.log || console.error;
   const { callMs = CALL_MS, budgetMs = FILE_BUDGET_MS } = deps; // tests shorten these
-  const f = timedFetch(deps.fetch, callMs, Date.now() + budgetMs);
+  const t0 = Date.now();
+  const f = timedFetch(deps.fetch, callMs, t0 + budgetMs);
   const discord = discordClient(env.DISCORD_BOT_TOKEN, f);
   const followup = async (content) => {
     try {
-      const res = await timedFetch(deps.fetch, TAIL_MS)(
+      const res = await timedFetch(deps.fetch, TAIL_MS, t0 + REPORT_BY_MS)(
         `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
         { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) },
       );
@@ -145,7 +151,8 @@ export async function fileIssue(interaction, env, deps) {
 
   const repo = cfg.repos[repoKey];
   let gh;
-  let ghTail; // its own time limit, so the lock is released even after the budget ran out
+  let ghRecheck; // the re-check of an unknown create, after the filing's budget
+  let ghRelease; // the lock's release, last
   let locked = false;
   let keepLock = false;
   let creating = false;
@@ -153,7 +160,8 @@ export async function fileIssue(interaction, env, deps) {
     const ghToken = await (deps.installationToken || installationToken)(
       { appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY, repo }, f);
     gh = githubClient(ghToken, f);
-    ghTail = githubClient(ghToken, timedFetch(deps.fetch, TAIL_MS));
+    ghRecheck = githubClient(ghToken, timedFetch(deps.fetch, TAIL_MS, t0 + RECHECK_BY_MS));
+    ghRelease = githubClient(ghToken, timedFetch(deps.fetch, TAIL_MS, t0 + RELEASE_BY_MS));
 
     // The form may have been opened before the forum list changed: check again.
     const thread = await discord.getChannel(threadId);
@@ -222,7 +230,7 @@ export async function fileIssue(interaction, env, deps) {
     // look once more, and if it is not there yet keep the lock, so a retry
     // cannot file a second issue while the first may still appear.
     if (creating && unknownOutcome(e)) {
-      const found = await ghTail.findByThread(repo, threadId).catch(() => null);
+      const found = await ghRecheck.findByThread(repo, threadId).catch(() => null);
       if (found) {
         await followup(`Created ${repoKey} #${found.number}: ${found.html_url} (GitHub answered late; the post's tag and note were not set)`);
         return { created: found.number, late: true };
@@ -235,7 +243,7 @@ export async function fileIssue(interaction, env, deps) {
     return { error: e.message };
   } finally {
     if (locked && !keepLock) {
-      try { await ghTail.releaseThread(repo, threadId); } catch (e) { log(`lock ${lockLabel(threadId)} not released: ${e.message}`); }
+      try { await ghRelease.releaseThread(repo, threadId); } catch (e) { log(`lock ${lockLabel(threadId)} not released: ${e.message}`); }
     }
   }
 }

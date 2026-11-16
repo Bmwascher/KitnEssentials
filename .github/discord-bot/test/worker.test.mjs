@@ -348,3 +348,44 @@ test('a lock claim with no answer is reported with the label to clear', async ()
   assert.equal(base.find('POST', /\/issues$/).length, 0);
   assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /discord-lock-700/);
 });
+
+// Moves the clock forward from the moment `at` is called, to stand in for a
+// filing whose calls used most of Workers' 30 s.
+function shiftClock() {
+  const real = Date.now;
+  let by = 0;
+  Date.now = () => real() + by;
+  return { at: (ms) => { by = ms; }, restore: () => { Date.now = real; } };
+}
+
+test('each closing phase has its own end: a late re-check is skipped but the report still goes', async () => {
+  const clock = shiftClock();
+  try {
+    const base = fakeFetch(discordRoutes(githubRoutes()));
+    const hang = (url, init = {}) => (init.method === 'POST' && /\/issues$/.test(url)
+      ? new Promise((_, reject) => init.signal.addEventListener('abort', () => { clock.at(21000); reject(init.signal.reason); }))
+      : base(url, init));
+    const ctx = ctxFor();
+    await handle(await signed(submit()), env, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
+    const [res] = await Promise.all(ctx.jobs);
+    assert.equal(res.uncertain, true);
+    const looks = base.find('GET', /issues\?state=all.*labels=from-discord/).length;
+    assert.equal(looks, 2, 'no re-check after 20 s');
+    assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /may have been created/);
+  } finally { clock.restore(); }
+});
+
+test('each closing phase has its own end: past the report, the lock is still released', async () => {
+  const clock = shiftClock();
+  try {
+    const base = fakeFetch(discordRoutes(githubRoutes()));
+    const hang = (url, init = {}) => (/\/messages\/800$/.test(url)
+      ? new Promise((_, reject) => init.signal.addEventListener('abort', () => { clock.at(26000); reject(init.signal.reason); }))
+      : base(url, init));
+    const ctx = ctxFor();
+    await handle(await signed(submit()), env, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
+    await Promise.all(ctx.jobs);
+    assert.equal(base.find('PATCH', /\/webhooks\//).length, 0, 'no report after 25 s');
+    assert.equal(base.find('DELETE', /labels\/discord-lock-700$/).length, 1, 'released before 29 s');
+  } finally { clock.restore(); }
+});

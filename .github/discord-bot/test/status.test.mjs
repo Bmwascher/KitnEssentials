@@ -297,3 +297,40 @@ test('shipping adds the shipped label before it removes pending-release', async 
   const labelOps = f.calls.filter((c) => /issues\/17\/labels/.test(c.url)).map((c) => c.method);
   assert.deepEqual(labelOps, ['POST', 'DELETE']);
 });
+
+test('a tag event is checked against the commit it pushed, not where the tag points now', async () => {
+  const f = fakeFetch(routes({}, [
+    ['GET', /\/issues\?state=all.*labels=pending-release/, () => [issue(17)]],
+    ['GET', /\/issues\/17\/comments/, () => [{ user: BOT, body: '<!-- discord-fixed-in: bbbbbbb -->' }]],
+    ['GET', /\/compare\/bbbbbbb\.\.\.aaaa111$/, () => ({ status: 'behind' })],
+    ['GET', /\/compare\/bbbbbbb\.\.\.discord-test-1$/, () => ({ status: 'ahead' })],
+  ]));
+  const done = await run({ eventName: 'push', fetchImpl: f, env: { ...env, RELEASE_TAG_PATTERN: '^discord-test-' }, log: quiet,
+    payload: { ref: 'refs/tags/discord-test-1', created: true, after: 'aaaa111', repository } });
+  assert.equal(done.length, 0, 'the commit this event pushed lacks the fix');
+  assert.equal(f.find('GET', /compare\/bbbbbbb\.\.\.discord-test-1$/).length, 0);
+});
+
+test('an earlier fix missing from the tag holds the issue even when a later one is in it', async () => {
+  const f = fakeFetch(routes({}, [
+    ['GET', /\/issues\?state=all.*labels=pending-release/, () => [issue(17)]],
+    ['GET', /\/issues\/17\/comments/, () => [
+      { user: BOT, body: '<!-- discord-fixed-in: aaaaaaa -->' },
+      { user: BOT, body: '<!-- discord-fixed-in: bbbbbbb -->' },
+    ]],
+    ['GET', /\/compare\/aaaaaaa\.\.\.v5\.0\.5$/, () => ({ status: 'behind' })],
+    ['GET', /\/compare\/bbbbbbb\.\.\.v5\.0\.5$/, () => ({ status: 'ahead' })],
+  ]));
+  const done = await run({ eventName: 'push', fetchImpl: f, env, log: quiet, payload: { ref: 'refs/tags/v5.0.5', repository } });
+  assert.equal(done.length, 0);
+});
+
+test('In progress written while a merge landed is put back to Fixed', async () => {
+  let reads = 0;
+  const f = fakeFetch(routes({}, [
+    ['GET', /repos\/me\/one\/issues\/17$/, () => (++reads <= 2 ? issue(17) : issue(17, { labels: [{ name: 'from-discord' }, { name: 'pending-release' }] }))],
+  ]));
+  await run({ eventName: PR, fetchImpl: f, env, log: quiet, payload: { action: 'opened', repository, pull_request: pr() } });
+  const tags = f.find('PATCH', /channels\/700$/).map((c) => c.body.applied_tags.at(-1));
+  assert.deepEqual(tags, ['s-prog', 's-fix']);
+});

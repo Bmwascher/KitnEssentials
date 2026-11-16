@@ -69,8 +69,10 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     }
   }
 
-  async function tagContains(sha, tag) {
-    const r = await gh.call('GET', `/repos/${repo}/compare/${sha}...${encodeURIComponent(tag)}`);
+  // `target` is the commit the tag event pushed (its `after`), not the tag's
+  // name: a rerun of an old event must not see where the tag points today.
+  async function tagContains(sha, target) {
+    const r = await gh.call('GET', `/repos/${repo}/compare/${sha}...${encodeURIComponent(target)}`);
     return r.status === 'ahead' || r.status === 'identical';
   }
 
@@ -108,7 +110,12 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         await each(open, async (issue) => {
           const now = await gh.getIssue(repo, issue.number);
           if (done(now)) return;
-          await notify(now, STATUS.inProgress, MESSAGES.inProgress());
+          const m = await notify(now, STATUS.inProgress, MESSAGES.inProgress());
+          // A merge or ship from another run may have landed while this one
+          // wrote: read once more and put the later status back.
+          const after = m ? await gh.getIssue(repo, issue.number) : null;
+          if (after && hasLabel(after, LABELS.shipped)) await discord.setStatus(m.threadId, STATUS.shipped);
+          else if (after && hasLabel(after, LABELS.pendingRelease)) await discord.setStatus(m.threadId, STATUS.fixed);
         });
       }
     } else if (action === 'closed' && pr.merged && pr.base.ref === payload.repository.default_branch) {
@@ -151,7 +158,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         const shas = await fixesOf(issue);
         let inTag = true;
         for (const sha of shas) {
-          if (!(await tagContains(sha, tag))) {
+          if (!(await tagContains(sha, payload.after || tag))) {
             log(`#${issue.number}: fix ${sha.slice(0, 7)} is not in ${tag}, still pending`);
             inTag = false;
             break;
