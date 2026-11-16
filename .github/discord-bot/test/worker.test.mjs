@@ -267,14 +267,16 @@ test('once the issue exists, a failed tag or post note is reported, never as a f
 test('a stalled call ends the send with a report to the mod', async () => {
   const base = fakeFetch(discordRoutes(githubRoutes()));
   // The issue list never answers; only the call's own time limit ends it.
-  const stall = (url, init = {}) => (/issues\?state=all/.test(url)
-    ? stall(init)
+  let aborted = 0;
+  const hangList = (url, init = {}) => (/issues\?state=all/.test(url)
+    ? stall(init, () => { aborted++; })
     : base(url, init));
   const ctx = ctxFor();
   const t0 = Date.now();
-  await handle(await signed(submit()), env, ctx, { fetch: stall, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
+  await handle(await signed(submit()), env, ctx, { fetch: hangList, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
   const [res] = await Promise.all(ctx.jobs);
-  assert.ok(res.error, 'reported as an error');
+  assert.equal(aborted, 1, 'the stalled list call was ended by its time limit');
+  assert.match(res.error, /aborted|timeout/i, 'reported as the time-limit error');
   assert.ok(Date.now() - t0 < 2000, 'within the per-call limit');
   assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /Nothing was created/);
 });
