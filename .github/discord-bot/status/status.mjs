@@ -32,11 +32,18 @@ const RECENT_MS = 24 * 60 * 60 * 1000;
 // count: anyone can comment on a public issue.
 const BOT_LOGIN = 'github-actions[bot]';
 const RELEASE = [LABELS.pendingRelease, LABELS.shipped];
+// Lists are followed this many pages (100 each) at most.
+const MAX_PAGES = 10;
+// A message note older than this that was never marked sent is owed.
+const OWED_MS = 10 * 60 * 1000;
 
 const shipRecord = (tag, sha) => `Shipped in ${tag}.\n\n<!-- discord-shipped-in: ${tag} fixes: ${sha} -->`;
 // Written just before a message to the player. Of two runs about to send
-// the same message, only the one whose record came first sends it.
-const toldRecord = (key, text) => `Told the player: ${text}\n\n<!-- discord-told: ${key} -->`;
+// the same message, only the one whose note came first sends it. The note is
+// marked sent after the send, or dropped when the message went stale first;
+// the sweep sends a note left neither.
+const toldRecord = (key, text, status) => `Told the player: ${text}\n\n<!-- discord-told: ${key} -->`
+  + (status ? `\n<!-- discord-told-status: ${status} -->` : '');
 
 // The release labels an issue should carry.
 export function wantedLabels(st) {
@@ -55,7 +62,7 @@ export function wantedStatus(st, prs) {
   return working ? STATUS.inProgress : STATUS.triaged;
 }
 
-export async function run({ eventName, payload, env, fetchImpl = fetch, log = console.log }) {
+export async function run({ eventName, payload, env, fetchImpl = fetch, log = console.log, now = Date.now }) {
   // A scheduled run's payload names no repository; Actions sets GITHUB_REPOSITORY.
   const repo = (payload.repository && payload.repository.full_name) || env.GITHUB_REPOSITORY;
   const [owner, name] = repo.split('/');
@@ -73,27 +80,52 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     return r.data;
   }
 
+  // Every node of a GraphQL connection, page by page.
+  async function connection(query, variables, pick) {
+    const out = [];
+    let after = null;
+    for (let i = 0; i < MAX_PAGES; i++) {
+      const conn = pick(await graphql(query, { ...variables, after }));
+      if (!conn) return out;
+      out.push(...conn.nodes);
+      if (!conn.pageInfo || !conn.pageInfo.hasNextPage) return out;
+      after = conn.pageInfo.endCursor;
+    }
+    throw new Error(`more than ${MAX_PAGES * 100} linked items: too many to read`);
+  }
+
   // Open PRs that will close the issue: closing keywords and the
   // Development sidebar link alike.
   async function prsFor(n) {
-    const d = await graphql(`query($owner: String!, $name: String!, $number: Int!) {
+    return connection(`query($owner: String!, $name: String!, $number: Int!, $after: String) {
       repository(owner: $owner, name: $name) { issue(number: $number) {
-        closedByPullRequestsReferences(first: 100, includeClosedPrs: false) { nodes { isDraft state authorAssociation } } } } }`,
-    { owner, name, number: n });
-    return d.repository.issue.closedByPullRequestsReferences.nodes;
+        closedByPullRequestsReferences(first: 100, after: $after, includeClosedPrs: false) {
+          pageInfo { hasNextPage endCursor } nodes { isDraft state authorAssociation } } } } }`,
+    { owner, name, number: n }, (d) => d.repository.issue.closedByPullRequestsReferences);
   }
 
   // This repo's issues a PR will close.
   async function issuesClosedBy(prNumber) {
-    const d = await graphql(`query($owner: String!, $name: String!, $number: Int!) {
+    const nodes = await connection(`query($owner: String!, $name: String!, $number: Int!, $after: String) {
       repository(owner: $owner, name: $name) { pullRequest(number: $number) {
-        closingIssuesReferences(first: 100) { nodes { number repository { nameWithOwner } } } } } }`,
-    { owner, name, number: prNumber });
-    const pr = d.repository.pullRequest;
-    if (!pr) return [];
-    return pr.closingIssuesReferences.nodes
+        closingIssuesReferences(first: 100, after: $after) {
+          pageInfo { hasNextPage endCursor } nodes { number repository { nameWithOwner } } } } } }`,
+    { owner, name, number: prNumber }, (d) => d.repository.pullRequest && d.repository.pullRequest.closingIssuesReferences);
+    return nodes
       .filter((x) => !x.repository || x.repository.nameWithOwner.toLowerCase() === repo.toLowerCase())
       .map((x) => x.number);
+  }
+
+  // Every item of a REST list, page by page, until `stop` finds one.
+  async function listPages(path, stop = () => false) {
+    const out = [];
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const batch = await gh.call('GET', `${path}${path.includes('?') ? '&' : '?'}per_page=100&page=${page}`);
+      out.push(...batch);
+      if (batch.length < 100 || batch.some(stop)) return out;
+    }
+    log(`${path}: stopped after ${MAX_PAGES} pages`);
+    return out;
   }
 
   // The workflow's records on the issue, from every page: releases that
@@ -108,7 +140,16 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         const sh = /<!--\s*discord-shipped-in:\s*(\S+)\s+fixes:\s*([0-9a-f,]*)\s*-->/.exec(c.body || '');
         if (sh) shipped.push({ tag: sh[1], fixes: sh[2].split(',').filter(Boolean) });
         const tl = /<!--\s*discord-told:\s*(\S+)\s*-->/.exec(c.body || '');
-        if (tl) told.push({ key: tl[1], id: c.id });
+        if (tl) {
+          const body = c.body || '';
+          told.push({
+            key: tl[1], id: c.id, body,
+            text: (/^Told the player: ([\s\S]*?)\n\n<!--/.exec(body) || [])[1] || '',
+            status: (/<!--\s*discord-told-status:\s*(.+?)\s*-->/.exec(body) || [])[1] || null,
+            settled: /<!--\s*discord-(sent|dropped)\s*-->/.test(body),
+            at: Date.parse(c.created_at) || 0,
+          });
+        }
       }
       if (batch.length < 100) return { shipped, told };
     }
@@ -149,12 +190,15 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // shipped before these records existed): the first release tag on the
   // first page that holds it. Writes the record when `write` is set.
   async function recoverShip(n, sha, write) {
-    const tags = (await gh.call('GET', `/repos/${repo}/tags?per_page=100`)).filter((t) => pattern.test(t.name));
-    for (const t of tags) {
-      if (await tagContains(sha, t.commit && t.commit.sha ? t.commit.sha : t.name)) {
-        if (write) await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body: shipRecord(t.name, sha) });
-        return t.name;
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const batch = await gh.call('GET', `/repos/${repo}/tags?per_page=100&page=${page}`);
+      for (const t of batch.filter((x) => pattern.test(x.name))) {
+        if (await tagContains(sha, t.commit && t.commit.sha ? t.commit.sha : t.name)) {
+          if (write) await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body: shipRecord(t.name, sha) });
+          return t.name;
+        }
       }
+      if (batch.length < 100) break;
     }
     return null;
   }
@@ -202,11 +246,11 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       if (r.skipped) {
         // The forum has no such tag: the post did not move.
         log(`#${n}: ${r.skipped}`);
-        return { n, threadId, from, to: from };
+        return { n, threadId, from, to: from, st };
       }
       const after = await stateOf(n);
       const again = wantedStatus(after, after.issue.state === 'open' ? await prsFor(n) : []);
-      if (again === want) return { n, threadId, from, to: want };
+      if (again === want) return { n, threadId, from, to: want, st: after };
     }
     throw new Error(`#${n}: post status did not settle after ${SETTLE_TRIES} tries`);
   }
@@ -216,19 +260,73 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     return settlePost(n);
   }
 
+  // Write a message note and return it when this run's note is the first
+  // with that key; otherwise another run owns the message.
+  async function claim(n, key, text, status) {
+    const body = toldRecord(key, text, status);
+    const mine = await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body });
+    const first = (await recordsOf(n)).told.find((t) => t.key === key);
+    if (first && mine && first.id !== mine.id) return null;
+    return { id: mine && mine.id, body };
+  }
+
+  const settleNote = (note, how) => gh.call('PATCH', `/repos/${repo}/issues/comments/${note.id}`, { body: `${note.body}\n<!-- discord-${how} -->` });
+
+  // Send a claimed message, then mark its note sent. A failed send leaves the
+  // note open, for the sweep.
+  async function deliver(n, threadId, note, text, status, ping = []) {
+    try {
+      await discord.send(threadId, text, ping);
+    } catch (e) {
+      if (!/-> 404 /.test(e.message)) throw e;
+      log(`#${n}: Discord post is gone; message dropped`);
+      await settleNote(note, 'dropped');
+      return;
+    }
+    await settleNote(note, 'sent');
+    done.push({ issue: n, thread: threadId, status, message: text });
+  }
+
+  const statusNow = async (n) => {
+    const st = await stateOf(n);
+    return wantedStatus(st, st.issue.state === 'open' ? await prsFor(n) : []);
+  };
+
   // Tell the player, once, when the post ended on `status`. The key names
   // the change; a rerun or an overlapping run with the same key stays quiet.
   async function tell(moved, status, key, text) {
     if (!moved || moved.to !== status || moved.from === status) return;
-    const mine = await gh.call('POST', `/repos/${repo}/issues/${moved.n}/comments`, { body: toldRecord(key, text) });
-    const first = (await recordsOf(moved.n)).told.find((t) => t.key === key);
-    if (first && mine && first.id !== mine.id) return;
-    try {
-      await discord.send(moved.threadId, text);
-    } catch (e) {
-      if (!/-> 404 /.test(e.message)) throw e;
+    const note = await claim(moved.n, key, text, status);
+    if (!note) return;
+    // Another run may have moved the issue on since this one settled it; that
+    // run tells its own news.
+    if ((await statusNow(moved.n)) !== status) {
+      await settleNote(note, 'dropped');
+      return;
     }
-    done.push({ issue: moved.n, thread: moved.threadId, status, message: text });
+    await deliver(moved.n, moved.threadId, note, text, status);
+  }
+
+  // Tell the player about the status a run moved the post to, whichever run
+  // it is. Each key comes from the issue's state, so every run that sees the
+  // same change claims the same note and only one sends.
+  async function announce(moved) {
+    if (!moved || moved.to === moved.from) return;
+    const { st, to } = moved;
+    if (to === STATUS.fixed && st.fix) return tell(moved, to, `fixed-${st.fix}`, MESSAGES.fixed());
+    if (to === STATUS.shipped && st.fix && st.shippedIn) {
+      return tell(moved, to, `shipped-${st.shippedIn.replace(/[^\w.-]/g, '')}-${st.fix}`, MESSAGES.shipped(repo, st.shippedIn));
+    }
+    if (to === STATUS.closed && st.close) {
+      const reason = st.issue.state_reason;
+      return tell(moved, to, `closed-${st.close.id}`, reason === 'completed' ? MESSAGES.done() : MESSAGES.closed(reason));
+    }
+    if (to === STATUS.inProgress) {
+      // Once per time the issue is open: a second PR, or a PR back from
+      // draft, says nothing new.
+      const close = await lastClose(moved.n);
+      return tell(moved, to, `in-progress-after-${close ? close.id : 'none'}`, MESSAGES.inProgress());
+    }
   }
 
   // One issue's failure is logged and the rest still run; the job fails at the end.
@@ -255,10 +353,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     await each(numbers, async (n) => {
       const issue = await botIssue(n);
       if (!issue || issue.state !== 'open') return;
-      const moved = await sync(n);
-      if (moved && moved.from !== STATUS.inProgress) {
-        await tell(moved, STATUS.inProgress, `in-progress-pr${pr.number}-${String(pr.updated_at || payload.action).replace(/\W/g, '')}`, MESSAGES.inProgress());
-      }
+      await announce(await sync(n));
     });
   } else if (eventName === 'push' && String(payload.ref).startsWith('refs/tags/')) {
     const tag = payload.ref.slice('refs/tags/'.length);
@@ -269,22 +364,26 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     } else if (!pattern.test(tag)) {
       log(`tag ${tag} is not a release tag, nothing to do`);
     } else {
-      const since = new Date(Date.now() - RECENT_MS).toISOString();
-      const recent = await gh.call('GET', `/repos/${repo}/issues?state=closed&labels=${encodeURIComponent(LABELS.fromDiscord)}&since=${since}&per_page=100`);
+      const since = new Date(now() - RECENT_MS).toISOString();
+      const recent = await listPages(`/repos/${repo}/issues?state=closed&labels=${encodeURIComponent(LABELS.fromDiscord)}&since=${since}`);
       const pending = await gh.issuesWithLabel(repo, LABELS.pendingRelease);
       const numbers = [...new Set([...pending, ...recent].filter((i) => !i.pull_request && eligible(i)).map((i) => i.number))];
       await each(numbers, async (n) => {
-        const st = await stateOf(n);
-        if (st.fix && !st.shippedIn) {
-          if (await tagContains(st.fix, target)) {
-            await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body: shipRecord(tag, st.fix) });
-            const moved = await sync(n);
-            await tell(moved, STATUS.shipped, `shipped-${tag.replace(/[^\w.-]/g, '')}-${st.fix}`, MESSAGES.shipped(repo, tag));
-            return;
+        for (let i = 0; i < SETTLE_TRIES; i++) {
+          const st = await stateOf(n);
+          if (st.fix && !st.shippedIn) {
+            if (await tagContains(st.fix, target)) {
+              await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body: shipRecord(tag, st.fix) });
+            } else {
+              log(`#${n}: fix ${st.fix.slice(0, 7)} is not in ${tag}, still pending`);
+            }
           }
-          log(`#${n}: fix ${st.fix.slice(0, 7)} is not in ${tag}, still pending`);
+          const moved = await sync(n);
+          await announce(moved);
+          // A new fix that closed the issue meanwhile gets its own check.
+          const after = moved ? moved.st : await stateOf(n);
+          if (!after.fix || after.fix === st.fix || after.shippedIn) return;
         }
-        await sync(n);
       });
     }
   } else if (eventName === 'issues') {
@@ -293,36 +392,34 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       const issue = await botIssue(n);
       const m = issue && parseMarker(issue.body);
       if (m) {
-        // A locked post does not unarchive on a new message; reopen it first.
-        await discord.unarchive(m.threadId);
         const text = MESSAGES.needsInfo(m.reporterId);
-        await discord.send(m.threadId, text, m.reporterId ? [m.reporterId] : []);
-        done.push({ issue: n, thread: m.threadId, message: text });
+        // One ping per labeling: a rerun of the event finds the note.
+        const note = await claim(n, `needs-info-${String(payload.issue.updated_at || 'once').replace(/\W/g, '')}`, text, null);
+        if (note) {
+          // A locked post does not unarchive on a new message; reopen it first.
+          await discord.unarchive(m.threadId);
+          await deliver(n, m.threadId, note, text, null, m.reporterId ? [m.reporterId] : []);
+        }
       }
     } else if (['closed', 'reopened'].includes(payload.action)) {
       await each([n], async () => {
         if (!(await botIssue(n))) return;
-        const moved = await sync(n);
-        const st = await stateOf(n);
-        if (st.issue.state !== 'closed' || !st.close) return;
-        if (st.fix) {
-          await tell(moved, STATUS.fixed, `fixed-${st.fix}`, MESSAGES.fixed());
-        } else {
-          const reason = st.issue.state_reason;
-          await tell(moved, STATUS.closed, `closed-${st.close.id}`, reason === 'completed' ? MESSAGES.done() : MESSAGES.closed(reason));
-        }
+        await announce(await sync(n));
       });
     }
   } else if (eventName === 'schedule' || eventName === 'workflow_dispatch') {
-    // E3: the sweep. Report mode lists what is wrong; fix mode writes it,
-    // and neither tells anyone.
+    // E3: the sweep. Report mode lists what is wrong; fix mode writes it.
+    // Neither announces a status; fix mode only sends a message a run
+    // claimed and never sent, while it is still true.
     const fix = env.SWEEP_MODE === 'fix';
     const issues = (await gh.issuesWithLabel(repo, LABELS.fromDiscord)).filter(eligible);
     let wrong = 0;
     await each(issues.map((i) => i.number), async (n) => {
       let st = await stateOf(n);
       const parts = [];
-      if (st.fix && !st.shippedIn) {
+      // Only an issue labeled shipped can have lost its record; a pending fix
+      // waits for the next release tag.
+      if (st.fix && !st.shippedIn && hasLabel(st.issue, LABELS.shipped)) {
         const held = await recoverShip(n, st.fix, fix);
         if (held) {
           parts.push(`ship record missing (${held} holds the fix)`);
@@ -345,6 +442,20 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         parts.push(`labels ${has.join(', ') || '(none)'} -> ${want.join(', ') || '(none)'}`);
       }
       if (shown !== undefined && shown !== status) parts.push(`post ${shown || '(no status)'} -> ${status}`);
+      const owed = [];
+      const seen = new Set();
+      for (const t of st.records.told) {
+        if (seen.has(t.key)) continue;
+        seen.add(t.key);
+        if (!t.settled && now() - t.at > OWED_MS) owed.push(t);
+      }
+      for (const t of owed) {
+        const still = !t.status || t.status === status;
+        parts.push(`message "${t.text}" never sent${still ? '' : ' (no longer true)'}`);
+        if (!fix) continue;
+        if (still && shown !== undefined) await deliver(n, threadId, t, t.text, t.status);
+        else await settleNote(t, 'dropped');
+      }
       if (!parts.length) return;
       wrong++;
       const line = `#${n}: ${parts.join('; ')}`;

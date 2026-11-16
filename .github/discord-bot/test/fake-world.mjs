@@ -16,6 +16,8 @@ export function world() {
     calls: [],
     nextId: 1,
     tags: [], // [{ name, commit: { sha } }], newest first
+    pageSize: 100, // nodes per GraphQL page
+    clock: Date.now(), // created_at and updated_at
     hooks: [], // [method, RegExp, fn(call)] run before a matching call is served
     fail: [], // [method, RegExp, Response | Error, times]
   };
@@ -23,7 +25,7 @@ export function world() {
   w.issue = (n, over = {}) => {
     const thread = over.thread || String(700 + n);
     const i = {
-      number: n, state: 'open', state_reason: null, labels: new Set(['from-discord']),
+      number: n, state: 'open', state_reason: null, labels: new Set(['from-discord']), updated_at: new Date(w.clock).toISOString(),
       body: `## Report\n\n> hi\n\n${MARK(thread)}`, comments: [], events: [], ...over,
     };
     if (over.labels) i.labels = new Set(over.labels);
@@ -38,7 +40,7 @@ export function world() {
     return t;
   };
   w.record = (n, body, login = BOT) => {
-    const c = { id: w.nextId++, user: { login }, body };
+    const c = { id: w.nextId++, user: { login }, body, created_at: new Date(w.clock).toISOString() };
     w.issues.get(n).comments.push(c);
     return c;
   };
@@ -62,6 +64,12 @@ export function world() {
   const page = (url) => Number((/[?&]page=(\d+)/.exec(url) || [0, 1])[1]);
   const per = (url) => Number((/[?&]per_page=(\d+)/.exec(url) || [0, 30])[1]);
   const slice = (all, url) => all.slice((page(url) - 1) * per(url), page(url) * per(url));
+  // A GraphQL connection page; the cursor is the next index.
+  const gqlPage = (all, after) => {
+    const from = Number(after || 0);
+    const nodes = all.slice(from, from + w.pageSize);
+    return { nodes, pageInfo: { hasNextPage: from + w.pageSize < all.length, endCursor: String(from + w.pageSize) } };
+  };
 
   const routes = [
     ['GET', /\/repos\/me\/one\/issues\/(\d+)$/, (m) => {
@@ -71,7 +79,10 @@ export function world() {
     ['GET', /\/repos\/me\/one\/issues\?.*labels=([^&]+)/, (m, url) => {
       const label = decodeURIComponent(m[1]);
       const state = (/[?&]state=(\w+)/.exec(url) || [0, 'open'])[1];
-      const all = [...w.issues.values()].filter((i) => i.labels.has(label) && (state === 'all' || i.state === state)).map(view);
+      const since = (/[?&]since=([^&]+)/.exec(url) || [0, ''])[1];
+      const all = [...w.issues.values()]
+        .filter((i) => i.labels.has(label) && (state === 'all' || i.state === state) && (!since || i.updated_at >= decodeURIComponent(since)))
+        .map(view);
       return json(slice(all, url));
     }],
     ['GET', /\/repos\/me\/one\/issues\/(\d+)\/comments/, (m, url) => json(slice(w.issues.get(Number(m[1])).comments, url))],
@@ -96,17 +107,25 @@ export function world() {
       const status = w.contains.get(`${m[1]}...${decodeURIComponent(m[2])}`) || 'behind';
       return json({ status });
     }],
-    ['GET', /\/repos\/me\/one\/tags\?/, () => json(w.tags)],
+    ['GET', /\/repos\/me\/one\/tags\?/, (m, url) => json(slice(w.tags, url))],
+    ['PATCH', /\/repos\/me\/one\/issues\/comments\/(\d+)$/, (m, url, body) => {
+      for (const i of w.issues.values()) {
+        const c = i.comments.find((x) => x.id === Number(m[1]));
+        if (c) { c.body = body.body; return json({ id: c.id }); }
+      }
+      return json({ message: 'nf' }, 404);
+    }],
     ['POST', /api\.github\.com\/graphql$/, (m, url, body) => {
       const v = body.variables;
       if (/closedByPullRequestsReferences/.test(body.query)) {
-        const nodes = [...w.prs.values()].filter((p) => p.closes.includes(v.number) && p.state === 'OPEN')
+        const all = [...w.prs.values()].filter((p) => p.closes.includes(v.number) && p.state === 'OPEN')
           .map((p) => ({ isDraft: !!p.draft, state: p.state, authorAssociation: p.author_association }));
-        return json({ data: { repository: { issue: { closedByPullRequestsReferences: { nodes } } } } });
+        return json({ data: { repository: { issue: { closedByPullRequestsReferences: gqlPage(all, v.after) } } } });
       }
       if (/closingIssuesReferences/.test(body.query)) {
         const p = w.prs.get(v.number);
-        return json({ data: { repository: { pullRequest: { closingIssuesReferences: { nodes: (p ? p.closes : []).map((number) => ({ number })) } } } } });
+        const all = (p ? p.closes : []).map((c) => (typeof c === 'number' ? { number: c, repository: { nameWithOwner: 'me/one' } } : c));
+        return json({ data: { repository: { pullRequest: p ? { closingIssuesReferences: gqlPage(all, v.after) } : null } } });
       }
       return json({ errors: [{ message: 'unknown query' }] });
     }],
@@ -153,5 +172,4 @@ export function world() {
   return w;
 }
 
-export const fixedIn = (sha) => `Fixed in ${sha}.\n\n<!-- discord-fixed-in: ${sha} -->`;
 export const shippedIn = (tag, shas) => `Shipped in ${tag}.\n\n<!-- discord-shipped-in: ${tag} fixes: ${shas.join(',')} -->`;
