@@ -296,7 +296,7 @@ test('shipping adds the shipped label before it removes pending-release', async 
   const f = fakeFetch(routes({}, [['GET', /\/issues\?state=all.*labels=pending-release/, () => [issue(17)]]]));
   await run({ eventName: 'push', fetchImpl: f, env, log: quiet, payload: { ref: 'refs/tags/v5.0.3', repository } });
   const labelOps = f.calls.filter((c) => /issues\/17\/labels/.test(c.url)).map((c) => c.method);
-  assert.deepEqual(labelOps, ['POST', 'DELETE']);
+  assert.deepEqual(labelOps, ['POST', 'DELETE', 'POST'], 'shipped first, and again after pending goes');
 });
 
 test('a tag event is checked against the commit it pushed, not where the tag points now', async () => {
@@ -370,4 +370,19 @@ test('an annotated tag is checked against the commit it points at', async () => 
   const done = await run({ eventName: 'push', fetchImpl: f, env, log: quiet,
     payload: { ref: 'refs/tags/v5.0.7', created: true, after: '7a90b1e', head_commit: { id: 'c0ffee1' }, repository } });
   assert.equal(done.length, 1);
+});
+
+test('a merge that dropped shipped during a ship of a tag holding its fix ends shipped, not with neither label', async () => {
+  let reads = 0;
+  const f = fakeFetch(routes({}, [
+    ['GET', /\/issues\?state=all.*labels=pending-release/, () => [issue(17)]],
+    ['GET', /\/issues\/17\/comments/, () => (++reads === 1
+      ? [{ user: BOT, body: '<!-- discord-fixed-in: aaaaaaa -->' }]
+      : [{ user: BOT, body: '<!-- discord-fixed-in: aaaaaaa -->' }, { user: BOT, body: '<!-- discord-fixed-in: bbbbbbb -->' }])],
+    ['GET', /\/compare\/(aaaaaaa|bbbbbbb)\.\.\.v5\.0\.8$/, () => ({ status: 'ahead' })],
+  ]));
+  await run({ eventName: 'push', fetchImpl: f, env, log: quiet, payload: { ref: 'refs/tags/v5.0.8', repository } });
+  const ops = f.calls.filter((c) => /issues\/17\/labels/.test(c.url))
+    .map((c) => `${c.method} ${c.method === 'POST' ? c.body.labels[0] : c.url.split('/').pop()}`);
+  assert.deepEqual(ops, ['POST shipped', 'DELETE pending-release', 'POST shipped']);
 });

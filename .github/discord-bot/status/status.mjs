@@ -90,6 +90,10 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       await discord.setStatus(m.threadId, STATUS.fixed).catch((e) => { if (!/-> 404 /.test(e.message)) throw e; });
       return;
     }
+    // Every fix is in the tag. A merge running meanwhile may have dropped
+    // `shipped` (it drops it before recording): add it again so the issue
+    // never ends with neither label.
+    await gh.addLabels(repo, issue.number, [LABELS.shipped]);
   }
 
   // Issues a PR says it closes. A number that is not an issue (404) is

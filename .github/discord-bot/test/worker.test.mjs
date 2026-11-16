@@ -401,3 +401,25 @@ test('a create that succeeded with a cut-off answer is not reported as nothing c
   assert.doesNotMatch(f.find('PATCH', /\/webhooks\//)[0].body.content, /Nothing was created/);
   assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 0, 'the lock stays');
 });
+
+test('a lost connection on create (a plain Error on Workers) keeps the lock; a 4xx refusal does not', async () => {
+  const lost = fakeFetch(discordRoutes(githubRoutes([], [
+    ['POST', /\/issues$/, () => { throw new Error('Network connection lost.'); }],
+  ])));
+  let ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: lost, installationToken: async () => 'inst', log: () => {} });
+  let [res] = await Promise.all(ctx.jobs);
+  assert.equal(res.uncertain, true);
+  assert.match(lost.find('PATCH', /\/webhooks\//)[0].body.content, /may have been created/);
+  assert.equal(lost.find('DELETE', /labels\/discord-lock-700$/).length, 0);
+
+  const refused = fakeFetch(discordRoutes(githubRoutes([], [
+    ['POST', /\/issues$/, () => new Response('{"message":"Validation Failed"}', { status: 422 })],
+  ])));
+  ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: refused, installationToken: async () => 'inst', log: () => {} });
+  [res] = await Promise.all(ctx.jobs);
+  assert.equal(res.uncertain, undefined);
+  assert.match(refused.find('PATCH', /\/webhooks\//)[0].body.content, /^Nothing was created/);
+  assert.equal(refused.find('DELETE', /labels\/discord-lock-700$/).length, 1);
+});

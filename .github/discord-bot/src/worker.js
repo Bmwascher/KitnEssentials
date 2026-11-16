@@ -55,11 +55,14 @@ export function config(env) {
   return { repos, forums };
 }
 
-// A write whose result is unknown: no answer (time limit, network failure) or
-// a GitHub server error, which can come after the write was applied.
+// A write whose result is unknown: anything but a definite refusal (GitHub
+// answered 4xx) or a call that was never sent (out of time before it). A lost
+// connection on Workers is a plain Error, a timeout an AbortError or
+// TimeoutError, a cut-off success a SyntaxError; GitHub's 5xx can come after
+// the write was applied.
 export function unknownOutcome(e) {
-  // SyntaxError: a success whose body was cut off, so the write did happen.
-  return /TimeoutError|AbortError|TypeError|SyntaxError/.test(e.name) || /-> 5\d\d /.test(e.message);
+  const msg = String((e && e.message) || '');
+  return !/^GitHub \S+ \S+ -> 4\d\d /.test(msg) && !/^out of time before /.test(msg);
 }
 
 function canUse(member) {
