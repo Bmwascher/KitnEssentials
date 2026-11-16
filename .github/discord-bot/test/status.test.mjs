@@ -191,21 +191,54 @@ test('needs-info reopens an archived post, then pings only the reporter', async 
   assert.deepEqual(order, ['PATCH', 'POST'], 'reopened before the message');
 });
 
-test('only the workflow\'s own fixed-in comment counts, read from every page', async () => {
+test('only the workflow\'s own fixed-in comments count, from every page, and the tag needs all of them', async () => {
   const marker = (sha, user) => ({ user, body: `<!-- discord-fixed-in: ${sha} -->` });
   const outsider = { login: 'someone' };
   const page1 = [marker('aaaaaaa', BOT), ...Array.from({ length: 99 }, () => ({ user: outsider, body: 'me too' }))];
   const f = fakeFetch(routes({}, [
     ['GET', /\/issues\?state=all.*labels=pending-release/, () => [issue(17)]],
     ['GET', /\/issues\/17\/comments\?per_page=100&page=1$/, () => page1],
-    // A later page: the bot's newer record, then an outsider's planted one.
+    // A later page: a second fix, then an outsider's planted record.
     ['GET', /\/issues\/17\/comments\?per_page=100&page=2$/, () => [marker('bbbbbbb', BOT), marker('ccccccc', outsider)]],
+    ['GET', /\/compare\/aaaaaaa\.\.\.v5\.0\.1$/, () => ({ status: 'ahead' })],
     ['GET', /\/compare\/bbbbbbb\.\.\.v5\.0\.1$/, () => ({ status: 'behind' })],
   ]));
   const done = await run({ eventName: 'push', fetchImpl: f, env, log: quiet, payload: { ref: 'refs/tags/v5.0.1', repository } });
-  assert.equal(done.length, 0, 'held by the bot\'s newest commit, not the outsider\'s');
-  assert.equal(f.find('GET', /compare\/ccccccc/).length, 0);
-  assert.equal(f.find('GET', /compare\/aaaaaaa/).length, 0);
+  assert.equal(done.length, 0, 'held: the tag lacks the second fix');
+  assert.equal(f.find('GET', /compare\/ccccccc/).length, 0, 'the outsider\'s record is never read');
+});
+
+test('rerunning an old merge event changes nothing', async () => {
+  const f = fakeFetch(routes({ 17: issue(17, { labels: [{ name: 'from-discord' }, { name: 'shipped' }] }) }, [
+    ['GET', /\/issues\/17\/comments/, () => [{ user: BOT, body: '<!-- discord-fixed-in: abc1234 -->' }]],
+  ]));
+  const done = await run({ eventName: PR, fetchImpl: f, env, log: quiet,
+    payload: { action: 'closed', repository, pull_request: pr({ merged: true, merge_commit_sha: 'abc1234' }) } });
+  assert.equal(done.length, 0);
+  assert.equal(f.calls.filter((c) => c.method !== 'GET').length, 0, 'no label, comment or Discord write');
+});
+
+test('a merge that lands while In progress is being written wins', async () => {
+  let reads = 0;
+  const f = fakeFetch(routes({}, [
+    ['GET', /repos\/me\/one\/issues\/17$/, () => (++reads === 1 ? issue(17) : issue(17, { labels: [{ name: 'from-discord' }, { name: 'pending-release' }] }))],
+  ]));
+  const done = await run({ eventName: PR, fetchImpl: f, env, log: quiet, payload: { action: 'opened', repository, pull_request: pr() } });
+  assert.equal(done.length, 0);
+  assert.equal(f.calls.filter((c) => /discord\.com/.test(c.url)).length, 0);
+});
+
+test('a failed issue read on a PR fails the job instead of passing silently', async () => {
+  const f = fakeFetch(routes({}, [['GET', /repos\/me\/one\/issues\/17$/, () => new Response('slow down', { status: 403 })]]));
+  await assert.rejects(run({ eventName: PR, fetchImpl: f, env, log: quiet,
+    payload: { action: 'closed', repository, pull_request: pr({ merged: true, merge_commit_sha: 'abc1234' }) } }), /#17/);
+});
+
+test('a moved release tag ships nothing', async () => {
+  const f = fakeFetch(routes({}, [['GET', /\/issues\?state=all/, () => [issue(17)]]]));
+  const done = await run({ eventName: 'push', fetchImpl: f, env, log: quiet, payload: { ref: 'refs/tags/v5.0.120', created: false, forced: true, repository } });
+  assert.equal(done.length, 0);
+  assert.equal(f.calls.length, 0);
 });
 
 test('a ship that stopped after telling the player is finished without telling again', async () => {

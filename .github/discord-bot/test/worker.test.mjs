@@ -180,16 +180,62 @@ test('a failed duplicate lookup stops the send instead of filing blind', async (
   assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /Nothing was created/);
 });
 
-test('two sends of one post at once file one issue', async () => {
+// A small GitHub with real state: labels are created once, issues are listed.
+function sharedGitHub() {
+  const labels = new Set();
+  const issues = [];
+  const tick = () => new Promise((r) => setTimeout(r, 5));
+  return [
+    ['GET', /issues\?state=all.*labels=from-discord/, async () => { await tick(); return [...issues]; }],
+    ['POST', /test-one\/labels$/, async (b) => {
+      await tick();
+      if (labels.has(b.name)) return new Response('{"message":"Validation Failed","errors":[{"resource":"Label","code":"already_exists","field":"name"}]}', { status: 422 });
+      labels.add(b.name);
+      return new Response('{}', { status: 201 });
+    }],
+    ['DELETE', /test-one\/labels\/(.+)$/, async (_, url) => { await tick(); labels.delete(decodeURIComponent(url.split('/').pop())); return null; }],
+    ['POST', /test-one\/issues$/, async (b) => {
+      await tick();
+      const n = issues.length + 17;
+      issues.push({ number: n, html_url: `u/${n}`, body: b.body });
+      return { number: n, html_url: `u/${n}` };
+    }],
+  ];
+}
+
+test('two sends of one post at the same moment file one issue', async () => {
+  const f = fakeFetch(discordRoutes(sharedGitHub()));
+  const ctx = ctxFor();
+  await Promise.all([
+    handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' }),
+    handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' }),
+  ]);
+  const results = await Promise.all(ctx.jobs);
+  assert.equal(f.find('POST', /\/issues$/).length, 1, 'one issue');
+  assert.equal(results.filter((r) => r.created).length, 1);
+  assert.ok(results.some((r) => r.busy || r.duplicate), JSON.stringify(results));
+  assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 1, 'only the holder releases the lock');
+});
+
+test('a label refusal that is not "already exists" is an error, not a busy lock', async () => {
   const f = fakeFetch(discordRoutes(githubRoutes([], [
-    ['POST', /\/labels$/, () => new Response('{"message":"Validation Failed"}', { status: 422 })],
+    ['POST', /\/labels$/, () => new Response('{"message":"You have exceeded a secondary rate limit"}', { status: 422 })],
   ])));
   const ctx = ctxFor();
   await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
-  assert.deepEqual(await Promise.all(ctx.jobs), [{ busy: true }]);
+  const [res] = await Promise.all(ctx.jobs);
+  assert.match(res.error, /422/);
+  assert.doesNotMatch(f.find('PATCH', /\/webhooks\//)[0].body.content, /another send/);
+});
+
+test('a form submitted after its forum left the list files nothing', async () => {
+  const f = fakeFetch(discordRoutes(githubRoutes()));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), { ...env, FORUM_CHANNEL_IDS: '901' }, ctx, { fetch: f, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(ctx.jobs), [{ refused: 'forum' }]);
   assert.equal(f.find('POST', /\/issues$/).length, 0);
-  assert.equal(f.find('DELETE', /labels\//).length, 0, 'another send holds the lock');
-  assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /another send of this post is running/);
+  const r = await handle(await signed(submit()), { ...env, FORUM_CHANNEL_IDS: '' }, ctxFor(), { fetch: f });
+  assert.match((await r.json()).data.content, /not set up/);
 });
 
 test('a send that finished while this one waited for the lock is not filed again', async () => {
@@ -259,4 +305,21 @@ test('a create that got no answer is reported as maybe created, not as nothing',
   const told = base.find('PATCH', /\/webhooks\//)[0].body.content;
   assert.match(told, /may have been created/);
   assert.doesNotMatch(told, /Nothing was created/);
+  assert.equal(base.find('DELETE', /labels\/discord-lock-700$/).length, 0, 'the lock stays until the outcome is known');
+});
+
+test('a create that answered late is found again and reported as created', async () => {
+  let looks = 0;
+  const base = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /issues\?state=all.*labels=from-discord/, () => (++looks <= 2 ? [] : [{ number: 17, html_url: 'u/17', body: '<!-- discord-thread: 700 reporter: 42 -->' }])],
+  ])));
+  const hang = (url, init = {}) => (init.method === 'POST' && /\/issues$/.test(url)
+    ? new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)))
+    : base(url, init));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
+  const [res] = await Promise.all(ctx.jobs);
+  assert.equal(res.created, 17);
+  assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /^Created ONE #17/);
+  assert.equal(base.find('DELETE', /labels\/discord-lock-700$/).length, 1);
 });

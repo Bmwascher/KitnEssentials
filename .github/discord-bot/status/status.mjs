@@ -54,18 +54,18 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     }
   }
 
-  // The fix commit the merged-PR step recorded on the issue (the newest one),
-  // read from every page and only from this workflow's own comments.
-  async function fixedIn(issue) {
-    let sha = null;
+  // Every fix commit the merged-PR step recorded on the issue, read from every
+  // page and only from this workflow's own comments.
+  async function fixesOf(issue) {
+    const shas = new Set();
     for (let page = 1; ; page++) {
       const batch = await gh.call('GET', `/repos/${repo}/issues/${issue.number}/comments?per_page=100&page=${page}`);
       for (const c of batch) {
         if (!c.user || c.user.login !== BOT_LOGIN) continue;
         const m = /<!--\s*discord-fixed-in:\s*([0-9a-f]{7,40})\s*-->/.exec(c.body || '');
-        if (m) sha = m[1];
+        if (m) shas.add(m[1]);
       }
-      if (batch.length < 100) return sha;
+      if (batch.length < 100) return [...shas];
     }
   }
 
@@ -74,12 +74,20 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     return r.status === 'ahead' || r.status === 'identical';
   }
 
+  // Issues a PR says it closes. A number that is not an issue (404) is
+  // skipped; any other read error fails the job at the end.
   async function linkedIssues(pr) {
     const nums = closingIssues(`${pr.title}\n${pr.body || ''}`);
     const out = [];
     for (const n of nums) {
-      const issue = await gh.getIssue(repo, n).catch(() => null);
-      if (issue && !issue.pull_request) out.push(issue);
+      try {
+        const issue = await gh.getIssue(repo, n);
+        if (!issue.pull_request) out.push(issue);
+      } catch (e) {
+        if (/-> 404 /.test(e.message)) continue;
+        log(`#${n}: ${e.message}`);
+        failed.push(n);
+      }
     }
     return out;
   }
@@ -93,15 +101,26 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       } else if (!TRUSTED.has(pr.author_association)) {
         log(`PR author is ${pr.author_association || 'unknown'}, not a repo member: nothing to do`);
       } else {
-        // A post already Fixed or Shipped does not go back to In progress.
-        const open = (await linkedIssues(pr)).filter((i) => !hasLabel(i, LABELS.pendingRelease) && !hasLabel(i, LABELS.shipped));
-        await each(open, (issue) => notify(issue, STATUS.inProgress, MESSAGES.inProgress()));
+        // A post already Fixed or Shipped does not go back to In progress. The
+        // labels are read again just before the write, in case a merge landed.
+        const done = (i) => hasLabel(i, LABELS.pendingRelease) || hasLabel(i, LABELS.shipped);
+        const open = (await linkedIssues(pr)).filter((i) => !done(i));
+        await each(open, async (issue) => {
+          const now = await gh.getIssue(repo, issue.number);
+          if (done(now)) return;
+          await notify(now, STATUS.inProgress, MESSAGES.inProgress());
+        });
       }
     } else if (action === 'closed' && pr.merged && pr.base.ref === payload.repository.default_branch) {
       const fixed = (await linkedIssues(pr)).filter(eligible);
       await each(fixed, async (issue) => {
+        // A merge already recorded is a rerun of this event: do nothing again.
+        if (pr.merge_commit_sha && (await fixesOf(issue)).includes(pr.merge_commit_sha)) {
+          log(`#${issue.number}: ${pr.merge_commit_sha.slice(0, 7)} already recorded, nothing to do`);
+          return;
+        }
         // The commit first, then the label: a pending issue always has the
-        // commit a release tag is checked against.
+        // commits a release tag is checked against.
         if (pr.merge_commit_sha) {
           await gh.call('POST', `/repos/${repo}/issues/${issue.number}/comments`, {
             body: `Fixed in ${pr.merge_commit_sha}; ships with the first release tag that contains it.\n\n${fixedInMarker(pr.merge_commit_sha)}`,
@@ -116,8 +135,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   } else if (eventName === 'push' && String(payload.ref).startsWith('refs/tags/')) {
     const tag = payload.ref.slice('refs/tags/'.length);
     const pattern = new RegExp(env.RELEASE_TAG_PATTERN || '^v\\d');
-    if (payload.deleted) {
-      log(`tag ${tag} was deleted, nothing to do`);
+    if (payload.deleted || payload.created === false) {
+      log(`tag ${tag} was deleted or moved, not created: nothing to do`);
     } else if (!pattern.test(tag)) {
       log(`tag ${tag} is not a release tag, nothing to do`);
     } else {
@@ -128,14 +147,17 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           await gh.removeLabel(repo, issue.number, LABELS.pendingRelease);
           return;
         }
-        // Ship only a fix this tag contains, so a rerun of an older tag, or a
-        // tag cut before the fix merged, leaves it pending.
-        const sha = await fixedIn(issue);
-        if (sha && !(await tagContains(sha, tag))) {
-          log(`#${issue.number}: fix ${sha.slice(0, 7)} is not in ${tag}, still pending`);
-          return;
+        // Ship only when this tag contains every recorded fix, so a rerun of an
+        // older tag, or a tag cut before a fix merged, leaves it pending. With
+        // no record (labeled by hand by someone with write access) it ships.
+        const shas = await fixesOf(issue);
+        for (const sha of shas) {
+          if (!(await tagContains(sha, tag))) {
+            log(`#${issue.number}: fix ${sha.slice(0, 7)} is not in ${tag}, still pending`);
+            return;
+          }
         }
-        if (!sha) log(`#${issue.number}: no recorded fix commit (labeled by hand); shipping with ${tag}`);
+        if (!shas.length) log(`#${issue.number}: no recorded fix commit (labeled by hand); shipping with ${tag}`);
         try {
           await notify(issue, STATUS.shipped, MESSAGES.shipped(repo, tag));
         } catch (e) {

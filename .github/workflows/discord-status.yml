@@ -20,15 +20,19 @@ permissions:
   contents: read
   issues: write
 
-# Release tags run one at a time so two never ship the same issue; every other
-# event runs on its own, so a burst of label events never cancels one.
-concurrency:
-  group: discord-status-${{ github.event_name == 'push' && 'tags' || github.run_id }}
-
 jobs:
   status:
-    # Of the labels, only needs-info has anything to say.
-    if: github.event_name != 'issues' || github.event.action != 'labeled' || github.event.label.name == 'needs-info'
+    # Skipped before it can queue: labels other than needs-info, and tag
+    # deletions or moves (only a newly created tag is a release).
+    if: >-
+      (github.event_name != 'issues' || github.event.action != 'labeled' || github.event.label.name == 'needs-info') &&
+      (github.event_name != 'push' || (github.event.created && !github.event.deleted))
+    # Release tags run one at a time so two never ship the same issue; one PR's
+    # events run in order (opened before closed); everything else runs alone.
+    # GitHub keeps one waiting run per group: a third tag in quick succession
+    # replaces the waiting one, whose fixes then ship with the newer tag.
+    concurrency:
+      group: discord-status-${{ github.event_name == 'push' && 'tags' || github.event.pull_request && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

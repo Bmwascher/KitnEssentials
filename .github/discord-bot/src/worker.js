@@ -141,12 +141,20 @@ export async function fileIssue(interaction, env, deps) {
   let gh;
   let ghTail; // its own time limit, so the lock is released even after the budget ran out
   let locked = false;
+  let keepLock = false;
   let creating = false;
   try {
     const ghToken = await (deps.installationToken || installationToken)(
       { appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY, repo }, f);
     gh = githubClient(ghToken, f);
     ghTail = githubClient(ghToken, timedFetch(deps.fetch, TAIL_MS));
+
+    // The form may have been opened before the forum list changed: check again.
+    const thread = await discord.getChannel(threadId);
+    if (!cfg.forums.includes(thread.parent_id)) {
+      await followup('Nothing was created: this post is not in a forum the bot is set up for.');
+      return { refused: 'forum' };
+    }
 
     // Look, lock, then look again: a send that finished between the first look
     // and the lock has released its lock but left its issue.
@@ -197,14 +205,23 @@ export async function fileIssue(interaction, env, deps) {
     await followup(`Created ${repoKey} #${issue.number}: ${issue.html_url}${notes.length ? ` (${notes.join('; ')})` : ''}`);
     return { created: issue.number, notes };
   } catch (e) {
-    // A create that got no answer may still have happened on GitHub's side.
-    const unknown = creating && /TimeoutError|AbortError/.test(e.name);
-    await followup(unknown
-      ? `The issue may have been created: GitHub did not answer in time. Send the post again to check; it will point at the issue if it exists.`
-      : `Nothing was created: ${e.message.slice(0, 1500)}`);
+    // A create that got no answer may still have happened on GitHub's side:
+    // look once more, and if it is not there yet keep the lock, so a retry
+    // cannot file a second issue while the first may still appear.
+    if (creating && /TimeoutError|AbortError/.test(e.name)) {
+      const found = await ghTail.findByThread(repo, threadId).catch(() => null);
+      if (found) {
+        await followup(`Created ${repoKey} #${found.number}: ${found.html_url} (GitHub answered late; the post's tag and note were not set)`);
+        return { created: found.number, late: true };
+      }
+      keepLock = true;
+      await followup(`The issue may have been created: GitHub did not answer in time. If none appears in ${repo} within a few minutes, delete the label ${lockLabel(threadId)} there and send the post again.`);
+      return { error: e.message, uncertain: true };
+    }
+    await followup(`Nothing was created: ${e.message.slice(0, 1500)}`);
     return { error: e.message };
   } finally {
-    if (locked) {
+    if (locked && !keepLock) {
       try { await ghTail.releaseThread(repo, threadId); } catch (e) { log(`lock ${lockLabel(threadId)} not released: ${e.message}`); }
     }
   }
@@ -227,6 +244,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
   if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('gh:')) {
     if (!canUse(interaction.member)) return reply('Only moderators and admins can send posts to GitHub.');
     const cfg = config(env);
+    if (!cfg.forums.length) return reply('The bot is not set up yet: FORUM_CHANNEL_IDS is empty.');
     const v = modalValues(interaction.data);
     const problems = [];
     if (!normRepoKey(v.repo, cfg.repos)) problems.push(`Repo must be ${Object.keys(cfg.repos).join(' or ')}.`);

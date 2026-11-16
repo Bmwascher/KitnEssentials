@@ -101,9 +101,12 @@ export function githubClient(token, fetchImpl = fetch) {
       const res = await fetchImpl(`${API}/repos/${repo}/labels`, {
         method: 'POST', headers: headers(), body: JSON.stringify({ name: lockLabel(threadId), color: 'ededed', description: 'Send to GitHub in progress' }),
       });
-      if (res.status === 422) return false;
-      if (!res.ok) throw new Error(`GitHub POST /repos/${repo}/labels -> ${res.status} ${(await res.text().catch(() => '')).slice(0, 300)}`);
-      return true;
+      if (res.ok) return true;
+      const text = await res.text().catch(() => '');
+      // Only "already exists" means another send holds the lock; any other
+      // refusal (validation, abuse limits) is an error.
+      if (res.status === 422 && /already_exists/.test(text)) return false;
+      throw new Error(`GitHub POST /repos/${repo}/labels -> ${res.status} ${text.slice(0, 300)}`);
     },
     releaseThread: (repo, threadId) => call('DELETE', `/repos/${repo}/labels/${encodeURIComponent(lockLabel(threadId))}`),
   };
