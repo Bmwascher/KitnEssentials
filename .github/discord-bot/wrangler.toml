@@ -5,10 +5,36 @@ name = "discord-issue-bot"
 main = "src/worker.js"
 compatibility_date = "2025-06-01"
 
+# The post scan every 5 minutes, and the daily check of waiting posts.
+# These must match CRONS in src/scan.js.
+[triggers]
+crons = ["*/5 * * * *", "0 15 * * *"]
+
+# Where the scan remembers which posts it has messaged. Create it once with
+# `npx wrangler@3 kv namespace create STATE`, then uncomment these three lines
+# with the id it prints. Until then the scan does nothing (right-click still works).
+# [[kv_namespaces]]
+# binding = "STATE"
+# id = "<the namespace id>"
+
 [vars]
 # Which repo each form choice files into, by a short key the form shows.
 # Several repos: {"KE":"owner/one","UI":"owner/two"}.
 REPOS = '{"KE":"Bmwascher/KitnEssentials"}'
-# Forum channel id(s) the command works in, comma separated. Required: while
-# it is empty the command refuses every post.
-FORUM_CHANNEL_IDS = ""
+# The forums the bot works in, keyed by channel id, each with the client and
+# type every post there has ({} guesses from the post's tags), e.g.
+# {"111":{"client":"Retail","type":"Bug"},"222":{"client":"Forever","type":"Bug"},"333":{"type":"Feature"}}
+# Required: while it is empty the bot does nothing anywhere.
+FORUMS = ""
+# The server those forums are in (the scan lists its posts).
+GUILD_ID = ""
+# Role ids allowed to press the "Send to GitHub" button, comma separated.
+# Empty: only moderators (Manage Threads) can use it.
+APPROVED_ROLE_IDS = ""
+# Channel for the daily list of posts waiting with no status. Empty: logged only.
+MOD_CHANNEL_ID = ""
+# How old a post with no status must be before the daily list names it.
+STALE_DAYS = "3"
+# Optional: the template fields each type of post should fill, checked as
+# advice for moderators only. Default: see DEFAULT_TEMPLATES in src/core.js.
+# TEMPLATES = '{"Bug":["Version","Issue Details","Steps to Reproduce"],"Feature":["Summary"]}'

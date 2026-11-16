@@ -1,12 +1,16 @@
 // Cloudflare Worker that answers Discord interactions over HTTP (no gateway,
-// no always-on server). One command: right-click a forum post > Apps >
-// "Send to GitHub" opens a form; submitting it files the issue.
+// no always-on server). Two ways in, one form: the "Send to GitHub" button
+// the scheduled scan puts in each new post (approved roles), or right-click
+// a post > Apps > "Send to GitHub" (moderators). Submitting the form files
+// the issue.
 import {
   STATUS, MESSAGES, PERMS, buildTitle, buildBody, labelsFor, cleanPostTitle,
   guessFromTags, normClient, normType, normRepoKey, parseRepos, timedFetch,
+  parseForums, parseRoleIds, parseTemplates, templateCheck, templateSummary,
 } from './core.js';
 import { discordClient } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
+import { scan, daily, CRONS, SEND_BUTTON, threadRecord, saveThreadRecord } from './scan.js';
 
 export const COMMAND_NAME = 'Send to GitHub';
 const EPHEMERAL = 64;
@@ -51,8 +55,11 @@ export async function verifyDiscord(publicKeyHex, signatureHex, timestamp, body,
 // ends up in another server cannot file into these repos.
 export function config(env) {
   const repos = parseRepos(env.REPOS);
-  const forums = String(env.FORUM_CHANNEL_IDS || '').split(',').map((s) => s.trim()).filter(Boolean);
-  return { repos, forums };
+  const forumInfo = parseForums(env);
+  return {
+    repos, forums: Object.keys(forumInfo), forumInfo,
+    roles: parseRoleIds(env.APPROVED_ROLE_IDS), templates: parseTemplates(env.TEMPLATES),
+  };
 }
 
 // A write whose result is unknown: anything but a definite refusal (GitHub
@@ -71,6 +78,11 @@ function canUse(member) {
   return (p & PERMS.administrator) !== 0n || (p & PERMS.manageThreads) !== 0n;
 }
 
+const hasRole = (member, roles) => !!member && (member.roles || []).some((r) => roles.includes(r));
+// Moderators (right-click) or an approved role (the button) may send.
+const allowed = (member, cfg) => canUse(member) || hasRole(member, cfg.roles);
+const NOT_ALLOWED = 'Only moderators and approved roles can send posts to GitHub.';
+
 const input = (id, label, value, opts = {}) => ({
   type: 1,
   components: [{
@@ -86,35 +98,35 @@ function modalValues(data) {
   return out;
 }
 
-async function openForm(interaction, env, deps) {
+async function openForm(interaction, env, deps, { threadId, messageId, greetingId = '' }) {
   const cfg = config(env);
-  if (!canUse(interaction.member)) return reply('Only moderators and admins can send posts to GitHub.');
-  if (!cfg.forums.length) return reply('The bot is not set up yet: FORUM_CHANNEL_IDS is empty.');
-  const threadId = interaction.channel_id;
-  const messageId = interaction.data.target_id;
+  if (!cfg.forums.length) return reply('The bot is not set up yet: FORUMS is empty.');
   const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, Date.now() + FORM_LOOKUP_MS));
-  let ch = interaction.channel || {};
+  let ch = interaction.channel && interaction.channel.id === threadId ? interaction.channel : {};
   if (!ch.parent_id || !ch.applied_tags) {
     ch = await discord.getChannel(threadId).catch(() => ch);
   }
   if (!cfg.forums.includes(ch.parent_id)) {
-    return reply('This only works on posts in the bug and feedback forum.');
+    return reply('This only works on posts in the forums the bot is set up for.');
   }
 
-  // Pre-fill client and type from the post's own tags; a slow or failed lookup
-  // just leaves those fields for the moderator to type.
-  let guess = { client: null, type: null };
-  try {
-    const forum = await discord.getChannel(ch.parent_id);
-    const names = (forum.available_tags || []).filter((t) => (ch.applied_tags || []).includes(t.id)).map((t) => t.name);
-    guess = guessFromTags(names);
-  } catch { /* keep the blanks */ }
+  // Pre-fill client and type from the forum's own settings, else from the
+  // post's tags; a slow or failed lookup just leaves those fields blank.
+  let guess = { ...cfg.forumInfo[ch.parent_id] };
+  if (!guess.client || !guess.type) {
+    try {
+      const forum = await discord.getChannel(ch.parent_id);
+      const names = (forum.available_tags || []).filter((t) => (ch.applied_tags || []).includes(t.id)).map((t) => t.name);
+      const fromTags = guessFromTags(names);
+      guess = { client: guess.client || fromTags.client, type: guess.type || fromTags.type };
+    } catch { /* keep the blanks */ }
+  }
 
   const keys = Object.keys(cfg.repos);
   return json({
     type: 9,
     data: {
-      custom_id: `gh:${threadId}:${messageId}`,
+      custom_id: `gh:${threadId}:${messageId}${greetingId ? `:${greetingId}` : ''}`,
       title: 'Send to GitHub',
       components: [
         input('repo', `Repo (${keys.join(' or ')})`, keys[0], { max: 10 }),
@@ -131,7 +143,7 @@ async function openForm(interaction, env, deps) {
 // and every outcome, partial ones included, is reported back to the moderator.
 export async function fileIssue(interaction, env, deps) {
   const cfg = config(env);
-  const [, threadId, messageId] = interaction.data.custom_id.split(':');
+  const [, threadId, messageId, greetingId] = interaction.data.custom_id.split(':');
   const v = modalValues(interaction.data);
   const repoKey = normRepoKey(v.repo, cfg.repos);
   const client = normClient(v.client);
@@ -174,15 +186,20 @@ export async function fileIssue(interaction, env, deps) {
       return { refused: 'forum' };
     }
 
-    // Look, lock, then look again: a send that finished between the first look
-    // and the lock has released its lock but left its issue.
+    // Lock, then look once: any send that finished before the lock was
+    // granted has left its issue to be found. The post's KV record, when it
+    // names the issue, saves reading the whole issue list.
+    const kv = env.STATE;
+    const rec = await threadRecord(kv, threadId).catch(() => null);
     const already = async () => {
-      const existing = await gh.findByThread(repo, threadId);
+      let existing = null;
+      if (rec && rec.issue && rec.issue.repo === repo) {
+        existing = await gh.getIssue(repo, rec.issue.number).catch((e) => { if (/-> 404 /.test(e.message)) return null; throw e; });
+      }
+      if (!existing) existing = await gh.findByThread(repo, threadId);
       if (existing) await followup(`Already tracked: ${repoKey} #${existing.number} ${existing.html_url}`);
       return existing;
     };
-    let existing = await already();
-    if (existing) return { duplicate: existing.number };
     try {
       locked = await gh.claimThread(repo, threadId);
     } catch (e) {
@@ -195,12 +212,14 @@ export async function fileIssue(interaction, env, deps) {
       await followup(`Nothing was created: another send of this post is running, or one stopped partway. If no issue appears, delete the label ${lockLabel(threadId)} in ${repo} and try again.`);
       return { busy: true };
     }
-    existing = await already();
+    const existing = await already();
     if (existing) return { duplicate: existing.number };
 
     const message = await discord.call('GET', `/channels/${threadId}/messages/${messageId}`);
     const author = message.author || {};
     const by = interaction.member && interaction.member.user;
+    const fields = cfg.templates[type] || [];
+    const check = fields.length ? templateCheck(message.content, fields, (message.attachments || []).length) : [];
     creating = true;
     const issue = await gh.createIssue(repo, {
       title: buildTitle({ repoKey, client, module: v.module, title: v.title }),
@@ -213,6 +232,7 @@ export async function fileIssue(interaction, env, deps) {
         client,
         attachments: message.attachments,
         sentBy: by ? (by.global_name || by.username) : null,
+        templateLine: check.length ? templateSummary(check) : null,
       }),
       labels: labelsFor({ type, client }),
     });
@@ -225,9 +245,22 @@ export async function fileIssue(interaction, env, deps) {
       if (status.skipped) notes.push(`tag not set: ${status.skipped}`);
     } catch (e) { notes.push(`tag not set: ${e.message.slice(0, 300)}`); }
     try {
-      await discord.send(threadId, MESSAGES.tracked(repoKey, issue.number));
+      await saveThreadRecord(kv, threadId, { issue: { repo, number: issue.number } });
+    } catch (e) { notes.push(`post record not saved: ${e.message.slice(0, 200)}`); }
+    // One bot message per post: the button's message becomes the note.
+    const greeting = greetingId || (rec && rec.greeting);
+    try {
+      if (greeting) {
+        await discord.call('PATCH', `/channels/${threadId}/messages/${greeting}`, {
+          content: MESSAGES.tracked(repoKey, issue.number), components: [], allowed_mentions: { parse: [] },
+        });
+      } else {
+        await discord.send(threadId, MESSAGES.tracked(repoKey, issue.number));
+      }
     } catch (e) { notes.push(`note in the post not sent: ${e.message.slice(0, 300)}`); }
-    await followup(`Created ${repoKey} #${issue.number}: ${issue.html_url}${notes.length ? ` (${notes.join('; ')})` : ''}`);
+    const gaps = check.filter((c) => c.state !== 'present');
+    const tmpl = gaps.length ? ` Template: ${gaps.map((c) => `${c.field} ${c.state}`).join(', ')}.` : '';
+    await followup(`Created ${repoKey} #${issue.number}: ${issue.html_url}${notes.length ? ` (${notes.join('; ')})` : ''}${tmpl}`);
     return { created: issue.number, notes };
   } catch (e) {
     // A create that got no answer may still have happened on GitHub's side:
@@ -263,20 +296,32 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
   if (interaction.type === 1) return json({ type: 1 });
 
   if (interaction.type === 2 && interaction.data.name === COMMAND_NAME) {
-    return openForm(interaction, env, deps);
+    if (!canUse(interaction.member)) return reply('Only moderators and admins can send posts to GitHub.');
+    return openForm(interaction, env, deps, { threadId: interaction.channel_id, messageId: interaction.data.target_id });
+  }
+
+  if (interaction.type === 3 && String(interaction.data.custom_id).startsWith(`${SEND_BUTTON}:`)) {
+    const cfg = config(env);
+    if (!cfg.roles.length && !canUse(interaction.member)) {
+      return reply('The button is not set up yet: APPROVED_ROLE_IDS is empty. A moderator can right-click the post > Apps > Send to GitHub.');
+    }
+    if (!allowed(interaction.member, cfg)) return reply(NOT_ALLOWED);
+    const threadId = interaction.data.custom_id.split(':')[1];
+    // A forum post's first message has the post's own id.
+    return openForm(interaction, env, deps, { threadId, messageId: threadId, greetingId: interaction.message && interaction.message.id });
   }
 
   if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('gh:')) {
-    if (!canUse(interaction.member)) return reply('Only moderators and admins can send posts to GitHub.');
     const cfg = config(env);
-    if (!cfg.forums.length) return reply('The bot is not set up yet: FORUM_CHANNEL_IDS is empty.');
+    if (!allowed(interaction.member, cfg)) return reply(NOT_ALLOWED);
+    if (!cfg.forums.length) return reply('The bot is not set up yet: FORUMS is empty.');
     const v = modalValues(interaction.data);
     const problems = [];
     if (!normRepoKey(v.repo, cfg.repos)) problems.push(`Repo must be ${Object.keys(cfg.repos).join(' or ')}.`);
     if (!normClient(v.client)) problems.push('Client must be Retail, Forever or All.');
     if (!normType(v.type)) problems.push('Type must be Bug or Feature.');
     if (!String(v.title || '').trim()) problems.push('Title is empty.');
-    if (problems.length) return reply(`Nothing was created. ${problems.join(' ')} Right-click the post to try again.`);
+    if (problems.length) return reply(`Nothing was created. ${problems.join(' ')} Press the button or right-click the post to try again.`);
 
     ctx.waitUntil(fileIssue(interaction, env, deps));
     return json({ type: 5, data: { flags: EPHEMERAL } });
@@ -285,4 +330,12 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
   return reply('Unknown command.');
 }
 
-export default { fetch: (request, env, ctx) => handle(request, env, ctx) };
+export async function scheduled(controller, env, ctx, deps = { fetch: (...a) => fetch(...a) }) {
+  if (controller.cron === CRONS.daily) return daily(env, deps);
+  return scan(env, deps);
+}
+
+export default {
+  fetch: (request, env, ctx) => handle(request, env, ctx),
+  scheduled: (controller, env, ctx) => ctx.waitUntil(scheduled(controller, env, ctx)),
+};

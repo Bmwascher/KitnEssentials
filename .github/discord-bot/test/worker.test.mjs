@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, createVerify } from 'node:crypto';
 import { handle, COMMAND_NAME } from '../src/worker.js';
 import { importAppKey, appJwt } from '../src/github.js';
-import { fakeFetch, FORUM, stall } from './fake-fetch.mjs';
+import { fakeFetch, fakeKv, FORUM, stall } from './fake-fetch.mjs';
 
 const keys = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
 const pubHex = Buffer.from(await crypto.subtle.exportKey('raw', keys.publicKey)).toString('hex');
@@ -239,15 +239,16 @@ test('a form submitted after its forum left the list files nothing', async () =>
 });
 
 test('a send that finished while this one waited for the lock is not filed again', async () => {
-  let looks = 0;
+  // The look comes after the lock, so it sees the issue the other send left.
   const f = fakeFetch(discordRoutes(githubRoutes([], [
-    ['GET', /issues\?state=all.*labels=from-discord/, () => (++looks === 1 ? [] : [{ number: 17, html_url: 'u', body: '<!-- discord-thread: 700 reporter: 42 -->' }])],
+    ['GET', /issues\?state=all.*labels=from-discord/, () => [{ number: 17, html_url: 'u', body: '<!-- discord-thread: 700 reporter: 42 -->' }]],
   ])));
   const ctx = ctxFor();
   await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
   assert.deepEqual(await Promise.all(ctx.jobs), [{ duplicate: 17 }]);
   assert.equal(f.find('POST', /\/issues$/).length, 0);
-  assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 1);
+  const order = f.calls.filter((c) => /labels(\/discord-lock-700)?$|issues\?state=all/.test(c.url)).map((c) => c.method);
+  assert.deepEqual(order, ['POST', 'GET', 'DELETE'], 'lock, one look, release');
 });
 
 test('once the issue exists, a failed tag or post note is reported, never as a failed create', async () => {
@@ -313,7 +314,7 @@ test('a create that got no answer is reported as maybe created, not as nothing',
 test('a create that answered late is found again and reported as created', async () => {
   let looks = 0;
   const base = fakeFetch(discordRoutes(githubRoutes([], [
-    ['GET', /issues\?state=all.*labels=from-discord/, () => (++looks <= 2 ? [] : [{ number: 17, html_url: 'u/17', body: '<!-- discord-thread: 700 reporter: 42 -->' }])],
+    ['GET', /issues\?state=all.*labels=from-discord/, () => (++looks <= 1 ? [] : [{ number: 17, html_url: 'u/17', body: '<!-- discord-thread: 700 reporter: 42 -->' }])],
   ])));
   const hang = (url, init = {}) => (init.method === 'POST' && /\/issues$/.test(url)
     ? stall(init)
@@ -372,7 +373,7 @@ test('each closing phase has its own end: a late re-check is skipped but the rep
     const [res] = await Promise.all(ctx.jobs);
     assert.equal(res.uncertain, true);
     const looks = base.find('GET', /issues\?state=all.*labels=from-discord/).length;
-    assert.equal(looks, 2, 'no re-check after 20 s');
+    assert.equal(looks, 1, 'no re-check after 20 s');
     assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /may have been created/);
   } finally { clock.restore(); }
 });
@@ -424,4 +425,89 @@ test('a lost connection on create (a plain Error on Workers) keeps the lock; a 4
   assert.equal(res.uncertain, undefined);
   assert.match(refused.find('PATCH', /\/webhooks\//)[0].body.content, /^Nothing was created/);
   assert.equal(refused.find('DELETE', /labels\/discord-lock-700$/).length, 1);
+});
+
+// ---- The thread button (P3) ---------------------------------------------------
+
+const P3 = { ...env, FORUM_CHANNEL_IDS: '', FORUMS: '{"900":{"client":"Forever","type":"Feature"}}', APPROVED_ROLE_IDS: '77' };
+const HELPER = { permissions: '0', roles: ['77'], user: { id: '8', username: 'helper' } };
+const press = (member) => ({ type: 3, member, channel_id: '700', message: { id: '950' }, data: { custom_id: 'send:700', component_type: 2 } });
+
+test('an approved role presses the button and gets the form, pre-filled from the forum', async () => {
+  const f = fakeFetch(discordRoutes());
+  const j = await (await handle(await signed(press(HELPER)), P3, ctxFor(), { fetch: f })).json();
+  assert.equal(j.type, 9);
+  assert.equal(j.data.custom_id, 'gh:700:700:950', 'thread, its first message, the button message');
+  const val = Object.fromEntries(j.data.components.map((row) => [row.components[0].custom_id, row.components[0].value]));
+  assert.deepEqual([val.client, val.type], ['Forever', 'Feature'], 'the forum map wins over the post tags');
+});
+
+test('the button refuses anyone without an approved role, and with no roles set it says so', async () => {
+  let j = await (await handle(await signed(press(PLAYER)), P3, ctxFor(), { fetch: fakeFetch(discordRoutes()) })).json();
+  assert.equal(j.type, 4);
+  assert.match(j.data.content, /Only moderators and approved roles/);
+  j = await (await handle(await signed(press(HELPER)), { ...P3, APPROVED_ROLE_IDS: '' }, ctxFor(), { fetch: fakeFetch(discordRoutes()) })).json();
+  assert.match(j.data.content, /APPROVED_ROLE_IDS is empty.*right-click/);
+});
+
+test('a moderator can still press the button with no roles set', async () => {
+  const j = await (await handle(await signed(press(MOD)), { ...P3, APPROVED_ROLE_IDS: '' }, ctxFor(), { fetch: fakeFetch(discordRoutes()) })).json();
+  assert.equal(j.type, 9);
+});
+
+const buttonSubmit = (member = HELPER) => ({ ...submit(), member, data: { ...submit().data, custom_id: 'gh:700:800:950' } });
+
+test('filing from the button turns the button message into the note, and remembers the issue', async () => {
+  const kv = fakeKv({ 'thread:700': JSON.stringify({ greeting: '950' }) });
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
+    ['PATCH', /\/channels\/700\/messages\/950$/, () => ({})],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(buttonSubmit()), { ...P3, STATE: kv }, ctx, { fetch: f, installationToken: async () => 'inst' });
+  const [res] = await Promise.all(ctx.jobs);
+  assert.equal(res.created, 17);
+  const edit = f.find('PATCH', /\/channels\/700\/messages\/950$/)[0].body;
+  assert.match(edit.content, /tracked as ONE #17/);
+  assert.deepEqual(edit.components, [], 'the button is gone');
+  assert.equal(f.find('POST', /\/channels\/700\/messages$/).length, 0, 'no second bot message');
+  assert.deepEqual(JSON.parse(kv.m.get('thread:700')), { greeting: '950', issue: { repo: 'me/test-one', number: 17 } });
+});
+
+test('an approved role can submit the form; a player cannot', async () => {
+  const f = fakeFetch(discordRoutes(githubRoutes([], [['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u' })]])));
+  let ctx = ctxFor();
+  const r = await handle(await signed(buttonSubmit(PLAYER)), P3, ctx, { fetch: f });
+  assert.match((await r.json()).data.content, /Only moderators and approved roles/);
+  assert.equal(ctx.jobs.length, 0);
+  ctx = ctxFor();
+  await handle(await signed(buttonSubmit(HELPER)), P3, ctx, { fetch: f, installationToken: async () => 'inst' });
+  assert.equal((await Promise.all(ctx.jobs))[0].created, 17);
+});
+
+test('the template check is noted in the issue and told to the moderator, never the player', async () => {
+  let created;
+  const post = '**Addon Version:** 1.2\n**Issue Details:**\nbags overlap\n**Steps to Reproduce:**\n1.\n2.\n**Supporting Screenshots:**\n*(attach below)*';
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /\/channels\/700\/messages\/800$/, () => ({ id: '800', content: post, author: { id: '42', username: 'pat' }, attachments: [] })],
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, (b) => { created = b; return { number: 17, html_url: 'u' }; }],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
+  await Promise.all(ctx.jobs);
+  assert.match(created.body, /Template check \(advisory\): Version present · Issue Details present · Steps to Reproduce missing · Supporting Screenshots missing/);
+  assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /Template: Steps to Reproduce missing, Supporting Screenshots missing\./);
+  assert.doesNotMatch(f.find('POST', /\/channels\/700\/messages$/)[0].body.content, /Template/);
+});
+
+test('a post the bot already filed is found from its record without reading the issue list', async () => {
+  const kv = fakeKv({ 'thread:700': JSON.stringify({ greeting: '950', issue: { repo: 'me/test-one', number: 17 } }) });
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /api\.github\.com\/repos\/me\/test-one\/issues\/17$/, () => ({ number: 17, html_url: 'u/17', body: '<!-- discord-thread: 700 reporter: 42 -->' })],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(buttonSubmit()), { ...P3, STATE: kv }, ctx, { fetch: f, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(ctx.jobs), [{ duplicate: 17 }]);
+  assert.equal(f.find('GET', /issues\?state=all/).length, 0);
+  assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /Already tracked: ONE #17/);
 });
