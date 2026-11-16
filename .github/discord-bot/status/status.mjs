@@ -34,14 +34,14 @@ const BOT_LOGIN = 'github-actions[bot]';
 const RELEASE = [LABELS.pendingRelease, LABELS.shipped];
 // Lists are followed this many pages (100 each) at most.
 const MAX_PAGES = 10;
-// A message note older than this that was never marked sent is owed.
+// A message note older than this that was never marked sent is listed.
 const OWED_MS = 10 * 60 * 1000;
 
 const shipRecord = (tag, sha) => `Shipped in ${tag}.\n\n<!-- discord-shipped-in: ${tag} fixes: ${sha} -->`;
 // Written just before a message to the player. Of two runs about to send
 // the same message, only the one whose note came first sends it. The note is
 // marked sent after the send, or dropped when the message went stale first;
-// the sweep sends a note left neither.
+// the sweep lists a note left neither.
 const toldRecord = (key, text, status) => `Told the player: ${text}\n\n<!-- discord-told: ${key} -->`
   + (status ? `\n<!-- discord-told-status: ${status} -->` : '');
 
@@ -124,8 +124,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       out.push(...batch);
       if (batch.length < 100 || batch.some(stop)) return out;
     }
-    log(`${path}: stopped after ${MAX_PAGES} pages`);
-    return out;
+    throw new Error(`${path}: more than ${MAX_PAGES * 100} items, too many to read`);
   }
 
   // The workflow's records on the issue, from every page: releases that
@@ -198,9 +197,10 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           return t.name;
         }
       }
-      if (batch.length < 100) break;
+      if (batch.length < 100) return null;
     }
-    return null;
+    // A release may sit further back: fail rather than take "not shipped" as the answer.
+    throw new Error(`#${n}: more than ${MAX_PAGES * 100} tags, too many to read`);
   }
 
   // Write the release labels the state gives, then read again; repeat while
@@ -287,11 +287,6 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     done.push({ issue: n, thread: threadId, status, message: text });
   }
 
-  const statusNow = async (n) => {
-    const st = await stateOf(n);
-    return wantedStatus(st, st.issue.state === 'open' ? await prsFor(n) : []);
-  };
-
   // Tell the player, once, when the post ended on `status`. The key names
   // the change; a rerun or an overlapping run with the same key stays quiet.
   async function tell(moved, status, key, text) {
@@ -299,12 +294,35 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const note = await claim(moved.n, key, text, status);
     if (!note) return;
     // Another run may have moved the issue on since this one settled it; that
-    // run tells its own news.
-    if ((await statusNow(moved.n)) !== status) {
+    // run tells its own news. The fact must still hold, not just the status.
+    const st = await stateOf(moved.n);
+    const nowStatus = wantedStatus(st, st.issue.state === 'open' ? await prsFor(moved.n) : []);
+    const still = nowStatus === status && (await messageFor(moved.n, st, status));
+    if (!still || still.key !== key) {
       await settleNote(note, 'dropped');
       return;
     }
     await deliver(moved.n, moved.threadId, note, text, status);
+  }
+
+  // The message for a post showing `status`, keyed by the fact it tells,
+  // or null when that status has none.
+  async function messageFor(n, st, status) {
+    if (status === STATUS.fixed && st.fix) return { key: `fixed-${st.fix}`, text: MESSAGES.fixed() };
+    if (status === STATUS.shipped && st.fix && st.shippedIn) {
+      return { key: `shipped-${st.shippedIn.replace(/[^\w.-]/g, '')}-${st.fix}`, text: MESSAGES.shipped(repo, st.shippedIn) };
+    }
+    if (status === STATUS.closed && st.close) {
+      const reason = st.issue.state_reason;
+      return { key: `closed-${st.close.id}`, text: reason === 'completed' ? MESSAGES.done() : MESSAGES.closed(reason) };
+    }
+    if (status === STATUS.inProgress) {
+      // Once per time the issue is open: a second PR, or a PR back from
+      // draft, says nothing new.
+      const close = await lastClose(n);
+      return { key: `in-progress-after-${close ? close.id : 'none'}`, text: MESSAGES.inProgress() };
+    }
+    return null;
   }
 
   // Tell the player about the status a run moved the post to, whichever run
@@ -312,21 +330,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // same change claims the same note and only one sends.
   async function announce(moved) {
     if (!moved || moved.to === moved.from) return;
-    const { st, to } = moved;
-    if (to === STATUS.fixed && st.fix) return tell(moved, to, `fixed-${st.fix}`, MESSAGES.fixed());
-    if (to === STATUS.shipped && st.fix && st.shippedIn) {
-      return tell(moved, to, `shipped-${st.shippedIn.replace(/[^\w.-]/g, '')}-${st.fix}`, MESSAGES.shipped(repo, st.shippedIn));
-    }
-    if (to === STATUS.closed && st.close) {
-      const reason = st.issue.state_reason;
-      return tell(moved, to, `closed-${st.close.id}`, reason === 'completed' ? MESSAGES.done() : MESSAGES.closed(reason));
-    }
-    if (to === STATUS.inProgress) {
-      // Once per time the issue is open: a second PR, or a PR back from
-      // draft, says nothing new.
-      const close = await lastClose(moved.n);
-      return tell(moved, to, `in-progress-after-${close ? close.id : 'none'}`, MESSAGES.inProgress());
-    }
+    const m = await messageFor(moved.n, moved.st, moved.to);
+    if (m) await tell(moved, moved.to, m.key, m.text);
   }
 
   // One issue's failure is logged and the rest still run; the job fails at the end.
@@ -408,9 +413,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       });
     }
   } else if (eventName === 'schedule' || eventName === 'workflow_dispatch') {
-    // E3: the sweep. Report mode lists what is wrong; fix mode writes it.
-    // Neither announces a status; fix mode only sends a message a run
-    // claimed and never sent, while it is still true.
+    // E3: the sweep. Report mode lists what is wrong; fix mode writes it,
+    // and neither tells anyone.
     const fix = env.SWEEP_MODE === 'fix';
     const issues = (await gh.issuesWithLabel(repo, LABELS.fromDiscord)).filter(eligible);
     let wrong = 0;
@@ -442,19 +446,13 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         parts.push(`labels ${has.join(', ') || '(none)'} -> ${want.join(', ') || '(none)'}`);
       }
       if (shown !== undefined && shown !== status) parts.push(`post ${shown || '(no status)'} -> ${status}`);
-      const owed = [];
+      // A claimed message never marked sent or dropped: its send failed.
+      // Listed for a person to judge; the sweep never messages anyone.
       const seen = new Set();
       for (const t of st.records.told) {
         if (seen.has(t.key)) continue;
         seen.add(t.key);
-        if (!t.settled && now() - t.at > OWED_MS) owed.push(t);
-      }
-      for (const t of owed) {
-        const still = !t.status || t.status === status;
-        parts.push(`message "${t.text}" never sent${still ? '' : ' (no longer true)'}`);
-        if (!fix) continue;
-        if (still && shown !== undefined) await deliver(n, threadId, t, t.text, t.status);
-        else await settleNote(t, 'dropped');
+        if (!t.settled && now() - t.at > OWED_MS) parts.push(`message "${t.text}" may not have been sent`);
       }
       if (!parts.length) return;
       wrong++;

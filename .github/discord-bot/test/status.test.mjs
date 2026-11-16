@@ -548,18 +548,41 @@ test('a Shipped message that went stale before sending is dropped, not sent', as
   assert.ok(w.issues.get(17).comments.some((c) => /discord-told: shipped-[\s\S]*discord-dropped/.test(c.body)));
 });
 
-test('a message whose send failed is sent by the sweep later, once, while still true', async () => {
+test('a message whose send failed is listed by the sweep, which sends nothing', async () => {
   const w = world();
   w.issue(17);
   w.close(17, 'completed', 'aaaaaaa1');
   w.fail.push(['POST', /channels\/717\/messages$/, new Response('{}', { status: 500 }), 1]);
   await closed(w, 17).catch(() => {});
-  assert.deepEqual(w.said('717'), []);
   w.clock += 60 * 60 * 1000;
-  const sweep = () => run({ eventName: 'schedule', payload: {}, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: quiet, now: () => w.clock });
-  await sweep();
-  await sweep();
-  assert.deepEqual(w.said('717'), ['The fix is merged and will be in the next update.']);
+  const out = [];
+  await run({ eventName: 'schedule', payload: {}, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: (s) => out.push(s), now: () => w.clock });
+  assert.deepEqual(w.said('717'), []);
+  assert.match(out.join('\n'), /#17: message "The fix is merged and will be in the next update\." may not have been sent/);
+});
+
+test('a Shipped message for an old release is dropped when the issue has shipped again in a newer one', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  await closed(w, 17);
+  w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+  w.contains.set('bbbbbbb2...c-v5.0.3', 'ahead');
+  let raced = false;
+  w.hooks.push(['POST', /issues\/17\/comments$/, async (call) => {
+    if (raced || !/discord-told: shipped-v5\.0\.2/.test(call.body.body)) return;
+    raced = true;
+    // Before the v5.0.2 message goes out: reopened, fixed again, shipped in v5.0.3.
+    Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
+    await go(w, 'issues', { action: 'reopened', issue: { number: 17 } });
+    w.close(17, 'completed', 'bbbbbbb2');
+    await closed(w, 17);
+    await tag(w, 'v5.0.3');
+  }]);
+  await tag(w, 'v5.0.2');
+  assert.ok(raced);
+  assert.equal(w.said('717').filter((m) => /v5\.0\.2/.test(m)).length, 0, 'no stale v5.0.2 message');
+  assert.equal(w.said('717').filter((m) => /v5\.0\.3/.test(m)).length, 1);
 });
 
 test('a tag run re-checks a new fix that closed the issue while it ran', async () => {
@@ -608,4 +631,14 @@ test('lists are followed past their first page: recent issues, tags and linked P
   await prEvent(w3, 5);
   assert.equal(w3.tagOf('717'), 'In progress', 'the member PR on the second page counts');
   assert.equal(w3.tagOf('718'), 'In progress');
+});
+
+test('more release tags than the pages hold fail the sweep rather than unship the issue', async () => {
+  const w = world();
+  w.issue(17, { labels: ['from-discord', 'shipped'] });
+  w.close(17, 'completed', 'aaaaaaa1');
+  w.tags = Array.from({ length: 1000 }, (_, i) => ({ name: `other-${i}`, commit: { sha: `o${i}` } }));
+  w.tags.push({ name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } });
+  await assert.rejects(run({ eventName: 'schedule', payload: {}, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: quiet }));
+  assert.deepEqual(labels(w, 17), ['shipped']);
 });
