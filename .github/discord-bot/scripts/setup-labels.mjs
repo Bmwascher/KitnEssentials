@@ -1,4 +1,4 @@
-// Creates (or recolours) the labels the bot and the status workflow use.
+// Creates (or recolors) the labels the bot and the status workflow use.
 //   GITHUB_TOKEN=... node scripts/setup-labels.mjs owner/repo [owner/repo ...]
 // Safe to re-run; existing labels keep their issues.
 const LABELS = [

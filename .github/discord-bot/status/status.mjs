@@ -1,6 +1,6 @@
 // GitHub -> Discord: moves a forum post's status tag and posts a short note,
 // driven by the workflow in .github/workflows/discord-status.yml.
-// Only issues labelled `from-discord` (made by the bot) are ever touched.
+// Only issues labeled `from-discord` (made by the bot) are ever touched.
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { STATUS, LABELS, MESSAGES, parseMarker, closingIssues, keyForRepo } from '../src/core.js';

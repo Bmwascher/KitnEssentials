@@ -19,7 +19,7 @@ export const LABELS = {
 const CLIENTS = { retail: 'Retail', forever: 'Forever', all: 'All' };
 const TYPES = { bug: 'Bug', feature: 'Feature', feedback: 'Feature', request: 'Feature' };
 
-// Free text from the form -> canonical value, or null when unrecognised.
+// Free text from the form -> canonical value, or null when unrecognized.
 export function normClient(s) {
   const k = String(s || '').trim().toLowerCase();
   return CLIENTS[k] || null;

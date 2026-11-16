@@ -8,7 +8,7 @@ test('title follows [AES][Client][Module] Title', () => {
   assert.equal(C.buildTitle({ repoKey: 'AUI', client: 'All', module: '', title: 'x' }), '[AUI][All][General] x');
 });
 
-test('form values normalise, junk is refused', () => {
+test('form values normalize, junk is refused', () => {
   assert.equal(C.normClient('forever'), 'Forever');
   assert.equal(C.normClient('classic'), null);
   assert.equal(C.normType('Feedback/Request'), 'Feature');

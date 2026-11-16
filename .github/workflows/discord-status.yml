@@ -1,7 +1,7 @@
 name: Discord status
 
 # Moves a #aui-help forum post along (In progress -> Fixed -> Shipped) when the
-# GitHub issue the bot made from it moves. Only touches issues labelled
+# GitHub issue the bot made from it moves. Only touches issues labeled
 # `from-discord`. Does nothing until the DISCORD_BOT_TOKEN secret is set.
 # pull_request_target (not pull_request) so contributor PRs from forks still
 # update Discord; it runs this repo's own script and never checks out PR code.
