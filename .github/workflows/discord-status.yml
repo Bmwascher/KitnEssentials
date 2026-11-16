@@ -1,0 +1,44 @@
+name: Discord status
+
+# Moves a #aui-help forum post along (In progress -> Fixed -> Shipped) when the
+# GitHub issue the bot made from it moves. Only touches issues labelled
+# `from-discord`. Does nothing until the DISCORD_BOT_TOKEN secret is set.
+# pull_request_target (not pull_request) so contributor PRs from forks still
+# update Discord; it runs this repo's own script and never checks out PR code.
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, closed]
+  issues:
+    types: [closed, labeled]
+  push:
+    # Test copy: KitnEssentials' own v* tags publish real releases, so the
+    # "shipped" step is tried with throwaway discord-test-* tags instead.
+    tags: ['discord-test-*']
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: discord-status-${{ github.event.issue.number || github.event.pull_request.number || github.ref }}
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/discord-bot
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Update the Discord post
+        run: node .github/discord-bot/status/status.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          # Optional repository variables, for pointing a test copy elsewhere.
+          REPOS: ${{ vars.DISCORD_BOT_REPOS || '{"AES":"Bmwascher/KitnEssentials"}' }}
+          RELEASE_TAG_PATTERN: ${{ vars.RELEASE_TAG_PATTERN || '^discord-test-' }}

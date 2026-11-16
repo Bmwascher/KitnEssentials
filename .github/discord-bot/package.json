@@ -1,0 +1,13 @@
+{
+  "name": "aes-discord-bot",
+  "private": true,
+  "type": "module",
+  "description": "Moderator-triggered Discord forum post -> GitHub issue, with status sent back to the post.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "register": "node scripts/register.mjs",
+    "labels": "node scripts/setup-labels.mjs",
+    "deploy": "npx wrangler@3 deploy"
+  },
+  "engines": { "node": ">=20" }
+}
