@@ -167,12 +167,6 @@ export const MESSAGES = {
   needsInfo: (uid) => `${uid ? `<@${uid}> ` : ''}Could you add a bit more detail? A screenshot, your addon version and the steps to make it happen help a lot.`,
 };
 
-// Repo key (e.g. "KE") for a full repo name, from the configured map.
-export function keyForRepo(fullName, repos) {
-  const want = String(fullName).toLowerCase();
-  return Object.keys(repos).find((k) => repos[k].toLowerCase() === want) || null;
-}
-
 // A fetch whose every call gives up after `ms`, and that refuses to start once
 // `deadline` (epoch ms) has passed, so a stalled call fails instead of hanging.
 export function timedFetch(fetchImpl, ms, deadline = Infinity) {

@@ -62,9 +62,8 @@ KitnEssentials) before the real ones. Roughly 30 minutes.
    `DISCORD_APP_ID=... DISCORD_BOT_TOKEN=... DISCORD_GUILD_ID=<test server id> npm run register`
 8. **Labels:** `GITHUB_TOKEN=<a token with repo access> npm run labels <you>/<test-repo>`
 9. **Status workflow in the test repo:** copy `.github/discord-bot/` and
-   `.github/workflows/discord-status.yml` into it, add the repo secret
-   `DISCORD_BOT_TOKEN`, and the repo variable `DISCORD_BOT_REPOS` =
-   `{"KE":"<you>/<test-repo>"}`.
+   `.github/workflows/discord-status.yml` into it and add the repo secret
+   `DISCORD_BOT_TOKEN`.
 
 Then walk one fake report through: post in the test forum, right-click > Send
 to GitHub, open a PR with `Fixes #N` into the default branch (from an account

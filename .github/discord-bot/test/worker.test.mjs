@@ -226,9 +226,37 @@ test('a stalled call ends the send with a report to the mod', async () => {
     : base(url, init));
   const ctx = ctxFor();
   const t0 = Date.now();
-  await handle(await signed(submit()), env, ctx, { fetch: stall, installationToken: async () => 'inst', log: () => {} });
+  await handle(await signed(submit()), env, ctx, { fetch: stall, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
   const [res] = await Promise.all(ctx.jobs);
   assert.ok(res.error, 'reported as an error');
-  assert.ok(Date.now() - t0 < 12000, 'within the per-call limit');
+  assert.ok(Date.now() - t0 < 2000, 'within the per-call limit');
   assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /Nothing was created/);
+});
+
+test('the lock is released even after the filing ran out of time', async () => {
+  const base = fakeFetch(discordRoutes(githubRoutes()));
+  // Reading the post outlasts the whole budget, so no later call may start.
+  const slow = async (url, init = {}) => {
+    if (/\/messages\/800$/.test(url)) await new Promise((r) => setTimeout(r, 120));
+    return base(url, init);
+  };
+  const ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: slow, installationToken: async () => 'inst', log: () => {}, budgetMs: 60 });
+  const [res] = await Promise.all(ctx.jobs);
+  assert.match(res.error, /out of time/);
+  assert.equal(base.find('POST', /\/issues$/).length, 0);
+  assert.equal(base.find('DELETE', /labels\/discord-lock-700$/).length, 1, 'released despite the spent budget');
+});
+
+test('a create that got no answer is reported as maybe created, not as nothing', async () => {
+  const base = fakeFetch(discordRoutes(githubRoutes()));
+  const hang = (url, init = {}) => (init.method === 'POST' && /\/issues$/.test(url)
+    ? new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)))
+    : base(url, init));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
+  await Promise.all(ctx.jobs);
+  const told = base.find('PATCH', /\/webhooks\//)[0].body.content;
+  assert.match(told, /may have been created/);
+  assert.doesNotMatch(told, /Nothing was created/);
 });

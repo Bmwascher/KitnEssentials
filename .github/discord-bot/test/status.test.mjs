@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { run } from '../status/status.mjs';
 import { fakeFetch, FORUM } from './fake-fetch.mjs';
 
-const env = { GITHUB_TOKEN: 'gh', DISCORD_BOT_TOKEN: 'bot', REPOS: '{"ONE":"me/one","TWO":"me/two"}' };
+const env = { GITHUB_TOKEN: 'gh', DISCORD_BOT_TOKEN: 'bot' };
+const BOT = { login: 'github-actions[bot]' };
 const repository = { full_name: 'me/one', default_branch: 'dev' };
 const MARK = '<!-- discord-thread: 700 reporter: 42 -->';
 const issue = (n, extra = {}) => ({ number: n, body: `## Report\n\n> hi\n\n${MARK}`, labels: [{ name: 'from-discord' }], ...extra });
@@ -72,8 +73,17 @@ test('merging into dev marks pending-release, records the fix commit and says fi
     payload: { action: 'closed', repository, pull_request: pr({ merged: true, merge_commit_sha: 'abc1234def', title: 'Fix bags (fixes #17)', body: '' }) } });
   assert.deepEqual(f.find('POST', /issues\/17\/labels$/)[0].body, { labels: ['pending-release'] });
   assert.match(f.find('POST', /issues\/17\/comments$/)[0].body.body, /<!-- discord-fixed-in: abc1234def -->/);
+  const writes = f.calls.filter((c) => /issues\/17\/(comments|labels)$/.test(c.url)).map((c) => c.url.split('/').pop());
+  assert.deepEqual(writes, ['comments', 'labels'], 'the commit is recorded before the issue is labeled pending');
   assert.deepEqual(f.find('PATCH', /channels\/700$/)[0].body.applied_tags, ['t-retail', 't-bug', 's-fix']);
   assert.match(f.find('POST', /channels\/700\/messages$/)[0].body.content, /next update/);
+});
+
+test('an issue fixed again after shipping is pending, not shipped', async () => {
+  const f = fakeFetch(routes({ 17: issue(17, { labels: [{ name: 'from-discord' }, { name: 'shipped' }] }) }));
+  await run({ eventName: PR, fetchImpl: f, env, log: quiet,
+    payload: { action: 'closed', repository, pull_request: pr({ merged: true, merge_commit_sha: 'abc1234' }) } });
+  assert.equal(f.find('DELETE', /issues\/17\/labels\/shipped$/).length, 1);
 });
 
 test('a merged PR does not label a from-discord issue that has no marker', async () => {
@@ -124,7 +134,7 @@ test('one broken post does not stop the rest of a release; a deleted post still 
 });
 
 test('a tag ships only fixes it contains, so rerunning an older tag ships nothing new', async () => {
-  const fixed = (sha) => [{ body: `Fixed in ${sha}.\n\n<!-- discord-fixed-in: ${sha} -->` }];
+  const fixed = (sha) => [{ user: BOT, body: `Fixed in ${sha}.\n\n<!-- discord-fixed-in: ${sha} -->` }];
   const f = fakeFetch(routes({}, [
     ['GET', /\/issues\?state=all.*labels=pending-release/, () => [issue(17), issue(18)]],
     ['GET', /\/issues\/17\/comments/, () => fixed('aaaaaaa')],
@@ -181,7 +191,36 @@ test('needs-info reopens an archived post, then pings only the reporter', async 
   assert.deepEqual(order, ['PATCH', 'POST'], 'reopened before the message');
 });
 
-test('a missing REPOS setting stops the run', async () => {
-  await assert.rejects(run({ eventName: 'issues', fetchImpl: fakeFetch([]), env: { ...env, REPOS: '' }, log: quiet,
-    payload: { action: 'closed', repository, issue: issue(17) } }), /REPOS is not set/);
+test('only the workflow\'s own fixed-in comment counts, read from every page', async () => {
+  const marker = (sha, user) => ({ user, body: `<!-- discord-fixed-in: ${sha} -->` });
+  const outsider = { login: 'someone' };
+  const page1 = [marker('aaaaaaa', BOT), ...Array.from({ length: 99 }, () => ({ user: outsider, body: 'me too' }))];
+  const f = fakeFetch(routes({}, [
+    ['GET', /\/issues\?state=all.*labels=pending-release/, () => [issue(17)]],
+    ['GET', /\/issues\/17\/comments\?per_page=100&page=1$/, () => page1],
+    // A later page: the bot's newer record, then an outsider's planted one.
+    ['GET', /\/issues\/17\/comments\?per_page=100&page=2$/, () => [marker('bbbbbbb', BOT), marker('ccccccc', outsider)]],
+    ['GET', /\/compare\/bbbbbbb\.\.\.v5\.0\.1$/, () => ({ status: 'behind' })],
+  ]));
+  const done = await run({ eventName: 'push', fetchImpl: f, env, log: quiet, payload: { ref: 'refs/tags/v5.0.1', repository } });
+  assert.equal(done.length, 0, 'held by the bot\'s newest commit, not the outsider\'s');
+  assert.equal(f.find('GET', /compare\/ccccccc/).length, 0);
+  assert.equal(f.find('GET', /compare\/aaaaaaa/).length, 0);
+});
+
+test('a ship that stopped after telling the player is finished without telling again', async () => {
+  const f = fakeFetch(routes({}, [
+    ['GET', /\/issues\?state=all.*labels=pending-release/, () => [issue(17, { labels: [{ name: 'from-discord' }, { name: 'pending-release' }, { name: 'shipped' }] })]],
+  ]));
+  const done = await run({ eventName: 'push', fetchImpl: f, env, log: quiet, payload: { ref: 'refs/tags/v5.0.2', repository } });
+  assert.equal(done.length, 0);
+  assert.equal(f.find('DELETE', /issues\/17\/labels\/pending-release/).length, 1);
+  assert.equal(f.calls.filter((c) => /discord\.com/.test(c.url)).length, 0);
+});
+
+test('shipping adds the shipped label before it removes pending-release', async () => {
+  const f = fakeFetch(routes({}, [['GET', /\/issues\?state=all.*labels=pending-release/, () => [issue(17)]]]));
+  await run({ eventName: 'push', fetchImpl: f, env, log: quiet, payload: { ref: 'refs/tags/v5.0.3', repository } });
+  const labelOps = f.calls.filter((c) => /issues\/17\/labels/.test(c.url)).map((c) => c.method);
+  assert.deepEqual(labelOps, ['POST', 'DELETE']);
 });

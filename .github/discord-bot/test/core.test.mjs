@@ -59,7 +59,6 @@ test('shipped message names the repo and the release', () => {
   assert.match(C.MESSAGES.shipped('me/SomeAddon', 'v5.0.120'), /landed in SomeAddon v5\.0\.120\./);
   assert.match(C.MESSAGES.shipped('me/OtherUI', '30.8'), /landed in OtherUI v30\.8\./);
   assert.match(C.MESSAGES.shipped('me/KitnEssentials', 'discord-test-1'), /landed in KitnEssentials discord-test-1\./);
-  assert.equal(C.keyForRepo('Me/OtherUI', { ONE: 'me/SomeAddon', TWO: 'me/OtherUI' }), 'TWO');
 });
 
 test('player text cannot plant a marker or mention anyone', () => {

@@ -12,10 +12,11 @@ export const COMMAND_NAME = 'Send to GitHub';
 const EPHEMERAL = 64;
 // Discord wants the first answer within 3 s; the form's lookups get 1.5 s.
 const FORM_LOOKUP_MS = 1500;
-// Workers cancel waitUntil work about 30 s after the response, so the filing
-// stops starting calls at 20 s and keeps the rest for reporting back.
-const FILE_BUDGET_MS = 20000;
+// Workers cancel waitUntil work about 30 s after the response. The filing's
+// calls all end by 17 s; reporting back and releasing the lock get 5 s each.
+const FILE_BUDGET_MS = 17000;
 const CALL_MS = 8000;
+const TAIL_MS = 5000;
 // Signed requests older than this are refused (a captured one cannot be replayed later).
 const MAX_AGE_S = 300;
 
@@ -121,11 +122,12 @@ export async function fileIssue(interaction, env, deps) {
   const client = normClient(v.client);
   const type = normType(v.type);
   const log = deps.log || console.error;
-  const f = timedFetch(deps.fetch, CALL_MS, Date.now() + FILE_BUDGET_MS);
+  const { callMs = CALL_MS, budgetMs = FILE_BUDGET_MS } = deps; // tests shorten these
+  const f = timedFetch(deps.fetch, callMs, Date.now() + budgetMs);
   const discord = discordClient(env.DISCORD_BOT_TOKEN, f);
   const followup = async (content) => {
     try {
-      const res = await timedFetch(deps.fetch, CALL_MS)(
+      const res = await timedFetch(deps.fetch, TAIL_MS)(
         `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
         { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) },
       );
@@ -137,11 +139,14 @@ export async function fileIssue(interaction, env, deps) {
 
   const repo = cfg.repos[repoKey];
   let gh;
+  let ghTail; // its own time limit, so the lock is released even after the budget ran out
   let locked = false;
+  let creating = false;
   try {
     const ghToken = await (deps.installationToken || installationToken)(
       { appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY, repo }, f);
     gh = githubClient(ghToken, f);
+    ghTail = githubClient(ghToken, timedFetch(deps.fetch, TAIL_MS));
 
     // Look, lock, then look again: a send that finished between the first look
     // and the lock has released its lock but left its issue.
@@ -163,6 +168,7 @@ export async function fileIssue(interaction, env, deps) {
     const message = await discord.call('GET', `/channels/${threadId}/messages/${messageId}`);
     const author = message.author || {};
     const by = interaction.member && interaction.member.user;
+    creating = true;
     const issue = await gh.createIssue(repo, {
       title: buildTitle({ repoKey, client, module: v.module, title: v.title }),
       body: buildBody({
@@ -177,6 +183,7 @@ export async function fileIssue(interaction, env, deps) {
       }),
       labels: labelsFor({ type, client }),
     });
+    creating = false;
 
     // The issue exists from here on: report it whatever else fails.
     const notes = [];
@@ -190,11 +197,15 @@ export async function fileIssue(interaction, env, deps) {
     await followup(`Created ${repoKey} #${issue.number}: ${issue.html_url}${notes.length ? ` (${notes.join('; ')})` : ''}`);
     return { created: issue.number, notes };
   } catch (e) {
-    await followup(`Nothing was created: ${e.message.slice(0, 1500)}`);
+    // A create that got no answer may still have happened on GitHub's side.
+    const unknown = creating && /TimeoutError|AbortError/.test(e.name);
+    await followup(unknown
+      ? `The issue may have been created: GitHub did not answer in time. Send the post again to check; it will point at the issue if it exists.`
+      : `Nothing was created: ${e.message.slice(0, 1500)}`);
     return { error: e.message };
   } finally {
     if (locked) {
-      try { await gh.releaseThread(repo, threadId); } catch (e) { log(`lock ${lockLabel(threadId)} not released: ${e.message}`); }
+      try { await ghTail.releaseThread(repo, threadId); } catch (e) { log(`lock ${lockLabel(threadId)} not released: ${e.message}`); }
     }
   }
 }

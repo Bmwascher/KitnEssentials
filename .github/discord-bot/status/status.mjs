@@ -3,7 +3,7 @@
 // Only issues labeled `from-discord` (made by the bot) are ever touched.
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { STATUS, LABELS, MESSAGES, parseMarker, closingIssues, parseRepos, timedFetch } from '../src/core.js';
+import { STATUS, LABELS, MESSAGES, parseMarker, closingIssues, timedFetch } from '../src/core.js';
 import { discordClient } from '../src/discord.js';
 import { githubClient } from '../src/github.js';
 
@@ -15,10 +15,12 @@ const TRUSTED = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 const PR_EVENTS = new Set(['pull_request', 'pull_request_target']);
 const CALL_MS = 15000;
 const fixedInMarker = (sha) => `<!-- discord-fixed-in: ${sha} -->`;
+// The account this workflow comments as (GITHUB_TOKEN). Only its fixed-in
+// comments count: anyone can comment on a public issue.
+const BOT_LOGIN = 'github-actions[bot]';
 
 export async function run({ eventName, payload, env, fetchImpl = fetch, log = console.log }) {
   const repo = payload.repository.full_name;
-  parseRepos(env.REPOS);
   const f = timedFetch(fetchImpl, CALL_MS);
   const gh = githubClient(env.GITHUB_TOKEN, f);
   const discord = discordClient(env.DISCORD_BOT_TOKEN, f);
@@ -52,14 +54,19 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     }
   }
 
-  // The fix commit the merged-PR step recorded on the issue, newest first.
+  // The fix commit the merged-PR step recorded on the issue (the newest one),
+  // read from every page and only from this workflow's own comments.
   async function fixedIn(issue) {
-    const comments = await gh.call('GET', `/repos/${repo}/issues/${issue.number}/comments?per_page=100`);
-    for (const c of [...comments].reverse()) {
-      const m = /<!--\s*discord-fixed-in:\s*([0-9a-f]{7,40})\s*-->/.exec(c.body || '');
-      if (m) return m[1];
+    let sha = null;
+    for (let page = 1; ; page++) {
+      const batch = await gh.call('GET', `/repos/${repo}/issues/${issue.number}/comments?per_page=100&page=${page}`);
+      for (const c of batch) {
+        if (!c.user || c.user.login !== BOT_LOGIN) continue;
+        const m = /<!--\s*discord-fixed-in:\s*([0-9a-f]{7,40})\s*-->/.exec(c.body || '');
+        if (m) sha = m[1];
+      }
+      if (batch.length < 100) return sha;
     }
-    return null;
   }
 
   async function tagContains(sha, tag) {
@@ -93,13 +100,16 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     } else if (action === 'closed' && pr.merged && pr.base.ref === payload.repository.default_branch) {
       const fixed = (await linkedIssues(pr)).filter(eligible);
       await each(fixed, async (issue) => {
-        await gh.addLabels(repo, issue.number, [LABELS.pendingRelease]);
-        // The commit is what a release tag is later checked against.
+        // The commit first, then the label: a pending issue always has the
+        // commit a release tag is checked against.
         if (pr.merge_commit_sha) {
           await gh.call('POST', `/repos/${repo}/issues/${issue.number}/comments`, {
             body: `Fixed in ${pr.merge_commit_sha}; ships with the first release tag that contains it.\n\n${fixedInMarker(pr.merge_commit_sha)}`,
           });
         }
+        await gh.addLabels(repo, issue.number, [LABELS.pendingRelease]);
+        // Fixed again after an earlier ship: it is pending, not shipped.
+        if (hasLabel(issue, LABELS.shipped)) await gh.removeLabel(repo, issue.number, LABELS.shipped);
         await notify(issue, STATUS.fixed, MESSAGES.fixed());
       });
     }
@@ -113,6 +123,11 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     } else {
       const pending = (await gh.issuesWithLabel(repo, LABELS.pendingRelease)).filter(eligible);
       await each(pending, async (issue) => {
+        // Both labels: an earlier ship stopped after telling the player.
+        if (hasLabel(issue, LABELS.shipped)) {
+          await gh.removeLabel(repo, issue.number, LABELS.pendingRelease);
+          return;
+        }
         // Ship only a fix this tag contains, so a rerun of an older tag, or a
         // tag cut before the fix merged, leaves it pending.
         const sha = await fixedIn(issue);
@@ -129,8 +144,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           if (!/-> 404 /.test(e.message)) throw e;
           log(`#${issue.number}: Discord post is gone (${e.message.slice(0, 120)}); marking shipped anyway`);
         }
-        await gh.removeLabel(repo, issue.number, LABELS.pendingRelease);
+        // Add before remove: a failure in between leaves both labels, never none.
         await gh.addLabels(repo, issue.number, [LABELS.shipped]);
+        await gh.removeLabel(repo, issue.number, LABELS.pendingRelease);
       });
     }
   } else if (eventName === 'issues') {
