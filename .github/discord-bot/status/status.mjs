@@ -1,235 +1,324 @@
-// GitHub -> Discord: moves a forum post's status tag and posts a short note,
-// driven by the workflow in .github/workflows/discord-status.yml.
-// Only issues labeled `from-discord` (made by the bot) are ever touched.
+// GitHub -> Discord: keeps each bot-made issue's release labels and its forum
+// post's status tag equal to what the issue's state says, and tells the player
+// when the post moves. Driven by .github/workflows/discord-status.yml.
+//
+// Nothing here steps a status along. Every run works out the whole state from
+// the issue, its records and its open PRs, writes it, then reads again and
+// rewrites until a read agrees: two runs racing on one issue end on the state
+// of everything both wrote. The daily sweep repairs what a failed call left.
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { STATUS, LABELS, MESSAGES, parseMarker, closingIssues, timedFetch } from '../src/core.js';
+import { STATUS, LABELS, MESSAGES, parseMarker, timedFetch } from '../src/core.js';
 import { discordClient } from '../src/discord.js';
 import { githubClient } from '../src/github.js';
 
 const hasLabel = (issue, name) => (issue.labels || []).some((l) => (l.name || l) === name);
 // The bot's own issues: the label and the marker it writes last.
 const eligible = (issue) => hasLabel(issue, LABELS.fromDiscord) && parseMarker(issue.body) !== null;
-// Only people with a role on the repo can move a post with a PR.
+// Only PRs from people with a role on the repo move a post to In progress.
 const TRUSTED = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 const PR_EVENTS = new Set(['pull_request', 'pull_request_target']);
 const CALL_MS = 15000;
-const fixedInMarker = (sha) => `<!-- discord-fixed-in: ${sha} -->`;
-// The account this workflow comments as (GITHUB_TOKEN). Only its fixed-in
-// comments count: anyone can comment on a public issue.
+const SETTLE_TRIES = 3;
+// The account this workflow comments as (GITHUB_TOKEN). Only its records
+// count: anyone can comment on a public issue.
 const BOT_LOGIN = 'github-actions[bot]';
+const RELEASE = [LABELS.pendingRelease, LABELS.shipped];
+
+const fixedRecord = (sha) => `Fixed in ${sha}; ships with the first release tag that contains it.\n\n<!-- discord-fixed-in: ${sha} -->`;
+const shippedRecord = (tag, shas) => `Shipped in ${tag}.\n\n<!-- discord-shipped-in: ${tag} fixes: ${shas.join(',')} -->`;
+
+// The release state the records give: which fixes exist, which a release has
+// covered, and the newest release that covered them.
+export function releaseState(records) {
+  const shipped = new Set();
+  let lastTag = null;
+  for (const s of records.shipped) {
+    for (const sha of s.fixes) shipped.add(sha);
+    lastTag = s.tag;
+  }
+  const waiting = records.fixes.filter((sha) => !shipped.has(sha));
+  return { fixes: records.fixes, waiting, lastTag };
+}
+
+// The release labels an issue should carry.
+export function wantedLabels(issue, records) {
+  if (issue.state !== 'closed' || issue.state_reason !== 'completed') return [];
+  const r = releaseState(records);
+  if (!r.fixes.length) return [];
+  return [r.waiting.length ? LABELS.pendingRelease : LABELS.shipped];
+}
+
+// The status tag a post should show (E1).
+export function wantedStatus(issue, records, prs) {
+  if (issue.state === 'closed') {
+    if (issue.state_reason !== 'completed') return STATUS.closed;
+    const r = releaseState(records);
+    if (!r.fixes.length) return STATUS.closed;
+    return r.waiting.length ? STATUS.fixed : STATUS.shipped;
+  }
+  const working = prs.some((p) => p.state === 'OPEN' && !p.isDraft && TRUSTED.has(p.authorAssociation));
+  return working ? STATUS.inProgress : STATUS.triaged;
+}
 
 export async function run({ eventName, payload, env, fetchImpl = fetch, log = console.log }) {
   const repo = payload.repository.full_name;
+  const [owner, name] = repo.split('/');
   const f = timedFetch(fetchImpl, CALL_MS);
   const gh = githubClient(env.GITHUB_TOKEN, f);
   const discord = discordClient(env.DISCORD_BOT_TOKEN, f);
   const done = [];
   const failed = [];
 
-  async function notify(issue, status, message, ping = []) {
-    const m = parseMarker(issue.body);
-    if (!m || !eligible(issue)) return false;
-    if (status) {
-      const r = await discord.setStatus(m.threadId, status);
-      if (r.skipped) log(`#${issue.number}: ${r.skipped}`);
-    } else {
-      // A locked post does not unarchive on a new message; reopen it first.
-      await discord.unarchive(m.threadId);
-    }
-    if (message) await discord.send(m.threadId, message, ping);
-    done.push({ issue: issue.number, thread: m.threadId, status, message });
-    return m;
+  async function graphql(query, variables) {
+    const r = await gh.call('POST', '/graphql', { query, variables });
+    if (r.errors && r.errors.length) throw new Error(`GitHub GraphQL: ${r.errors[0].message}`);
+    return r.data;
   }
 
-  // One issue's failure is logged and the rest still run; the job fails at the end.
-  async function each(issues, fn) {
-    for (const issue of issues) {
-      try {
-        await fn(issue);
-      } catch (e) {
-        log(`#${issue.number}: ${e.message}`);
-        failed.push(issue.number);
-      }
-    }
+  // Open PRs that will close the issue: closing keywords and the
+  // Development sidebar link alike.
+  async function prsFor(n) {
+    const d = await graphql(`query($owner: String!, $name: String!, $number: Int!) {
+      repository(owner: $owner, name: $name) { issue(number: $number) {
+        closedByPullRequestsReferences(first: 25, includeClosedPrs: false) { nodes { isDraft state authorAssociation } } } } }`,
+    { owner, name, number: n });
+    return d.repository.issue.closedByPullRequestsReferences.nodes;
   }
 
-  // Every fix commit the merged-PR step recorded on the issue, read from every
-  // page and only from this workflow's own comments.
-  async function fixesOf(issue) {
-    const shas = new Set();
+  async function issuesClosedBy(prNumber) {
+    const d = await graphql(`query($owner: String!, $name: String!, $number: Int!) {
+      repository(owner: $owner, name: $name) { pullRequest(number: $number) {
+        closingIssuesReferences(first: 25) { nodes { number } } } } }`,
+    { owner, name, number: prNumber });
+    const pr = d.repository.pullRequest;
+    return pr ? pr.closingIssuesReferences.nodes.map((n) => n.number) : [];
+  }
+
+  // Every record this workflow wrote on the issue, from every page.
+  async function recordsOf(n) {
+    const fixes = [];
+    const shipped = [];
     for (let page = 1; ; page++) {
-      const batch = await gh.call('GET', `/repos/${repo}/issues/${issue.number}/comments?per_page=100&page=${page}`);
+      const batch = await gh.call('GET', `/repos/${repo}/issues/${n}/comments?per_page=100&page=${page}`);
       for (const c of batch) {
         if (!c.user || c.user.login !== BOT_LOGIN) continue;
-        const m = /<!--\s*discord-fixed-in:\s*([0-9a-f]{7,40})\s*-->/.exec(c.body || '');
-        if (m) shas.add(m[1]);
+        const fx = /<!--\s*discord-fixed-in:\s*([0-9a-f]{7,40})\s*-->/.exec(c.body || '');
+        if (fx && !fixes.includes(fx[1])) fixes.push(fx[1]);
+        const sh = /<!--\s*discord-shipped-in:\s*(\S+)\s+fixes:\s*([0-9a-f,]*)\s*-->/.exec(c.body || '');
+        if (sh) shipped.push({ tag: sh[1], fixes: sh[2].split(',').filter(Boolean) });
       }
-      if (batch.length < 100) return [...shas];
+      if (batch.length < 100) return { fixes, shipped };
     }
   }
 
-  // `target` is the commit the tag event pointed at when it was pushed, not
-  // the tag's name: a rerun of an old event must not see where the tag
-  // points today.
+  // The commit that closed the issue, from its newest `closed` event; null
+  // when it was closed by hand.
+  async function closingCommit(n) {
+    let last = null;
+    for (let page = 1; ; page++) {
+      const batch = await gh.call('GET', `/repos/${repo}/issues/${n}/events?per_page=100&page=${page}`);
+      for (const e of batch) if (e.event === 'closed') last = e;
+      if (batch.length < 100) return last ? last.commit_id || null : null;
+    }
+  }
+
   async function tagContains(sha, target) {
     const r = await gh.call('GET', `/repos/${repo}/compare/${sha}...${encodeURIComponent(target)}`);
     return r.status === 'ahead' || r.status === 'identical';
   }
 
-  // Removes `pending-release` once a tag holds every fix in `shas`, then reads
-  // the records again: a merge that recorded a new fix while this ran may
-  // already have added its label, which this removal just took away.
-  async function dropPending(issue, shas, target, tag) {
-    await gh.removeLabel(repo, issue.number, LABELS.pendingRelease);
-    for (const sha of (await fixesOf(issue)).filter((s) => !shas.includes(s))) {
-      if (await tagContains(sha, target)) continue;
-      log(`#${issue.number}: fix ${sha.slice(0, 7)} merged during the ship and is not in ${tag}: pending again`);
-      await gh.addLabels(repo, issue.number, [LABELS.pendingRelease]);
-      await gh.removeLabel(repo, issue.number, LABELS.shipped);
-      const m = parseMarker(issue.body);
-      await discord.setStatus(m.threadId, STATUS.fixed).catch((e) => { if (!/-> 404 /.test(e.message)) throw e; });
-      return;
+  // Write the release labels the records give, then read again; repeat while
+  // another run's record changed the answer in between.
+  async function settleLabels(n) {
+    for (let i = 0; i < SETTLE_TRIES; i++) {
+      const issue = await gh.getIssue(repo, n);
+      const records = await recordsOf(n);
+      const want = wantedLabels(issue, records);
+      for (const l of want) if (!hasLabel(issue, l)) await gh.addLabels(repo, n, [l]);
+      for (const l of RELEASE) if (!want.includes(l) && hasLabel(issue, l)) await gh.removeLabel(repo, n, l);
+      const now = await gh.getIssue(repo, n);
+      const again = wantedLabels(now, await recordsOf(n));
+      const has = RELEASE.filter((l) => hasLabel(now, l));
+      if (again.length === has.length && again.every((l) => has.includes(l))) return;
     }
-    // Every fix is in the tag. A merge running meanwhile may have dropped
-    // `shipped` (it drops it before recording): add it again so the issue
-    // never ends with neither label.
-    await gh.addLabels(repo, issue.number, [LABELS.shipped]);
+    throw new Error(`#${n}: release labels did not settle after ${SETTLE_TRIES} tries`);
   }
 
-  // Issues a PR says it closes. A number that is not an issue (404) is
-  // skipped; any other read error fails the job at the end.
-  async function linkedIssues(pr) {
-    const nums = closingIssues(`${pr.title}\n${pr.body || ''}`);
-    const out = [];
-    for (const n of nums) {
+  // Set the post's tag to what the issue says, then read again; repeat while
+  // the answer moved. Returns the status it started from and ended on.
+  async function settlePost(n) {
+    let from = null;
+    let to = null;
+    let threadId = null;
+    for (let i = 0; i < SETTLE_TRIES; i++) {
+      const issue = await gh.getIssue(repo, n);
+      if (!eligible(issue)) return null;
+      threadId = parseMarker(issue.body).threadId;
+      const want = wantedStatus(issue, await recordsOf(n), issue.state === 'open' ? await prsFor(n) : []);
+      let r;
       try {
-        const issue = await gh.getIssue(repo, n);
-        if (!issue.pull_request) out.push(issue);
+        r = await discord.setStatus(threadId, want);
       } catch (e) {
-        if (/-> 404 /.test(e.message)) continue;
+        // A deleted post can never be told; its issue still moves.
+        if (!/-> 404 /.test(e.message)) throw e;
+        log(`#${n}: Discord post is gone (${e.message.slice(0, 120)})`);
+        return null;
+      }
+      if (r.skipped) log(`#${n}: ${r.skipped}`);
+      if (from === null) from = r.from;
+      to = want;
+      const after = await gh.getIssue(repo, n);
+      const again = wantedStatus(after, await recordsOf(n), after.state === 'open' ? await prsFor(n) : []);
+      if (again === want) return { threadId, from, to, issue: after };
+    }
+    throw new Error(`#${n}: post status did not settle after ${SETTLE_TRIES} tries`);
+  }
+
+  // Tell the player when the post ended on a new status. Closed and Shipped
+  // say why; Triaged (a PR went away) stays quiet.
+  async function announce(n, moved) {
+    if (!moved || moved.from === moved.to) return;
+    let text = null;
+    if (moved.to === STATUS.inProgress) text = MESSAGES.inProgress();
+    else if (moved.to === STATUS.fixed) text = MESSAGES.fixed();
+    else if (moved.to === STATUS.shipped) {
+      const r = releaseState(await recordsOf(n));
+      text = MESSAGES.shipped(repo, r.lastTag);
+    } else if (moved.to === STATUS.closed) {
+      text = moved.issue.state_reason === 'completed' ? MESSAGES.done() : MESSAGES.closed(moved.issue.state_reason);
+    }
+    if (!text) return;
+    try {
+      await discord.send(moved.threadId, text);
+    } catch (e) {
+      if (!/-> 404 /.test(e.message)) throw e;
+    }
+    done.push({ issue: n, thread: moved.threadId, status: moved.to, message: text });
+  }
+
+  async function sync(n) {
+    await settleLabels(n);
+    await announce(n, await settlePost(n));
+  }
+
+  // One issue's failure is logged and the rest still run; the job fails at the end.
+  async function each(numbers, fn) {
+    for (const n of numbers) {
+      try {
+        await fn(n);
+      } catch (e) {
         log(`#${n}: ${e.message}`);
         failed.push(n);
       }
     }
-    return out;
+  }
+
+  async function botIssue(n) {
+    const issue = await gh.getIssue(repo, n);
+    return eligible(issue) ? issue : null;
   }
 
   if (PR_EVENTS.has(eventName)) {
-    const pr = payload.pull_request;
-    const action = payload.action;
-    if (['opened', 'reopened', 'ready_for_review'].includes(action)) {
-      if (pr.draft) {
-        log('draft PR: nothing to do until it is ready for review');
-      } else if (!TRUSTED.has(pr.author_association)) {
-        log(`PR author is ${pr.author_association || 'unknown'}, not a repo member: nothing to do`);
-      } else {
-        // A post already Fixed or Shipped does not go back to In progress. The
-        // labels are read again just before the write, in case a merge landed.
-        const fixedOrShipped = (i) => hasLabel(i, LABELS.pendingRelease) || hasLabel(i, LABELS.shipped);
-        const open = (await linkedIssues(pr)).filter((i) => !fixedOrShipped(i));
-        await each(open, async (issue) => {
-          const now = await gh.getIssue(repo, issue.number);
-          if (fixedOrShipped(now)) return;
-          const m = await notify(now, STATUS.inProgress, MESSAGES.inProgress());
-          // A merge or ship from another run may have landed while this one
-          // wrote: read once more and put the later status back.
-          const after = m ? await gh.getIssue(repo, issue.number) : null;
-          if (after && hasLabel(after, LABELS.shipped)) await discord.setStatus(m.threadId, STATUS.shipped);
-          else if (after && hasLabel(after, LABELS.pendingRelease)) await discord.setStatus(m.threadId, STATUS.fixed);
-        });
-      }
-    } else if (action === 'closed' && pr.merged && pr.base.ref === payload.repository.default_branch) {
-      const fixed = (await linkedIssues(pr)).filter(eligible);
-      await each(fixed, async (issue) => {
-        // Order matters so a rerun of this event (after success or a failure
-        // partway) can tell what is left: drop `shipped`, record the commit,
-        // add `pending-release`, tell the player.
-        const recorded = pr.merge_commit_sha && (await fixesOf(issue)).includes(pr.merge_commit_sha);
-        if (recorded && hasLabel(issue, LABELS.shipped)) {
-          // `shipped` is dropped before the record is written, so this fix shipped since.
-          log(`#${issue.number}: ${pr.merge_commit_sha.slice(0, 7)} already shipped, nothing to do`);
-          return;
-        }
-        if (!recorded) {
-          if (hasLabel(issue, LABELS.shipped)) await gh.removeLabel(repo, issue.number, LABELS.shipped);
-          if (pr.merge_commit_sha) {
-            await gh.call('POST', `/repos/${repo}/issues/${issue.number}/comments`, {
-              body: `Fixed in ${pr.merge_commit_sha}; ships with the first release tag that contains it.\n\n${fixedInMarker(pr.merge_commit_sha)}`,
-            });
-          }
-        }
-        // Always added, even when the read showed it: a ship running now may be
-        // about to remove it (see dropPending).
-        await gh.addLabels(repo, issue.number, [LABELS.pendingRelease]);
-        await notify(issue, STATUS.fixed, MESSAGES.fixed());
-      });
-    }
+    // Any change to a PR re-syncs the issues it will close. Whether the post
+    // shows In progress depends on the PR's state and author (wantedStatus).
+    const numbers = await issuesClosedBy(payload.pull_request.number);
+    await each(numbers, async (n) => {
+      if (await botIssue(n)) await sync(n);
+    });
   } else if (eventName === 'push' && String(payload.ref).startsWith('refs/tags/')) {
     const tag = payload.ref.slice('refs/tags/'.length);
     const pattern = new RegExp(env.RELEASE_TAG_PATTERN || '^v\\d');
+    // The tagged commit: for an annotated tag `after` is the tag object.
+    const target = (payload.head_commit && payload.head_commit.id) || payload.after || tag;
     if (payload.deleted || payload.created === false) {
       log(`tag ${tag} was deleted or moved, not created: nothing to do`);
     } else if (!pattern.test(tag)) {
       log(`tag ${tag} is not a release tag, nothing to do`);
     } else {
-      // The tagged commit: for an annotated tag `after` is the tag object, so
-      // head_commit comes first.
-      const target = (payload.head_commit && payload.head_commit.id) || payload.after || tag;
       const pending = (await gh.issuesWithLabel(repo, LABELS.pendingRelease)).filter(eligible);
-      await each(pending, async (issue) => {
-        // Ship only when this tag contains every recorded fix, so a rerun of an
-        // older tag, or a tag cut before a fix merged, leaves it pending. With
-        // no record (labeled by hand by someone with write access) it ships.
-        const shas = await fixesOf(issue);
-        let inTag = true;
-        for (const sha of shas) {
-          if (!(await tagContains(sha, target))) {
-            log(`#${issue.number}: fix ${sha.slice(0, 7)} is not in ${tag}, still pending`);
-            inTag = false;
-            break;
+      await each(pending.map((i) => i.number), async (n) => {
+        const records = await recordsOf(n);
+        const r = releaseState(records);
+        const already = records.shipped.some((s) => s.tag === tag);
+        if (r.waiting.length && !already) {
+          let all = true;
+          for (const sha of r.fixes) {
+            if (!(await tagContains(sha, target))) {
+              log(`#${n}: fix ${sha.slice(0, 7)} is not in ${tag}, still pending`);
+              all = false;
+              break;
+            }
+          }
+          if (all) {
+            await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body: shippedRecord(tag, r.fixes) });
           }
         }
-        // Both labels: a ship that stopped after telling the player (finish it
-        // quietly), or a newer fix that raced a ship (it is pending again).
-        if (hasLabel(issue, LABELS.shipped)) {
-          if (!inTag) {
-            await gh.removeLabel(repo, issue.number, LABELS.shipped);
-            return;
-          }
-          // The post may say Fixed (a fix merged during an earlier ship): set
-          // Shipped without a second message.
-          const m = parseMarker(issue.body);
-          await discord.setStatus(m.threadId, STATUS.shipped).catch((e) => { if (!/-> 404 /.test(e.message)) throw e; });
-          await dropPending(issue, shas, target, tag);
-          return;
-        }
-        if (!inTag) return;
-        if (!shas.length) log(`#${issue.number}: no recorded fix commit (labeled by hand); shipping with ${tag}`);
-        try {
-          await notify(issue, STATUS.shipped, MESSAGES.shipped(repo, tag));
-        } catch (e) {
-          // A deleted post can never be told; ship the issue anyway so it
-          // does not block every later tag.
-          if (!/-> 404 /.test(e.message)) throw e;
-          log(`#${issue.number}: Discord post is gone (${e.message.slice(0, 120)}); marking shipped anyway`);
-        }
-        // Add before remove: a failure in between leaves both labels, never none.
-        await gh.addLabels(repo, issue.number, [LABELS.shipped]);
-        await dropPending(issue, shas, target, tag);
+        await sync(n);
       });
     }
   } else if (eventName === 'issues') {
-    const issue = payload.issue;
-    if (payload.action === 'closed' && ['not_planned', 'duplicate'].includes(issue.state_reason)) {
-      await notify(issue, STATUS.closed, MESSAGES.closed(issue.state_reason));
-    } else if (payload.action === 'labeled' && payload.label && payload.label.name === LABELS.needsInfo) {
-      const m = parseMarker(issue.body);
-      await notify(issue, null, MESSAGES.needsInfo(m && m.reporterId), m && m.reporterId ? [m.reporterId] : []);
+    const n = payload.issue.number;
+    if (payload.action === 'labeled' && payload.label && payload.label.name === LABELS.needsInfo) {
+      const issue = await botIssue(n);
+      const m = issue && parseMarker(issue.body);
+      if (m) {
+        // A locked post does not unarchive on a new message; reopen it first.
+        await discord.unarchive(m.threadId);
+        const text = MESSAGES.needsInfo(m.reporterId);
+        await discord.send(m.threadId, text, m.reporterId ? [m.reporterId] : []);
+        done.push({ issue: n, thread: m.threadId, message: text });
+      }
+    } else if (['closed', 'reopened'].includes(payload.action)) {
+      await each([n], async () => {
+        const issue = await botIssue(n);
+        if (!issue) return;
+        if (issue.state === 'closed' && issue.state_reason === 'completed') {
+          // E2: a commit that closed the issue is its fix.
+          const sha = await closingCommit(n);
+          if (sha && !(await recordsOf(n)).fixes.includes(sha)) {
+            await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body: fixedRecord(sha) });
+          }
+        }
+        await sync(n);
+      });
     }
+  } else if (eventName === 'schedule' || eventName === 'workflow_dispatch') {
+    // E3: the sweep. Report mode lists what is wrong; fix mode writes it,
+    // and neither tells anyone.
+    const fix = env.SWEEP_MODE === 'fix';
+    const issues = (await gh.issuesWithLabel(repo, LABELS.fromDiscord)).filter(eligible);
+    let wrong = 0;
+    await each(issues.map((i) => i.number), async (n) => {
+      const issue = await gh.getIssue(repo, n);
+      const records = await recordsOf(n);
+      const want = wantedLabels(issue, records);
+      const has = RELEASE.filter((l) => hasLabel(issue, l));
+      const status = wantedStatus(issue, records, issue.state === 'open' ? await prsFor(n) : []);
+      const threadId = parseMarker(issue.body).threadId;
+      let shown = null;
+      try {
+        shown = await discord.statusOf(threadId);
+      } catch (e) {
+        if (!/-> 404 /.test(e.message)) throw e;
+      }
+      const labelsOk = want.length === has.length && want.every((l) => has.includes(l));
+      const postOk = shown === null || shown === status;
+      if (labelsOk && postOk) return;
+      wrong++;
+      const parts = [];
+      if (!labelsOk) parts.push(`labels ${has.join(', ') || '(none)'} -> ${want.join(', ') || '(none)'}`);
+      if (!postOk) parts.push(`post ${shown || '(no status)'} -> ${status}`);
+      log(`#${n}: ${parts.join('; ')}`);
+      if (fix) {
+        await settleLabels(n);
+        await settlePost(n);
+      }
+    });
+    log(`sweep (${fix ? 'fix' : 'report'} mode): ${wrong} of ${issues.length} issue(s) out of step`);
   }
 
-  log(done.length ? `updated ${done.length} Discord post(s)` : 'no Discord post to update');
+  log(done.length ? `told ${done.length} Discord post(s)` : 'no Discord post told');
   if (failed.length) throw new Error(`could not update issue(s) ${failed.map((n) => `#${n}`).join(', ')}; see above`);
   return done;
 }

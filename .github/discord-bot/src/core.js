@@ -148,6 +148,17 @@ export function nextAppliedTags(current, available, statusName) {
   return [...keep.slice(0, 4), target.id];
 }
 
+// The status a post shows now (a status tag's canonical name), or null.
+export function currentStatus(applied, available) {
+  const byLower = new Map(Object.values(STATUS).map((s) => [s.toLowerCase(), s]));
+  const byId = new Map((available || []).map((t) => [t.id, t]));
+  for (const id of applied || []) {
+    const t = byId.get(id);
+    if (t && byLower.has(t.name.toLowerCase())) return byLower.get(t.name.toLowerCase());
+  }
+  return null;
+}
+
 // "owner/SomeAddon" + "v5.0.120" -> "SomeAddon v5.0.120"; a tag that does not
 // start with a version number is shown as it is.
 export function repoDisplay(repoFullName, tag) {
@@ -161,6 +172,7 @@ export const MESSAGES = {
   inProgress: () => 'A fix is up and being tested.',
   fixed: () => 'The fix is merged and will be in the next update.',
   shipped: (repoFullName, tag) => `The fix landed in ${repoDisplay(repoFullName, tag)}. Update the addon to get it, and reply here if it still happens.`,
+  done: () => 'Marked as done.',
   closed: (reason) => reason === 'duplicate'
     ? 'Closed as a duplicate of another report.'
     : 'Closed without a change for now.',
