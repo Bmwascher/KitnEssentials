@@ -1,32 +1,40 @@
 // The Worker's scheduled jobs. Every few minutes `scan` puts one message with
 // a "Send to GitHub" button into each new post in the configured forums. Once
 // a day `daily` lists posts that have waited too long with no status, and
-// warns the moderators if the scan has stopped running.
+// warns the moderators if the scan has stopped running or keeps failing.
 //
-// State lives in the Workers KV namespace bound as STATE:
+// State lives in the Workers KV namespace bound as STATE. KV's free plan
+// allows 1,000 writes a day, so a scan writes its own state once per run:
 //   scan:since   epoch ms; posts made at or before it are never messaged
-//   scan:last    epoch ms of the last scan that ran, whatever it found
-//   scan:caught  epoch ms up to which archived posts are known to be handled
-//   scan:through the newest post id at or before which every post is handled,
-//                so a run reads KV only for posts after it
-//   scan:error   the last scan's failure, cleared by a clean run
-//   thread:<id>  {"greeting": message id, "skipped": reason, "issue": {"repo", "number"}}
+//   scan:state   {"last": epoch ms of the last run, whatever it found,
+//                 "caught": {forum: epoch ms up to which its archived posts are handled},
+//                 "through": {forum: the newest post id at or before which every
+//                             post there is handled, so a run reads KV only after it},
+//                 "error": {"at": epoch ms, "text": the last failure}}
+//   thread:<id>  {"greeting": message id, "skipped": reason, "tries": failed sends,
+//                 "issue": {"repo", "number"}}
 import { parseForums, snowflakeMs, timedFetch, currentStatus } from './core.js';
 import { discordClient } from './discord.js';
 
 export const SEND_BUTTON = 'send';
 // Workers' free plan allows 50 outgoing calls per run. Each greeting costs two
-// (a look at the post's last messages, then the send); the rest of the budget
-// reads the forums.
+// (a look at the post's last messages, then the send) and has its own share,
+// so reading the forums can never use up what the greetings need.
 const MAX_GREET = 8;
-const CALL_BUDGET = 45;
+const READ_BUDGET = 28;
+const GREET_BUDGET = 2 * MAX_GREET;
+const POST_BUDGET = 4;
 const MAX_KV_READS = 60;
 const ARCHIVE_PAGES = 3;
+// A post that fails this many runs in a row (not a refusal) is given up on.
+const MAX_TRIES = 6;
 const CALL_MS = 5000;
-// Posts archive after an hour at the shortest; when the archived posts were
-// last fully handled longer ago than this, they are read too.
+// Posts archive after an hour at the shortest; when a forum's archived posts
+// were last known handled longer ago than this, they are read too.
 const CATCH_UP_MS = 50 * 60 * 1000;
 const STALE_SCAN_MS = 60 * 60 * 1000;
+const ERROR_SHOWN_MS = 24 * 60 * 60 * 1000;
+const DAILY_ARCHIVED_MS = 30 * 24 * 60 * 60 * 1000;
 const ANSWERED = 'answered';
 
 export const GREETING = 'Thanks for posting! A moderator will look at this soon. Moderators: the button below sends this post to GitHub.';
@@ -55,12 +63,16 @@ export async function saveThreadRecord(kv, threadId, patch) {
   await kv.put(`thread:${threadId}`, JSON.stringify({ ...rec, ...patch }));
 }
 
-// A Discord client that refuses calls past the run's budget.
-function budgetClient(env, deps) {
+// A record that only counts failed tries is not finished.
+const finished = (rec) => !!rec && Object.keys(rec).some((k) => k !== 'tries');
+
+// A Discord client that refuses calls past its share of the run's budget.
+export class BudgetSpent extends Error {}
+function budgetClient(env, deps, budget) {
   const timed = timedFetch(deps.fetch || fetch, CALL_MS);
-  let left = CALL_BUDGET;
+  let left = budget;
   const counted = (url, init) => {
-    if (left <= 0) throw new Error('call budget for this run is spent');
+    if (left <= 0) throw new BudgetSpent('call budget for this run is spent');
     left--;
     return timed(url, init);
   };
@@ -69,48 +81,35 @@ function budgetClient(env, deps) {
 
 const refused = (err) => / -> (403|404) /.test(String(err && err.message));
 
-// Posts in the configured forums: the guild's active posts, plus, when asked,
-// each forum's posts archived at or after `archivedSince`, newest first, up to
-// a few pages. `complete` is false when anything could not be read.
-async function forumThreads(discord, guildId, forumIds, archivedSince, log) {
-  const out = new Map();
-  const failed = [];
-  let complete = true;
-  try {
-    const active = await discord.call('GET', `/guilds/${guildId}/threads/active`);
-    for (const t of active.threads || []) if (forumIds.includes(t.parent_id)) out.set(t.id, t);
-  } catch (err) {
-    log(`could not read the active posts: ${err.message}`);
-    failed.push('active posts');
-    complete = false;
+// One forum's archived posts, newest first, back to those archived at `since`
+// (epoch ms), up to a few pages. `cut` is the archive time it stopped at when
+// the page limit came first.
+async function archivedPosts(discord, forumId, since) {
+  const out = [];
+  let before = '';
+  for (let page = 0; page < ARCHIVE_PAGES; page++) {
+    const arch = await discord.call('GET', `/channels/${forumId}/threads/archived/public?limit=50${before}`);
+    const threads = arch.threads || [];
+    out.push(...threads);
+    const oldest = threads.at(-1);
+    const stamp = oldest && oldest.thread_metadata && oldest.thread_metadata.archive_timestamp;
+    if (!arch.has_more || !stamp || Date.parse(stamp) < since) return { threads: out, cut: null };
+    before = `&before=${encodeURIComponent(stamp)}`;
   }
-  if (archivedSince !== null) {
-    for (const forumId of forumIds) {
-      try {
-        let before = '';
-        for (let page = 0; ; page++) {
-          if (page === ARCHIVE_PAGES) { complete = false; break; }
-          const arch = await discord.call('GET', `/channels/${forumId}/threads/archived/public?limit=50${before}`);
-          const threads = arch.threads || [];
-          for (const t of threads) out.set(t.id, t);
-          const oldest = threads.at(-1);
-          const stamp = oldest && oldest.thread_metadata && oldest.thread_metadata.archive_timestamp;
-          if (!arch.has_more || !stamp || Date.parse(stamp) < archivedSince) break;
-          before = `&before=${encodeURIComponent(stamp)}`;
-        }
-      } catch (err) {
-        log(`could not read forum ${forumId}: ${err.message}`);
-        failed.push(`forum ${forumId}`);
-        complete = false;
-      }
-    }
-  }
-  return { threads: [...out.values()], complete, failed };
+  return { threads: out, cut: out.at(-1).thread_metadata.archive_timestamp };
+}
+
+// Archived by Discord's inactivity timer rather than closed by someone: a
+// post closed by hand before the scan saw it is left closed.
+function archivedByTimer(t) {
+  const md = t.thread_metadata || {};
+  const stamp = Date.parse(md.archive_timestamp);
+  return !!md.auto_archive_duration && stamp - snowflakeMs(t.id) >= md.auto_archive_duration * 60 * 1000;
 }
 
 // The bot's button already in the post's last messages, if any.
 async function existingGreeting(discord, threadId) {
-  const recent = await discord.call('GET', `/channels/${threadId}/messages?limit=20`);
+  const recent = await discord.call('GET', `/channels/${threadId}/messages?limit=100`);
   const mine = `${SEND_BUTTON}:${threadId}`;
   const hit = (recent || []).find((m) => (m.components || []).some((row) => (row.components || []).some((c) => c.custom_id === mine)));
   return hit ? hit.id : null;
@@ -127,74 +126,106 @@ export async function scan(env, deps = {}) {
     return { skipped: true };
   }
   const since = Number(await kv.get('scan:since'));
+  const state = (await readJson(kv, 'scan:state')) || {};
+  const caught = { ...state.caught };
+  const through = { ...state.through };
   if (!since) {
     // First run: start from now, so posts made before the bot never get a message.
     await kv.put('scan:since', String(now));
-    await kv.put('scan:last', String(now));
-    await kv.put('scan:caught', String(now));
+    await kv.put('scan:state', JSON.stringify({ last: now }));
     return { started: now };
   }
   const greeted = [];
   const errors = [];
   let left = 0;
   try {
-    const caught = Number(await kv.get('scan:caught')) || since;
-    const catchUp = now - caught > CATCH_UP_MS;
-    const discord = budgetClient(env, deps);
-    const found = await forumThreads(discord, env.GUILD_ID, forumIds, catchUp ? caught : null, log);
-    errors.push(...found.failed);
-    const through = BigInt((await kv.get('scan:through')) || 0);
-    const fresh = found.threads
-      .filter((t) => snowflakeMs(t.id) > since && BigInt(t.id) > through && !(t.thread_metadata && t.thread_metadata.locked))
+    const discord = budgetClient(env, deps, READ_BUDGET);
+    const greeter = budgetClient(env, deps, GREET_BUDGET);
+    const posts = new Map();
+    let active;
+    try {
+      active = (await discord.call('GET', `/guilds/${env.GUILD_ID}/threads/active`)).threads || [];
+    } catch (err) {
+      errors.push('the active posts');
+      throw err;
+    }
+    for (const t of active) if (forumIds.includes(t.parent_id)) posts.set(t.id, t);
+    const readable = new Set();
+    const order = [...forumIds].sort((a, b) => (caught[a] || since) - (caught[b] || since));
+    for (const f of order) {
+      if (now - (caught[f] || since) <= CATCH_UP_MS) { readable.add(f); continue; }
+      try {
+        const arch = await archivedPosts(discord, f, caught[f] || since);
+        for (const t of arch.threads) if (t.parent_id === f && archivedByTimer(t) && !posts.has(t.id)) posts.set(t.id, t);
+        if (arch.cut) errors.push(`archived posts in forum ${f} from before ${arch.cut} (too many to read)`);
+        readable.add(f);
+      } catch (err) {
+        if (err instanceof BudgetSpent) { log(`forum ${f}: catch-up deferred to the next run`); continue; }
+        log(`could not read forum ${f}: ${err.message}`);
+        errors.push(`forum ${f}`);
+      }
+    }
+
+    const mark = (f) => BigInt(through[f] || 0);
+    const fresh = [...posts.values()]
+      .filter((t) => snowflakeMs(t.id) > since && BigInt(t.id) > mark(t.parent_id) && !(t.thread_metadata && t.thread_metadata.locked))
       .sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
+    const unbroken = new Set(forumIds);
+    const leftIn = new Set();
     let reads = 0;
-    let handled = through;
-    let unbroken = true;
+    let tried = 0;
     for (const t of fresh) {
-      if (greeted.length >= MAX_GREET || reads >= MAX_KV_READS) { left++; unbroken = false; continue; }
+      const f = t.parent_id;
+      if (tried >= MAX_GREET || reads >= MAX_KV_READS) { left++; leftIn.add(f); unbroken.delete(f); continue; }
       reads++;
-      let done = true;
-      if (!(await threadRecord(kv, t.id))) {
+      const rec = await threadRecord(kv, t.id);
+      let done = finished(rec);
+      if (!done) {
+        tried++;
         try {
-          const had = await existingGreeting(discord, t.id);
+          const had = await existingGreeting(greeter, t.id);
           if (had) await saveThreadRecord(kv, t.id, { greeting: had });
           else {
-            const m = await discord.call('POST', `/channels/${t.id}/messages`, greetingMessage(t.id));
+            const m = await greeter.call('POST', `/channels/${t.id}/messages`, greetingMessage(t.id));
             greeted.push(t.id);
             await saveThreadRecord(kv, t.id, { greeting: m.id });
           }
+          done = true;
         } catch (err) {
-          if (refused(err)) {
+          const tries = ((rec && rec.tries) || 0) + 1;
+          if (refused(err) || tries >= MAX_TRIES) {
             log(`post ${t.id} skipped: ${err.message}`);
             await saveThreadRecord(kv, t.id, { skipped: err.message.slice(0, 200) });
+            if (!refused(err)) errors.push(`post ${t.id} (gave up after ${tries} tries)`);
+            done = true;
           } else {
             log(`post ${t.id} left for the next run: ${err.message}`);
+            await saveThreadRecord(kv, t.id, { tries });
             errors.push(`post ${t.id}`);
             left++;
-            done = false;
+            leftIn.add(f);
           }
         }
       }
-      unbroken = unbroken && done;
-      if (unbroken) handled = BigInt(t.id);
+      if (!done) unbroken.delete(f);
+      if (unbroken.has(f) && readable.has(f)) through[f] = t.id;
     }
-    if (found.complete && handled > through) await kv.put('scan:through', handled.toString());
-    if (catchUp && found.complete && !left) await kv.put('scan:caught', String(now));
+    for (const f of readable) if (!leftIn.has(f)) caught[f] = now;
     if (left) log(`scan: ${left} post(s) left for the next run`);
   } catch (err) {
-    errors.push(err.message);
+    if (!errors.length) errors.push(err.message);
     throw err;
   } finally {
-    await kv.put('scan:last', String(now));
-    if (errors.length) await kv.put('scan:error', `${new Date(now).toISOString()}: could not read or message ${errors.slice(0, 5).join(', ')}`);
-    else await kv.put('scan:error', '');
+    const next = { last: now, caught, through, error: state.error };
+    if (errors.length) next.error = { at: now, text: `could not read or message ${errors.slice(0, 5).join(', ')}` };
+    await kv.put('scan:state', JSON.stringify(next));
   }
   return { greeted, left };
 }
 
 // E4 and the scan alert, posted to MOD_CHANNEL_ID (logged when it is unset).
 // The alert goes first, on its own, so a forum that cannot be read never
-// holds it back.
+// holds it back. The daily check writes no state.
 export async function daily(env, deps = {}) {
   const log = deps.log || console.log;
   const now = (deps.now || Date.now)();
@@ -204,52 +235,79 @@ export async function daily(env, deps = {}) {
     return { skipped: true };
   }
   const staleMs = (Number(env.STALE_DAYS) || 3) * 24 * 60 * 60 * 1000;
-  const discord = budgetClient(env, deps);
+  const discord = budgetClient(env, deps, READ_BUDGET + GREET_BUDGET);
+  const poster = budgetClient(env, deps, POST_BUDGET);
+  let posted = false;
   const post = async (text) => {
     text = text.slice(0, 1900);
     if (!env.MOD_CHANNEL_ID) return log(text);
-    try { await discord.send(env.MOD_CHANNEL_ID, text); } catch (err) { log(`could not post to the moderator channel: ${err.message}\n${text}`); }
+    try {
+      await poster.send(env.MOD_CHANNEL_ID, text);
+      posted = true;
+    } catch (err) {
+      log(`could not post to the moderator channel: ${err.message}\n${text}`);
+    }
   };
 
   const kv = env.STATE;
   let alerted = false;
   if (kv && Number(await kv.get('scan:since'))) {
-    const last = Number(await kv.get('scan:last')) || 0;
-    const error = await kv.get('scan:error');
+    const state = (await readJson(kv, 'scan:state')) || {};
+    const last = Number(state.last) || 0;
     const alert = [];
     if (now - last > STALE_SCAN_MS) {
       alert.push(`The post scan has not run for ${Math.round((now - last) / 60000)} minutes: new posts are not getting their button. Check the Worker's cron trigger.`);
     }
-    if (error) alert.push(`The post scan is running but hit a problem: ${error}. Check the bot's permissions in those channels.`);
+    if (state.error && now - state.error.at < ERROR_SHOWN_MS) {
+      alert.push(`The post scan hit a problem at ${new Date(state.error.at).toISOString()}: ${state.error.text}. Check the bot's permissions in those channels.`);
+    }
     if (alert.length) { await post(alert.join('\n')); alerted = true; }
   }
 
-  const lines = [];
   const tagsByForum = new Map();
   for (const id of forumIds) {
     try { tagsByForum.set(id, (await discord.getChannel(id)).available_tags || []); } catch (err) { log(`could not read forum ${id}: ${err.message}`); }
   }
-  const found = await forumThreads(discord, env.GUILD_ID, forumIds, 0, log);
-  const unread = [...new Set([...forumIds.filter((id) => !tagsByForum.has(id)).map((id) => `forum ${id}`), ...found.failed])];
-  const waiting = found.threads.filter((t) => {
+  const unread = forumIds.filter((id) => !tagsByForum.has(id)).map((id) => `forum ${id}`);
+  const threads = new Map();
+  try {
+    const active = await discord.call('GET', `/guilds/${env.GUILD_ID}/threads/active`);
+    for (const t of active.threads || []) threads.set(t.id, t);
+  } catch (err) {
+    log(`could not read the active posts: ${err.message}`);
+    unread.push('the active posts');
+  }
+  let cut = false;
+  for (const id of tagsByForum.keys()) {
+    try {
+      const arch = await archivedPosts(discord, id, now - DAILY_ARCHIVED_MS);
+      for (const t of arch.threads) threads.set(t.id, t);
+      cut = cut || !!arch.cut;
+    } catch (err) {
+      log(`could not read forum ${id}: ${err.message}`);
+      unread.push(`forum ${id}`);
+    }
+  }
+  const waiting = [...threads.values()].filter((t) => {
+    if (!tagsByForum.has(t.parent_id)) return false;
     if (now - snowflakeMs(t.id) < staleMs) return false;
     if (t.thread_metadata && t.thread_metadata.locked) return false;
-    if (!tagsByForum.has(t.parent_id)) return false;
     const tags = tagsByForum.get(t.parent_id);
     if (currentStatus(t.applied_tags, tags)) return false;
     const answered = tags.find((x) => x.name.toLowerCase() === ANSWERED);
     return !(answered && (t.applied_tags || []).includes(answered.id));
   });
+  const lines = [];
   if (waiting.length) {
     lines.push(`${waiting.length} post(s) older than ${Math.round(staleMs / 86400000)} days with no status or "Answered" tag:`);
     for (const t of waiting.slice(0, 20)) lines.push(`- ${t.name || t.id}: https://discord.com/channels/${env.GUILD_ID}/${t.id}`);
     if (waiting.length > 20) lines.push(`- and ${waiting.length - 20} more`);
+    if (cut) lines.push('Only the most recently archived posts were checked; older ones may also be waiting.');
   }
-  if (unread.length) lines.push(`Could not read ${unread.join(', ')}, so this list may be short. Check the bot's access there.`);
-  else if (!found.complete) lines.push('Only the most recently archived posts were checked; older ones may also be waiting.');
+  if (unread.length) lines.push(`Could not read ${[...new Set(unread)].join(', ')}, so this list may be short. Check the bot's access there.`);
 
   if (lines.length) await post(lines.join('\n'));
-  return { waiting: waiting.length, alerted, unread, posted: !!env.MOD_CHANNEL_ID && (alerted || lines.length > 0) };
+  return { waiting: waiting.length, alerted, unread, posted };
 }
 
 // Which job a cron expression runs (wrangler.toml [triggers]).
