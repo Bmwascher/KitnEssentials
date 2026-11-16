@@ -69,7 +69,7 @@ to GitHub, open a PR with `Fixes #N` into the default branch, merge it, and
 push a tag. **In this KitnEssentials test copy, use a `discord-test-1` style
 tag: its own `v*` tags publish real releases to CurseForge and Wago.** Each
 step should change the tag and post its message. (The workflow here already
-defaults to this repo and that tag pattern, so steps 9's variable is optional.)
+defaults to this repo and that tag pattern, so step 9's variable is optional.)
 
 ## Stage 3: live
 
