@@ -114,21 +114,24 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     } else if (action === 'closed' && pr.merged && pr.base.ref === payload.repository.default_branch) {
       const fixed = (await linkedIssues(pr)).filter(eligible);
       await each(fixed, async (issue) => {
-        // A merge already recorded is a rerun of this event: do nothing again.
-        if (pr.merge_commit_sha && (await fixesOf(issue)).includes(pr.merge_commit_sha)) {
-          log(`#${issue.number}: ${pr.merge_commit_sha.slice(0, 7)} already recorded, nothing to do`);
+        // Order matters so a rerun of this event (after success or a failure
+        // partway) can tell what is left: drop `shipped`, record the commit,
+        // add `pending-release`, tell the player.
+        const recorded = pr.merge_commit_sha && (await fixesOf(issue)).includes(pr.merge_commit_sha);
+        if (recorded && hasLabel(issue, LABELS.shipped)) {
+          // `shipped` is dropped before the record is written, so this fix shipped since.
+          log(`#${issue.number}: ${pr.merge_commit_sha.slice(0, 7)} already shipped, nothing to do`);
           return;
         }
-        // The commit first, then the label: a pending issue always has the
-        // commits a release tag is checked against.
-        if (pr.merge_commit_sha) {
-          await gh.call('POST', `/repos/${repo}/issues/${issue.number}/comments`, {
-            body: `Fixed in ${pr.merge_commit_sha}; ships with the first release tag that contains it.\n\n${fixedInMarker(pr.merge_commit_sha)}`,
-          });
+        if (!recorded) {
+          if (hasLabel(issue, LABELS.shipped)) await gh.removeLabel(repo, issue.number, LABELS.shipped);
+          if (pr.merge_commit_sha) {
+            await gh.call('POST', `/repos/${repo}/issues/${issue.number}/comments`, {
+              body: `Fixed in ${pr.merge_commit_sha}; ships with the first release tag that contains it.\n\n${fixedInMarker(pr.merge_commit_sha)}`,
+            });
+          }
         }
-        await gh.addLabels(repo, issue.number, [LABELS.pendingRelease]);
-        // Fixed again after an earlier ship: it is pending, not shipped.
-        if (hasLabel(issue, LABELS.shipped)) await gh.removeLabel(repo, issue.number, LABELS.shipped);
+        if (!hasLabel(issue, LABELS.pendingRelease)) await gh.addLabels(repo, issue.number, [LABELS.pendingRelease]);
         await notify(issue, STATUS.fixed, MESSAGES.fixed());
       });
     }
@@ -142,21 +145,25 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     } else {
       const pending = (await gh.issuesWithLabel(repo, LABELS.pendingRelease)).filter(eligible);
       await each(pending, async (issue) => {
-        // Both labels: an earlier ship stopped after telling the player.
-        if (hasLabel(issue, LABELS.shipped)) {
-          await gh.removeLabel(repo, issue.number, LABELS.pendingRelease);
-          return;
-        }
         // Ship only when this tag contains every recorded fix, so a rerun of an
         // older tag, or a tag cut before a fix merged, leaves it pending. With
         // no record (labeled by hand by someone with write access) it ships.
         const shas = await fixesOf(issue);
+        let inTag = true;
         for (const sha of shas) {
           if (!(await tagContains(sha, tag))) {
             log(`#${issue.number}: fix ${sha.slice(0, 7)} is not in ${tag}, still pending`);
-            return;
+            inTag = false;
+            break;
           }
         }
+        // Both labels: a ship that stopped after telling the player (finish it
+        // quietly), or a newer fix that raced a ship (it is pending again).
+        if (hasLabel(issue, LABELS.shipped)) {
+          await gh.removeLabel(repo, issue.number, inTag ? LABELS.pendingRelease : LABELS.shipped);
+          return;
+        }
+        if (!inTag) return;
         if (!shas.length) log(`#${issue.number}: no recorded fix commit (labeled by hand); shipping with ${tag}`);
         try {
           await notify(issue, STATUS.shipped, MESSAGES.shipped(repo, tag));

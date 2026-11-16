@@ -323,3 +323,28 @@ test('a create that answered late is found again and reported as created', async
   assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /^Created ONE #17/);
   assert.equal(base.find('DELETE', /labels\/discord-lock-700$/).length, 1);
 });
+
+test('a server error on create is an unknown outcome too', async () => {
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['POST', /\/issues$/, () => new Response('bad gateway', { status: 502 })],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst', log: () => {} });
+  const [res] = await Promise.all(ctx.jobs);
+  assert.equal(res.uncertain, true);
+  assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /may have been created/);
+  assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 0, 'the lock stays');
+});
+
+test('a lock claim with no answer is reported with the label to clear', async () => {
+  const base = fakeFetch(discordRoutes(githubRoutes()));
+  const hang = (url, init = {}) => (init.method === 'POST' && /\/labels$/.test(url)
+    ? new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)))
+    : base(url, init));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
+  const [res] = await Promise.all(ctx.jobs);
+  assert.equal(res.uncertain, 'lock');
+  assert.equal(base.find('POST', /\/issues$/).length, 0);
+  assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /discord-lock-700/);
+});

@@ -83,7 +83,20 @@ test('an issue fixed again after shipping is pending, not shipped', async () => 
   const f = fakeFetch(routes({ 17: issue(17, { labels: [{ name: 'from-discord' }, { name: 'shipped' }] }) }));
   await run({ eventName: PR, fetchImpl: f, env, log: quiet,
     payload: { action: 'closed', repository, pull_request: pr({ merged: true, merge_commit_sha: 'abc1234' }) } });
-  assert.equal(f.find('DELETE', /issues\/17\/labels\/shipped$/).length, 1);
+  const writes = f.calls.filter((c) => /issues\/17\/(comments|labels)/.test(c.url) && c.method !== 'GET')
+    .map((c) => `${c.method} ${c.url.split('/issues/17/')[1]}`);
+  assert.deepEqual(writes, ['DELETE labels/shipped', 'POST comments', 'POST labels'], 'shipped goes before the record is written');
+});
+
+test('rerunning a merge that stopped partway finishes it', async () => {
+  const rec = [{ user: BOT, body: '<!-- discord-fixed-in: abc1234 -->' }];
+  // The record was written, then adding the label failed.
+  const f = fakeFetch(routes({ 17: issue(17) }, [['GET', /\/issues\/17\/comments/, () => rec]]));
+  const done = await run({ eventName: PR, fetchImpl: f, env, log: quiet,
+    payload: { action: 'closed', repository, pull_request: pr({ merged: true, merge_commit_sha: 'abc1234' }) } });
+  assert.equal(f.find('POST', /issues\/17\/comments$/).length, 0, 'not recorded twice');
+  assert.deepEqual(f.find('POST', /issues\/17\/labels$/)[0].body, { labels: ['pending-release'] });
+  assert.equal(done.length, 1, 'the player is told');
 });
 
 test('a merged PR does not label a from-discord issue that has no marker', async () => {
@@ -205,7 +218,22 @@ test('only the workflow\'s own fixed-in comments count, from every page, and the
   ]));
   const done = await run({ eventName: 'push', fetchImpl: f, env, log: quiet, payload: { ref: 'refs/tags/v5.0.1', repository } });
   assert.equal(done.length, 0, 'held: the tag lacks the second fix');
-  assert.equal(f.find('GET', /compare\/ccccccc/).length, 0, 'the outsider\'s record is never read');
+});
+
+test('an outsider\'s planted fix record can neither hold nor break a release', async () => {
+  const f = fakeFetch(routes({}, [
+    ['GET', /\/issues\?state=all.*labels=pending-release/, () => [issue(17)]],
+    ['GET', /\/issues\/17\/comments/, () => [
+      { user: BOT, body: '<!-- discord-fixed-in: aaaaaaa -->' },
+      { user: { login: 'someone' }, body: '<!-- discord-fixed-in: ccccccc -->' },
+    ]],
+    ['GET', /\/compare\/aaaaaaa\.\.\.v5\.0\.1$/, () => ({ status: 'ahead' })],
+    // Were the outsider's record read, this would hold the issue.
+    ['GET', /\/compare\/ccccccc\.\.\.v5\.0\.1$/, () => ({ status: 'behind' })],
+  ]));
+  const done = await run({ eventName: 'push', fetchImpl: f, env, log: quiet, payload: { ref: 'refs/tags/v5.0.1', repository } });
+  assert.deepEqual(done.map((d) => d.issue), [17]);
+  assert.equal(f.find('GET', /compare\/ccccccc/).length, 0);
 });
 
 test('rerunning an old merge event changes nothing', async () => {
@@ -239,6 +267,18 @@ test('a moved release tag ships nothing', async () => {
   const done = await run({ eventName: 'push', fetchImpl: f, env, log: quiet, payload: { ref: 'refs/tags/v5.0.120', created: false, forced: true, repository } });
   assert.equal(done.length, 0);
   assert.equal(f.calls.length, 0);
+});
+
+test('both labels with a newer fix not in the tag: pending again, not dropped', async () => {
+  const f = fakeFetch(routes({}, [
+    ['GET', /\/issues\?state=all.*labels=pending-release/, () => [issue(17, { labels: [{ name: 'from-discord' }, { name: 'pending-release' }, { name: 'shipped' }] })]],
+    ['GET', /\/issues\/17\/comments/, () => [{ user: BOT, body: '<!-- discord-fixed-in: def5678 -->' }]],
+    ['GET', /\/compare\/def5678\.\.\.v5\.0\.4$/, () => ({ status: 'behind' })],
+  ]));
+  const done = await run({ eventName: 'push', fetchImpl: f, env, log: quiet, payload: { ref: 'refs/tags/v5.0.4', repository } });
+  assert.equal(done.length, 0);
+  assert.equal(f.find('DELETE', /issues\/17\/labels\/shipped$/).length, 1);
+  assert.equal(f.find('DELETE', /issues\/17\/labels\/pending-release$/).length, 0);
 });
 
 test('a ship that stopped after telling the player is finished without telling again', async () => {

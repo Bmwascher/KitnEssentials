@@ -71,7 +71,7 @@ with a role on the repo: PRs from outside authors do not move posts), merge it, 
 push a tag. **In this KitnEssentials test copy, use a `discord-test-1` style
 tag: its own `v*` tags publish real releases to CurseForge and Wago.** Each
 step should change the tag and post its message. (The workflow here already
-defaults to this repo and that tag pattern, so step 9's variable is optional.)
+defaults to that tag pattern; set the repo variable `RELEASE_TAG_PATTERN` to change it.)
 
 ## Stage 3: live
 

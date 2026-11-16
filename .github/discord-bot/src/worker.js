@@ -50,6 +50,12 @@ export function config(env) {
   return { repos, forums };
 }
 
+// A write whose result is unknown: no answer (time limit, network failure) or
+// a GitHub server error, which can come after the write was applied.
+export function unknownOutcome(e) {
+  return /TimeoutError|AbortError|TypeError/.test(e.name) || /-> 5\d\d /.test(e.message);
+}
+
 function canUse(member) {
   if (!member || member.permissions === undefined) return false;
   const p = BigInt(member.permissions);
@@ -165,7 +171,14 @@ export async function fileIssue(interaction, env, deps) {
     };
     let existing = await already();
     if (existing) return { duplicate: existing.number };
-    locked = await gh.claimThread(repo, threadId);
+    try {
+      locked = await gh.claimThread(repo, threadId);
+    } catch (e) {
+      // The lock label may exist even though the answer was lost.
+      if (!unknownOutcome(e)) throw e;
+      await followup(`Nothing was created: GitHub did not confirm the lock (${e.message.slice(0, 200)}). If a later send says another send is running, delete the label ${lockLabel(threadId)} in ${repo} and try again.`);
+      return { error: e.message, uncertain: 'lock' };
+    }
     if (!locked) {
       await followup(`Nothing was created: another send of this post is running, or one stopped partway. If no issue appears, delete the label ${lockLabel(threadId)} in ${repo} and try again.`);
       return { busy: true };
@@ -208,7 +221,7 @@ export async function fileIssue(interaction, env, deps) {
     // A create that got no answer may still have happened on GitHub's side:
     // look once more, and if it is not there yet keep the lock, so a retry
     // cannot file a second issue while the first may still appear.
-    if (creating && /TimeoutError|AbortError/.test(e.name)) {
+    if (creating && unknownOutcome(e)) {
       const found = await ghTail.findByThread(repo, threadId).catch(() => null);
       if (found) {
         await followup(`Created ${repoKey} #${found.number}: ${found.html_url} (GitHub answered late; the post's tag and note were not set)`);
