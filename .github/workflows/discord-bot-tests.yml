@@ -3,6 +3,9 @@ name: Discord bot tests
 # Mock tests for the Discord bot: no Discord or GitHub calls are made.
 on:
   push:
+    # Branches only: path filters are not applied to tag pushes, so without
+    # this a release tag would run these tests too.
+    branches: ['**']
     paths: ['.github/discord-bot/**', '.github/workflows/discord-*.yml']
   pull_request:
     paths: ['.github/discord-bot/**', '.github/workflows/discord-*.yml']
@@ -14,7 +17,7 @@ jobs:
       run:
         working-directory: .github/discord-bot
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 22

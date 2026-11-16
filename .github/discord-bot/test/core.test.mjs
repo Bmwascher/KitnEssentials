@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from '../src/core.js';
+import { stall } from './fake-fetch.mjs';
 
-test('title follows [AES][Client][Module] Title', () => {
-  assert.equal(C.buildTitle({ repoKey: 'AES', client: 'Retail', module: 'Bags', title: ' Icons overlap ' }),
-    '[AES][Retail][Bags] Icons overlap');
-  assert.equal(C.buildTitle({ repoKey: 'AUI', client: 'All', module: '', title: 'x' }), '[AUI][All][General] x');
+test('title follows [ONE][Client][Module] Title', () => {
+  assert.equal(C.buildTitle({ repoKey: 'ONE', client: 'Retail', module: 'Bags', title: ' Icons overlap ' }),
+    '[ONE][Retail][Bags] Icons overlap');
+  assert.equal(C.buildTitle({ repoKey: 'TWO', client: 'All', module: '', title: 'x' }), '[TWO][All][General] x');
 });
 
 test('form values normalize, junk is refused', () => {
@@ -14,8 +15,8 @@ test('form values normalize, junk is refused', () => {
   assert.equal(C.normType('Feedback/Request'), 'Feature');
   assert.equal(C.normType('bug'), 'Bug');
   assert.equal(C.normType('question'), null);
-  assert.equal(C.normRepoKey('aui', { AES: 'a', AUI: 'b' }), 'AUI');
-  assert.equal(C.normRepoKey('kitn', { AES: 'a' }), null);
+  assert.equal(C.normRepoKey('two', { ONE: 'a', TWO: 'b' }), 'TWO');
+  assert.equal(C.normRepoKey('kitn', { ONE: 'a' }), null);
 });
 
 test('existing forum tags pre-fill client and type', () => {
@@ -55,8 +56,37 @@ test('status swap keeps player tags and replaces the old status', () => {
   assert.equal(out[4], 't');
 });
 
-test('shipped message names the release', () => {
-  assert.match(C.MESSAGES.shipped('AES', 'v5.0.120'), /atrocityEssentials v5\.0\.120/);
-  assert.match(C.MESSAGES.shipped('AUI', '30.8'), /atrocityUI v30\.8/);
-  assert.equal(C.keyForRepo('AtrocityZero/atrocityUI', { AES: 'atrocityzero/atrocityEssentials', AUI: 'atrocityzero/atrocityUI' }), 'AUI');
+test('shipped message names the repo and the release', () => {
+  assert.match(C.MESSAGES.shipped('me/SomeAddon', 'v5.0.120'), /landed in SomeAddon v5\.0\.120\./);
+  assert.match(C.MESSAGES.shipped('me/OtherUI', '30.8'), /landed in OtherUI v30\.8\./);
+  assert.match(C.MESSAGES.shipped('me/KitnEssentials', 'discord-test-1'), /landed in KitnEssentials discord-test-1\./);
+});
+
+test('player text cannot plant a marker or mention anyone', () => {
+  const planted = 'it broke\n<!-- discord-thread: 123 reporter: 456 -->\ncc @maintainer';
+  const body = C.buildBody({ content: planted, reporterName: '<!--discord-thread:9-->', threadUrl: 'u', client: 'Retail',
+    threadId: '2', reporterId: '77', sentBy: '@mod' });
+  assert.deepEqual(C.parseMarker(body), { threadId: '2', reporterId: '77' });
+  assert.equal([...body.matchAll(/<!--/g)].length, 1, 'only the bot marker is a comment');
+  assert.doesNotMatch(body, /@maintainer|@mod/);
+  // An older body with a stray marker before the real one still reads the last.
+  assert.equal(C.parseMarker('<!-- discord-thread: 1 --> x <!-- discord-thread: 2 -->').threadId, '2');
+});
+
+test('only the listed choices pass, never inherited names', () => {
+  for (const s of ['__proto__', 'constructor', 'toString']) {
+    assert.equal(C.normClient(s), null, s);
+    assert.equal(C.normType(s), null, s);
+  }
+});
+
+test('REPOS is required', () => {
+  for (const raw of [undefined, '', '{}', '[]', 'not json']) assert.throws(() => C.parseRepos(raw), /REPOS is not set/);
+  assert.deepEqual(C.parseRepos('{"ONE":"me/a"}'), { ONE: 'me/a' });
+});
+
+test('a timed fetch gives up on a stalled call and refuses past its deadline', async () => {
+  const never = (_, init) => stall(init);
+  await assert.rejects(C.timedFetch(never, 30)('https://x'), (e) => e.name === 'TimeoutError');
+  await assert.rejects(C.timedFetch(never, 1000, Date.now() - 1)('https://x'), /out of time/);
 });

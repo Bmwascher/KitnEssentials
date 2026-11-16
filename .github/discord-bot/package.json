@@ -1,5 +1,5 @@
 {
-  "name": "aes-discord-bot",
+  "name": "discord-issue-bot",
   "private": true,
   "type": "module",
   "description": "Moderator-triggered Discord forum post -> GitHub issue, with status sent back to the post.",

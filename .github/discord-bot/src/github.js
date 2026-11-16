@@ -1,6 +1,8 @@
 // GitHub access for the worker: a GitHub App (installed on the repos only),
 // signed with Web Crypto so it runs on Cloudflare Workers and in Node alike.
 
+import { LABELS, parseMarker } from './core.js';
+
 const API = 'https://api.github.com';
 
 const b64url = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)))
@@ -44,17 +46,20 @@ export async function appJwt(appId, key, now = Math.floor(Date.now() / 1000)) {
   return `${header}.${payload}.${b64url(sig)}`;
 }
 
+const MAX_PAGES = 100;
+
 export function githubClient(token, fetchImpl = fetch) {
+  const headers = () => ({
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'discord-issue-bot',
+    'Content-Type': 'application/json',
+  });
   async function call(method, path, body) {
     const res = await fetchImpl(`${API}${path}`, {
       method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'aes-discord-bot',
-        'Content-Type': 'application/json',
-      },
+      headers: headers(),
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     if (!res.ok) {
@@ -68,25 +73,46 @@ export function githubClient(token, fetchImpl = fetch) {
     createIssue: (repo, issue) => call('POST', `/repos/${repo}/issues`, issue),
     getIssue: (repo, n) => call('GET', `/repos/${repo}/issues/${n}`),
     addLabels: (repo, n, labels) => call('POST', `/repos/${repo}/issues/${n}/labels`, { labels }),
-    removeLabel: (repo, n, label) => call('DELETE', `/repos/${repo}/issues/${n}/labels/${encodeURIComponent(label)}`).catch(() => null),
-    // Every issue (open or closed) carrying a label, following pages.
+    // A label already gone is fine; any other failure reaches the caller.
+    removeLabel: (repo, n, label) => call('DELETE', `/repos/${repo}/issues/${n}/labels/${encodeURIComponent(label)}`)
+      .catch((e) => { if (/-> 404 /.test(e.message)) return null; throw e; }),
+    // Every issue (open or closed) carrying a label, following every page.
     async issuesWithLabel(repo, label) {
       const out = [];
-      for (let page = 1; page < 20; page++) {
+      for (let page = 1; ; page++) {
+        if (page > MAX_PAGES) throw new Error(`more than ${MAX_PAGES * 100} issues labeled ${label}; stopping rather than skipping some`);
         const batch = await call('GET', `/repos/${repo}/issues?state=all&per_page=100&page=${page}&labels=${encodeURIComponent(label)}`);
         out.push(...batch.filter((i) => !i.pull_request));
-        if (batch.length < 100) break;
+        if (batch.length < 100) return out;
       }
-      return out;
     },
-    // An issue already made from this Discord post, if any.
+    // An issue already made from this Discord post, if any. Reads the issue list
+    // (consistent at once), not search (which lags); errors reach the caller.
     async findByThread(repo, threadId) {
-      const q = encodeURIComponent(`repo:${repo} "discord-thread: ${threadId}" in:body is:issue`);
-      const r = await call('GET', `/search/issues?q=${q}&per_page=1`);
-      return r.items && r.items[0] ? r.items[0] : null;
+      const issues = await this.issuesWithLabel(repo, LABELS.fromDiscord);
+      return issues.find((i) => {
+        const m = parseMarker(i.body);
+        return m && m.threadId === String(threadId);
+      }) || null;
     },
+    // A per-post lock: creating a label is atomic, so of two sends of the same
+    // post at the same moment only one gets true. Released once the send ends.
+    async claimThread(repo, threadId) {
+      const res = await fetchImpl(`${API}/repos/${repo}/labels`, {
+        method: 'POST', headers: headers(), body: JSON.stringify({ name: lockLabel(threadId), color: 'ededed', description: 'Send to GitHub in progress' }),
+      });
+      if (res.ok) return true;
+      const text = await res.text().catch(() => '');
+      // Only "already exists" means another send holds the lock; any other
+      // refusal (validation, abuse limits) is an error.
+      if (res.status === 422 && /already_exists/.test(text)) return false;
+      throw new Error(`GitHub POST /repos/${repo}/labels -> ${res.status} ${text.slice(0, 300)}`);
+    },
+    releaseThread: (repo, threadId) => call('DELETE', `/repos/${repo}/labels/${encodeURIComponent(lockLabel(threadId))}`),
   };
 }
+
+export const lockLabel = (threadId) => `discord-lock-${threadId}`;
 
 export async function installationToken({ appId, privateKey, repo }, fetchImpl = fetch) {
   const key = await importAppKey(privateKey);
