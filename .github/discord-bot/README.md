@@ -1,16 +1,16 @@
-# Discord bot: #aui-help posts to GitHub issues
+# Discord bot: forum posts to GitHub issues
 
 A moderator right-clicks a forum post, picks **Apps > Send to GitHub**, and fills
-a short form. The bot files the issue in this repo (or atrocityUI), tags the
+a short form. The bot files the issue in the repo the form names, tags the
 post **Triaged** and tells the player. After that, the `Discord status`
 workflow moves the post along on its own:
 
 | On GitHub | Forum tag | Message in the post |
 | --- | --- | --- |
-| Mod sends the post | Triaged | "Thanks! This is now tracked as AES #17..." |
-| A PR saying `Fixes #17` opens | In progress | "A fix is up and being tested." |
-| That PR is merged into `dev` | Fixed, next update | "The fix is merged and will be in the next update." |
-| A release tag is pushed (`v5.0.120`) | Shipped | "The fix landed in atrocityEssentials v5.0.120..." (post stays open) |
+| Mod sends the post | Triaged | "Thanks! This is now tracked as KE #17..." |
+| A PR saying `Fixes #17` opens (author with a repo role, not a draft) | In progress | "A fix is up and being tested." |
+| That PR is merged into the default branch | Fixed, next update | "The fix is merged and will be in the next update." |
+| A release tag containing the fix is pushed | Shipped | "The fix landed in KitnEssentials v5.0.120..." (post stays open) |
 | Issue closed as not planned / duplicate | Closed | Short reason |
 | `needs-info` label added | (unchanged) | Pings the reporter for details |
 
@@ -35,7 +35,7 @@ Do this on a private Discord server and a throwaway repo (for example
 KitnEssentials) before the real ones. Roughly 30 minutes.
 
 1. **Test forum.** On the test server, make a forum channel with the same tags
-   as #aui-help (Retail, Forever, Bug, Feedback/Request) plus the five status
+   as your real help forum (for example Retail, Forever, Bug, Feedback/Request) plus the five status
    tags, spelled exactly: `Triaged`, `In progress`, `Fixed, next update`,
    `Shipped`, `Closed`. Copy the forum's channel id (Developer Mode on, right-click > Copy Channel ID).
 2. **Discord app.** At discord.com/developers/applications: New Application >
@@ -53,7 +53,7 @@ KitnEssentials) before the real ones. Roughly 30 minutes.
 5. **Worker.** In this folder: `npx wrangler@3 login`, then
    `npx wrangler@3 secret put` for `DISCORD_PUBLIC_KEY`, `DISCORD_BOT_TOKEN`,
    `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY` (paste the whole `.pem`). In
-   `wrangler.toml` set `REPOS` to `{"AES":"<you>/<test-repo>"}` and
+   `wrangler.toml` set `REPOS` to `{"KE":"<you>/<test-repo>"}` and
    `FORUM_CHANNEL_IDS` to the test forum's id (both are required: with either
    unset the command refuses every post). `npm run deploy` prints a URL.
 6. **Point Discord at it.** Developer portal > General Information >
@@ -64,7 +64,7 @@ KitnEssentials) before the real ones. Roughly 30 minutes.
 9. **Status workflow in the test repo:** copy `.github/discord-bot/` and
    `.github/workflows/discord-status.yml` into it, add the repo secret
    `DISCORD_BOT_TOKEN`, and the repo variable `DISCORD_BOT_REPOS` =
-   `{"AES":"<you>/<test-repo>"}`.
+   `{"KE":"<you>/<test-repo>"}`.
 
 Then walk one fake report through: post in the test forum, right-click > Send
 to GitHub, open a PR with `Fixes #N` into the default branch (from an account
@@ -81,6 +81,7 @@ the real forums' ids and the command at first registered without
 `DISCORD_GUILD_ID` (global). Narrow who sees it under Server
 Settings > Integrations > the bot > Send to GitHub (Mod and Admin roles).
 
-atrocityUI needs its own copy of `discord-status.yml` and this folder, with
-`tags: ['*']` in the trigger and the repo variable `RELEASE_TAG_PATTERN` =
-`^\d+\.\d+` (its tags look like `30.8`).
+Each repo the bot files into needs its own copy of `discord-status.yml` and
+this folder. Set its push trigger to that repo's release tags, and the repo
+variable `RELEASE_TAG_PATTERN` to match them (for tags like `30.8`:
+`tags: ['*']` and `^\d+\.\d+`).

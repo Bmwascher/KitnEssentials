@@ -16,7 +16,7 @@ export function fakeFetch(routes) {
   return fn;
 }
 
-// A forum with the tags the real #aui-help has, plus the bot's status tags.
+// A help forum with client and type tags, plus the bot's status tags.
 export const FORUM = {
   id: '900',
   available_tags: [

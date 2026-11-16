@@ -10,7 +10,7 @@ const pubHex = Buffer.from(await crypto.subtle.exportKey('raw', keys.publicKey))
 const env = {
   DISCORD_PUBLIC_KEY: pubHex, DISCORD_BOT_TOKEN: 'bot-token',
   GITHUB_APP_ID: '1', GITHUB_APP_PRIVATE_KEY: 'unused',
-  REPOS: '{"AES":"me/test-aes","AUI":"me/test-aui"}', FORUM_CHANNEL_IDS: '900',
+  REPOS: '{"ONE":"me/test-one","TWO":"me/test-two"}', FORUM_CHANNEL_IDS: '900',
 };
 const MOD = { permissions: String(1n << 34n), user: { id: '5', username: 'moddy' } };
 const PLAYER = { permissions: '0', user: { id: '6', username: 'pat' } };
@@ -41,9 +41,9 @@ function discordRoutes(extra = []) {
 function githubRoutes(existing = [], extra = []) {
   return [
     ...extra,
-    ['GET', /api\.github\.com\/repos\/me\/test-aes\/issues\?state=all.*labels=from-discord/, () => existing],
-    ['POST', /api\.github\.com\/repos\/me\/test-aes\/labels$/, () => new Response('{}', { status: 201 })],
-    ['DELETE', /api\.github\.com\/repos\/me\/test-aes\/labels\/discord-lock-700$/, () => null],
+    ['GET', /api\.github\.com\/repos\/me\/test-one\/issues\?state=all.*labels=from-discord/, () => existing],
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/labels$/, () => new Response('{}', { status: 201 })],
+    ['DELETE', /api\.github\.com\/repos\/me\/test-one\/labels\/discord-lock-700$/, () => null],
   ];
 }
 
@@ -74,12 +74,12 @@ test('mod right-click opens a form pre-filled from the post', async () => {
   assert.equal(j.type, 9);
   assert.equal(j.data.custom_id, 'gh:700:800');
   const val = Object.fromEntries(j.data.components.map((row) => [row.components[0].custom_id, row.components[0].value]));
-  assert.deepEqual(val, { repo: 'AES', client: 'Retail', type: 'Bug', module: undefined, title: 'Bags overlap after resize' });
+  assert.deepEqual(val, { repo: 'ONE', client: 'Retail', type: 'Bug', module: undefined, title: 'Bags overlap after resize' });
 });
 
 const submit = (over = {}) => ({
   type: 5, member: MOD, guild_id: '1', channel_id: '700', application_id: 'app', token: 'itok',
-  data: { custom_id: 'gh:700:800', components: Object.entries({ repo: 'aes', client: 'retail', type: 'bug', module: 'Bags', title: 'Bags overlap after resize', ...over })
+  data: { custom_id: 'gh:700:800', components: Object.entries({ repo: 'one', client: 'retail', type: 'bug', module: 'Bags', title: 'Bags overlap after resize', ...over })
     .map(([custom_id, value]) => ({ type: 1, components: [{ type: 4, custom_id, value }] })) },
 });
 
@@ -88,7 +88,7 @@ test('a bad form value creates nothing and says why', async () => {
   const ctx = ctxFor();
   const r = await handle(await signed(submit({ client: 'classic', repo: 'kitn' })), env, ctx, { fetch: f });
   const j = await r.json();
-  assert.match(j.data.content, /Nothing was created.*Repo must be AES or AUI.*Client must be/);
+  assert.match(j.data.content, /Nothing was created.*Repo must be ONE or TWO.*Client must be/);
   assert.equal(ctx.jobs.length, 0);
   assert.equal(f.calls.length, 0);
 });
@@ -96,7 +96,7 @@ test('a bad form value creates nothing and says why', async () => {
 test('submitting files the issue, tags the post Triaged and tells the player', async () => {
   let created;
   const f = fakeFetch(discordRoutes(githubRoutes([], [
-    ['POST', /api\.github\.com\/repos\/me\/test-aes\/issues$/, (b) => { created = b; return { number: 17, html_url: 'https://github.com/me/test-aes/issues/17' }; }],
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, (b) => { created = b; return { number: 17, html_url: 'https://github.com/me/test-one/issues/17' }; }],
   ])));
   const ctx = ctxFor();
   const r = await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
@@ -104,7 +104,7 @@ test('submitting files the issue, tags the post Triaged and tells the player', a
   assert.deepEqual(await Promise.all(ctx.jobs), [{ created: 17, notes: [] }]);
   assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 1, 'the lock is released');
 
-  assert.equal(created.title, '[AES][Retail][Bags] Bags overlap after resize');
+  assert.equal(created.title, '[ONE][Retail][Bags] Bags overlap after resize');
   assert.match(created.body, /> My bags overlap\n> after resize/);
   assert.match(created.body, /\*\*Pat\*\* in \[the Discord post\]\(https:\/\/discord.com\/channels\/1\/700\)/);
   assert.match(created.body, /<!-- discord-thread: 700 reporter: 42 -->/);
@@ -112,9 +112,9 @@ test('submitting files the issue, tags the post Triaged and tells the player', a
 
   assert.deepEqual(f.find('PATCH', /\/channels\/700$/)[0].body, { applied_tags: ['t-retail', 't-bug', 's-tri'] });
   const msg = f.find('POST', /\/channels\/700\/messages$/)[0].body;
-  assert.match(msg.content, /tracked as AES #17/);
+  assert.match(msg.content, /tracked as ONE #17/);
   assert.deepEqual(msg.allowed_mentions, { parse: [], users: [] });
-  assert.match(f.find('PATCH', /\/webhooks\/app\/itok/)[0].body.content, /Created AES #17/);
+  assert.match(f.find('PATCH', /\/webhooks\/app\/itok/)[0].body.content, /Created ONE #17/);
 });
 
 test('sending the same post twice points at the first issue', async () => {
@@ -126,7 +126,7 @@ test('sending the same post twice points at the first issue', async () => {
   await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
   assert.deepEqual(await Promise.all(ctx.jobs), [{ duplicate: 17 }]);
   assert.equal(f.find('POST', /\/issues$/).length, 0);
-  assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /Already tracked: AES #17/);
+  assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /Already tracked: ONE #17/);
 });
 
 test('a GitHub failure is reported to the mod, not swallowed', async () => {
@@ -206,7 +206,7 @@ test('a send that finished while this one waited for the lock is not filed again
 
 test('once the issue exists, a failed tag or post note is reported, never as a failed create', async () => {
   const f = fakeFetch(discordRoutes(githubRoutes([], [
-    ['POST', /\/issues$/, () => ({ number: 17, html_url: 'https://github.com/me/test-aes/issues/17' })],
+    ['POST', /\/issues$/, () => ({ number: 17, html_url: 'https://github.com/me/test-one/issues/17' })],
     ['PATCH', /\/channels\/700$/, () => new Response('{"message":"Missing Permissions"}', { status: 403 })],
     ['POST', /\/channels\/700\/messages$/, () => new Response('{"message":"Thread is locked"}', { status: 403 })],
   ])));
@@ -215,7 +215,7 @@ test('once the issue exists, a failed tag or post note is reported, never as a f
   const [res] = await Promise.all(ctx.jobs);
   assert.equal(res.created, 17);
   const told = f.find('PATCH', /\/webhooks\//)[0].body.content;
-  assert.match(told, /^Created AES #17: .*tag not set: .*403.*note in the post not sent: .*403/);
+  assert.match(told, /^Created ONE #17: .*tag not set: .*403.*note in the post not sent: .*403/);
 });
 
 test('a stalled call ends the send with a report to the mod', async () => {

@@ -1,14 +1,14 @@
 # Cloudflare Worker for the Discord side. Free tier is plenty.
 # Secrets (never in this file), set once with `npx wrangler@3 secret put <NAME>`:
 #   DISCORD_PUBLIC_KEY, DISCORD_BOT_TOKEN, GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY
-name = "aes-discord-bot"
+name = "discord-issue-bot"
 main = "src/worker.js"
 compatibility_date = "2025-06-01"
 
 [vars]
-# Which repo each form choice files into. For the test server, point AES at
-# the test repo instead, e.g. {"AES":"<you>/KitnEssentials"}.
-REPOS = '{"AES":"Bmwascher/KitnEssentials"}'
+# Which repo each form choice files into, by a short key the form shows.
+# Several repos: {"KE":"owner/one","UI":"owner/two"}.
+REPOS = '{"KE":"Bmwascher/KitnEssentials"}'
 # Forum channel id(s) the command works in, comma separated. Required: while
 # it is empty the command refuses every post.
 FORUM_CHANNEL_IDS = ""

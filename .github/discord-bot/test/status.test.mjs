@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { run } from '../status/status.mjs';
 import { fakeFetch, FORUM } from './fake-fetch.mjs';
 
-const env = { GITHUB_TOKEN: 'gh', DISCORD_BOT_TOKEN: 'bot', REPOS: '{"AES":"me/aes","AUI":"me/aui"}' };
-const repository = { full_name: 'me/aes', default_branch: 'dev' };
+const env = { GITHUB_TOKEN: 'gh', DISCORD_BOT_TOKEN: 'bot', REPOS: '{"ONE":"me/one","TWO":"me/two"}' };
+const repository = { full_name: 'me/one', default_branch: 'dev' };
 const MARK = '<!-- discord-thread: 700 reporter: 42 -->';
 const issue = (n, extra = {}) => ({ number: n, body: `## Report\n\n> hi\n\n${MARK}`, labels: [{ name: 'from-discord' }], ...extra });
 const quiet = () => {};
@@ -15,7 +15,7 @@ const pr = (over = {}) => ({ title: 'Bags fix', body: 'Fixes #17', base: { ref: 
 function routes(issues, extra = []) {
   return [
     ...extra,
-    ['GET', /api\.github\.com\/repos\/me\/aes\/issues\/(\d+)$/, (_, url) => {
+    ['GET', /api\.github\.com\/repos\/me\/one\/issues\/(\d+)$/, (_, url) => {
       const n = Number(/issues\/(\d+)$/.exec(url)[1]);
       return issues[n] || new Response('nf', { status: 404 });
     }],
@@ -99,7 +99,7 @@ test('a release tag ships every pending issue and names the version', async () =
   ]));
   const done = await run({ eventName: 'push', fetchImpl: f, env, log: quiet, payload: { ref: 'refs/tags/v5.0.120', repository } });
   assert.equal(done.length, 1);
-  assert.match(done[0].message, /landed in aes v5\.0\.120/);
+  assert.match(done[0].message, /landed in one v5\.0\.120/);
   assert.deepEqual(f.find('PATCH', /channels\/700$/)[0].body.applied_tags, ['t-retail', 't-bug', 's-ship']);
   assert.equal(f.find('DELETE', /issues\/17\/labels\/pending-release/).length, 1);
   assert.deepEqual(f.find('POST', /issues\/17\/labels$/)[0].body, { labels: ['shipped'] });
@@ -146,14 +146,14 @@ test('deleting a release tag ships nothing', async () => {
 });
 
 test('a second repo names itself from its full name; other tags do nothing', async () => {
-  const aui = { full_name: 'me/aui', default_branch: 'dev' };
+  const two = { full_name: 'me/two', default_branch: 'dev' };
   const f = fakeFetch([
     ['GET', /\/issues\?state=all/, () => [issue(4)]],
     ...routes({}),
   ]);
   const done = await run({ eventName: 'push', fetchImpl: f, env: { ...env, RELEASE_TAG_PATTERN: '^\\d+\\.\\d+' }, log: quiet,
-    payload: { ref: 'refs/tags/30.8', repository: aui } });
-  assert.match(done[0].message, /aui v30\.8/);
+    payload: { ref: 'refs/tags/30.8', repository: two } });
+  assert.match(done[0].message, /two v30\.8/);
   const none = await run({ eventName: 'push', fetchImpl: fakeFetch([]), env, log: quiet, payload: { ref: 'refs/tags/test-build', repository } });
   assert.equal(none.length, 0);
 });

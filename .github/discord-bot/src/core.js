@@ -35,13 +35,13 @@ const CLIENTS = { retail: 'Retail', forever: 'Forever', all: 'All' };
 const TYPES = { bug: 'Bug', feature: 'Feature', feedback: 'Feature', request: 'Feature' };
 const own = (obj, k) => (Object.prototype.hasOwnProperty.call(obj, k) ? obj[k] : null);
 
-// REPOS is required config: {"AES":"owner/repo", ...}. A missing or broken value
+// REPOS is required config: {"KE":"owner/repo", ...}. A missing or broken value
 // stops the bot instead of filing into a default repo.
 export function parseRepos(raw) {
   let repos;
   try { repos = JSON.parse(String(raw || '')); } catch { repos = null; }
   if (!repos || typeof repos !== 'object' || Array.isArray(repos) || !Object.keys(repos).length) {
-    throw new Error('REPOS is not set: expected JSON like {"AES":"owner/repo"}');
+    throw new Error('REPOS is not set: expected JSON like {"KE":"owner/repo"}');
   }
   return repos;
 }
@@ -58,7 +58,7 @@ export function normRepoKey(s, repos) {
   return Object.prototype.hasOwnProperty.call(repos, k) ? k : null;
 }
 
-// "[AES][Retail][Bags] Bank tab icons overlap" -- the shape already used by hand.
+// "[KE][Retail][Bags] Bank tab icons overlap" -- the shape already used by hand.
 export function buildTitle({ repoKey, client, module, title }) {
   const mod = String(module || '').trim() || 'General';
   return `[${repoKey}][${client}][${mod}] ${String(title).trim()}`;
@@ -167,7 +167,7 @@ export const MESSAGES = {
   needsInfo: (uid) => `${uid ? `<@${uid}> ` : ''}Could you add a bit more detail? A screenshot, your addon version and the steps to make it happen help a lot.`,
 };
 
-// Repo key ("AES"/"AUI") for a full repo name, from the configured map.
+// Repo key (e.g. "KE") for a full repo name, from the configured map.
 export function keyForRepo(fullName, repos) {
   const want = String(fullName).toLowerCase();
   return Object.keys(repos).find((k) => repos[k].toLowerCase() === want) || null;

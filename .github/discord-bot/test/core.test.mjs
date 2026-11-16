@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from '../src/core.js';
 
-test('title follows [AES][Client][Module] Title', () => {
-  assert.equal(C.buildTitle({ repoKey: 'AES', client: 'Retail', module: 'Bags', title: ' Icons overlap ' }),
-    '[AES][Retail][Bags] Icons overlap');
-  assert.equal(C.buildTitle({ repoKey: 'AUI', client: 'All', module: '', title: 'x' }), '[AUI][All][General] x');
+test('title follows [ONE][Client][Module] Title', () => {
+  assert.equal(C.buildTitle({ repoKey: 'ONE', client: 'Retail', module: 'Bags', title: ' Icons overlap ' }),
+    '[ONE][Retail][Bags] Icons overlap');
+  assert.equal(C.buildTitle({ repoKey: 'TWO', client: 'All', module: '', title: 'x' }), '[TWO][All][General] x');
 });
 
 test('form values normalize, junk is refused', () => {
@@ -14,8 +14,8 @@ test('form values normalize, junk is refused', () => {
   assert.equal(C.normType('Feedback/Request'), 'Feature');
   assert.equal(C.normType('bug'), 'Bug');
   assert.equal(C.normType('question'), null);
-  assert.equal(C.normRepoKey('aui', { AES: 'a', AUI: 'b' }), 'AUI');
-  assert.equal(C.normRepoKey('kitn', { AES: 'a' }), null);
+  assert.equal(C.normRepoKey('two', { ONE: 'a', TWO: 'b' }), 'TWO');
+  assert.equal(C.normRepoKey('kitn', { ONE: 'a' }), null);
 });
 
 test('existing forum tags pre-fill client and type', () => {
@@ -59,7 +59,7 @@ test('shipped message names the repo and the release', () => {
   assert.match(C.MESSAGES.shipped('me/SomeAddon', 'v5.0.120'), /landed in SomeAddon v5\.0\.120\./);
   assert.match(C.MESSAGES.shipped('me/OtherUI', '30.8'), /landed in OtherUI v30\.8\./);
   assert.match(C.MESSAGES.shipped('me/KitnEssentials', 'discord-test-1'), /landed in KitnEssentials discord-test-1\./);
-  assert.equal(C.keyForRepo('Me/OtherUI', { AES: 'me/SomeAddon', AUI: 'me/OtherUI' }), 'AUI');
+  assert.equal(C.keyForRepo('Me/OtherUI', { ONE: 'me/SomeAddon', TWO: 'me/OtherUI' }), 'TWO');
 });
 
 test('player text cannot plant a marker or mention anyone', () => {
@@ -82,7 +82,7 @@ test('only the listed choices pass, never inherited names', () => {
 
 test('REPOS is required', () => {
   for (const raw of [undefined, '', '{}', '[]', 'not json']) assert.throws(() => C.parseRepos(raw), /REPOS is not set/);
-  assert.deepEqual(C.parseRepos('{"AES":"me/a"}'), { AES: 'me/a' });
+  assert.deepEqual(C.parseRepos('{"ONE":"me/a"}'), { ONE: 'me/a' });
 });
 
 test('a timed fetch gives up on a stalled call and refuses past its deadline', async () => {

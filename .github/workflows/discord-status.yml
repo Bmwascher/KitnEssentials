@@ -44,5 +44,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           # Optional repository variables, for pointing a test copy elsewhere.
-          REPOS: ${{ vars.DISCORD_BOT_REPOS || '{"AES":"Bmwascher/KitnEssentials"}' }}
+          REPOS: ${{ vars.DISCORD_BOT_REPOS || '{"KE":"Bmwascher/KitnEssentials"}' }}
           RELEASE_TAG_PATTERN: ${{ vars.RELEASE_TAG_PATTERN || '^discord-test-' }}
