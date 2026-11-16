@@ -35,15 +35,17 @@ taken off again. Runs that overlap on one issue each read again after writing
 until the answer holds. Whichever run moves the post sends the message for
 where it moved, once: the workflow leaves a hidden note on the issue for it,
 only the run whose note came first sends it, and a message that stopped being
-true before it went out is dropped. A daily sweep lists anything still out of
-step in the job summary, a post with no status tag and a message whose send
-failed included (and, with `SWEEP_MODE=fix`, repairs the labels and tags). The
-sweep never messages anyone.
+true before its last check is dropped (one overtaken in the moment between
+that check and the send still goes out; the next message corrects it). A
+daily sweep lists anything still out of step in the job summary, a post with
+no status tag and a message whose send failed included (and, with
+`SWEEP_MODE=fix`, repairs the labels and tags). The sweep never messages
+anyone.
 
 Every day the Worker also lists posts older than `STALE_DAYS` that have no
-status tag and no `Answered` tag in `MOD_CHANNEL_ID`, and warns there first if
-the post scan has stopped, or hit a problem with some post or forum in the last
-day. A post the bot may not message (locked, or no permission) is skipped; one
+status tag and no `Answered` tag (open posts, and posts archived in the last
+30 days) in `MOD_CHANNEL_ID`, and warns there first if the post scan has
+stopped, or hit a problem with some post or forum in the last day. A post the bot may not message (locked, or no permission) is skipped; one
 that fails six runs in a row is given up on.
 
 Two halves, no always-on server:
