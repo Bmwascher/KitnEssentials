@@ -126,15 +126,6 @@ export function labelsFor({ type, client }) {
   return out;
 }
 
-// Issue numbers a PR says it closes ("Fixes #12", "closes #3, resolves #4").
-export function closingIssues(text) {
-  const out = new Set();
-  const re = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d+)/gi;
-  let m;
-  while ((m = re.exec(String(text || '')))) out.add(Number(m[1]));
-  return [...out];
-}
-
 // New applied_tags for a forum post: keep every non-status tag, swap the status.
 // Discord allows at most 5 applied tags; the status tag always wins a slot.
 export function nextAppliedTags(current, available, statusName) {
@@ -235,7 +226,9 @@ export function parseTemplates(raw) {
   if (!raw || !String(raw).trim()) return DEFAULT_TEMPLATES;
   try {
     const t = JSON.parse(String(raw));
-    if (t && typeof t === 'object' && !Array.isArray(t)) return t;
+    const ok = t && typeof t === 'object' && !Array.isArray(t)
+      && Object.values(t).every((v) => Array.isArray(v) && v.every((f) => typeof f === 'string'));
+    if (ok) return t;
   } catch { /* fall through */ }
   return DEFAULT_TEMPLATES;
 }

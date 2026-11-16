@@ -14,6 +14,8 @@ export function world() {
     contains: new Map(), // `${sha}...${target}` -> 'ahead' | 'identical' | 'behind' | 'diverged'
     threads: new Map(), // id -> { id, parent_id, applied_tags, archived, messages: [] }
     calls: [],
+    nextId: 1,
+    tags: [], // [{ name, commit: { sha } }], newest first
     hooks: [], // [method, RegExp, fn(call)] run before a matching call is served
     fail: [], // [method, RegExp, Response | Error, times]
   };
@@ -35,12 +37,16 @@ export function world() {
     w.threads.set(id, t);
     return t;
   };
-  w.record = (n, body, login = BOT) => w.issues.get(n).comments.push({ user: { login }, body });
+  w.record = (n, body, login = BOT) => {
+    const c = { id: w.nextId++, user: { login }, body };
+    w.issues.get(n).comments.push(c);
+    return c;
+  };
   w.close = (n, reason = 'completed', commit = null) => {
     const i = w.issues.get(n);
     i.state = 'closed';
     i.state_reason = reason;
-    i.events.push({ event: 'closed', commit_id: commit });
+    i.events.push({ id: w.nextId++, event: 'closed', commit_id: commit });
   };
   w.tagOf = (threadId) => {
     const id = w.threads.get(threadId).applied_tags.at(-1);
@@ -64,13 +70,14 @@ export function world() {
     }],
     ['GET', /\/repos\/me\/one\/issues\?.*labels=([^&]+)/, (m, url) => {
       const label = decodeURIComponent(m[1]);
-      const all = [...w.issues.values()].filter((i) => i.labels.has(label)).map(view);
+      const state = (/[?&]state=(\w+)/.exec(url) || [0, 'open'])[1];
+      const all = [...w.issues.values()].filter((i) => i.labels.has(label) && (state === 'all' || i.state === state)).map(view);
       return json(slice(all, url));
     }],
     ['GET', /\/repos\/me\/one\/issues\/(\d+)\/comments/, (m, url) => json(slice(w.issues.get(Number(m[1])).comments, url))],
     ['POST', /\/repos\/me\/one\/issues\/(\d+)\/comments$/, (m, url, body) => {
-      w.record(Number(m[1]), body.body);
-      return json({});
+      const c = w.record(Number(m[1]), body.body);
+      return json({ id: c.id });
     }],
     ['GET', /\/repos\/me\/one\/issues\/(\d+)\/events/, (m, url) => json(slice(w.issues.get(Number(m[1])).events, url))],
     ['POST', /\/repos\/me\/one\/issues\/(\d+)\/labels$/, (m, url, body) => {
@@ -89,6 +96,7 @@ export function world() {
       const status = w.contains.get(`${m[1]}...${decodeURIComponent(m[2])}`) || 'behind';
       return json({ status });
     }],
+    ['GET', /\/repos\/me\/one\/tags\?/, () => json(w.tags)],
     ['POST', /api\.github\.com\/graphql$/, (m, url, body) => {
       const v = body.variables;
       if (/closedByPullRequestsReferences/.test(body.query)) {

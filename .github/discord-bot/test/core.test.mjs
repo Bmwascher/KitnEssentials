@@ -40,11 +40,6 @@ test('body quotes the reporter, links the post and carries the marker', () => {
   assert.equal(C.parseMarker('no marker'), null);
 });
 
-test('closing keywords find linked issues', () => {
-  assert.deepEqual(C.closingIssues('Fixes #12, closes #3 and resolved: #4. See #9'), [12, 3, 4]);
-  assert.deepEqual(C.closingIssues('fix #5\nFIXED #5'), [5]);
-  assert.deepEqual(C.closingIssues('related to #8'), []);
-});
 
 test('status swap keeps player tags and replaces the old status', () => {
   const avail = [{ id: 'r', name: 'Retail' }, { id: 'b', name: 'Bug' }, { id: 't', name: 'Triaged' }, { id: 'p', name: 'In progress' }];
@@ -89,4 +84,10 @@ test('a timed fetch gives up on a stalled call and refuses past its deadline', a
   const never = (_, init) => stall(init);
   await assert.rejects(C.timedFetch(never, 30)('https://x'), (e) => e.name === 'TimeoutError');
   await assert.rejects(C.timedFetch(never, 1000, Date.now() - 1)('https://x'), /out of time/);
+});
+
+test('a TEMPLATES value that is not lists of field names falls back to the defaults', () => {
+  assert.equal(C.parseTemplates('{"Bug":"Version"}'), C.DEFAULT_TEMPLATES);
+  assert.equal(C.parseTemplates('{"Bug":[1]}'), C.DEFAULT_TEMPLATES);
+  assert.deepEqual(C.parseTemplates('{"Bug":["Version"]}'), { Bug: ['Version'] });
 });

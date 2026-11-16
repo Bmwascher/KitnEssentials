@@ -60,15 +60,15 @@ test('issues the bot did not make are left alone', async () => {
 
 // ---- Fixed: closed by a commit ----------------------------------------------
 
-test('an issue closed by a commit records it, is pending-release and the post says Fixed', async () => {
+test('an issue closed by a commit is pending-release and the post says Fixed, once', async () => {
   const w = world();
   w.issue(17);
   w.close(17, 'completed', 'aaaaaaa1');
   await closed(w, 17);
-  assert.match(w.issues.get(17).comments[0].body, /<!-- discord-fixed-in: aaaaaaa1 -->/);
   assert.deepEqual(labels(w, 17), ['pending-release']);
   assert.equal(w.tagOf('717'), 'Fixed, next update');
   assert.deepEqual(w.said('717'), ['The fix is merged and will be in the next update.']);
+  assert.match(w.issues.get(17).comments[0].body, /<!-- discord-told: fixed-aaaaaaa1 -->/);
 });
 
 test('rerunning the close records nothing twice and says nothing twice', async () => {
@@ -107,10 +107,13 @@ test('a reopened issue drops its release label and goes back to Triaged', async 
   w.issue(17);
   w.close(17, 'completed', 'aaaaaaa1');
   await closed(w, 17);
+  assert.deepEqual(labels(w, 17), ['pending-release']);
+  assert.equal(w.tagOf('717'), 'Fixed, next update');
   Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
   await go(w, 'issues', { action: 'reopened', issue: { number: 17 } });
   assert.deepEqual(labels(w, 17), []);
   assert.equal(w.tagOf('717'), 'Triaged');
+  assert.equal(w.said('717').length, 1, 'reopening tells no one');
 });
 
 // ---- Shipped ---------------------------------------------------------------
@@ -125,8 +128,9 @@ test('a release tag holding every fix ships the issue and names the version, onc
   await tag(w, 'v5.0.2');
   assert.deepEqual(labels(w, 17), ['shipped']);
   assert.equal(w.tagOf('717'), 'Shipped');
-  assert.match(w.issues.get(17).comments.at(-1).body, /<!-- discord-shipped-in: v5\.0\.2 fixes: aaaaaaa1 -->/);
-  assert.equal(w.issues.get(17).comments.length, 2);
+  const bodies = w.issues.get(17).comments.map((c) => c.body);
+  assert.equal(bodies.filter((b) => /<!-- discord-shipped-in: v5\.0\.2 fixes: aaaaaaa1 -->/.test(b)).length, 1, 'one ship record');
+  assert.equal(bodies.length, 3, 'told Fixed, the ship record, told Shipped');
   assert.match(w.said('717').at(-1), /landed in one v5\.0\.2/);
   assert.equal(w.said('717').length, 2);
 });
@@ -142,17 +146,16 @@ test('a tag is checked at the commit it points at, not its tag object or name', 
   assert.deepEqual(labels(w, 17), ['pending-release'], 'only the tagged commit counts');
 });
 
-test('a tag missing any recorded fix leaves the issue pending', async () => {
+test('a tag that does not hold the fix leaves the issue pending', async () => {
   const w = world();
   w.issue(17);
-  w.record(17, fixedIn('aaaaaaa1'));
-  w.record(17, fixedIn('bbbbbbb2'));
   w.close(17, 'completed', 'bbbbbbb2');
   await closed(w, 17);
-  w.contains.set('bbbbbbb2...c-v5.0.2', 'ahead');
+  w.contains.set('bbbbbbb2...c-v5.0.2', 'behind');
   await tag(w, 'v5.0.2');
   assert.deepEqual(labels(w, 17), ['pending-release']);
   assert.equal(w.tagOf('717'), 'Fixed, next update');
+  assert.equal(w.said('717').length, 1);
 });
 
 test('a fix after shipping is pending again, then ships with the next tag that holds it', async () => {
@@ -206,15 +209,15 @@ test('only the workflow\'s own records count, from every page', async () => {
   const w = world();
   w.issue(17);
   for (let i = 0; i < 120; i++) w.record(17, `chatter ${i}`, 'someone');
-  w.record(17, fixedIn('aaaaaaa1'));
-  w.record(17, fixedIn('ffffff99'), 'outsider');
   w.record(17, shippedIn('v9.9.9', ['aaaaaaa1']), 'outsider');
+  w.record(17, '<!-- discord-told: fixed-aaaaaaa1 -->', 'outsider');
   w.close(17, 'completed', 'aaaaaaa1');
   await closed(w, 17);
-  assert.deepEqual(labels(w, 17), ['pending-release'], 'the outsider\'s shipped record is ignored');
+  assert.deepEqual(labels(w, 17), ['pending-release'], 'the outsider\'s ship record is ignored');
+  assert.equal(w.said('717').length, 1, 'the outsider\'s told record does not silence the bot');
   w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
   await tag(w, 'v5.0.2');
-  assert.deepEqual(labels(w, 17), ['shipped'], 'the outsider\'s fix record does not hold it');
+  assert.deepEqual(labels(w, 17), ['shipped']);
 });
 
 // ---- Races: two runs on one issue -------------------------------------------
@@ -239,24 +242,28 @@ test('a fix closed while a ship is writing labels ends pending, with the post at
   assert.equal(w.tagOf('717'), 'Fixed, next update');
 });
 
-test('a ship that lands while a fix run writes labels still ends with the right labels', async () => {
+test('a ship of an old fix that lands while a new fix closes the issue sends no Shipped message', async () => {
   const w = world();
   w.issue(17);
-  w.record(17, fixedIn('aaaaaaa1'));
-  w.issues.get(17).labels.add('pending-release');
+  w.close(17, 'completed', 'aaaaaaa1');
+  await closed(w, 17);
   w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
   w.contains.set('bbbbbbb2...c-v5.0.2', 'behind');
   let raced = false;
   w.hooks.push(['POST', /issues\/17\/comments$/, async (call) => {
-    if (raced || !/fixed-in: bbbbbbb2/.test(call.body.body)) return;
+    if (raced || !/shipped-in: v5\.0\.2/.test(call.body.body)) return;
     raced = true;
-    await tag(w, 'v5.0.2');
+    // The fix did not hold: reopened, then closed by a new commit.
+    Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
+    await go(w, 'issues', { action: 'reopened', issue: { number: 17 } });
+    w.close(17, 'completed', 'bbbbbbb2');
+    await closed(w, 17);
   }]);
-  w.close(17, 'completed', 'bbbbbbb2');
-  await closed(w, 17);
+  await tag(w, 'v5.0.2');
   assert.ok(raced);
   assert.deepEqual(labels(w, 17), ['pending-release'], 'bbbbbbb2 is not in v5.0.2');
   assert.equal(w.tagOf('717'), 'Fixed, next update');
+  assert.equal(w.said('717').filter((m) => /landed/.test(m)).length, 0);
 });
 
 test('an In progress write that loses to a ship is put back to Shipped', async () => {
@@ -291,7 +298,7 @@ test('the daily sweep in report mode lists what is wrong and changes nothing', a
   w.record(17, fixedIn('aaaaaaa1'));
   w.close(17, 'completed', 'aaaaaaa1');
   const out = [];
-  await run({ eventName: 'schedule', payload: { repository }, env: { ...env, SWEEP_MODE: 'report' }, fetchImpl: w.fetch, log: (s) => out.push(s) });
+  await run({ eventName: 'schedule', payload: { schedule: '17 9 * * *' }, env: { ...env, SWEEP_MODE: 'report', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: (s) => out.push(s) });
   assert.deepEqual(labels(w, 17), []);
   assert.equal(w.tagOf('717'), 'Triaged');
   assert.ok(out.some((s) => /#17: labels \(none\) -> pending-release; post Triaged -> Fixed, next update/.test(s)), out.join('\n'));
@@ -302,7 +309,7 @@ test('the daily sweep in fix mode repairs labels and posts without telling anyon
   w.issue(17, { labels: ['from-discord', 'shipped', 'pending-release'] });
   w.record(17, fixedIn('aaaaaaa1'));
   w.close(17, 'completed', 'aaaaaaa1');
-  await run({ eventName: 'schedule', payload: { repository }, env: { ...env, SWEEP_MODE: 'fix' }, fetchImpl: w.fetch, log: quiet });
+  await run({ eventName: 'schedule', payload: { schedule: '17 9 * * *' }, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: quiet });
   assert.deepEqual(labels(w, 17), ['pending-release']);
   assert.equal(w.tagOf('717'), 'Fixed, next update');
   assert.deepEqual(w.said('717'), []);
@@ -315,7 +322,7 @@ test('a failed write fails the job, and the next sweep repairs what it left', as
   w.fail.push(['POST', /issues\/17\/labels$/, new Response('boom', { status: 502 }), 1]);
   await assert.rejects(closed(w, 17), /#17/);
   assert.deepEqual(labels(w, 17), []);
-  await run({ eventName: 'schedule', payload: { repository }, env: { ...env, SWEEP_MODE: 'fix' }, fetchImpl: w.fetch, log: quiet });
+  await run({ eventName: 'schedule', payload: { schedule: '17 9 * * *' }, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: quiet });
   assert.deepEqual(labels(w, 17), ['pending-release']);
 });
 
@@ -329,4 +336,132 @@ test('needs-info reopens an archived post, then pings only the reporter', async 
   const m = w.threads.get('717').messages[0];
   assert.match(m.content, /^<@42> /);
   assert.deepEqual(m.allowed_mentions, { parse: [], users: ['42'] });
+});
+
+// ---- Round 1 review --------------------------------------------------------------
+
+test('a merged PR and the close it causes, in either order, tell the player once: Fixed', async () => {
+  for (const prFirst of [true, false]) {
+    const w = world();
+    w.issue(17);
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    await prEvent(w, 5);
+    w.prs.get(5).state = 'MERGED';
+    w.close(17, 'completed', 'aaaaaaa1');
+    if (prFirst) { await prEvent(w, 5, 'closed'); await closed(w, 17); } else { await closed(w, 17); await prEvent(w, 5, 'closed'); }
+    assert.deepEqual(w.said('717'), ['A fix is up and being tested.', 'The fix is merged and will be in the next update.'], `prFirst=${prFirst}`);
+    assert.equal(w.tagOf('717'), 'Fixed, next update');
+  }
+});
+
+test('two close runs at once send the Fixed message once', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  let raced = false;
+  w.hooks.push(['PATCH', /channels\/717$/, async () => {
+    if (raced) return;
+    raced = true;
+    await closed(w, 17);
+  }]);
+  await closed(w, 17);
+  assert.ok(raced);
+  assert.equal(w.said('717').filter((m) => /next update/.test(m)).length, 1);
+});
+
+test('an issue reopened after shipping, then closed by hand, is Closed and says so, not Shipped again', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  await closed(w, 17);
+  w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+  await tag(w, 'v5.0.2');
+  Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
+  await go(w, 'issues', { action: 'reopened', issue: { number: 17 } });
+  w.close(17, 'completed', null);
+  await closed(w, 17);
+  assert.deepEqual(labels(w, 17), []);
+  assert.equal(w.tagOf('717'), 'Closed');
+  assert.equal(w.said('717').at(-1), 'Marked as done.');
+  assert.equal(w.said('717').filter((m) => /landed/.test(m)).length, 1);
+});
+
+test('a commit in another repo that closed the issue is not taken as its fix', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'ddddddd4');
+  w.issues.get(17).events.at(-1).commit_url = 'https://api.github.com/repos/me/other/commits/ddddddd4';
+  await closed(w, 17);
+  assert.deepEqual(labels(w, 17), []);
+  assert.equal(w.tagOf('717'), 'Closed');
+  assert.deepEqual(w.said('717'), ['Marked as done.']);
+});
+
+test('a forum missing a status tag does not repeat the message on every sync', async () => {
+  const w = world();
+  w.issue(17);
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  const noProg = w.fetch;
+  w.fetch = async (url, init) => {
+    const r = await noProg(url, init);
+    if (/channels\/900$/.test(url)) {
+      const forum = await r.json();
+      forum.available_tags = forum.available_tags.filter((t) => t.name !== 'In progress');
+      return new Response(JSON.stringify(forum));
+    }
+    return r;
+  };
+  await prEvent(w, 5);
+  await prEvent(w, 5, 'reopened');
+  assert.deepEqual(w.said('717'), []);
+  assert.equal(w.tagOf('717'), 'Triaged');
+});
+
+// ---- Recovery ------------------------------------------------------------------
+
+test('a tag run ships a just-closed issue the close run has not labeled yet', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+  await tag(w, 'v5.0.2');
+  assert.deepEqual(labels(w, 17), ['shipped']);
+  assert.match(w.said('717').at(-1), /v5\.0\.2/);
+});
+
+test('a shipped issue with no ship record (shipped before records existed) stays shipped', async () => {
+  const w = world();
+  w.issue(17, { labels: ['from-discord', 'shipped'] });
+  w.close(17, 'completed', 'aaaaaaa1');
+  w.thread('717', { applied_tags: ['t-retail', 's-ship'] });
+  w.tags = [{ name: 'nightly', commit: { sha: 'n1' } }, { name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
+  w.contains.set('aaaaaaa1...c-v5.0.1', 'ahead');
+  w.contains.set('aaaaaaa1...n1', 'ahead');
+  await go(w, 'issues', { action: 'reopened', issue: { number: 17 } }).catch(() => {});
+  await run({ eventName: 'schedule', payload: {}, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: quiet });
+  assert.deepEqual(labels(w, 17), ['shipped']);
+  assert.equal(w.tagOf('717'), 'Shipped');
+  assert.ok(w.issues.get(17).comments.some((c) => /discord-shipped-in: v5\.0\.1 fixes: aaaaaaa1/.test(c.body)), 'the record is rebuilt from the release tag, not the nightly');
+  assert.deepEqual(w.said('717'), []);
+});
+
+test('the sweep reports a post with no status tag, and a missing ship record, into the job summary', async () => {
+  const { mkdtempSync, readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const summary = join(mkdtempSync(join(tmpdir(), 'sweep-')), 'summary.md');
+  const w = world();
+  w.issue(17);
+  w.thread('717', { applied_tags: ['t-retail'] });
+  w.issue(18, { labels: ['from-discord', 'pending-release'] });
+  w.close(18, 'completed', 'bbbbbbb2');
+  w.thread('718', { applied_tags: ['s-fix'] });
+  w.tags = [{ name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
+  w.contains.set('bbbbbbb2...c-v5.0.1', 'ahead');
+  await run({ eventName: 'schedule', payload: {}, env: { ...env, GITHUB_REPOSITORY: 'me/one', GITHUB_STEP_SUMMARY: summary }, fetchImpl: w.fetch, log: quiet });
+  const text = readFileSync(summary, 'utf8');
+  assert.match(text, /2 of 2 issue\(s\) out of step/);
+  assert.match(text, /#17: post \(no status\) -> Triaged/);
+  assert.match(text, /#18: ship record missing \(v5\.0\.1 holds the fix\); labels pending-release -> shipped; post Fixed, next update -> Shipped/);
+  assert.equal(w.issues.get(18).comments.length, 0, 'report mode writes nothing');
 });
