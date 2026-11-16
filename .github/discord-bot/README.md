@@ -41,7 +41,8 @@ KitnEssentials) before the real ones. Roughly 30 minutes.
 2. **Discord app.** At discord.com/developers/applications: New Application >
    Bot > Reset Token (keep it). Under Privileged Gateway Intents switch on
    **Message Content** (the bot reads the post it is pointed at; it never listens
-   to the server). Note the Application ID and Public Key from General Information.
+   to the server). Under Bot, switch **Public Bot** off so only you can invite it.
+   Note the Application ID and Public Key from General Information.
 3. **Invite it** with OAuth2 > URL Generator: scopes `bot` + `applications.commands`,
    permissions View Channels, Read Message History, Send Messages in Threads,
    Manage Threads.
@@ -53,7 +54,8 @@ KitnEssentials) before the real ones. Roughly 30 minutes.
    `npx wrangler@3 secret put` for `DISCORD_PUBLIC_KEY`, `DISCORD_BOT_TOKEN`,
    `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY` (paste the whole `.pem`). In
    `wrangler.toml` set `REPOS` to `{"AES":"<you>/<test-repo>"}` and
-   `FORUM_CHANNEL_IDS` to the test forum's id. `npm run deploy` prints a URL.
+   `FORUM_CHANNEL_IDS` to the test forum's id (both are required: with either
+   unset the command refuses every post). `npm run deploy` prints a URL.
 6. **Point Discord at it.** Developer portal > General Information >
    Interactions Endpoint URL = that URL. Discord checks it on save.
 7. **Register the command** on the test server only:
@@ -65,7 +67,8 @@ KitnEssentials) before the real ones. Roughly 30 minutes.
    `{"AES":"<you>/<test-repo>"}`.
 
 Then walk one fake report through: post in the test forum, right-click > Send
-to GitHub, open a PR with `Fixes #N` into the default branch, merge it, and
+to GitHub, open a PR with `Fixes #N` into the default branch (from an account
+with a role on the repo: PRs from outside authors do not move posts), merge it, and
 push a tag. **In this KitnEssentials test copy, use a `discord-test-1` style
 tag: its own `v*` tags publish real releases to CurseForge and Wago.** Each
 step should change the tag and post its message. (The workflow here already
@@ -73,8 +76,9 @@ defaults to this repo and that tag pattern, so step 9's variable is optional.)
 
 ## Stage 3: live
 
-Same steps against the real server and repos, with the command at first
-registered without `DISCORD_GUILD_ID` (global). Narrow who sees it under Server
+Same steps against the real server and repos, with `FORUM_CHANNEL_IDS` set to
+the real forums' ids and the command at first registered without
+`DISCORD_GUILD_ID` (global). Narrow who sees it under Server
 Settings > Integrations > the bot > Send to GitHub (Mod and Admin roles).
 
 atrocityUI needs its own copy of `discord-status.yml` and this folder, with

@@ -2,15 +2,15 @@
 //   DISCORD_APP_ID=... DISCORD_BOT_TOKEN=... [DISCORD_GUILD_ID=...] node scripts/register.mjs
 // With DISCORD_GUILD_ID it is registered on that server only (shows up instantly; use for testing).
 import { COMMAND_NAME } from '../src/worker.js';
+import { PERMS } from '../src/core.js';
 
 const { DISCORD_APP_ID: app, DISCORD_BOT_TOKEN: token, DISCORD_GUILD_ID: guild } = process.env;
 if (!app || !token) { console.error('Set DISCORD_APP_ID and DISCORD_BOT_TOKEN'); process.exit(1); }
 
-const MANAGE_THREADS = (1n << 34n).toString();
 const commands = [{
   name: COMMAND_NAME,
   type: 3, // message context menu
-  default_member_permissions: MANAGE_THREADS, // mods and admins; narrow further in Server Settings > Integrations
+  default_member_permissions: PERMS.manageThreads.toString(), // mods and admins; narrow further in Server Settings > Integrations
   contexts: [0], // servers only
 }];
 const url = guild

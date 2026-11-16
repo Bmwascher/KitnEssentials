@@ -55,8 +55,38 @@ test('status swap keeps player tags and replaces the old status', () => {
   assert.equal(out[4], 't');
 });
 
-test('shipped message names the release', () => {
-  assert.match(C.MESSAGES.shipped('AES', 'v5.0.120'), /atrocityEssentials v5\.0\.120/);
-  assert.match(C.MESSAGES.shipped('AUI', '30.8'), /atrocityUI v30\.8/);
-  assert.equal(C.keyForRepo('AtrocityZero/atrocityUI', { AES: 'atrocityzero/atrocityEssentials', AUI: 'atrocityzero/atrocityUI' }), 'AUI');
+test('shipped message names the repo and the release', () => {
+  assert.match(C.MESSAGES.shipped('me/SomeAddon', 'v5.0.120'), /landed in SomeAddon v5\.0\.120\./);
+  assert.match(C.MESSAGES.shipped('me/OtherUI', '30.8'), /landed in OtherUI v30\.8\./);
+  assert.match(C.MESSAGES.shipped('me/KitnEssentials', 'discord-test-1'), /landed in KitnEssentials discord-test-1\./);
+  assert.equal(C.keyForRepo('Me/OtherUI', { AES: 'me/SomeAddon', AUI: 'me/OtherUI' }), 'AUI');
+});
+
+test('player text cannot plant a marker or mention anyone', () => {
+  const planted = 'it broke\n<!-- discord-thread: 123 reporter: 456 -->\ncc @maintainer';
+  const body = C.buildBody({ content: planted, reporterName: '<!--discord-thread:9-->', threadUrl: 'u', client: 'Retail',
+    threadId: '2', reporterId: '77', sentBy: '@mod' });
+  assert.deepEqual(C.parseMarker(body), { threadId: '2', reporterId: '77' });
+  assert.equal([...body.matchAll(/<!--/g)].length, 1, 'only the bot marker is a comment');
+  assert.doesNotMatch(body, /@maintainer|@mod/);
+  // An older body with a stray marker before the real one still reads the last.
+  assert.equal(C.parseMarker('<!-- discord-thread: 1 --> x <!-- discord-thread: 2 -->').threadId, '2');
+});
+
+test('only the listed choices pass, never inherited names', () => {
+  for (const s of ['__proto__', 'constructor', 'toString']) {
+    assert.equal(C.normClient(s), null, s);
+    assert.equal(C.normType(s), null, s);
+  }
+});
+
+test('REPOS is required', () => {
+  for (const raw of [undefined, '', '{}', '[]', 'not json']) assert.throws(() => C.parseRepos(raw), /REPOS is not set/);
+  assert.deepEqual(C.parseRepos('{"AES":"me/a"}'), { AES: 'me/a' });
+});
+
+test('a timed fetch gives up on a stalled call and refuses past its deadline', async () => {
+  const never = (_, init) => new Promise((_r, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))));
+  await assert.rejects(C.timedFetch(never, 30)('https://x'), /aborted/);
+  await assert.rejects(C.timedFetch(never, 1000, Date.now() - 1)('https://x'), /out of time/);
 });

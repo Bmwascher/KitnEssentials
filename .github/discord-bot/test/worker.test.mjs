@@ -15,9 +15,8 @@ const env = {
 const MOD = { permissions: String(1n << 34n), user: { id: '5', username: 'moddy' } };
 const PLAYER = { permissions: '0', user: { id: '6', username: 'pat' } };
 
-async function signed(obj, { tamper = false } = {}) {
+async function signed(obj, { tamper = false, ts = String(Math.floor(Date.now() / 1000)) } = {}) {
   const body = JSON.stringify(obj);
-  const ts = '1700000000';
   const sig = Buffer.from(await crypto.subtle.sign('Ed25519', keys.privateKey, new TextEncoder().encode(ts + body))).toString('hex');
   return new Request('https://bot.example/', {
     method: 'POST', body: tamper ? body.replace('1', '2') : body,
@@ -35,6 +34,16 @@ function discordRoutes(extra = []) {
     ['PATCH', /\/channels\/700$/, () => ({})],
     ['POST', /\/channels\/700\/messages$/, () => ({ id: '1' })],
     ['PATCH', /\/webhooks\//, () => ({})],
+  ];
+}
+
+// GitHub side of a send: the from-discord issue list and the per-post lock label.
+function githubRoutes(existing = [], extra = []) {
+  return [
+    ...extra,
+    ['GET', /api\.github\.com\/repos\/me\/test-aes\/issues\?state=all.*labels=from-discord/, () => existing],
+    ['POST', /api\.github\.com\/repos\/me\/test-aes\/labels$/, () => new Response('{}', { status: 201 })],
+    ['DELETE', /api\.github\.com\/repos\/me\/test-aes\/labels\/discord-lock-700$/, () => null],
   ];
 }
 
@@ -86,14 +95,14 @@ test('a bad form value creates nothing and says why', async () => {
 
 test('submitting files the issue, tags the post Triaged and tells the player', async () => {
   let created;
-  const f = fakeFetch(discordRoutes([
-    ['GET', /api\.github\.com\/search\/issues/, () => ({ items: [] })],
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
     ['POST', /api\.github\.com\/repos\/me\/test-aes\/issues$/, (b) => { created = b; return { number: 17, html_url: 'https://github.com/me/test-aes/issues/17' }; }],
-  ]));
+  ])));
   const ctx = ctxFor();
   const r = await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
   assert.equal((await r.json()).type, 5);
-  assert.deepEqual(await Promise.all(ctx.jobs), [{ created: 17 }]);
+  assert.deepEqual(await Promise.all(ctx.jobs), [{ created: 17, notes: [] }]);
+  assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 1, 'the lock is released');
 
   assert.equal(created.title, '[AES][Retail][Bags] Bags overlap after resize');
   assert.match(created.body, /> My bags overlap\n> after resize/);
@@ -109,9 +118,10 @@ test('submitting files the issue, tags the post Triaged and tells the player', a
 });
 
 test('sending the same post twice points at the first issue', async () => {
-  const f = fakeFetch(discordRoutes([
-    ['GET', /api\.github\.com\/search\/issues/, () => ({ items: [{ number: 17, html_url: 'u' }] })],
-  ]));
+  const f = fakeFetch(discordRoutes(githubRoutes([
+    { number: 9, body: 'another post <!-- discord-thread: 701 reporter: 1 -->' },
+    { number: 17, html_url: 'u', body: '<!-- discord-thread: 700 reporter: 42 -->' },
+  ])));
   const ctx = ctxFor();
   await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
   assert.deepEqual(await Promise.all(ctx.jobs), [{ duplicate: 17 }]);
@@ -120,15 +130,15 @@ test('sending the same post twice points at the first issue', async () => {
 });
 
 test('a GitHub failure is reported to the mod, not swallowed', async () => {
-  const f = fakeFetch(discordRoutes([
-    ['GET', /search\/issues/, () => ({ items: [] })],
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
     ['POST', /\/issues$/, () => new Response('boom', { status: 403 })],
-  ]));
+  ])));
   const ctx = ctxFor();
   await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
   const [res] = await Promise.all(ctx.jobs);
   assert.match(res.error, /403/);
-  assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /Could not create the issue/);
+  assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /Nothing was created: .*403/);
+  assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 1, 'the lock is released on failure too');
 });
 
 test('GitHub App key in the PKCS#1 format GitHub hands out signs a valid JWT', async () => {
@@ -140,4 +150,85 @@ test('GitHub App key in the PKCS#1 format GitHub hands out signs a valid JWT', a
   const v = createVerify('RSA-SHA256'); v.update(`${h}.${p}`);
   assert.ok(v.verify(publicKey, Buffer.from(s, 'base64url')));
   assert.deepEqual(JSON.parse(Buffer.from(p, 'base64url')), { iat: 1699999940, exp: 1700000540, iss: '123' });
+});
+
+// ---- gate-fix cases ----
+
+test('with no forum configured the command works nowhere', async () => {
+  const f = fakeFetch(discordRoutes());
+  const r = await handle(await signed({ type: 2, member: MOD, channel_id: '700', data: { name: COMMAND_NAME, target_id: '800' } }),
+    { ...env, FORUM_CHANNEL_IDS: '' }, ctxFor(), { fetch: f });
+  const j = await r.json();
+  assert.equal(j.type, 4);
+  assert.match(j.data.content, /not set up/);
+});
+
+test('an hour-old signed request is refused', async () => {
+  const old = String(Math.floor(Date.now() / 1000) - 3600);
+  assert.equal((await handle(await signed({ type: 1 }, { ts: old }), env, ctxFor(), { fetch: fakeFetch([]) })).status, 401);
+});
+
+test('a failed duplicate lookup stops the send instead of filing blind', async () => {
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /issues\?state=all.*labels=from-discord/, () => new Response('rate limited', { status: 403 })],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
+  const [res] = await Promise.all(ctx.jobs);
+  assert.match(res.error, /403/);
+  assert.equal(f.find('POST', /\/issues$/).length, 0);
+  assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /Nothing was created/);
+});
+
+test('two sends of one post at once file one issue', async () => {
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['POST', /\/labels$/, () => new Response('{"message":"Validation Failed"}', { status: 422 })],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(ctx.jobs), [{ busy: true }]);
+  assert.equal(f.find('POST', /\/issues$/).length, 0);
+  assert.equal(f.find('DELETE', /labels\//).length, 0, 'another send holds the lock');
+  assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /another send of this post is running/);
+});
+
+test('a send that finished while this one waited for the lock is not filed again', async () => {
+  let looks = 0;
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /issues\?state=all.*labels=from-discord/, () => (++looks === 1 ? [] : [{ number: 17, html_url: 'u', body: '<!-- discord-thread: 700 reporter: 42 -->' }])],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(ctx.jobs), [{ duplicate: 17 }]);
+  assert.equal(f.find('POST', /\/issues$/).length, 0);
+  assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 1);
+});
+
+test('once the issue exists, a failed tag or post note is reported, never as a failed create', async () => {
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['POST', /\/issues$/, () => ({ number: 17, html_url: 'https://github.com/me/test-aes/issues/17' })],
+    ['PATCH', /\/channels\/700$/, () => new Response('{"message":"Missing Permissions"}', { status: 403 })],
+    ['POST', /\/channels\/700\/messages$/, () => new Response('{"message":"Thread is locked"}', { status: 403 })],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
+  const [res] = await Promise.all(ctx.jobs);
+  assert.equal(res.created, 17);
+  const told = f.find('PATCH', /\/webhooks\//)[0].body.content;
+  assert.match(told, /^Created AES #17: .*tag not set: .*403.*note in the post not sent: .*403/);
+});
+
+test('a stalled call ends the send with a report to the mod', async () => {
+  const base = fakeFetch(discordRoutes(githubRoutes()));
+  // The issue list never answers; only the call's own time limit ends it.
+  const stall = (url, init = {}) => (/issues\?state=all/.test(url)
+    ? new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)))
+    : base(url, init));
+  const ctx = ctxFor();
+  const t0 = Date.now();
+  await handle(await signed(submit()), env, ctx, { fetch: stall, installationToken: async () => 'inst', log: () => {} });
+  const [res] = await Promise.all(ctx.jobs);
+  assert.ok(res.error, 'reported as an error');
+  assert.ok(Date.now() - t0 < 12000, 'within the per-call limit');
+  assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /Nothing was created/);
 });

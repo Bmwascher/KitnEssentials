@@ -1,10 +1,11 @@
 name: Discord status
 
-# Moves a #aui-help forum post along (In progress -> Fixed -> Shipped) when the
-# GitHub issue the bot made from it moves. Only touches issues labeled
+# Moves a forum post along (In progress -> Fixed -> Shipped) when the GitHub
+# issue the bot made from it moves. Only touches issues labeled
 # `from-discord`. Does nothing until the DISCORD_BOT_TOKEN secret is set.
 # pull_request_target (not pull_request) so contributor PRs from forks still
 # update Discord; it runs this repo's own script and never checks out PR code.
+# The script acts on a PR only when its author has a role on the repo.
 on:
   pull_request_target:
     types: [opened, reopened, ready_for_review, closed]
@@ -18,16 +19,19 @@ on:
 permissions:
   contents: read
   issues: write
-  pull-requests: read
 
+# Release tags run one at a time so two never ship the same issue; every other
+# event runs on its own, so a burst of label events never cancels one.
 concurrency:
-  group: discord-status-${{ github.event.issue.number || github.event.pull_request.number || github.ref }}
+  group: discord-status-${{ github.event_name == 'push' && 'tags' || github.run_id }}
 
 jobs:
   status:
+    # Of the labels, only needs-info has anything to say.
+    if: github.event_name != 'issues' || github.event.action != 'labeled' || github.event.label.name == 'needs-info'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/discord-bot

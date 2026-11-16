@@ -9,5 +9,6 @@ compatibility_date = "2025-06-01"
 # Which repo each form choice files into. For the test server, point AES at
 # the test repo instead, e.g. {"AES":"<you>/KitnEssentials"}.
 REPOS = '{"AES":"Bmwascher/KitnEssentials"}'
-# Forum channel id(s) the command works in, comma separated. Empty = any thread.
+# Forum channel id(s) the command works in, comma separated. Required: while
+# it is empty the command refuses every post.
 FORUM_CHANNEL_IDS = ""

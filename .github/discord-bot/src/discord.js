@@ -40,5 +40,11 @@ export function discordClient(token, fetchImpl = fetch) {
       await call('PATCH', `/channels/${threadId}`, patch);
       return { tags };
     },
+    async unarchive(threadId) {
+      const thread = await call('GET', `/channels/${threadId}`);
+      if (thread.thread_metadata && thread.thread_metadata.archived) {
+        await call('PATCH', `/channels/${threadId}`, { archived: false });
+      }
+    },
   };
 }
