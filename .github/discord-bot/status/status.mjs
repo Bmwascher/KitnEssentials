@@ -69,8 +69,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     }
   }
 
-  // `target` is the commit the tag event pushed (its `after`), not the tag's
-  // name: a rerun of an old event must not see where the tag points today.
+  // `target` is the commit the tag event pointed at when it was pushed, not
+  // the tag's name: a rerun of an old event must not see where the tag
+  // points today.
   async function tagContains(sha, target) {
     const r = await gh.call('GET', `/repos/${repo}/compare/${sha}...${encodeURIComponent(target)}`);
     return r.status === 'ahead' || r.status === 'identical';
@@ -125,11 +126,11 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       } else {
         // A post already Fixed or Shipped does not go back to In progress. The
         // labels are read again just before the write, in case a merge landed.
-        const done = (i) => hasLabel(i, LABELS.pendingRelease) || hasLabel(i, LABELS.shipped);
-        const open = (await linkedIssues(pr)).filter((i) => !done(i));
+        const fixedOrShipped = (i) => hasLabel(i, LABELS.pendingRelease) || hasLabel(i, LABELS.shipped);
+        const open = (await linkedIssues(pr)).filter((i) => !fixedOrShipped(i));
         await each(open, async (issue) => {
           const now = await gh.getIssue(repo, issue.number);
-          if (done(now)) return;
+          if (fixedOrShipped(now)) return;
           const m = await notify(now, STATUS.inProgress, MESSAGES.inProgress());
           // A merge or ship from another run may have landed while this one
           // wrote: read once more and put the later status back.
