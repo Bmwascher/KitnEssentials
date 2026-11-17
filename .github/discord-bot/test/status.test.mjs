@@ -780,13 +780,17 @@ test('the release named is the oldest of the newest tags that hold the fix, an a
   assert.match(w.said('717')[0], /out in one v5\.0\.2\./);
 });
 
-test('a fix in no release costs one compare and is Fixed', async () => {
+test('a fix in no release costs one compare per release check, a few checks per run, and is Fixed', async () => {
   const w = world();
   w.issue(17);
   w.tags = RELEASES;
   w.close(17, 'completed', 'bbbbbbb2');
   await closed(w, 17);
-  assert.equal(w.find('GET', /compare\/bbbbbbb2/).length, 1);
+  // Each read of the issue checks the releases afresh: labels, post, message.
+  const compares = w.find('GET', /compare\/bbbbbbb2/).length;
+  const walks = w.find('POST', /graphql$/).filter((c) => /refs\(refPrefix/.test(c.body.query)).length;
+  assert.equal(compares, walks);
+  assert.ok(compares >= 1 && compares <= 6, `${compares} compares`);
   assert.equal(w.tagOf('717'), 'Fixed, next update');
 });
 
@@ -1146,6 +1150,26 @@ test('two issues one fix closes, the second closing after a release, while one P
   assert.equal(w.tagOf('717'), 'Fixed, next update');
   assert.equal(w.tagOf('718'), 'Shipped');
   assert.deepEqual(w.said('718').filter((m) => /next update|This is fixed/.test(m)), []);
+});
+
+test('a release tagged while a close run writes its labels is announced as Shipped, with the shipped label', async () => {
+  const w = world();
+  w.issue(17);
+  w.tags = RELEASES;
+  w.close(17, 'completed', 'aaaaaaa1');
+  let raced = false;
+  // The tag run for this release finds nothing to do: the issue is not yet labeled.
+  w.hooks.push(['POST', /issues\/17\/labels$/, async () => {
+    if (raced) return;
+    raced = true;
+    w.tags = [{ name: 'v5.0.4', commit: { sha: 'c-v5.0.4' } }, ...RELEASES];
+    w.contains.set('aaaaaaa1...c-v5.0.4', 'ahead');
+  }]);
+  await closed(w, 17);
+  assert.ok(raced);
+  assert.deepEqual(labels(w, 17), ['shipped']);
+  assert.equal(w.tagOf('717'), 'Shipped');
+  assert.deepEqual(w.said('717'), ['The fix is out in one v5.0.4. Update your addons, and let us know here if you still see the problem.']);
 });
 
 test('a re-run does not send a note a moderator marked sent after the re-run took it over', async () => {
