@@ -269,14 +269,16 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // The issue's state, after checking a fix with no ship record against the
   // releases: its close may have come after the release run read its lists,
   // a record write may have failed, or the issue may have closed while this
-  // run settled its post. A fix in no release is checked once per run: a tag
-  // made later starts its own run.
+  // run settled its post. A closed issue whose fix is in no release is checked
+  // once per run: a tag made later starts its own run, which finds the issue
+  // among its recent closes. An issue that closes later is checked again.
   const unreleased = new Set();
   async function releasedState(n) {
     const st = await stateOf(n);
-    if (!st.fix || st.shippedIn || unreleased.has(st.fix)) return st;
+    const key = `${n} ${st.fix}`;
+    if (!st.fix || st.shippedIn || unreleased.has(key)) return st;
     if (await releaseHolding(n, st.fix, true)) return stateOf(n);
-    unreleased.add(st.fix);
+    unreleased.add(key);
     return st;
   }
 

@@ -1121,6 +1121,33 @@ test('a sweep drop does not overwrite a note a re-run marked after the sweep rea
   assert.doesNotMatch(fixedNotes(w)[0].body, /^Dropped/);
 });
 
+test('two issues one fix closes, the second closing after a release, while one PR run settles both: the second is Shipped', async () => {
+  const w = world();
+  w.issue(17);
+  w.issue(18);
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17, 18] });
+  const steps = [
+    () => w.close(17, 'completed', 'aaaaaaa1'),
+    () => {
+      w.tags = [{ name: 'v5.0.2', commit: { sha: 'c-v5.0.2' } }];
+      w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+      w.close(18, 'completed', 'aaaaaaa1');
+    },
+  ];
+  for (const [thread, step] of [['717', steps[0]], ['718', steps[1]]]) {
+    let raced = false;
+    w.hooks.push(['PATCH', new RegExp(`channels/${thread}$`), async () => {
+      if (raced) return;
+      raced = true;
+      step();
+    }]);
+  }
+  await prEvent(w, 5);
+  assert.equal(w.tagOf('717'), 'Fixed, next update');
+  assert.equal(w.tagOf('718'), 'Shipped');
+  assert.deepEqual(w.said('718').filter((m) => /next update|This is fixed/.test(m)), []);
+});
+
 test('a re-run does not send a note a moderator marked sent after the re-run took it over', async () => {
   const w = world();
   w.issue(17);
