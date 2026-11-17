@@ -15,15 +15,15 @@ it along:
 | The issue | Forum tag | Message in the post (once, when the tag changes) |
 | --- | --- | --- |
 | Filed | Triaged | "Thanks! This is now tracked as KE #17..." |
-| Open, with a non-draft PR that will close it, from someone with a repo role | In progress | "A fix is up and being tested." |
-| Closed by a commit or a merged PR in this repo | Fixed, next update | "The fix is merged and will be in the next update." |
-| A release tag holds that commit | Shipped | "The fix landed in KitnEssentials v5.0.120..." (post stays open) |
-| Closed by hand | Closed | "Marked as done." |
+| Open, with a non-draft PR that will close it, from someone with a repo role | In progress | "Good news: a fix for this is being worked on and tested..." |
+| Closed by a commit or a merged PR in this repo | Fixed, next update | "This is fixed! The fix will be in the next update..." |
+| A release tag holds that commit | Shipped | "The fix is out in KitnEssentials v5.0.120..." (post stays open) |
+| Closed by hand | Closed | "A moderator has closed this..." |
 | Closed as not planned / duplicate | Closed | Short reason |
 | `needs-info` label added | (unchanged) | Pings the reporter for details |
 
 A PR that closes or goes back to draft puts the post back to Triaged, quietly.
-"A fix is up" is said once while the issue stays open, however many PRs come
+The In progress message is said once while the issue stays open, however many PRs come
 and go.
 
 How the release state is kept: the fix is the commit that last closed the
