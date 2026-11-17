@@ -1087,6 +1087,21 @@ test('an owed message no re-run could send is dropped by the fix-mode sweep, whi
   }
 });
 
+test('a note edited in the browser, with CRLF line ends, keeps its key and message when the bot rewrites it', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  refuseTagWrite(w);
+  await assert.rejects(closeRun(w, RUN), /#17/);
+  const note = fixedNotes(w)[0];
+  note.body = note.body.replace(/\n/g, '\r\n');
+  Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
+  w.clock += 60 * 60 * 1000;
+  await sweepFix(w, []);
+  assert.equal(fixedNotes(w).length, 1, 'the note keeps its key');
+  assert.match(fixedNotes(w)[0].body, /^Dropped \(no longer true\): This is fixed!/);
+});
+
 test('a needs-info ping whose label was taken off is dropped by the fix-mode sweep', async () => {
   const w = world();
   const i = w.issue(17);

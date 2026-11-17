@@ -565,4 +565,3 @@ test('a stalled pinned-template read near the deadline still leaves the create i
   assert.equal(res.created, 17, JSON.stringify(res));
   assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /could not read the forum's pinned template/);
 });
-

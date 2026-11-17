@@ -97,7 +97,7 @@ The fields come from, in order:
    The labels are the lines of the message's code block (or of the whole
    message, when it has none) that hold only one to eight words and a colon,
    with nothing after it. A label may use letters, digits, spaces, `'`, `/`,
-   `-` and `**` bold marks; a line with any other mark, such as
+   `-`, `_` and `*` marks (such as `**` bold); a line with any other mark, such as
    `Screenshots (optional):`, is not a label, so put each hint in ( ) on its
    own line under its label. Edit the pinned message and the next filing
    checks against the new labels, with no redeploy. The message is read at

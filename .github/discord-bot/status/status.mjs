@@ -82,7 +82,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // run owes.
   const runId = env.GITHUB_RUN_ID || null;
   const attempt = Number(env.GITHUB_RUN_ATTEMPT) || 1;
-  const runUrl = (id) => (id ? `${env.GITHUB_SERVER_URL || 'https://github.com'}/${repo}/actions/runs/${id}` : 'the run that wrote it');
+  const runUrl = (id) => `${env.GITHUB_SERVER_URL || 'https://github.com'}/${repo}/actions/runs/${id}`;
   const f = timedFetch(fetchImpl, CALL_MS);
   const gh = githubClient(env.GITHUB_TOKEN, f);
   const discord = discordClient(env.DISCORD_BOT_TOKEN, f);
@@ -153,11 +153,12 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       const batch = await gh.call('GET', `/repos/${repo}/issues/${n}/comments?per_page=100&page=${page}`);
       for (const c of batch) {
         if (!c.user || c.user.login !== BOT_LOGIN) continue;
-        const sh = /<!--\s*discord-shipped-in:\s*(\S+)\s+fixes:\s*([0-9a-f,]*)\s*-->/.exec(c.body || '');
+        // A body edited in the browser comes back with CRLF line ends.
+        const body = (c.body || '').replace(/\r\n?/g, '\n');
+        const sh = /<!--\s*discord-shipped-in:\s*(\S+)\s+fixes:\s*([0-9a-f,]*)\s*-->/.exec(body);
         if (sh) shipped.push({ tag: sh[1], fixes: sh[2].split(',').filter(Boolean) });
-        const tl = /<!--\s*discord-told:\s*(\S+)\s*-->/.exec(c.body || '');
+        const tl = /<!--\s*discord-told:\s*(\S+)\s*-->/.exec(body);
         if (tl) {
-          const body = c.body || '';
           // The last outcome mark wins: a moderator may mark a listed note by hand.
           const marks = [...body.matchAll(/<!--\s*discord-(sent|dropped|unconfirmed|sending)\s*-->/g)];
           told.push({

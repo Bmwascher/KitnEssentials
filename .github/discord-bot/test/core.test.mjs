@@ -262,6 +262,3 @@ test('a forum can name its pinned template message by its link', () => {
   // A value that is not a message link is flagged, so the moderator is told.
   assert.deepEqual([f['900'].badTemplate, f['902'].badTemplate], [false, true]);
 });
-
-
-
