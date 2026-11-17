@@ -169,6 +169,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
             state: marks.length ? marks[marks.length - 1][1] : 'attempted',
             // The older `Told the player` form, marked sent only after its send.
             legacy: /^Told the player: /.test(body),
+            // Dropped by the bot before any send, and marked by no one else:
+            // its message was never sent and can be claimed again.
+            released: /^Dropped \(/.test(body) && marks.length === 1 && marks[0][1] === 'dropped',
             at: Date.parse(c.created_at) || 0,
           });
         }
@@ -325,9 +328,10 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     await settleNote(note, 'dropped', reason);
   }
 
-  // The notes that own their message: a Dropped note was never sent, so when
-  // the same news comes true again, a new note is written for it.
-  const owningNote = (told, key) => told.find((t) => t.key === key && t.state !== 'dropped');
+  // The note that owns a message. A note the bot dropped before any send, and
+  // no one marked since, gives it up: when the same news comes true again, a
+  // new note is written for it. A note a moderator marked keeps it for good.
+  const owningNote = (told, key) => told.find((t) => t.key === key && !t.released);
 
   // The note for a message. A note already made for this key owns it: this
   // run takes it over only with `adopt`, when it is this run's own note from
@@ -666,7 +670,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       const stale = [];
       const seen = new Set();
       for (const t of st.records.told) {
-        if (t.state === 'dropped' || seen.has(t.key)) continue;
+        if (t.released || seen.has(t.key)) continue;
         seen.add(t.key);
         if (t.state === 'unconfirmed') {
           parts.push(`message "${t.text}" may not have reached the player (${t.url})`);

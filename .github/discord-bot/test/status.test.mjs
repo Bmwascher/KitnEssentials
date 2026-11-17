@@ -1193,6 +1193,29 @@ test('a re-run of a PR run sends the Shipped message it owes for an issue that c
   assert.equal(w.said('717').filter((m) => /out in/.test(m)).length, 1);
 });
 
+test('a note a moderator marked dropped keeps its message closed, even after the sweep dropped it', async () => {
+  for (const sweptFirst of [false, true]) {
+    const w = world();
+    w.issue(17);
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    const pr = (over) => go(w, PR, { action: 'ready_for_review', pull_request: { number: 5 } }, over);
+    refuseTagWrite(w);
+    await assert.rejects(pr(RUN), /#17/);
+    w.prs.get(5).draft = true;
+    if (sweptFirst) {
+      w.clock += 60 * 60 * 1000;
+      await sweepFix(w, []);
+    }
+    // The moderator sends it by hand, or decides it is not needed, and marks the note.
+    const note = w.issues.get(17).comments.find((c) => /discord-told: in-progress-/.test(c.body));
+    note.body = `${note.body}\n<!-- discord-dropped -->`;
+    w.prs.get(5).draft = false;
+    await pr({ GITHUB_RUN_ID: '556' });
+    assert.equal(w.tagOf('717'), 'In progress', `sweptFirst=${sweptFirst}`);
+    assert.deepEqual(w.said('717'), [], `sweptFirst=${sweptFirst}: nothing sent`);
+  }
+});
+
 test('an In progress note the sweep dropped does not stop the message when a PR is ready again', async () => {
   const w = world();
   w.issue(17);
