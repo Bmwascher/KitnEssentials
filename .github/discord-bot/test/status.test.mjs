@@ -115,7 +115,7 @@ test('a duplicate links the other report\'s Discord post', async () => {
   w.issue(18);
   w.close(17, 'duplicate', null, null, 18);
   await closed(w, 17);
-  assert.deepEqual(w.said('717'), ["This is the same problem as another report (https://discord.com/channels/900/718), so we'll follow it there and close this one. Thanks for reporting it!"]);
+  assert.deepEqual(w.said('717'), ["This is the same problem as another report (https://discord.com/channels/800/718), so we'll follow it there and close this one. Thanks for reporting it!"]);
 });
 
 test('a duplicate of an issue with no Discord post, not filed by the bot, or in another repo, goes out without a link', async () => {

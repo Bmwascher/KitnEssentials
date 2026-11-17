@@ -163,7 +163,8 @@ export function world() {
       if (m[1] === FORUM.id) return json(FORUM);
       const t = w.threads.get(m[1]);
       if (!t) return json({ message: 'Unknown Channel' }, 404);
-      return json({ id: t.id, guild_id: '900', parent_id: t.parent_id, applied_tags: [...t.applied_tags], thread_metadata: { archived: t.archived } });
+      // The server id differs from the forum id (900), so a link built from the wrong one fails.
+      return json({ id: t.id, guild_id: '800', parent_id: t.parent_id, applied_tags: [...t.applied_tags], thread_metadata: { archived: t.archived } });
     }],
     ['PATCH', /discord\.com\/api\/v10\/channels\/(\d+)$/, (m, url, body) => {
       const t = w.threads.get(m[1]);
