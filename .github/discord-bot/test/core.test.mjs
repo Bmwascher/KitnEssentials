@@ -100,6 +100,9 @@ test('Discord no-preview links survive into the issue as working links', () => {
   assert.equal(C.neutralize('<https://a.example/<!--x>'), '&lt;https://a.example/&lt;!--x>');
   // A typed entity shows as typed: it never becomes an @ or a <.
   assert.equal(C.neutralize('&#64;a &commat;b &#x40;c &lt;!-- x &amp; y'), '&amp;#64;a &amp;commat;b &amp;#x40;c &amp;lt;!-- x &amp;amp; y');
+  // An & that starts no entity is left alone, so a URL keeps its address.
+  assert.equal(C.neutralize('a & b https://e.com/?b=1&c=2'), 'a & b https://e.com/?b=1&c=2');
+  assert.equal(C.neutralize('<https://e.com/?b=1&c=2>'), `[${dest('https://e.com/?b=1&c=2')}](${dest('https://e.com/?b=1&c=2')})`);
   assert.equal(C.buildBody({ content: 'hi', reporterName: '&#64;mod', threadUrl: 'u', client: 'c', threadId: '1' }).includes('**&amp;#64;mod**'), true);
   // Every character of the destination survives: parentheses, trailing
   // punctuation, an @ (which the mention escaping would otherwise change).
