@@ -102,13 +102,32 @@ test('a duplicate links the other report\'s Discord post', async () => {
   assert.deepEqual(w.said('717'), ["This is the same problem as another report (https://discord.com/channels/900/718), so we'll follow it there and close this one. Thanks for reporting it!"]);
 });
 
-test('a duplicate of an issue with no Discord post, or in another repo, goes out without a link', async () => {
-  for (const dup of [{ body: 'filed on GitHub' }, { body: '<!-- discord-thread: 718 reporter: 42 -->', repo: 'someone/else' }]) {
+test('a duplicate of an issue with no Discord post, not filed by the bot, or in another repo, goes out without a link', async () => {
+  const marked = '<!-- discord-thread: 718 reporter: 42 -->';
+  for (const dup of [
+    { body: 'filed on GitHub', labels: ['from-discord'] },
+    { body: marked, labels: [] },
+    { body: marked, labels: ['from-discord'], repo: 'someone/else' },
+  ]) {
     const w = world();
     w.issue(17);
+    w.thread('718');
     w.close(17, 'duplicate', null, null, dup);
     await closed(w, 17);
     assert.match(w.said('717')[0], /same problem as another report, so/, JSON.stringify(dup));
+  }
+});
+
+test('a duplicate or not-planned close is told even while GitHub GraphQL is down', async () => {
+  for (const [reason, said] of [['duplicate', /same problem as another report, so/], ['not_planned', /decided not to change this/]]) {
+    const w = world();
+    w.issue(17);
+    w.issue(18);
+    w.close(17, reason, null, null, reason === 'duplicate' ? 18 : null);
+    w.fail.push(['POST', /graphql$/, new Response('{}', { status: 502 }), 99]);
+    await closed(w, 17);
+    assert.equal(w.tagOf('717'), 'Closed', reason);
+    assert.match(w.said('717')[0] || '', said, reason);
   }
 });
 

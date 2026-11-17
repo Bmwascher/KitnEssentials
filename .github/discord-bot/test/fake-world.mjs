@@ -47,7 +47,7 @@ export function world() {
   // `closer` is what GraphQL names as the closer: { pr: sha } for a merged PR
   // (whose REST event carries no commit) or { commit: sha }, with `repo` to
   // put it in another repository.
-  // `duplicateOf` is the issue number (or { body, repo }) it duplicates.
+  // `duplicateOf` is the issue number (or { body, labels, repo }) it duplicates.
   w.close = (n, reason = 'completed', commit = null, closer = null, duplicateOf = null) => {
     const i = w.issues.get(n);
     i.state = 'closed';
@@ -140,7 +140,8 @@ export function world() {
             : { __typename: 'Commit', oid: c.commit, repository };
         const d = last && last.duplicateOf;
         const dupIssue = typeof d === 'number' ? w.issues.get(d) : d;
-        const duplicateOf = dupIssue ? { body: dupIssue.body, repository: { nameWithOwner: dupIssue.repo || 'me/one' } } : null;
+        const dupLabels = [...(dupIssue && dupIssue.labels ? dupIssue.labels : [])].map((name) => ({ name }));
+        const duplicateOf = dupIssue ? { body: dupIssue.body, labels: { nodes: dupLabels }, repository: { nameWithOwner: dupIssue.repo || 'me/one' } } : null;
         return json({ data: { repository: { issue: { timelineItems: { nodes: last ? [{ closer, duplicateOf }] : [] } } } } });
       }
       return json({ errors: [{ message: 'unknown query' }] });
