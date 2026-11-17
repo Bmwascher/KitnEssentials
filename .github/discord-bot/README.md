@@ -144,6 +144,14 @@ Accepted on purpose; each line says how you would notice it.
   same change first reads it leaves that run nothing to send: no note and no
   message, and nothing is listed. The player sees the new status tag without
   its message.
+- A status note is changed by replacing its text, and GitHub cannot refuse a
+  replace when the note changed since it was read. The bot reads a note again
+  just before it sends or drops it, which leaves about a second:
+  - If a fix-mode sweep drops a note in the same second that a re-run marks
+    its send failed, the note reads Dropped, and later sweeps no longer list
+    the message as possibly not reaching the player.
+  - If a moderator sends a message by hand in the same second that a re-run
+    sends it, the player gets it twice.
 - The release check walks release tags newest first and stops at the first
   one without the fix, so it assumes each release tag holds every earlier
   one (one line of history). A release tagged on an older branch with a newer
