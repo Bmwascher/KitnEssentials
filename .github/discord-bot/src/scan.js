@@ -1,4 +1,4 @@
-// The Worker's scheduled jobs. Every few minutes `scan` puts one message with
+// The Worker's scheduled jobs. Every minute `scan` puts one message with
 // a "Send to GitHub" button into each new, open post in the configured forums.
 // A post that was closed or archived before a scan saw it gets none; the
 // right-click command still works there. Once
@@ -6,18 +6,20 @@
 // warns the moderators if the scan has stopped running or keeps failing.
 //
 // State lives in the Workers KV namespace bound as STATE. KV's free plan
-// allows 1,000 writes a day, so a scan writes its own state once per run:
+// allows 1,000 writes a day, so a scan writes its own state only when it
+// changed, or HEARTBEAT_MS after the last write, which tells the daily check
+// the scan is still running:
 //   scan:since   epoch ms; posts made at or before it are never messaged
-//   scan:state   {"last": epoch ms of the last run, whatever it found,
+//   scan:state   {"last": epoch ms of the last state write,
 //                 "through": {forum: the newest post id at or before which every
 //                             post there is handled, so a run reads KV only after it},
 //                 "error": {"at": epoch ms, "text": the last failure}}
 //   thread:<id>  {"greeting": message id, "skipped": reason, "tries": failed sends,
 //                 "issue": {"repo", "number"}}
-import { parseForums, snowflakeMs, timedFetch, currentStatus } from './core.js';
+import { parseForums, snowflakeMs, timedFetch, currentStatus, SEND_BUTTON } from './core.js';
 import { discordClient } from './discord.js';
 
-export const SEND_BUTTON = 'send';
+export { SEND_BUTTON };
 // Workers' free plan allows 50 outgoing calls per run. Each greeting costs two
 // (a look at the post's last messages, then the send) and has its own share,
 // so reading the forums can never use up what the greetings need.
@@ -26,10 +28,13 @@ const READ_BUDGET = 28;
 const GREET_BUDGET = 2 * MAX_GREET;
 const POST_BUDGET = 4;
 const MAX_KV_READS = 60;
-// A post that fails this many runs in a row (not a refusal) is given up on.
-const MAX_TRIES = 6;
+// A post that fails this many runs in a row (not a refusal) is given up on:
+// about 30 minutes of errors at one scan a minute. Each failed try is one KV
+// write, so the cost stays small.
+const MAX_TRIES = 30;
 const CALL_MS = 5000;
 const STALE_SCAN_MS = 60 * 60 * 1000;
+const HEARTBEAT_MS = 15 * 60 * 1000;
 const ERROR_SHOWN_MS = 24 * 60 * 60 * 1000;
 const DAILY_ARCHIVED_MS = 30 * 24 * 60 * 60 * 1000;
 const DAILY_ARCHIVE_PAGES = 6;
@@ -188,7 +193,10 @@ export async function scan(env, deps = {}) {
   } finally {
     const next = { last: now, through, error: state.error };
     if (errors.length) next.error = { at: now, text: `could not read or message ${errors.slice(0, 5).join(', ')}` };
-    await kv.put('scan:state', JSON.stringify(next));
+    const changed = JSON.stringify(through) !== JSON.stringify(state.through || {})
+      || (next.error && next.error.text) !== (state.error && state.error.text)
+      || now - (Number(state.last) || 0) >= HEARTBEAT_MS;
+    if (changed) await kv.put('scan:state', JSON.stringify(next));
   }
   return { greeted, left };
 }
@@ -225,8 +233,10 @@ export async function daily(env, deps = {}) {
     const state = (await readJson(kv, 'scan:state')) || {};
     const last = Number(state.last) || 0;
     const alert = [];
-    if (now - last > STALE_SCAN_MS) {
-      alert.push(`The post scan has not run for ${Math.round((now - last) / 60000)} minutes: new posts are not getting their button. Check the Worker's cron trigger.`);
+    // An idle scan writes its state only every HEARTBEAT_MS, so the last run
+    // may be up to that much newer than the saved time.
+    if (now - last > STALE_SCAN_MS + HEARTBEAT_MS) {
+      alert.push(`The post scan has not run for at least ${Math.round((now - last - HEARTBEAT_MS) / 60000)} minutes: new posts are not getting their button. Check the Worker's cron trigger.`);
     }
     if (state.error && now - state.error.at < ERROR_SHOWN_MS) {
       alert.push(`The post scan hit a problem at ${new Date(state.error.at).toISOString()}: ${state.error.text}. Check the bot's permissions in those channels.`);
@@ -284,4 +294,4 @@ export async function daily(env, deps = {}) {
 }
 
 // Which job a cron expression runs (wrangler.toml [triggers]).
-export const CRONS = { scan: '*/5 * * * *', daily: '0 15 * * *' };
+export const CRONS = { scan: '* * * * *', daily: '0 15 * * *' };

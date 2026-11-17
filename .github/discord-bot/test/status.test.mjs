@@ -69,6 +69,7 @@ test('an issue closed by a commit is pending-release and the post says Fixed, on
   assert.equal(w.tagOf('717'), 'Fixed, next update');
   assert.deepEqual(w.said('717'), ["This is fixed! The fix will be in the next update. We'll post here when that update is out."]);
   assert.match(w.issues.get(17).comments[0].body, /<!-- discord-told: fixed-aaaaaaa1 -->/);
+  assert.match(w.issues.get(17).comments[0].body, /^Delivery confirmed: This is fixed!/);
 });
 
 test('an issue closed by merging a PR, whose closed event carries no commit, is Fixed by the merge commit', async () => {
@@ -114,7 +115,7 @@ test('a duplicate links the other report\'s Discord post', async () => {
   w.issue(18);
   w.close(17, 'duplicate', null, null, 18);
   await closed(w, 17);
-  assert.deepEqual(w.said('717'), ["This is the same problem as another report (https://discord.com/channels/900/718), so we'll follow it there and close this one. Thanks for reporting it!"]);
+  assert.deepEqual(w.said('717'), ["This is the same problem as another report (https://discord.com/channels/800/718), so we'll follow it there and close this one. Thanks for reporting it!"]);
 });
 
 test('a duplicate of an issue with no Discord post, not filed by the bot, or in another repo, goes out without a link', async () => {
@@ -261,6 +262,7 @@ test('deleted, moved and non-release tags do nothing', async () => {
   await tag(w, 'v5.0.2', { deleted: true, created: false });
   await tag(w, 'v5.0.2', { created: false, forced: true });
   await tag(w, 'nightly-1');
+  await tag(w, 'v5.1.0-beta.1');
   assert.equal(w.calls.length, before);
 });
 
@@ -506,20 +508,22 @@ test('a tag run ships a just-closed issue the close run has not labeled yet', as
   assert.match(w.said('717').at(-1), /v5\.0\.2/);
 });
 
-test('a shipped issue with no ship record (shipped before records existed) stays shipped', async () => {
-  const w = world();
-  w.issue(17, { labels: ['from-discord', 'shipped'] });
-  w.close(17, 'completed', 'aaaaaaa1');
-  w.thread('717', { applied_tags: ['t-retail', 's-ship'] });
-  w.tags = [{ name: 'nightly', commit: { sha: 'n1' } }, { name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
-  w.contains.set('aaaaaaa1...c-v5.0.1', 'ahead');
-  w.contains.set('aaaaaaa1...n1', 'ahead');
-  await go(w, 'issues', { action: 'reopened', issue: { number: 17 } }).catch(() => {});
-  await run({ eventName: 'schedule', payload: {}, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: quiet });
-  assert.deepEqual(labels(w, 17), ['shipped']);
-  assert.equal(w.tagOf('717'), 'Shipped');
-  assert.ok(w.issues.get(17).comments.some((c) => /discord-shipped-in: v5\.0\.1 fixes: aaaaaaa1/.test(c.body)), 'the record is rebuilt from the release tag, not the nightly');
-  assert.deepEqual(w.said('717'), []);
+test('a shipped issue with no ship record (shipped before records existed) stays shipped, from a close run or the sweep', async () => {
+  for (const via of ['close run', 'sweep']) {
+    const w = world();
+    w.issue(17, { labels: ['from-discord', 'shipped'] });
+    w.close(17, 'completed', 'aaaaaaa1');
+    w.thread('717', { applied_tags: ['t-retail', 's-ship'] });
+    w.tags = [{ name: 'nightly', commit: { sha: 'n1' } }, { name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
+    w.contains.set('aaaaaaa1...c-v5.0.1', 'ahead');
+    w.contains.set('aaaaaaa1...n1', 'ahead');
+    if (via === 'close run') await closed(w, 17);
+    else await run({ eventName: 'schedule', payload: {}, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: quiet });
+    assert.deepEqual(labels(w, 17), ['shipped'], via);
+    assert.equal(w.tagOf('717'), 'Shipped', via);
+    assert.ok(w.issues.get(17).comments.some((c) => /discord-shipped-in: v5\.0\.1 fixes: aaaaaaa1/.test(c.body)), `${via}: the record is rebuilt from the release tag, not the nightly`);
+    assert.deepEqual(w.said('717'), [], via);
+  }
 });
 
 test('the sweep reports a post with no status tag, and a missing ship record, into the job summary', async () => {
@@ -544,7 +548,7 @@ test('the sweep reports a post with no status tag, and a missing ship record, in
   assert.match(text, /#17: post \(no status\) -> Triaged/);
   assert.match(text, /#18: ship record missing \(v5\.0\.1 holds the fix\); post Fixed, next update -> Shipped/);
   assert.equal(w.issues.get(18).comments.length, 0, 'report mode writes nothing');
-  assert.equal(w.find('GET', /compare\/ccccccc3/).length, 0, 'a pending fix is not checked against every tag');
+  assert.equal(w.find('GET', /compare\/ccccccc3/).length, 1, 'a pending fix is checked against the newest release only');
 });
 
 test('the close run and a tag run that holds the fix, interleaved, tell the player once', async () => {
@@ -623,6 +627,7 @@ test('a Shipped message that went stale before sending is dropped, not sent', as
   assert.ok(raced);
   assert.equal(w.said('717').filter((m) => /out in /.test(m)).length, 0);
   assert.ok(w.issues.get(17).comments.some((c) => /discord-told: shipped-[\s\S]*discord-dropped/.test(c.body)));
+  assert.ok(w.issues.get(17).comments.some((c) => /^Dropped \(no longer true\): The fix is out/.test(c.body)));
 });
 
 test('a message whose send failed is listed by the sweep, which sends nothing', async () => {
@@ -630,12 +635,13 @@ test('a message whose send failed is listed by the sweep, which sends nothing', 
   w.issue(17);
   w.close(17, 'completed', 'aaaaaaa1');
   w.fail.push(['POST', /channels\/717\/messages$/, new Response('{}', { status: 500 }), 1]);
-  await closed(w, 17).catch(() => {});
+  await assert.rejects(closed(w, 17), /#17/);
   w.clock += 60 * 60 * 1000;
   const out = [];
   await run({ eventName: 'schedule', payload: {}, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: (s) => out.push(s), now: () => w.clock });
   assert.deepEqual(w.said('717'), []);
-  assert.match(out.join('\n'), /#17: message "This is fixed! The fix will be in the next update\. We.ll post here when that update is out\." may not have been sent/);
+  assert.match(out.join('\n'), /#17: message "This is fixed! The fix will be in the next update\. We.ll post here when that update is out\." may not have reached the player \(https:\/\/github\.com\/me\/one\/issues\/17#issuecomment-\d+\)/);
+  assert.ok(w.issues.get(17).comments.some((c) => /^Unconfirmed \(the send failed; the player may not have it\): This is fixed!/.test(c.body)));
 });
 
 test('a Shipped message for an old release is dropped when the issue has shipped again in a newer one', async () => {
@@ -740,4 +746,571 @@ test('a needs-info label taken off while the run claims its ping sends nothing',
   await go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } });
   assert.deepEqual(w.said('717'), []);
   assert.ok(i.comments.some((c) => /discord-dropped/.test(c.body)));
+});
+
+// ---- A fix a release already holds -------------------------------------------------
+
+const RELEASES = [
+  { name: 'v5.0.3', commit: { sha: 'c-v5.0.3' }, annotated: true },
+  { name: 'v5.0.2', commit: { sha: 'c-v5.0.2' } },
+  { name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } },
+];
+
+test('a fix whose close comes after its release tag run is announced as Shipped, not Fixed', async () => {
+  const w = world();
+  w.issue(17);
+  w.tags = [{ name: 'v5.0.2', commit: { sha: 'c-v5.0.2' } }, { name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
+  w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+  await tag(w, 'v5.0.2');
+  w.close(17, 'completed', 'aaaaaaa1');
+  await closed(w, 17);
+  assert.deepEqual(labels(w, 17), ['shipped']);
+  assert.equal(w.tagOf('717'), 'Shipped');
+  assert.deepEqual(w.said('717'), ['The fix is out in one v5.0.2. Update your addons, and let us know here if you still see the problem.']);
+});
+
+test('the release named is the oldest of the newest tags that hold the fix, an annotated tag checked at its commit', async () => {
+  const w = world();
+  w.issue(17);
+  w.tags = RELEASES;
+  w.contains.set('aaaaaaa1...c-v5.0.3', 'ahead');
+  w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+  w.close(17, 'completed', 'aaaaaaa1');
+  await closed(w, 17);
+  assert.match(w.said('717')[0], /out in one v5\.0\.2\./);
+});
+
+test('a fix in no release costs one compare per release check, a few checks per run, and is Fixed', async () => {
+  const w = world();
+  w.issue(17);
+  w.tags = RELEASES;
+  w.close(17, 'completed', 'bbbbbbb2');
+  await closed(w, 17);
+  // Each read of the issue checks the releases afresh: labels, post, message.
+  const compares = w.find('GET', /compare\/bbbbbbb2/).length;
+  const walks = w.find('POST', /graphql$/).filter((c) => /refs\(refPrefix/.test(c.body.query)).length;
+  assert.equal(compares, walks);
+  assert.ok(compares >= 1 && compares <= 6, `${compares} compares`);
+  assert.equal(w.tagOf('717'), 'Fixed, next update');
+});
+
+test('a release check that cannot be read fails the run instead of announcing Fixed', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  w.fail.push(['POST', /graphql$/, new Response('{}', { status: 502 }), 99]);
+  await assert.rejects(closed(w, 17), /#17/);
+  assert.deepEqual(w.said('717'), []);
+});
+
+test('a tag run names the oldest release holding an unrecorded fix, as the close run and the sweep do', async () => {
+  const w = world();
+  w.issue(17);
+  w.tags = RELEASES;
+  w.contains.set('aaaaaaa1...c-v5.0.3', 'ahead');
+  w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+  w.close(17, 'completed', 'aaaaaaa1');
+  await tag(w, 'v5.0.3');
+  assert.ok(w.issues.get(17).comments.some((c) => /discord-shipped-in: v5\.0\.2 fixes: aaaaaaa1/.test(c.body)));
+  assert.match(w.said('717').at(-1), /out in one v5\.0\.2\./);
+});
+
+// ---- Notes and owed messages --------------------------------------------------------
+
+const RUN = { GITHUB_RUN_ID: '555' };
+const closeRun = (w, over) => go(w, 'issues', { action: 'closed', issue: { number: 17 } }, over);
+const sweepFix = (w, out) => run({ eventName: 'schedule', payload: {}, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: (s) => out.push(s), now: () => w.clock });
+const fixedNotes = (w) => w.issues.get(17).comments.filter((c) => /discord-told: fixed-/.test(c.body));
+const refuseTagWrite = (w) => w.fail.push(['PATCH', /channels\/717$/, new Response('{"message":"Missing Permissions"}', { status: 403 }), 1]);
+// The forum has no Fixed tag while `gone()` says so.
+const withoutFixedTag = (w, gone) => {
+  const real = w.fetch;
+  w.fetch = async (url, init) => {
+    const r = await real(url, init);
+    if (!gone() || !/channels\/900$/.test(url)) return r;
+    const forum = await r.json();
+    forum.available_tags = forum.available_tags.filter((t) => t.name !== 'Fixed, next update');
+    return new Response(JSON.stringify(forum));
+  };
+};
+
+test('of two runs that write a note for one message at once, the later drops its own note', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  let raced = false;
+  w.hooks.push(['POST', /issues\/17\/comments$/, async (call) => {
+    if (raced || !/discord-told: fixed-/.test(call.body.body)) return;
+    raced = true;
+    await closed(w, 17);
+  }]);
+  await closed(w, 17);
+  assert.ok(raced);
+  assert.equal(w.said('717').length, 1);
+  assert.deepEqual(fixedNotes(w).map((c) => c.body.split(':')[0]), ['Delivery confirmed', 'Dropped (another run claimed it)']);
+});
+
+test('a message stopped by a setup problem stays owed: the sweep leaves the post, and a re-run of that run sends it', async () => {
+  for (const problem of ['tag write refused', 'forum has no tag']) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    let broken = true;
+    if (problem === 'tag write refused') {
+      refuseTagWrite(w);
+      await assert.rejects(closeRun(w, RUN), /#17/);
+    } else {
+      withoutFixedTag(w, () => broken);
+      await closeRun(w, RUN);
+    }
+    assert.equal(w.tagOf('717'), 'Triaged', problem);
+    assert.deepEqual(w.said('717'), [], problem);
+    assert.match(fixedNotes(w)[0].body, /^Notification attempted: This is fixed!/, problem);
+
+    broken = false;
+    // A sweep right after the failure leaves the post too.
+    await sweepFix(w, []);
+    assert.equal(w.tagOf('717'), 'Triaged', `${problem}: an immediate sweep leaves the post`);
+    w.clock += 60 * 60 * 1000;
+    const out = [];
+    await sweepFix(w, out);
+    assert.match(out.join('\n'), /#17: .*owed message "This is fixed!.*re-run https:\/\/github\.com\/me\/one\/actions\/runs\/555/, problem);
+    assert.equal(w.tagOf('717'), 'Triaged', `${problem}: the sweep leaves the post`);
+    assert.deepEqual(labels(w, 17), ['pending-release'], problem);
+
+    await closeRun(w, RUN);
+    assert.equal(w.tagOf('717'), 'Fixed, next update', problem);
+    assert.equal(w.said('717').length, 1, problem);
+    assert.equal(fixedNotes(w).length, 1, `${problem}: the re-run sends the owed note and writes no new one`);
+    assert.match(fixedNotes(w)[0].body, /^Delivery confirmed: This is fixed!/, problem);
+  }
+});
+
+test('an owed message is sent by a re-run of its run even after another run or a sweep moved the post', async () => {
+  for (const mover of ['another run', 'a sweep at its tag write']) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    refuseTagWrite(w);
+    if (mover === 'another run') {
+      await assert.rejects(closeRun(w, RUN), /#17/);
+      await closeRun(w, { GITHUB_RUN_ID: '556' });
+    } else {
+      // The close run writes its note and its tag write is refused just
+      // before the sweep's own tag write, which then succeeds.
+      let raced = false;
+      w.hooks.push(['PATCH', /channels\/717$/, async () => {
+        if (raced) return;
+        raced = true;
+        await assert.rejects(closeRun(w, RUN), /#17/);
+      }]);
+      await sweepFix(w, []);
+      assert.ok(raced, mover);
+    }
+    assert.equal(w.tagOf('717'), 'Fixed, next update', mover);
+    assert.deepEqual(w.said('717'), [], `${mover} sends nothing`);
+    assert.equal(fixedNotes(w).length, 1, mover);
+    await closeRun(w, RUN);
+    assert.equal(w.said('717').length, 1, `${mover}: the re-run sends the owed message`);
+    assert.match(fixedNotes(w)[0].body, /^Delivery confirmed: This is fixed!/, mover);
+    await closeRun(w, RUN);
+    assert.equal(w.said('717').length, 1, `${mover}: a second re-run sends nothing more`);
+  }
+});
+
+test('a message that went out before its note was marked sent is never sent again', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  // The send succeeds, and the edit that marks the note sent fails.
+  w.hooks.push(['POST', /channels\/717\/messages$/, async () => {
+    w.fail.push(['PATCH', /issues\/comments\/\d+$/, new Response('{"message":"Server Error"}', { status: 500 }), 1]);
+  }]);
+  await assert.rejects(closeRun(w, RUN), /#17/);
+  assert.equal(w.said('717').length, 1);
+  await closeRun(w, RUN);
+  assert.equal(w.said('717').length, 1, 'the re-run does not take over a note marked as sending');
+  w.clock += 60 * 60 * 1000;
+  const out = [];
+  await sweepFix(w, out);
+  assert.match(out.join('\n'), /message "This is fixed!.*" may not have reached the player \(https:/);
+});
+
+test('a re-run of a tag run days later still finds the issue it owes a message, and sends it once', async () => {
+  const w = world();
+  w.issue(17, { labels: ['from-discord', 'pending-release'] });
+  w.close(17, 'completed', 'aaaaaaa1');
+  w.tags = [{ name: 'v5.0.3', commit: { sha: 'c-v5.0.3' } }];
+  w.contains.set('aaaaaaa1...c-v5.0.3', 'ahead');
+  refuseTagWrite(w);
+  const tagRun = (over) => run({
+    eventName: 'push',
+    payload: { repository, ref: 'refs/tags/v5.0.3', created: true, after: 'obj-v5.0.3', head_commit: { id: 'c-v5.0.3' } },
+    env: { ...env, ...RUN, ...over }, fetchImpl: w.fetch, log: quiet, now: () => w.clock,
+  });
+  await assert.rejects(tagRun({ GITHUB_RUN_ATTEMPT: '1' }), /#17/);
+  assert.deepEqual(labels(w, 17), ['shipped']);
+  assert.deepEqual(w.said('717'), []);
+  // Three days on, the issue is neither pending nor recently closed.
+  w.clock += 3 * 24 * 60 * 60 * 1000;
+  await tagRun({ GITHUB_RUN_ATTEMPT: '2' });
+  assert.equal(w.tagOf('717'), 'Shipped');
+  assert.equal(w.said('717').length, 1);
+  await tagRun({ GITHUB_RUN_ATTEMPT: '3' });
+  assert.equal(w.said('717').length, 1, 'a later attempt sends nothing more');
+});
+
+test('a re-run of a needs-info run whose ping never went out pings once', async () => {
+  const w = world();
+  const i = w.issue(17);
+  i.labels.add('needs-info');
+  const ev = { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } };
+  refuseTagWrite(w); // the post's reopen is refused once
+  await assert.rejects(go(w, 'issues', ev, RUN), /-> 403/);
+  assert.deepEqual(w.said('717'), []);
+  await go(w, 'issues', ev, RUN);
+  await go(w, 'issues', ev, RUN);
+  assert.equal(w.said('717').length, 1);
+});
+
+test('an old Told the player status note lists as possibly unsent, and is never held, dropped or resent', async () => {
+  for (const reopened of [false, true]) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    if (reopened) Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
+    // The older `Told the player` note: no run, no outcome mark.
+    const legacy = 'Told the player: This is fixed!\n\n<!-- discord-told: fixed-aaaaaaa1 -->\n<!-- discord-told-status: Fixed, next update -->';
+    const note = w.record(17, legacy);
+    w.clock += 60 * 60 * 1000;
+    const out = [];
+    await sweepFix(w, out);
+    assert.match(out.join('\n'), /message "This is fixed!" may not have been sent \(https:[^;]*$/m, `reopened: ${reopened}`);
+    assert.doesNotMatch(out.join('\n'), /owed message/);
+    assert.equal(note.body, legacy, `reopened: ${reopened}: the note is left as it is`);
+    assert.equal(w.tagOf('717'), reopened ? 'Triaged' : 'Fixed, next update', 'the fix-mode sweep repairs the post');
+    assert.deepEqual(w.said('717'), []);
+  }
+});
+
+test('a note whose run GitHub no longer lets re-run holds nothing, however new the note', async () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const run = (w, over) => w.runs.set('555', { id: 555, status: 'completed', run_attempt: 1, created_at: new Date(w.start).toISOString(), ...over });
+  for (const [why, setup] of [
+    // The note comes from a late attempt; the run's first attempt was 31 days ago.
+    ['30 days since the first attempt', (w) => run(w, { run_attempt: 2, created_at: new Date(w.clock - 31 * DAY).toISOString() })],
+    ['50 re-runs used', (w) => run(w, { run_attempt: 51 })],
+    ['run deleted', (w) => w.fail.push(['GET', /actions\/runs\/555$/, new Response('{"message":"Not Found"}', { status: 404 }), 1])],
+  ]) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    refuseTagWrite(w);
+    await assert.rejects(closeRun(w, RUN), /#17/);
+    setup(w);
+    const out = [];
+    await sweepFix(w, out);
+    assert.match(out.join('\n'), /message "This is fixed!.*" was not sent .*can no longer be re-run/, why);
+    assert.equal(w.tagOf('717'), 'Fixed, next update', `${why}: the sweep repairs the post`);
+    assert.deepEqual(w.said('717'), [], why);
+  }
+});
+
+test('a note whose run is still queued or running is neither listed nor dropped, and its post is held', async () => {
+  for (const [status, reopened] of [['queued', false], ['in_progress', false], ['in_progress', true]]) {
+    const why = `${status}${reopened ? ', issue reopened' : ''}`;
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    refuseTagWrite(w);
+    await assert.rejects(closeRun(w, RUN), /#17/);
+    w.runs.set('555', { id: 555, status, run_attempt: 1, created_at: new Date(w.start).toISOString() });
+    if (reopened) Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
+    // Well past ten minutes: the run's state decides, not the note's age.
+    w.clock += 60 * 60 * 1000;
+    const out = [];
+    await sweepFix(w, out);
+    assert.doesNotMatch(out.join('\n'), /This is fixed!/, why);
+    assert.match(fixedNotes(w)[0].body, /^Notification attempted: /, `${why}: the note is left for its run`);
+    assert.equal(w.tagOf('717'), 'Triaged', `${why}: the post is left as it is`);
+    assert.deepEqual(w.said('717'), [], why);
+  }
+});
+
+test('the sweep reads old "Told the player" notes, a moderator\'s mark clears a note, and a losing duplicate is ignored', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  await closeRun(w, RUN);
+  const UNC = 'Unconfirmed (the send failed; the player may not have it)';
+  for (const [head, key, marks] of [
+    ['Told the player', 'legacy-sent', '\n<!-- discord-sent -->'],
+    ['Told the player', 'legacy-open', ''],
+    [UNC, 'cleared', '\n<!-- discord-unconfirmed -->\n<!-- discord-sent -->'],
+    [UNC, 'listed', '\n<!-- discord-unconfirmed -->'],
+  ]) w.record(17, `${head}: News ${key}\n\n<!-- discord-told: ${key} -->${marks}`);
+  // A losing run's later note for the confirmed message, whose Dropped edit
+  // failed: only the first note of a message counts.
+  w.record(17, 'Notification attempted: This is fixed!\n\n<!-- discord-told: fixed-aaaaaaa1 -->\n<!-- discord-told-status: Fixed, next update -->\n<!-- discord-told-run: 556 -->');
+  w.clock += 60 * 60 * 1000;
+  const out = [];
+  await sweepFix(w, out);
+  const said = out.join('\n');
+  assert.doesNotMatch(said, /News legacy-sent|News cleared|This is fixed/);
+  assert.match(said, /message "News legacy-open" may not have been sent \(https:/);
+  assert.match(said, /message "News listed" may not have reached the player \(https:/);
+});
+
+test('an owed message no re-run could send is dropped by the fix-mode sweep, which then syncs quietly', async () => {
+  const reopen = (w) => Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
+  for (const [why, after, line, reason, wantLabels] of [
+    ['reopened', reopen, /is no longer true/, 'no longer true', []],
+    // Same status, another fix: a re-run of the first run could never adopt it.
+    ['closed again by another fix', async (w) => {
+      reopen(w);
+      w.close(17, 'completed', 'bbbbbbb2');
+      await closeRun(w, { GITHUB_RUN_ID: '556' });
+    }, /is no longer true/, 'no longer true', ['pending-release']],
+    ['post deleted', (w) => w.threads.delete('717'), /cannot be sent: the Discord post is gone/, 'the Discord post is gone', ['pending-release']],
+  ]) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    const thread = w.threads.get('717');
+    refuseTagWrite(w);
+    await assert.rejects(closeRun(w, RUN), /#17/);
+    await after(w);
+    const sent = thread.messages.length;
+    w.clock += 60 * 60 * 1000;
+    const out = [];
+    await sweepFix(w, out);
+    assert.match(out.join('\n'), new RegExp(`owed message "This is fixed!.*" ${line.source}`), why);
+    assert.equal(fixedNotes(w)[0].body.split(':')[0], `Dropped (${reason})`, why);
+    assert.deepEqual(labels(w, 17), wantLabels, why);
+    assert.equal(thread.messages.length, sent, `${why}: the sweep sends nothing`);
+  }
+});
+
+test('a note edited in the browser, with CRLF line ends, keeps its key and message when the bot rewrites it', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  refuseTagWrite(w);
+  await assert.rejects(closeRun(w, RUN), /#17/);
+  const note = fixedNotes(w)[0];
+  note.body = note.body.replace(/\n/g, '\r\n');
+  Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
+  w.clock += 60 * 60 * 1000;
+  await sweepFix(w, []);
+  assert.equal(fixedNotes(w).length, 1, 'the note keeps its key');
+  assert.match(fixedNotes(w)[0].body, /^Dropped \(no longer true\): This is fixed!/);
+});
+
+test('a sweep drop does not overwrite a note a re-run marked after the sweep read it', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  refuseTagWrite(w);
+  await assert.rejects(closeRun(w, RUN), /#17/);
+  Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
+  w.clock += 60 * 60 * 1000;
+  // The run's re-run marks the note while the sweep is judging it.
+  w.hooks.push(['GET', /actions\/runs\/555$/, async () => {
+    const note = fixedNotes(w)[0];
+    note.body = `${note.body}\n<!-- discord-sending -->\n<!-- discord-unconfirmed -->`;
+  }]);
+  await sweepFix(w, []);
+  assert.equal(fixedNotes(w).length, 1);
+  assert.match(fixedNotes(w)[0].body, /<!-- discord-unconfirmed -->$/);
+  assert.doesNotMatch(fixedNotes(w)[0].body, /^Dropped/);
+});
+
+test('two issues one fix closes, the second closing after a release, while one PR run settles both: the second is Shipped', async () => {
+  const w = world();
+  w.issue(17);
+  w.issue(18);
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17, 18] });
+  const steps = [
+    () => w.close(17, 'completed', 'aaaaaaa1'),
+    () => {
+      w.tags = [{ name: 'v5.0.2', commit: { sha: 'c-v5.0.2' } }];
+      w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+      w.close(18, 'completed', 'aaaaaaa1');
+    },
+  ];
+  for (const [thread, step] of [['717', steps[0]], ['718', steps[1]]]) {
+    let raced = false;
+    w.hooks.push(['PATCH', new RegExp(`channels/${thread}$`), async () => {
+      if (raced) return;
+      raced = true;
+      step();
+    }]);
+  }
+  await prEvent(w, 5);
+  assert.equal(w.tagOf('717'), 'Fixed, next update');
+  assert.equal(w.tagOf('718'), 'Shipped');
+  assert.deepEqual(w.said('718').filter((m) => /next update|This is fixed/.test(m)), []);
+});
+
+test('a release tagged while a close run writes its labels is announced as Shipped, with the shipped label', async () => {
+  const w = world();
+  w.issue(17);
+  w.tags = RELEASES;
+  w.close(17, 'completed', 'aaaaaaa1');
+  let raced = false;
+  // The tag run for this release finds nothing to do: the issue is not yet labeled.
+  w.hooks.push(['POST', /issues\/17\/labels$/, async () => {
+    if (raced) return;
+    raced = true;
+    w.tags = [{ name: 'v5.0.4', commit: { sha: 'c-v5.0.4' } }, ...RELEASES];
+    w.contains.set('aaaaaaa1...c-v5.0.4', 'ahead');
+  }]);
+  await closed(w, 17);
+  assert.ok(raced);
+  assert.deepEqual(labels(w, 17), ['shipped']);
+  assert.equal(w.tagOf('717'), 'Shipped');
+  assert.deepEqual(w.said('717'), ['The fix is out in one v5.0.4. Update your addons, and let us know here if you still see the problem.']);
+});
+
+test('a re-run of a PR run sends the Shipped message it owes for an issue that closed while it ran', async () => {
+  const w = world();
+  w.issue(17);
+  w.tags = [{ name: 'v5.0.2', commit: { sha: 'c-v5.0.2' } }];
+  w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  let moves = 0;
+  // The first move closes the issue; the Shipped move is then refused once.
+  w.hooks.push(['PATCH', /channels\/717$/, async () => {
+    moves++;
+    if (moves === 1) w.close(17, 'completed', 'aaaaaaa1');
+    if (moves === 2) refuseTagWrite(w);
+  }]);
+  const pr = (over) => go(w, PR, { action: 'opened', pull_request: { number: 5 } }, over);
+  await assert.rejects(pr(RUN), /#17/);
+  assert.equal(w.said('717').filter((m) => /out in/.test(m)).length, 0);
+  await pr({ ...RUN, GITHUB_RUN_ATTEMPT: '2' });
+  assert.equal(w.tagOf('717'), 'Shipped');
+  assert.equal(w.said('717').filter((m) => /out in/.test(m)).length, 1);
+});
+
+test('a note a moderator marked dropped keeps its message closed, even after the sweep dropped it', async () => {
+  for (const sweptFirst of [false, true]) {
+    const w = world();
+    w.issue(17);
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    const pr = (over) => go(w, PR, { action: 'ready_for_review', pull_request: { number: 5 } }, over);
+    refuseTagWrite(w);
+    await assert.rejects(pr(RUN), /#17/);
+    w.prs.get(5).draft = true;
+    if (sweptFirst) {
+      w.clock += 60 * 60 * 1000;
+      await sweepFix(w, []);
+    }
+    // The moderator sends it by hand, or decides it is not needed, and marks the note.
+    const note = w.issues.get(17).comments.find((c) => /discord-told: in-progress-/.test(c.body));
+    note.body = `${note.body}\n<!-- discord-dropped -->`;
+    w.prs.get(5).draft = false;
+    await pr({ GITHUB_RUN_ID: '556' });
+    assert.equal(w.tagOf('717'), 'In progress', `sweptFirst=${sweptFirst}`);
+    assert.deepEqual(w.said('717'), [], `sweptFirst=${sweptFirst}: nothing sent`);
+  }
+});
+
+test('an In progress note the sweep dropped does not stop the message when a PR is ready again', async () => {
+  const w = world();
+  w.issue(17);
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  const pr = (over) => go(w, PR, { action: 'ready_for_review', pull_request: { number: 5 } }, over);
+  refuseTagWrite(w);
+  await assert.rejects(pr(RUN), /#17/);
+  w.prs.get(5).draft = true;
+  w.clock += 60 * 60 * 1000;
+  await sweepFix(w, []);
+  assert.ok(w.issues.get(17).comments.some((c) => /^Dropped \(no longer true\): /.test(c.body)));
+  w.prs.get(5).draft = false;
+  await pr({ GITHUB_RUN_ID: '556' });
+  assert.equal(w.tagOf('717'), 'In progress');
+  assert.deepEqual(w.said('717'), ["Good news: a fix for this is being worked on and tested. We'll post here when it's done."]);
+});
+
+test('a re-run does not send a note a moderator marked sent after the re-run took it over', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  refuseTagWrite(w);
+  await assert.rejects(closeRun(w, RUN), /#17/);
+  // The moderator sends it by hand and marks the note while the re-run moves the post.
+  let marked = false;
+  w.hooks.push(['PATCH', /channels\/717$/, async () => {
+    if (marked) return;
+    marked = true;
+    const note = fixedNotes(w)[0];
+    note.body = `${note.body}\n<!-- discord-sent -->`;
+  }]);
+  await closeRun(w, { ...RUN, GITHUB_RUN_ATTEMPT: '2' });
+  assert.ok(marked);
+  assert.equal(w.tagOf('717'), 'Fixed, next update');
+  assert.deepEqual(w.said('717'), []);
+  assert.match(fixedNotes(w)[0].body, /<!-- discord-sent -->$/);
+});
+
+test('an issue closed while a PR run settles its post, by a fix already released, is announced as Shipped', async () => {
+  const w = world();
+  w.issue(17);
+  w.tags = [{ name: 'v5.0.2', commit: { sha: 'c-v5.0.2' } }];
+  w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  let raced = false;
+  w.hooks.push(['PATCH', /channels\/717$/, async () => {
+    if (raced) return;
+    raced = true;
+    w.close(17, 'completed', 'aaaaaaa1');
+  }]);
+  await prEvent(w, 5);
+  assert.ok(raced);
+  assert.equal(w.tagOf('717'), 'Shipped');
+  assert.deepEqual(w.said('717'), ['The fix is out in one v5.0.2. Update your addons, and let us know here if you still see the problem.']);
+});
+
+test('a needs-info ping whose label was taken off is dropped by the fix-mode sweep', async () => {
+  const w = world();
+  const i = w.issue(17);
+  i.labels.add('needs-info');
+  const ev = { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } };
+  refuseTagWrite(w); // the post's reopen is refused once
+  await assert.rejects(go(w, 'issues', ev, RUN), /-> 403/);
+  i.labels.delete('needs-info');
+  w.clock += 60 * 60 * 1000;
+  const out = [];
+  await sweepFix(w, out);
+  assert.match(out.join('\n'), /owed message "[\s\S]*" is no longer true/);
+  assert.ok(i.comments.some((c) => /^Dropped \(no longer true\): /.test(c.body)));
+  assert.deepEqual(w.said('717'), []);
+});
+
+test('a post with no status tag, overtaken while it settles, still gets its message once', async () => {
+  const w = world();
+  w.issue(17);
+  w.thread('717', { applied_tags: ['t-retail'] });
+  w.close(17, 'completed', 'aaaaaaa1');
+  let patches = 0;
+  w.hooks.push(['PATCH', /channels\/717$/, async () => {
+    patches++;
+    if (patches === 1) Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
+    if (patches === 2) w.close(17, 'completed', 'aaaaaaa1');
+  }]);
+  // With a run id, the last settle adopts the first settle's note: it must still go out once.
+  await closeRun(w, RUN);
+  assert.equal(patches, 3);
+  assert.equal(w.tagOf('717'), 'Fixed, next update');
+  assert.deepEqual(w.said('717'), ["This is fixed! The fix will be in the next update. We'll post here when that update is out."]);
+});
+
+test('a needs-info ping to a deleted post drops its note', async () => {
+  const w = world();
+  const i = w.issue(17);
+  i.labels.add('needs-info');
+  w.threads.delete('717');
+  await go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } });
+  assert.ok(i.comments.some((c) => /^Dropped \(the Discord post is gone\): /.test(c.body)));
 });

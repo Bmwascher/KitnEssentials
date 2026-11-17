@@ -15,12 +15,14 @@ export function world() {
     threads: new Map(), // id -> { id, parent_id, applied_tags, archived, messages: [] }
     calls: [],
     nextId: 1,
-    tags: [], // [{ name, commit: { sha } }], newest first
+    tags: [], // [{ name, commit: { sha }, annotated }], newest first by commit date
     pageSize: 100, // nodes per GraphQL page
     clock: Date.now(), // created_at and updated_at
     hooks: [], // [method, RegExp, fn(call)] run before a matching call is served
     fail: [], // [method, RegExp, Response | Error, times]
+    runs: new Map(), // workflow run id -> { status, run_attempt, created_at }
   };
+  w.start = w.clock;
 
   w.issue = (n, over = {}) => {
     const thread = over.thread || String(700 + n);
@@ -40,7 +42,8 @@ export function world() {
     return t;
   };
   w.record = (n, body, login = BOT) => {
-    const c = { id: w.nextId++, user: { login }, body, created_at: new Date(w.clock).toISOString() };
+    const id = w.nextId++;
+    const c = { id, user: { login }, body, created_at: new Date(w.clock).toISOString(), html_url: `https://github.com/${w.repo}/issues/${n}#issuecomment-${id}` };
     w.issues.get(n).comments.push(c);
     return c;
   };
@@ -111,7 +114,17 @@ export function world() {
       const status = w.contains.get(`${m[1]}...${decodeURIComponent(m[2])}`) || 'behind';
       return json({ status });
     }],
-    ['GET', /\/repos\/me\/one\/tags\?/, (m, url) => json(slice(w.tags, url))],
+    // A workflow run: one set in `w.runs`, else a finished first attempt
+    // from the world's start.
+    ['GET', /\/repos\/me\/one\/actions\/runs\/(\d+)$/, (m) => json(w.runs.get(m[1])
+      || { id: Number(m[1]), status: 'completed', run_attempt: 1, created_at: new Date(w.start).toISOString() })],
+    ['GET', /\/repos\/me\/one\/issues\/comments\/(\d+)$/, (m) => {
+      for (const i of w.issues.values()) {
+        const c = i.comments.find((x) => x.id === Number(m[1]));
+        if (c) return json(c);
+      }
+      return json({ message: 'nf' }, 404);
+    }],
     ['PATCH', /\/repos\/me\/one\/issues\/comments\/(\d+)$/, (m, url, body) => {
       for (const i of w.issues.values()) {
         const c = i.comments.find((x) => x.id === Number(m[1]));
@@ -121,6 +134,13 @@ export function world() {
     }],
     ['POST', /api\.github\.com\/graphql$/, (m, url, body) => {
       const v = body.variables;
+      if (/refs\(refPrefix/.test(body.query)) {
+        const all = w.tags.map((t) => ({
+          name: t.name,
+          target: t.annotated ? { __typename: 'Tag', oid: `tag-${t.name}`, target: { oid: t.commit.sha } } : { __typename: 'Commit', oid: t.commit.sha },
+        }));
+        return json({ data: { repository: { refs: gqlPage(all, v.after) } } });
+      }
       if (/closedByPullRequestsReferences/.test(body.query)) {
         const all = [...w.prs.values()].filter((p) => p.closes.includes(v.number) && p.state === 'OPEN')
           .map((p) => ({ isDraft: !!p.draft, state: p.state, authorAssociation: p.author_association }));
@@ -150,7 +170,8 @@ export function world() {
       if (m[1] === FORUM.id) return json(FORUM);
       const t = w.threads.get(m[1]);
       if (!t) return json({ message: 'Unknown Channel' }, 404);
-      return json({ id: t.id, guild_id: '900', parent_id: t.parent_id, applied_tags: [...t.applied_tags], thread_metadata: { archived: t.archived } });
+      // The server id differs from the forum id (900), so a link built from the wrong one fails.
+      return json({ id: t.id, guild_id: '800', parent_id: t.parent_id, applied_tags: [...t.applied_tags], thread_metadata: { archived: t.archived } });
     }],
     ['PATCH', /discord\.com\/api\/v10\/channels\/(\d+)$/, (m, url, body) => {
       const t = w.threads.get(m[1]);

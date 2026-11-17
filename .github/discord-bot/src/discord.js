@@ -31,13 +31,16 @@ export function discordClient(token, fetchImpl = fetch) {
     }),
     // Swap the status tag on a forum post, keeping every other tag. A post
     // that already shows it is left alone. `from` is the status it showed.
-    async setStatus(threadId, statusName) {
+    // `beforeMove(from)`, when given, runs once the post is known not to show
+    // the status, before anything is written, even when the forum lacks the tag.
+    async setStatus(threadId, statusName, beforeMove) {
       const thread = await call('GET', `/channels/${threadId}`);
       const forum = await call('GET', `/channels/${thread.parent_id}`);
       const from = currentStatus(thread.applied_tags, forum.available_tags);
       const tags = nextAppliedTags(thread.applied_tags, forum.available_tags, statusName);
-      if (!tags) return { from, skipped: `forum has no "${statusName}" tag` };
       if (from === statusName) return { from, tags };
+      if (beforeMove) await beforeMove(from);
+      if (!tags) return { from, skipped: `forum has no "${statusName}" tag` };
       const patch = { applied_tags: tags };
       if (thread.thread_metadata && thread.thread_metadata.archived) patch.archived = false;
       await call('PATCH', `/channels/${threadId}`, patch);

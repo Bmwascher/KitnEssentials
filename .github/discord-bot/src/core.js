@@ -84,24 +84,113 @@ export function guessFromTags(tagNames) {
 }
 
 // Player text goes into the issue as data: no HTML (so no fake marker comment)
-// and no @mentions that would notify GitHub users. Discord's no-preview link
-// forms, [text](<url>) and <url>, become explicit Markdown links before the
-// escaping, so it does not break them. An explicit destination keeps every
+// and no @mentions that would notify GitHub users; an & that starts an entity
+// is escaped, so a typed &#64; shows as typed and never becomes an @, and a
+// URL's & is left alone so its link still works. A fenced code block keeps
+// what the player typed, since Markdown shows it literally; only `<!--` is
+// broken there, so no marker comment can form. The bot writes both fence lines
+// itself, with more backticks than any run inside the block, so GitHub can
+// end the block only where the bot does, whatever the player typed. All else
+// is text: each backtick, and each run of three or more tildes, is
+// backslashed, so GitHub shows it as typed and opens no code or fence there.
+// A $ is left alone: GitHub draws $a$ as math even when escaped, and keeps
+// what is inside escaped, so it costs only looks.
+// Discord's no-preview link forms, [text](<url>), [text](<url> "title") and
+// <url>, become explicit Markdown links. An explicit destination keeps every
 // character (a bare URL would lose trailing punctuation): Markdown takes a
 // backslashed punctuation mark literally, so every one is backslashed, which
-// leaves the URL itself unchanged. Only @ is percent-encoded, since the
-// mention escaping below would change it. A bare URL's link text gets the
-// same backslashes, so a backtick or bracket in it cannot break the link.
-const URL_IN_BRACKETS = /<(https?:\/\/[^\s<>]+)>/g;
+// leaves the URL itself unchanged. Only @ is percent-encoded, since a mention
+// escape would change it. A bare URL's link text gets the same backslashes,
+// so a backtick or bracket in it cannot break the link. One pass handles
+// each piece once, so a title or a link's text is never rewritten again.
+const BRACKETED_URL = /<(https?:\/\/[^\s<>]+)>/;
+// A link title in any of its three forms, with backslash escapes.
+const TITLE = /"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|\(((?:[^()\\\n]|\\.)*)\)/;
+// A no-preview link's destination, with an optional title.
+const NO_PREVIEW = new RegExp(`\\]\\(${BRACKETED_URL.source}(?:[ \\t]+(?:${TITLE.source}))?[ \\t]*\\)`);
+// One pass over text: a no-preview link, a bracketed URL, a run of backticks
+// or of three or more tildes with the backslashes before it, a < or @, or an
+// & that starts an entity.
+const PROSE = new RegExp([NO_PREVIEW.source, BRACKETED_URL.source, '(\\\\*)(`+|~{3,})', '[<@]|&(?=#?\\w+;)'].join('|'), 'g');
 const PUNCT = /[!-/:-?[-`{-~]/g;
+// A zero-width space, written by code point so the source shows it.
+const ZWSP = String.fromCharCode(0x200b);
 const linkDest = (url) => url.replace(/@/g, '%40').replace(PUNCT, '\\$&');
+const plain = (s) => s.replace(/&(?=#?\w+;)/g, '&amp;').replace(/</g, '&lt;').replace(/@/g, `@${ZWSP}`);
+const escapeEach = (s) => s.replace(/[\s\S]/g, '\\$&');
+// A title keeps its text: the player's escapes are read, then its quote
+// marks, backslashes and backticks are escaped, and its < and @ as anywhere
+// else (a title shows the &lt; entity as <).
+const linkTitle = (t) => plain(t.replace(/\\([!-/:-@[-`{-~])/g, '$1').replace(/[\\"`]/g, '\\$&'));
+
+function neutralizeProse(text) {
+  return text.replace(PROSE, (m, url, t1, t2, t3, bare, slashes, marks) => {
+    if (url) {
+      const title = t1 ?? t2 ?? t3;
+      return title === undefined ? `](${linkDest(url)})` : `](${linkDest(url)} "${linkTitle(title)}")`;
+    }
+    if (bare) return `[${plain(bare.replace(PUNCT, '\\$&'))}](${linkDest(bare)})`;
+    // A mark the player escaped stays as it is; the rest are escaped.
+    if (marks) return slashes + (slashes.length % 2 ? marks[0] + escapeEach(marks.slice(1)) : escapeEach(marks));
+    return m === '&' ? '&amp;' : plain(m);
+  });
+}
+
+// CR and CRLF are line endings to GitHub too; one form keeps lines aligned.
+const lf = (text) => String(text || '').replace(/\r\n?/g, '\n');
+
+// A fence the bot accepts: a line that starts, with no indent, with three or
+// more backticks or tildes, then at most one plain language word. Any other
+// fence-like line is text, its marks escaped, so GitHub opens nothing there.
+const FENCE_OPEN = /^(`{3,}|~{3,})[ \t]*([A-Za-z0-9+#.-]*)[ \t]*$/;
+// Language words GitHub draws as a diagram, formula or map instead of
+// showing the code; the block keeps its code and loses the word.
+const DRAWN = new Set(['mermaid', 'math', 'geojson', 'topojson', 'stl']);
+// GitHub reads at most this many backticks of a fence line, so a block that
+// holds a run this long cannot be outrun and stays text.
+const MAX_FENCE = 255;
+const longestRun = (lines) => Math.max(0, ...lines.flatMap((l) => (l.match(/`+/g) || []).map((r) => r.length)));
 
 export function neutralize(text) {
-  return String(text || '')
-    .replace(/\]\(<(https?:\/\/[^\s<>]+)>\)/g, (m, url) => `](${linkDest(url)})`)
-    .replace(URL_IN_BRACKETS, (m, url) => `[${url.replace(PUNCT, '\\$&')}](${linkDest(url)})`)
-    .replace(/</g, '&lt;').replace(/@/g, '@​');
+  const lines = lf(text).split('\n');
+  const out = [];
+  let prose = [];
+  const flush = () => {
+    if (prose.length) out.push(neutralizeProse(prose.join('\n')));
+    prose = [];
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const open = FENCE_OPEN.exec(lines[i]);
+    if (!open) {
+      prose.push(lines[i]);
+      continue;
+    }
+    // The block ends at a line of up to three spaces, then the same mark at
+    // least as long, then only spaces or tabs (CommonMark), or at the end of
+    // the text. Where it ends here only decides how much shows as code: the
+    // fence lines written below leave GitHub no other place to end it.
+    const close = new RegExp('^ {0,3}' + open[1][0] + '{' + open[1].length + ',}[ \\t]*$');
+    let end = i + 1;
+    while (end < lines.length && !close.test(lines[end])) end++;
+    const body = lines.slice(i + 1, end);
+    const longest = longestRun(body);
+    if (longest >= MAX_FENCE) {
+      prose.push(...lines.slice(i, end + 1));
+    } else {
+      flush();
+      const fence = '`'.repeat(Math.max(3, longest + 1));
+      const word = DRAWN.has(open[2].toLowerCase()) ? '' : open[2];
+      out.push([fence + word, ...body.map((l) => l.replace(/<!--/g, `<${ZWSP}!--`)), fence].join('\n'));
+    }
+    i = end;
+  }
+  flush();
+  return out.join('\n');
 }
+
+// A name sits inside a line of the bot's own, where no code block can form,
+// so all of it is text.
+const neutralizeInline = (text) => neutralizeProse(lf(text));
 
 function quote(text) {
   const t = neutralize(text).trim() || '(no text, see the Discord post)';
@@ -123,12 +212,12 @@ export function parseMarker(body) {
 
 export function buildBody({ content, reporterName, threadUrl, client, attachments, threadId, reporterId, sentBy, templateLine }) {
   const lines = ['## Report', '', quote(content), ''];
-  lines.push(`Reported by **${neutralize(reporterName)}** in [the Discord post](${threadUrl}) · client ${client}`);
+  lines.push(`Reported by **${neutralizeInline(reporterName)}** in [the Discord post](${threadUrl}) · client ${client}`);
   if (attachments && attachments.length) {
     lines.push('', `${attachments.length} attachment(s) on the Discord post (open the post to see them; Discord image links expire).`);
   }
   if (templateLine) lines.push('', `Template check (advisory): ${templateLine}`);
-  if (sentBy) lines.push('', `_Sent from Discord by ${neutralize(sentBy)}._`);
+  if (sentBy) lines.push('', `_Sent from Discord by ${neutralizeInline(sentBy)}._`);
   lines.push('', marker({ threadId, reporterId }));
   return lines.join('\n');
 }
@@ -173,6 +262,15 @@ export function repoDisplay(repoFullName, tag) {
   return `${name} ${v}`;
 }
 
+// Which tags count as releases. Each repo sets its own pattern
+// (RELEASE_TAG_PATTERN); the default takes plain version numbers, with or
+// without a v. A pre-release word never counts, whatever the pattern says.
+export const DEFAULT_RELEASE_PATTERN = '^v?\\d+(\\.\\d+)*$';
+const PRERELEASE = /(^|[^a-z])(alpha|beta|rc|pre)([^a-z]|$)/i;
+export function isRelease(name, pattern) {
+  return pattern.test(name) && !PRERELEASE.test(name);
+}
+
 export const MESSAGES = {
   tracked: (key, n) => `Thanks! This is now tracked as ${key} #${n}. We'll post here when a fix is being tested and when it ships.`,
   inProgress: () => "Good news: a fix for this is being worked on and tested. We'll post here when it's done.",
@@ -198,8 +296,16 @@ export function timedFetch(fetchImpl, ms, deadline = Infinity) {
   };
 }
 
+// A Discord message link (right-click the message > Copy Message Link) -> the
+// channel and the message it names, or null.
+function messageLink(raw) {
+  const m = /^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/channels\/\d+\/(\d+)\/(\d+)\/?$/.exec(String(raw || '').trim());
+  return m ? { channelId: m[1], messageId: m[2] } : null;
+}
+
 // FORUMS is JSON keyed by forum channel id; each value may name the client and
-// type every post there has: {"123":{"client":"Retail","type":"Bug"}}. A value
+// type every post there has, and the link of the forum's pinned template
+// message: {"123":{"client":"Retail","type":"Bug","template":"https://discord.com/channels/1/2/3"}}. A value
 // of {} means "guess from the post's tags". The older FORUM_CHANNEL_IDS (a
 // comma list) still works and guesses for every forum. Broken JSON gives no
 // forums, so the bot works nowhere rather than everywhere.
@@ -212,12 +318,16 @@ export function parseForums(env) {
     for (const [id, v] of Object.entries(raw)) {
       if (!/^\d+$/.test(id)) continue;
       const o = v && typeof v === 'object' ? v : {};
-      out[id] = { client: normClient(o.client), type: normType(o.type) };
+      const template = messageLink(o.template);
+      // A template value that is not a message link is flagged, not dropped
+      // quietly, so the moderator's reply can say the defaults were checked.
+      const badTemplate = !template && String(o.template ?? '').trim() !== '';
+      out[id] = { client: normClient(o.client), type: normType(o.type), template, badTemplate };
     }
     return out;
   }
   for (const id of String(env.FORUM_CHANNEL_IDS || '').split(',').map((s) => s.trim()).filter(Boolean)) {
-    out[id] = { client: null, type: null };
+    out[id] = { client: null, type: null, template: null, badTemplate: false };
   }
   return out;
 }
@@ -228,16 +338,29 @@ export function parseRoleIds(raw) {
   return String(raw || '').split(',').map((s) => s.trim()).filter((s) => /^\d+$/.test(s));
 }
 
+// The custom id of the thread button ("send:<post>") and of the form
+// ("gh:<post>:<message>[:<button message>]"). Their parts go into API paths,
+// so they are taken only when every part is digits.
+export const SEND_BUTTON = 'send';
+export function parseCustomId(id) {
+  const s = String(id || '');
+  let m = new RegExp(`^${SEND_BUTTON}:(\\d+)$`).exec(s);
+  if (m) return { kind: 'send', threadId: m[1] };
+  m = /^gh:(\d+):(\d+)(?::(\d+))?$/.exec(s);
+  if (m) return { kind: 'form', threadId: m[1], messageId: m[2], greetingId: m[3] || '' };
+  return null;
+}
+
 // A Discord id's creation time in epoch ms.
 export function snowflakeMs(id) {
   return Number(BigInt(id) >> 22n) + 1420070400000;
 }
 
-// The template fields each kind of post should fill. TEMPLATES (JSON, same
-// shape) replaces these.
+// The template fields each kind of post should fill, as the published help
+// templates label them. TEMPLATES (JSON, same shape) replaces these.
 export const DEFAULT_TEMPLATES = {
-  Bug: ['Version', 'Issue Details', 'Steps to Reproduce', 'Supporting Screenshots'],
-  Feature: ['Category', 'Summary', 'Detailed Description'],
+  Bug: ['Addon version', 'UI version', 'Updated with the game closed', 'What happened', 'What you expected', 'How to make it happen again', 'Screenshots'],
+  Feature: ['Area', 'My idea or feedback', 'Why it matters', 'Screenshots'],
 };
 
 export function parseTemplates(raw) {
@@ -252,7 +375,9 @@ export function parseTemplates(raw) {
 }
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const isHint = (s) => /^\*?\s*\(.*\)\s*\*?$/.test(s) || /^\d+\.\s*$/.test(s);
+// Not an answer: a hint in ( ), a bare list number, or code-block marks (a
+// template pasted with its ``` lines).
+const isHint = (s) => /^\*?\s*\(.*\)\s*\*?$/.test(s) || /^\d+\.\s*$/.test(s) || /^`+\w*$/.test(s);
 
 // Advisory check of a post against its template: for each field, "present"
 // (labeled and answered), "missing" (labeled, left empty) or "unsure" (no
@@ -263,9 +388,16 @@ export function templateCheck(content, fields, attachments = 0) {
   const lines = text.split('\n');
   // A label may carry words before the field name ("Addon Version:").
   const labels = fields.map((f) => new RegExp(`^\\W*(?:[a-z][\\w ]*\\s)?${escapeRe(f)}[^:\\n]*:\\**`, 'i'));
+  // A line that two fields match ("UI version:" for "Version" and "UI
+  // version") belongs to the field with the longer name.
+  const owner = (l) => {
+    let best = -1;
+    labels.forEach((re, j) => { if (re.test(l) && (best < 0 || fields[j].length > fields[best].length)) best = j; });
+    return best;
+  };
   return fields.map((field, k) => {
     if (/screenshot|image|visual/i.test(field) && attachments > 0) return { field, state: 'present' };
-    const at = lines.findIndex((l) => labels[k].test(l.trim()));
+    const at = lines.findIndex((l) => owner(l.trim()) === k);
     if (at < 0) return { field, state: 'unsure' };
     const rest = [lines[at].trim().replace(labels[k], '').trim()];
     for (let i = at + 1; i < lines.length; i++) {
@@ -276,6 +408,27 @@ export function templateCheck(content, fields, attachments = 0) {
     const answer = rest.filter((l) => l && !isHint(l));
     return { field, state: answer.length ? 'present' : 'missing' };
   });
+}
+
+// A line holding only a label: one to eight words of letters, digits, _, ',
+// / and -, then a colon and nothing after, with optional * bold marks. Any
+// other punctuation, such as "Screenshots (optional):", makes it no label.
+const LABEL_ONLY = /^\**\s*[A-Za-z0-9][\w'/-]*(?:\s+[\w'/-]+){0,7}\s*\**\s*:\s*\**$/;
+
+// The field labels of a template message: the label-only lines of its first
+// code block, or of the whole message when it has none. Hint lines in ( ) are
+// not labels. An empty list means the message holds no template.
+export function templateLabels(content) {
+  const text = String(content || '');
+  const block = /```[^\n]*\n([\s\S]*?)```/.exec(text);
+  const labels = [];
+  for (const line of (block ? block[1] : text).split('\n')) {
+    const l = line.trim();
+    if (!LABEL_ONLY.test(l)) continue;
+    const label = l.replace(/[*:]/g, '').trim();
+    if (!labels.some((x) => x.toLowerCase() === label.toLowerCase())) labels.push(label);
+  }
+  return labels;
 }
 
 export function templateSummary(check) {

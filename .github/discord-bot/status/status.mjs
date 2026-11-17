@@ -13,7 +13,7 @@
 // everything both wrote. The daily sweep repairs what a failed call left.
 import { readFileSync, appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { STATUS, LABELS, MESSAGES, parseMarker, timedFetch } from '../src/core.js';
+import { STATUS, LABELS, MESSAGES, parseMarker, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN } from '../src/core.js';
 import { discordClient } from '../src/discord.js';
 import { githubClient } from '../src/github.js';
 
@@ -34,16 +34,27 @@ const BOT_LOGIN = 'github-actions[bot]';
 const RELEASE = [LABELS.pendingRelease, LABELS.shipped];
 // Lists are followed this many pages (100 each) at most.
 const MAX_PAGES = 10;
-// A message note older than this that was never marked sent is listed.
+// A note with no run to ask about (the older `Told the player` form, or one
+// from a run without an id) is judged once it is this old.
 const OWED_MS = 10 * 60 * 1000;
+// GitHub allows a run to be re-run for this long after its first attempt,
+// and this many times.
+const RERUN_MS = 30 * 24 * 60 * 60 * 1000;
+const MAX_RERUNS = 50;
 
 const shipRecord = (tag, sha) => `Shipped in ${tag}.\n\n<!-- discord-shipped-in: ${tag} fixes: ${sha} -->`;
-// Written just before a message to the player. Of two runs about to send
-// the same message, only the one whose note came first sends it. The note is
-// marked sent after the send, or dropped when the message went stale first;
-// the sweep lists a note left neither.
-const toldRecord = (key, text, status) => `Told the player: ${text}\n\n<!-- discord-told: ${key} -->`
-  + (status ? `\n<!-- discord-told-status: ${status} -->` : '');
+// A note for each message to the player, written before the post's tag
+// moves, so a move that fails leaves the message owed. Of two runs about to
+// send the same message, only the one whose note came first sends it. The
+// first line says what became of the message; the hidden lines name it, the
+// status it announces and the run that wrote it, so a re-run of that run can
+// still send it.
+const noteRecord = (key, text, status, runId) => `Notification attempted: ${text}\n\n<!-- discord-told: ${key} -->`
+  + (status ? `\n<!-- discord-told-status: ${status} -->` : '')
+  + (runId ? `\n<!-- discord-told-run: ${runId} -->` : '');
+// A note's message, under any of its first lines (`Told the player` is the older form).
+const NOTE_TEXT = /^(?:Told the player|Notification attempted|Delivery confirmed|Dropped \([^)\n]*\)|Unconfirmed \([^)\n]*\)): ([\s\S]*?)\n\n<!--/;
+const UNCONFIRMED = 'Unconfirmed (the send failed; the player may not have it)';
 
 // The release labels an issue should carry.
 export function wantedLabels(st) {
@@ -66,13 +77,19 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // A scheduled run's payload names no repository; Actions sets GITHUB_REPOSITORY.
   const repo = (payload.repository && payload.repository.full_name) || env.GITHUB_REPOSITORY;
   const [owner, name] = repo.split('/');
-  const pattern = new RegExp(env.RELEASE_TAG_PATTERN || '^v\\d');
+  const pattern = new RegExp(env.RELEASE_TAG_PATTERN || DEFAULT_RELEASE_PATTERN);
+  // A re-run of a workflow run keeps its id, so it can still send what the
+  // run owes.
+  const runId = env.GITHUB_RUN_ID || null;
+  const attempt = Number(env.GITHUB_RUN_ATTEMPT) || 1;
+  const runUrl = (id) => `${env.GITHUB_SERVER_URL || 'https://github.com'}/${repo}/actions/runs/${id}`;
   const f = timedFetch(fetchImpl, CALL_MS);
   const gh = githubClient(env.GITHUB_TOKEN, f);
   const discord = discordClient(env.DISCORD_BOT_TOKEN, f);
   const done = [];
   const failed = [];
   const report = [];
+  if (runId) log(`workflow run ${runId}, attempt ${attempt}`);
 
   async function graphql(query, variables) {
     const r = await gh.call('POST', '/graphql', { query, variables });
@@ -128,7 +145,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   }
 
   // The workflow's records on the issue, from every page: releases that
-  // shipped a fix, and messages already told.
+  // shipped a fix, and the notes of messages to the player.
   async function recordsOf(n) {
     const shipped = [];
     const told = [];
@@ -136,16 +153,25 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       const batch = await gh.call('GET', `/repos/${repo}/issues/${n}/comments?per_page=100&page=${page}`);
       for (const c of batch) {
         if (!c.user || c.user.login !== BOT_LOGIN) continue;
-        const sh = /<!--\s*discord-shipped-in:\s*(\S+)\s+fixes:\s*([0-9a-f,]*)\s*-->/.exec(c.body || '');
+        // A body edited in the browser comes back with CRLF line ends.
+        const body = (c.body || '').replace(/\r\n?/g, '\n');
+        const sh = /<!--\s*discord-shipped-in:\s*(\S+)\s+fixes:\s*([0-9a-f,]*)\s*-->/.exec(body);
         if (sh) shipped.push({ tag: sh[1], fixes: sh[2].split(',').filter(Boolean) });
-        const tl = /<!--\s*discord-told:\s*(\S+)\s*-->/.exec(c.body || '');
+        const tl = /<!--\s*discord-told:\s*(\S+)\s*-->/.exec(body);
         if (tl) {
-          const body = c.body || '';
+          // The last outcome mark wins: a moderator may mark a listed note by hand.
+          const marks = [...body.matchAll(/<!--\s*discord-(sent|dropped|unconfirmed|sending)\s*-->/g)];
           told.push({
-            key: tl[1], id: c.id, body,
-            text: (/^Told the player: ([\s\S]*?)\n\n<!--/.exec(body) || [])[1] || '',
+            key: tl[1], id: c.id, url: c.html_url || '', body,
+            text: (NOTE_TEXT.exec(body) || [])[1] || '',
             status: (/<!--\s*discord-told-status:\s*(.+?)\s*-->/.exec(body) || [])[1] || null,
-            settled: /<!--\s*discord-(sent|dropped)\s*-->/.test(body),
+            run: (/<!--\s*discord-told-run:\s*(\S+)\s*-->/.exec(body) || [])[1] || null,
+            state: marks.length ? marks[marks.length - 1][1] : 'attempted',
+            // The older `Told the player` form, marked sent only after its send.
+            legacy: /^Told the player: /.test(body),
+            // Dropped by the bot before any send, and marked by no one else:
+            // its message was never sent and can be claimed again.
+            released: /^Dropped \(/.test(body) && marks.length === 1 && marks[0][1] === 'dropped',
             at: Date.parse(c.created_at) || 0,
           });
         }
@@ -210,38 +236,62 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     return r.status === 'ahead' || r.status === 'identical';
   }
 
-  // A fix whose ship record is missing (a write that failed, or an issue
-  // shipped before these records existed): the first release tag on the
-  // first page that holds it. Writes the record when `write` is set.
-  async function recoverShip(n, sha, write) {
-    for (let page = 1; page <= MAX_PAGES; page++) {
-      const batch = await gh.call('GET', `/repos/${repo}/tags?per_page=100&page=${page}`);
-      for (const t of batch.filter((x) => pattern.test(x.name))) {
-        if (await tagContains(sha, t.commit && t.commit.sha ? t.commit.sha : t.name)) {
-          if (write) await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body: shipRecord(t.name, sha) });
-          return t.name;
-        }
+  // The release that first shipped a fix with no ship record (a close that
+  // came after its release run read its lists, a record write that failed, an
+  // issue shipped before these records existed). Release tags lie on one line
+  // of history, so walking them newest first, by the tagged commit's date,
+  // the first one that does not hold the fix ends the walk, and the oldest
+  // that held it is the release. Writes the record when `write` is set.
+  async function releaseHolding(n, sha, write) {
+    let held = null;
+    let after = null;
+    const finish = async () => {
+      if (held && write) await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body: shipRecord(held, sha) });
+      return held;
+    };
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const data = await graphql(`query($owner: String!, $name: String!, $after: String) {
+        repository(owner: $owner, name: $name) {
+          refs(refPrefix: "refs/tags/", first: 100, after: $after, orderBy: {field: TAG_COMMIT_DATE, direction: DESC}) {
+            pageInfo { hasNextPage endCursor }
+            nodes { name target { __typename oid ... on Tag { target { oid } } } } } } }`, { owner, name, after });
+      const refs = data.repository.refs;
+      for (const ref of refs.nodes) {
+        if (!isRelease(ref.name, pattern)) continue;
+        const commit = ref.target.__typename === 'Tag' ? ref.target.target.oid : ref.target.oid;
+        if (!(await tagContains(sha, commit))) return finish();
+        held = ref.name;
       }
-      if (batch.length < 100) return null;
+      if (!refs.pageInfo || !refs.pageInfo.hasNextPage) return finish();
+      after = refs.pageInfo.endCursor;
     }
     // A release may sit further back: fail rather than take "not shipped" as the answer.
     throw new Error(`#${n}: more than ${MAX_PAGES * 100} tags, too many to read`);
+  }
+
+  // The issue's state, after checking a fix with no ship record against the
+  // releases: its close may have come after the release run read its lists,
+  // a record write may have failed, or a release may have been tagged while
+  // this run worked. Checked afresh on every read, so no earlier answer goes
+  // stale.
+  async function releasedState(n) {
+    const st = await stateOf(n);
+    if (!st.fix || st.shippedIn) return st;
+    if (await releaseHolding(n, st.fix, true)) return stateOf(n);
+    return st;
   }
 
   // Write the release labels the state gives, then read again; repeat while
   // another run's write changed the answer in between.
   async function settleLabels(n) {
     for (let i = 0; i < SETTLE_TRIES; i++) {
-      let st = await stateOf(n);
-      // An issue labeled shipped with no record of it is checked against the
-      // release tags before it is turned back to pending.
-      if (st.fix && !st.shippedIn && hasLabel(st.issue, LABELS.shipped) && (await recoverShip(n, st.fix, true))) {
-        st = await stateOf(n);
-      }
+      const st = await releasedState(n);
       const want = wantedLabels(st);
       for (const l of want) if (!hasLabel(st.issue, l)) await gh.addLabels(repo, n, [l]);
       for (const l of RELEASE) if (!want.includes(l) && hasLabel(st.issue, l)) await gh.removeLabel(repo, n, l);
-      const now = await stateOf(n);
+      // Checked against the releases again: one may have been tagged while
+      // the labels were written.
+      const now = await releasedState(n);
       const again = wantedLabels(now);
       const has = RELEASE.filter((l) => hasLabel(now.issue, l));
       if (again.length === has.length && again.every((l) => has.includes(l))) return now;
@@ -249,85 +299,160 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     throw new Error(`#${n}: release labels did not settle after ${SETTLE_TRIES} tries`);
   }
 
-  // Set the post's tag to what the issue says, then read again; repeat while
-  // the answer moved. Returns where the post started and ended.
-  async function settlePost(n) {
-    let from = null;
-    for (let i = 0; i < SETTLE_TRIES; i++) {
-      const st = await stateOf(n);
-      if (!eligible(st.issue)) return null;
-      const threadId = parseMarker(st.issue.body).threadId;
-      const want = wantedStatus(st, st.issue.state === 'open' ? await prsFor(n) : []);
-      let r;
-      try {
-        r = await discord.setStatus(threadId, want);
-      } catch (e) {
-        // A deleted post can never be told; its issue still moves.
-        if (!/-> 404 /.test(e.message)) throw e;
-        log(`#${n}: Discord post is gone (${e.message.slice(0, 120)})`);
-        return null;
-      }
-      if (from === null) from = r.from;
-      if (r.skipped) {
-        // The forum has no such tag: the post did not move.
-        log(`#${n}: ${r.skipped}`);
-        return { n, threadId, from, to: from, st };
-      }
-      const after = await stateOf(n);
-      const again = wantedStatus(after, after.issue.state === 'open' ? await prsFor(n) : []);
-      if (again === want) return { n, threadId, from, to: want, st: after };
+  // Rewrite a note's first line to say what became of its message, and mark it.
+  async function settleNote(note, outcome, reason) {
+    const head = outcome === 'sent' ? 'Delivery confirmed' : outcome === 'unconfirmed' ? UNCONFIRMED : `Dropped (${reason})`;
+    const hidden = note.body.slice(note.body.indexOf('\n\n<!--'));
+    await gh.call('PATCH', `/repos/${repo}/issues/comments/${note.id}`, { body: `${head}: ${note.text}${hidden}\n<!-- discord-${outcome} -->` });
+  }
+
+  // A note's body as it is now, or null once anything marked it (a re-run, a
+  // sweep, a moderator) or it was deleted. A note is read again just before it
+  // is sent or dropped, so no write lands on a newer outcome.
+  async function unmarked(note) {
+    let cur;
+    try {
+      cur = await gh.call('GET', `/repos/${repo}/issues/comments/${note.id}`);
+    } catch (e) {
+      if (/-> 404 /.test(e.message)) return null;
+      throw e;
     }
-    throw new Error(`#${n}: post status did not settle after ${SETTLE_TRIES} tries`);
+    const body = ((cur && cur.body) || '').replace(/\r\n?/g, '\n');
+    return /<!--\s*discord-(sent|dropped|unconfirmed|sending)\s*-->/.test(body) ? null : body;
   }
 
-  async function sync(n) {
-    await settleLabels(n);
-    return settlePost(n);
+  async function dropNote(note, reason) {
+    const body = await unmarked(note);
+    if (body === null) return;
+    note.body = body;
+    await settleNote(note, 'dropped', reason);
   }
 
-  // Write a message note and return it when this run's note is the first
-  // with that key; otherwise another run owns the message.
-  async function claim(n, key, text, status) {
-    const body = toldRecord(key, text, status);
+  // The note that owns a message. A note the bot dropped before any send, and
+  // no one marked since, gives it up: when the same news comes true again, a
+  // new note is written for it. A note a moderator marked keeps it for good.
+  const owningNote = (told, key) => told.find((t) => t.key === key && !t.released);
+
+  // The note for a message. A note already made for this key owns it: this
+  // run takes it over only with `adopt`, when it is this run's own note from
+  // an earlier attempt and was never sent (a re-run). Otherwise this run
+  // writes a note, and of two runs writing at once the later drops its own.
+  async function claim(n, key, text, status, adopt = false) {
+    const existing = owningNote((await recordsOf(n)).told, key);
+    if (existing) return adopt && runId && existing.run === runId && existing.state === 'attempted' ? existing : null;
+    const body = noteRecord(key, text, status, runId);
     const mine = await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body });
-    const first = (await recordsOf(n)).told.find((t) => t.key === key);
-    if (first && mine && first.id !== mine.id) return null;
-    return { id: mine && mine.id, body };
+    const note = { id: mine && mine.id, body, text };
+    const first = owningNote((await recordsOf(n)).told, key);
+    if (first && mine && first.id !== mine.id) {
+      await settleNote(note, 'dropped', 'another run claimed it');
+      return null;
+    }
+    return note;
   }
 
-  const settleNote = (note, how) => gh.call('PATCH', `/repos/${repo}/issues/comments/${note.id}`, { body: `${note.body}\n<!-- discord-${how} -->` });
-
-  // Send a claimed message, then mark its note sent. A failed send leaves the
-  // note open, for the sweep.
+  // Send a claimed message, then mark its note sent. The note is marked as
+  // sending first: a run never takes over a note so marked, so a send that
+  // went out before its sent mark failed is never sent again. A failed send
+  // marks it unconfirmed, for the sweep, and fails the run.
   async function deliver(n, threadId, note, text, status, ping = []) {
+    const body = await unmarked(note);
+    if (body === null) {
+      log(`#${n}: the note for "${text.slice(0, 60)}" was marked meanwhile; not sent`);
+      return;
+    }
+    note.body = `${body}\n<!-- discord-sending -->`;
+    await gh.call('PATCH', `/repos/${repo}/issues/comments/${note.id}`, { body: note.body });
     try {
       await discord.send(threadId, text, ping);
     } catch (e) {
-      if (!/-> 404 /.test(e.message)) throw e;
-      log(`#${n}: Discord post is gone; message dropped`);
-      await settleNote(note, 'dropped');
-      return;
+      if (/-> 404 /.test(e.message)) {
+        log(`#${n}: Discord post is gone; message dropped`);
+        await settleNote(note, 'dropped', 'the Discord post is gone');
+        return;
+      }
+      await settleNote(note, 'unconfirmed').catch((err) => log(`#${n}: could not mark the note unconfirmed: ${err.message}`));
+      throw e;
     }
     await settleNote(note, 'sent');
     done.push({ issue: n, thread: threadId, status, message: text });
   }
 
-  // Tell the player, once, when the post ended on `status`. The key names
-  // the change; a rerun or an overlapping run with the same key stays quiet.
-  async function tell(moved, status, key, text) {
-    if (!moved || moved.to !== status || moved.from === status) return;
-    const note = await claim(moved.n, key, text, status);
-    if (!note) return;
-    // Another run may have moved the issue on since this one settled it; that
-    // run tells its own news. The fact must still hold, not just the status.
-    const st = await stateOf(moved.n);
+  // Set the post's tag to what the issue says, then read again; repeat while
+  // the answer moved. With `tell`, each move's message is claimed just before
+  // the tag is written, so a move that fails leaves the message owed. Returns
+  // the post and the notes claimed on the way.
+  async function settlePost(n, tell) {
+    const notes = [];
+    for (let i = 0; i < SETTLE_TRIES; i++) {
+      const st = await releasedState(n);
+      if (!eligible(st.issue)) {
+        for (const c of notes) await dropNote(c.note, 'no longer true');
+        return null;
+      }
+      const threadId = parseMarker(st.issue.body).threadId;
+      const want = wantedStatus(st, st.issue.state === 'open' ? await prsFor(n) : []);
+      const beforeMove = tell ? async () => {
+        const m = await messageFor(n, st, want);
+        const note = m && (await claim(n, m.key, m.text, want, true));
+        // A later settle can adopt this run's own note from an earlier one:
+        // keep each note once, so it is sent once.
+        if (note && !notes.some((c) => c.note.id === note.id)) notes.push({ note, key: m.key, text: m.text, status: want });
+      } : undefined;
+      let r;
+      try {
+        r = await discord.setStatus(threadId, want, beforeMove);
+      } catch (e) {
+        // A deleted post can never be told; its issue still moves.
+        if (!/-> 404 /.test(e.message)) throw e;
+        log(`#${n}: Discord post is gone (${e.message.slice(0, 120)})`);
+        for (const c of notes) await dropNote(c.note, 'the Discord post is gone');
+        return null;
+      }
+      if (r.skipped) {
+        // The forum has no such tag: the post did not move, and this move's
+        // message stays owed until a re-run once the tag exists.
+        log(`#${n}: ${r.skipped}`);
+        return { n, threadId, st, notes: notes.filter((c) => c.status !== want) };
+      }
+      if (tell && runId && r.from === want) {
+        // The post already shows the status: another run or a sweep moved it
+        // after an earlier attempt of this run wrote its note and stopped. A
+        // re-run still sends that note, its own and never marked as sending.
+        const m = await messageFor(n, st, want);
+        const own = m && owningNote((await recordsOf(n)).told, m.key);
+        if (own && own.run === runId && own.state === 'attempted' && !notes.some((c) => c.note.id === own.id)) {
+          notes.push({ note: own, key: m.key, text: m.text, status: want });
+        }
+      }
+      const after = await releasedState(n);
+      const again = wantedStatus(after, after.issue.state === 'open' ? await prsFor(n) : []);
+      if (again === want) return { n, threadId, st: after, notes };
+    }
+    throw new Error(`#${n}: post status did not settle after ${SETTLE_TRIES} tries`);
+  }
+
+  // Send a claimed message when the fact it tells still holds. Another run
+  // may have moved the issue on since; that run tells its own news.
+  async function tellNote(moved, c) {
+    const st = await releasedState(moved.n);
     const nowStatus = wantedStatus(st, st.issue.state === 'open' ? await prsFor(moved.n) : []);
-    const still = nowStatus === status && (await messageFor(moved.n, st, status));
-    if (!still || still.key !== key) {
-      await settleNote(note, 'dropped');
+    const still = nowStatus === c.status && (await messageFor(moved.n, st, c.status));
+    if (!still || still.key !== c.key) {
+      await dropNote(c.note, 'no longer true');
       return;
     }
-    await deliver(moved.n, moved.threadId, note, text, status);
+    await deliver(moved.n, moved.threadId, c.note, c.text, c.status);
+  }
+
+  // Labels, then the post, then the messages claimed on the way. The sweep
+  // syncs with `tell` off: it never messages anyone.
+  async function sync(n, tell = true) {
+    handled.add(n);
+    await settleLabels(n);
+    const moved = await settlePost(n, tell);
+    if (moved) for (const c of moved.notes) await tellNote(moved, c);
+    return moved;
   }
 
   // The Discord post of the issue this one was closed as a duplicate of, when
@@ -379,14 +504,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     return null;
   }
 
-  // Tell the player about the status a run moved the post to, whichever run
-  // it is. Each key comes from the issue's state, so every run that sees the
-  // same change claims the same note and only one sends.
-  async function announce(moved) {
-    if (!moved || moved.to === moved.from) return;
-    const m = await messageFor(moved.n, moved.st, moved.to);
-    if (m) await tell(moved, moved.to, m.key, m.text);
-  }
+  // The issues this run synced or pinged; a re-run's owed scan skips only
+  // these, so an issue the event passed over is still scanned.
+  const handled = new Set();
 
   // One issue's failure is logged and the rest still run; the job fails at the end.
   async function each(numbers, fn) {
@@ -398,6 +518,26 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         failed.push(n);
       }
     }
+  }
+
+  // A workflow run's state, for the sweep: whether it is still going, and
+  // whether GitHub still lets it be re-run (30 days from its first attempt,
+  // 50 re-runs at most). A deleted run is neither.
+  const runs = new Map();
+  function runInfo(id) {
+    if (!runs.has(id)) {
+      runs.set(id, gh.call('GET', `/repos/${repo}/actions/runs/${id}`).then(
+        (r) => ({
+          active: r.status !== 'completed',
+          open: now() - Date.parse(r.created_at) < RERUN_MS && (r.run_attempt || 1) <= MAX_RERUNS,
+        }),
+        (e) => {
+          if (/-> 404 /.test(e.message)) return { active: false, open: false };
+          throw e;
+        },
+      ));
+    }
+    return runs.get(id);
   }
 
   async function botIssue(n) {
@@ -412,7 +552,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     await each(numbers, async (n) => {
       const issue = await botIssue(n);
       if (!issue || issue.state !== 'open') return;
-      await announce(await sync(n));
+      await sync(n);
     });
   } else if (eventName === 'push' && String(payload.ref).startsWith('refs/tags/')) {
     const tag = payload.ref.slice('refs/tags/'.length);
@@ -420,7 +560,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const target = (payload.head_commit && payload.head_commit.id) || payload.after || tag;
     if (payload.deleted || payload.created === false) {
       log(`tag ${tag} was deleted or moved, not created: nothing to do`);
-    } else if (!pattern.test(tag)) {
+    } else if (!isRelease(tag, pattern)) {
       log(`tag ${tag} is not a release tag, nothing to do`);
     } else {
       const since = new Date(now() - RECENT_MS).toISOString();
@@ -432,13 +572,15 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           const st = await stateOf(n);
           if (st.fix && !st.shippedIn) {
             if (await tagContains(st.fix, target)) {
-              await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body: shipRecord(tag, st.fix) });
+              // The oldest release holding the fix is named, as on every other
+              // path; this tag when the tag list does not show it yet.
+              const held = (await releaseHolding(n, st.fix, false)) || tag;
+              await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body: shipRecord(held, st.fix) });
             } else {
               log(`#${n}: fix ${st.fix.slice(0, 7)} is not in ${tag}, still pending`);
             }
           }
           const moved = await sync(n);
-          await announce(moved);
           // A new fix that closed the issue meanwhile gets its own check.
           const after = moved ? moved.st : await stateOf(n);
           if (!after.fix || after.fix === st.fix || after.shippedIn) return;
@@ -453,20 +595,28 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       const m = issue && hasLabel(issue, LABELS.needsInfo) && parseMarker(issue.body);
       if (m) {
         const text = MESSAGES.needsInfo(m.reporterId);
-        // One ping per labeling: a rerun of the event finds the note.
-        const note = await claim(n, `needs-info-${String(payload.issue.updated_at || 'once').replace(/\W/g, '')}`, text, null);
+        // One ping per labeling: a rerun of the event finds the note, and a
+        // re-run of this run takes over its own note only if it was never
+        // marked as sending, so the ping goes out at most once.
+        handled.add(n);
+        const note = await claim(n, `needs-info-${String(payload.issue.updated_at || 'once').replace(/\W/g, '')}`, text, null, true);
         if (note && !hasLabel(await gh.getIssue(repo, n), LABELS.needsInfo)) {
-          await settleNote(note, 'dropped');
+          await dropNote(note, 'no longer true');
         } else if (note) {
           // A locked post does not unarchive on a new message; reopen it first.
-          await discord.unarchive(m.threadId);
-          await deliver(n, m.threadId, note, text, null, m.reporterId ? [m.reporterId] : []);
+          // A deleted post fails here, before the send, and drops the note.
+          const gone = await discord.unarchive(m.threadId).then(() => false, (e) => {
+            if (/-> 404 /.test(e.message)) return true;
+            throw e;
+          });
+          if (gone) await dropNote(note, 'the Discord post is gone');
+          else await deliver(n, m.threadId, note, text, null, m.reporterId ? [m.reporterId] : []);
         }
       }
     } else if (['closed', 'reopened'].includes(payload.action)) {
       await each([n], async () => {
         if (!(await botIssue(n))) return;
-        await announce(await sync(n));
+        await sync(n);
       });
     }
   } else if (eventName === 'schedule' || eventName === 'workflow_dispatch') {
@@ -478,10 +628,10 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     await each(issues.map((i) => i.number), async (n) => {
       let st = await stateOf(n);
       const parts = [];
-      // Only an issue labeled shipped can have lost its record; a pending fix
-      // waits for the next release tag.
-      if (st.fix && !st.shippedIn && hasLabel(st.issue, LABELS.shipped)) {
-        const held = await recoverShip(n, st.fix, fix);
+      // A fix with no ship record may already be in a release; a fix in none
+      // costs one compare.
+      if (st.fix && !st.shippedIn) {
+        const held = await releaseHolding(n, st.fix, fix);
         if (held) {
           parts.push(`ship record missing (${held} holds the fix)`);
           if (fix) st = await stateOf(n);
@@ -503,26 +653,89 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         parts.push(`labels ${has.join(', ') || '(none)'} -> ${want.join(', ') || '(none)'}`);
       }
       if (shown !== undefined && shown !== status) parts.push(`post ${shown || '(no status)'} -> ${status}`);
-      // A claimed message never marked sent or dropped: its send failed.
-      // Listed for a person to judge; the sweep never messages anyone.
+      // The first note of each message. The sweep never messages anyone.
+      // - A note in the older `Told the player` form was marked sent
+      //   only after its send, so an unmarked one may have gone out: it is
+      //   listed, and never held, dropped or resent.
+      // - A newer note still attempted was never sent: its send marks it
+      //   first. Still true, and its run still going or still re-runnable, it
+      //   is owed: the post is left for that run from the moment the note
+      //   exists, since a re-run sends it whether or not the post moved.
+      //   One no re-run could send is dropped: its post is gone, or its
+      //   message no longer holds (a status note, whatever the post shows; a
+      //   needs-info ping once the label is off).
+      // A note is judged once its run has ended (its run's state, or, with no
+      // run, the note's age).
+      const owed = [];
+      const stale = [];
       const seen = new Set();
       for (const t of st.records.told) {
-        if (seen.has(t.key)) continue;
+        if (t.released || seen.has(t.key)) continue;
         seen.add(t.key);
-        if (!t.settled && now() - t.at > OWED_MS) parts.push(`message "${t.text}" may not have been sent`);
+        if (t.state === 'unconfirmed') {
+          parts.push(`message "${t.text}" may not have reached the player (${t.url})`);
+          continue;
+        }
+        if (t.state === 'attempted' && t.legacy) {
+          if (now() - t.at > OWED_MS) parts.push(`message "${t.text}" may not have been sent (${t.url})`);
+          continue;
+        }
+        if (t.state !== 'attempted' && t.state !== 'sending') continue;
+        const r = t.run ? await runInfo(t.run) : null;
+        const done = r ? !r.active : now() - t.at > OWED_MS;
+        // A note marked as sending may have gone out; nothing resends it.
+        if (t.state === 'sending') {
+          if (done) parts.push(`message "${t.text}" may not have reached the player (${t.url})`);
+          continue;
+        }
+        const m = t.status && shown !== undefined && status === t.status ? await messageFor(n, st, status) : null;
+        const stillTrue = Boolean(m) && m.key === t.key;
+        const dead = shown === undefined ? 'the Discord post is gone'
+          : (t.status ? !stillTrue : t.key.startsWith('needs-info-') && !hasLabel(st.issue, LABELS.needsInfo)) ? 'no longer true'
+            : '';
+        if (stillTrue && r && (r.active || r.open)) {
+          if (shown !== t.status) owed.push(t);
+          if (done) parts.push(`owed message "${t.text}" (${t.url}): fix the setup if needed, then re-run ${runUrl(t.run)}; a post not showing it is left as it is until then`);
+        } else if (dead) {
+          if (done) {
+            stale.push({ note: t, reason: dead });
+            parts.push(`owed message "${t.text}" ${dead === 'no longer true' ? 'is no longer true' : 'cannot be sent: the Discord post is gone'} (${t.url})`);
+          }
+        } else if (done) {
+          const how = !r ? '' : r.open ? `; re-run ${runUrl(t.run)} sends it while it is still true`
+            : `; its run ${runUrl(t.run)} can no longer be re-run (30 days from its first attempt, or 50 re-runs, have passed, or it was deleted), so send it by hand if it is still needed`;
+          parts.push(`message "${t.text}" was not sent (${t.url})${how}`);
+        }
       }
       if (!parts.length) return;
       wrong++;
       const line = `#${n}: ${parts.join('; ')}`;
       log(line);
       report.push(line);
-      if (fix) await sync(n);
+      if (!fix) return;
+      for (const s of stale) await dropNote(s.note, s.reason);
+      if (owed.length) await settleLabels(n);
+      else await sync(n, false);
     });
     const head = `sweep (${fix ? 'fix' : 'report'} mode): ${wrong} of ${issues.length} issue(s) out of step`;
     log(head);
     if (env.GITHUB_STEP_SUMMARY) {
       appendFileSync(env.GITHUB_STEP_SUMMARY, [`### Discord status ${head}`, '', ...report.map((l) => `- ${l}`), ''].join('\n'));
     }
+  }
+
+  // A re-run also syncs every issue on which an earlier attempt of this run
+  // left a note it never sent. The event may no longer lead to that issue: a
+  // tag run's window of recent closes has moved on, or a PR no longer links
+  // it. The sync then sends the note while it is still true.
+  if (runId && attempt > 1 && eventName !== 'schedule' && eventName !== 'workflow_dispatch') {
+    const owing = [];
+    for (const i of (await gh.issuesWithLabel(repo, LABELS.fromDiscord)).filter(eligible)) {
+      if (handled.has(i.number)) continue;
+      const { told } = await recordsOf(i.number);
+      if (told.some((t) => t.run === runId && t.state === 'attempted')) owing.push(i.number);
+    }
+    await each(owing, (n) => sync(n));
   }
 
   log(done.length ? `told ${done.length} Discord post(s)` : 'no Discord post told');
