@@ -95,7 +95,7 @@ test('a TEMPLATES value that is not lists of field names falls back to the defau
 test('Discord no-preview links survive into the issue as working links', () => {
   const dest = (s) => s.replace(/[!-/:-?[-`{-~]/g, '\\$&'); // what Markdown reads back as s
   assert.equal(C.neutralize('see [Guide](<https://example.com/a?b=1>) and <https://example.com/x>'),
-    `see [Guide](${dest('https://example.com/a?b=1')}) and [https://example.com/x](${dest('https://example.com/x')})`);
+    `see [Guide](${dest('https://example.com/a?b=1')}) and [${dest('https://example.com/x')}](${dest('https://example.com/x')})`);
   assert.equal(C.neutralize('<!-- discord-thread: 1 --> <b>'), '&lt;!-- discord-thread: 1 --> &lt;b>');
   assert.equal(C.neutralize('<https://a.example/<!--x>'), '&lt;https://a.example/&lt;!--x>');
   // Every character of the destination survives: parentheses, trailing
@@ -104,7 +104,8 @@ test('Discord no-preview links survive into the issue as working links', () => {
     'http://[::1]:8080/x', 'https://example.com/W_(x)?a=1&b=2#c']) {
     assert.equal(C.neutralize(`[Guide](<${url}>)`), `[Guide](${dest(url)})`, url);
   }
-  assert.equal(C.neutralize('<https://example.com/W_(x)>'), `[https://example.com/W_(x)](${dest('https://example.com/W_(x)')})`);
-  assert.equal(C.neutralize('<https://example.com/[1]>'), `[https://example.com/\\[1\\]](${dest('https://example.com/[1]')})`);
+  for (const url of ['https://example.com/W_(x)', 'https://example.com/[1]', 'https://example.com/a`b']) {
+    assert.equal(C.neutralize(`<${url}>`), `[${dest(url)}](${dest(url)})`, url);
+  }
   assert.equal(C.neutralize('[Guide](<https://example.com/@user/p>)'), `[Guide](${dest('https://example.com/%40user/p')})`);
 });

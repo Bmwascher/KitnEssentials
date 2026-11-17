@@ -90,14 +90,16 @@ export function guessFromTags(tagNames) {
 // character (a bare URL would lose trailing punctuation): Markdown takes a
 // backslashed punctuation mark literally, so every one is backslashed, which
 // leaves the URL itself unchanged. Only @ is percent-encoded, since the
-// mention escaping below would change it.
+// mention escaping below would change it. A bare URL's link text gets the
+// same backslashes, so a backtick or bracket in it cannot break the link.
 const URL_IN_BRACKETS = /<(https?:\/\/[^\s<>]+)>/g;
-const linkDest = (url) => url.replace(/@/g, '%40').replace(/[!-/:-?[-`{-~]/g, '\\$&');
+const PUNCT = /[!-/:-?[-`{-~]/g;
+const linkDest = (url) => url.replace(/@/g, '%40').replace(PUNCT, '\\$&');
 
 export function neutralize(text) {
   return String(text || '')
     .replace(/\]\(<(https?:\/\/[^\s<>]+)>\)/g, (m, url) => `](${linkDest(url)})`)
-    .replace(URL_IN_BRACKETS, (m, url) => `[${url.replace(/[[\]]/g, '\\$&')}](${linkDest(url)})`)
+    .replace(URL_IN_BRACKETS, (m, url) => `[${url.replace(PUNCT, '\\$&')}](${linkDest(url)})`)
     .replace(/</g, '&lt;').replace(/@/g, '@​');
 }
 
