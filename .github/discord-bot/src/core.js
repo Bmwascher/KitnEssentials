@@ -165,10 +165,10 @@ export function repoDisplay(repoFullName, tag) {
 
 export const MESSAGES = {
   tracked: (key, n) => `Thanks! This is now tracked as ${key} #${n}. We'll post here when a fix is being tested and when it ships.`,
-  inProgress: () => 'A fix is up and being tested.',
-  fixed: () => 'The fix is merged and will be in the next update.',
-  shipped: (repoFullName, tag) => `The fix landed in ${repoDisplay(repoFullName, tag)}. Update the addon to get it, and reply here if it still happens.`,
-  done: () => 'Marked as done.',
+  inProgress: () => "Good news: a fix for this is being worked on and tested. We'll post here when it's done.",
+  fixed: () => "This is fixed! The fix will be in the next update. We'll post here when that update is out.",
+  shipped: (repoFullName, tag) => `The fix is out in ${repoDisplay(repoFullName, tag)}. Update your addons, and let us know here if you still see the problem.`,
+  done: () => "A moderator has closed this. If it's still happening for you, reply here and we'll take another look.",
   closed: (reason) => reason === 'duplicate'
     ? 'Closed as a duplicate of another report.'
     : 'Closed without a change for now.',
