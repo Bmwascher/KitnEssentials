@@ -221,4 +221,13 @@ test('the template check: an answer may open with a short line and a colon, a hi
   ]) assert.deepEqual(states(content, fields, attachments), want, content);
 });
 
+test('release tags: plain version numbers by default, and never a pre-release whatever the pattern', () => {
+  const def = new RegExp(C.DEFAULT_RELEASE_PATTERN);
+  for (const t of ['v5.0.120', '30.1', '31']) assert.equal(C.isRelease(t, def), true, t);
+  for (const t of ['v5.1.0-beta.1', '30.2-rc1', 'nightly']) assert.equal(C.isRelease(t, def), false, t);
+  const loose = /^(v|discord-test-)/;
+  for (const t of ['v5.1.0-beta.1', 'v1.0.0rc1', 'discord-test-1-beta.1', 'v2.0-ALPHA', 'v3-pre']) assert.equal(C.isRelease(t, loose), false, t);
+  assert.equal(C.isRelease('discord-test-1', loose), true);
+});
+
 

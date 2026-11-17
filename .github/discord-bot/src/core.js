@@ -259,6 +259,15 @@ export function repoDisplay(repoFullName, tag) {
   return `${name} ${v}`;
 }
 
+// Which tags count as releases. Each repo sets its own pattern
+// (RELEASE_TAG_PATTERN); the default takes plain version numbers, with or
+// without a v. A pre-release word never counts, whatever the pattern says.
+export const DEFAULT_RELEASE_PATTERN = '^v?\\d+(\\.\\d+)*$';
+const PRERELEASE = /(^|[^a-z])(alpha|beta|rc|pre)([^a-z]|$)/i;
+export function isRelease(name, pattern) {
+  return pattern.test(name) && !PRERELEASE.test(name);
+}
+
 export const MESSAGES = {
   tracked: (key, n) => `Thanks! This is now tracked as ${key} #${n}. We'll post here when a fix is being tested and when it ships.`,
   inProgress: () => "Good news: a fix for this is being worked on and tested. We'll post here when it's done.",
