@@ -93,6 +93,25 @@ test('a PR merged in another repository is not this repo\'s fix', async () => {
   assert.equal(w.tagOf('717'), 'Closed');
 });
 
+test('a duplicate links the other report\'s Discord post', async () => {
+  const w = world();
+  w.issue(17);
+  w.issue(18);
+  w.close(17, 'duplicate', null, null, 18);
+  await closed(w, 17);
+  assert.deepEqual(w.said('717'), ["This is the same problem as another report (https://discord.com/channels/900/718), so we'll follow it there and close this one. Thanks for reporting it!"]);
+});
+
+test('a duplicate of an issue with no Discord post, or in another repo, goes out without a link', async () => {
+  for (const dup of [{ body: 'filed on GitHub' }, { body: '<!-- discord-thread: 718 reporter: 42 -->', repo: 'someone/else' }]) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'duplicate', null, null, dup);
+    await closed(w, 17);
+    assert.match(w.said('717')[0], /same problem as another report, so/, JSON.stringify(dup));
+  }
+});
+
 test('rerunning the close records nothing twice and says nothing twice', async () => {
   const w = world();
   w.issue(17);
@@ -114,7 +133,7 @@ test('an issue closed by hand gets no release label and a neutral note', async (
 });
 
 test('closing as not planned or duplicate tells the player', async () => {
-  for (const [reason, said] of [['not_planned', /without a change/], ['duplicate', /duplicate/]]) {
+  for (const [reason, said] of [['not_planned', /decided not to change this/], ['duplicate', /same problem as another report,/]]) {
     const w = world();
     w.issue(17);
     w.close(17, reason);

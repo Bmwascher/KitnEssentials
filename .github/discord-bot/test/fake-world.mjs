@@ -47,11 +47,12 @@ export function world() {
   // `closer` is what GraphQL names as the closer: { pr: sha } for a merged PR
   // (whose REST event carries no commit) or { commit: sha }, with `repo` to
   // put it in another repository.
-  w.close = (n, reason = 'completed', commit = null, closer = null) => {
+  // `duplicateOf` is the issue number (or { body, repo }) it duplicates.
+  w.close = (n, reason = 'completed', commit = null, closer = null, duplicateOf = null) => {
     const i = w.issues.get(n);
     i.state = 'closed';
     i.state_reason = reason;
-    i.events.push({ id: w.nextId++, event: 'closed', commit_id: commit, closer });
+    i.events.push({ id: w.nextId++, event: 'closed', commit_id: commit, closer, duplicateOf });
   };
   w.tagOf = (threadId) => {
     const id = w.threads.get(threadId).applied_tags.at(-1);
@@ -137,7 +138,10 @@ export function world() {
         const closer = !c ? null
           : c.pr ? { __typename: 'PullRequest', merged: true, mergeCommit: { oid: c.pr }, repository }
             : { __typename: 'Commit', oid: c.commit, repository };
-        return json({ data: { repository: { issue: { timelineItems: { nodes: last ? [{ closer }] : [] } } } } });
+        const d = last && last.duplicateOf;
+        const dupIssue = typeof d === 'number' ? w.issues.get(d) : d;
+        const duplicateOf = dupIssue ? { body: dupIssue.body, repository: { nameWithOwner: dupIssue.repo || 'me/one' } } : null;
+        return json({ data: { repository: { issue: { timelineItems: { nodes: last ? [{ closer, duplicateOf }] : [] } } } } });
       }
       return json({ errors: [{ message: 'unknown query' }] });
     }],
@@ -145,7 +149,7 @@ export function world() {
       if (m[1] === FORUM.id) return json(FORUM);
       const t = w.threads.get(m[1]);
       if (!t) return json({ message: 'Unknown Channel' }, 404);
-      return json({ id: t.id, parent_id: t.parent_id, applied_tags: [...t.applied_tags], thread_metadata: { archived: t.archived } });
+      return json({ id: t.id, guild_id: '900', parent_id: t.parent_id, applied_tags: [...t.applied_tags], thread_metadata: { archived: t.archived } });
     }],
     ['PATCH', /discord\.com\/api\/v10\/channels\/(\d+)$/, (m, url, body) => {
       const t = w.threads.get(m[1]);

@@ -330,6 +330,33 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     await deliver(moved.n, moved.threadId, note, text, status);
   }
 
+  // The Discord post of the issue this one was closed as a duplicate of, when
+  // that issue is in this repo and came from Discord. Only a nicety: any
+  // failure gives null and the message goes out without the link.
+  async function duplicateLink(n) {
+    try {
+      const [owner, name] = repo.split('/');
+      const data = await graphql(`query($owner: String!, $name: String!, $number: Int!) {
+        repository(owner: $owner, name: $name) { issue(number: $number) {
+          timelineItems(itemTypes: [CLOSED_EVENT], last: 1) { nodes { ... on ClosedEvent {
+            duplicateOf { ... on Issue { body repository { nameWithOwner } } }
+          } } }
+        } }
+      }`, { owner, name, number: n });
+      const issue = data && data.repository && data.repository.issue;
+      const node = issue && issue.timelineItems && issue.timelineItems.nodes[0];
+      const d = node && node.duplicateOf;
+      if (!d || !d.repository || String(d.repository.nameWithOwner).toLowerCase() !== repo.toLowerCase()) return null;
+      const m = parseMarker(d.body);
+      if (!m) return null;
+      const ch = await discord.getChannel(m.threadId);
+      return ch && ch.guild_id ? `https://discord.com/channels/${ch.guild_id}/${m.threadId}` : null;
+    } catch (err) {
+      log(`#${n}: could not find the duplicate's post: ${err.message}`);
+      return null;
+    }
+  }
+
   // The message for a post showing `status`, keyed by the fact it tells,
   // or null when that status has none.
   async function messageFor(n, st, status) {
@@ -339,7 +366,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     }
     if (status === STATUS.closed && st.close) {
       const reason = st.issue.state_reason;
-      return { key: `closed-${st.close.id}`, text: reason === 'completed' ? MESSAGES.done() : MESSAGES.closed(reason) };
+      if (reason === 'completed') return { key: `closed-${st.close.id}`, text: MESSAGES.done() };
+      const link = reason === 'duplicate' ? await duplicateLink(n) : null;
+      return { key: `closed-${st.close.id}`, text: MESSAGES.closed(reason, link) };
     }
     if (status === STATUS.inProgress) {
       // Once per time the issue is open: a second PR, or a PR back from

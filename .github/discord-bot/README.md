@@ -19,7 +19,7 @@ it along:
 | Closed by a commit or a merged PR in this repo | Fixed, next update | "This is fixed! The fix will be in the next update..." |
 | A release tag holds that commit | Shipped | "The fix is out in KitnEssentials v5.0.120..." (post stays open) |
 | Closed by hand | Closed | "A moderator has closed this..." |
-| Closed as not planned / duplicate | Closed | Short reason |
+| Closed as not planned / duplicate | Closed | Short reason; a duplicate links the other report's post when it came from Discord |
 | `needs-info` label added | (unchanged) | Pings the reporter for details |
 
 A PR that closes or goes back to draft puts the post back to Triaged, quietly.
