@@ -13,7 +13,7 @@
 // everything both wrote. The daily sweep repairs what a failed call left.
 import { readFileSync, appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { STATUS, LABELS, MESSAGES, parseMarker, timedFetch } from '../src/core.js';
+import { STATUS, LABELS, MESSAGES, parseMarker, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN } from '../src/core.js';
 import { discordClient } from '../src/discord.js';
 import { githubClient } from '../src/github.js';
 
@@ -66,7 +66,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // A scheduled run's payload names no repository; Actions sets GITHUB_REPOSITORY.
   const repo = (payload.repository && payload.repository.full_name) || env.GITHUB_REPOSITORY;
   const [owner, name] = repo.split('/');
-  const pattern = new RegExp(env.RELEASE_TAG_PATTERN || '^v\\d');
+  const pattern = new RegExp(env.RELEASE_TAG_PATTERN || DEFAULT_RELEASE_PATTERN);
   const f = timedFetch(fetchImpl, CALL_MS);
   const gh = githubClient(env.GITHUB_TOKEN, f);
   const discord = discordClient(env.DISCORD_BOT_TOKEN, f);
@@ -210,19 +210,34 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     return r.status === 'ahead' || r.status === 'identical';
   }
 
-  // A fix whose ship record is missing (a write that failed, or an issue
-  // shipped before these records existed): the first release tag on the
-  // first page that holds it. Writes the record when `write` is set.
-  async function recoverShip(n, sha, write) {
-    for (let page = 1; page <= MAX_PAGES; page++) {
-      const batch = await gh.call('GET', `/repos/${repo}/tags?per_page=100&page=${page}`);
-      for (const t of batch.filter((x) => pattern.test(x.name))) {
-        if (await tagContains(sha, t.commit && t.commit.sha ? t.commit.sha : t.name)) {
-          if (write) await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body: shipRecord(t.name, sha) });
-          return t.name;
-        }
+  // The release that first shipped a fix with no ship record (a close that
+  // came after its release run read its lists, a record write that failed, an
+  // issue shipped before these records existed). Release tags lie on one line
+  // of history, so walking them newest first, by the tagged commit's date,
+  // the first one that does not hold the fix ends the walk, and the oldest
+  // that held it is the release. Writes the record when `write` is set.
+  async function releaseHolding(n, sha, write) {
+    let held = null;
+    let after = null;
+    const finish = async () => {
+      if (held && write) await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body: shipRecord(held, sha) });
+      return held;
+    };
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const data = await graphql(`query($owner: String!, $name: String!, $after: String) {
+        repository(owner: $owner, name: $name) {
+          refs(refPrefix: "refs/tags/", first: 100, after: $after, orderBy: {field: TAG_COMMIT_DATE, direction: DESC}) {
+            pageInfo { hasNextPage endCursor }
+            nodes { name target { __typename oid ... on Tag { target { oid } } } } } } }`, { owner, name, after });
+      const refs = data.repository.refs;
+      for (const ref of refs.nodes) {
+        if (!isRelease(ref.name, pattern)) continue;
+        const commit = ref.target.__typename === 'Tag' ? ref.target.target.oid : ref.target.oid;
+        if (!(await tagContains(sha, commit))) return finish();
+        held = ref.name;
       }
-      if (batch.length < 100) return null;
+      if (!refs.pageInfo || !refs.pageInfo.hasNextPage) return finish();
+      after = refs.pageInfo.endCursor;
     }
     // A release may sit further back: fail rather than take "not shipped" as the answer.
     throw new Error(`#${n}: more than ${MAX_PAGES * 100} tags, too many to read`);
@@ -233,9 +248,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   async function settleLabels(n) {
     for (let i = 0; i < SETTLE_TRIES; i++) {
       let st = await stateOf(n);
-      // An issue labeled shipped with no record of it is checked against the
-      // release tags before it is turned back to pending.
-      if (st.fix && !st.shippedIn && hasLabel(st.issue, LABELS.shipped) && (await recoverShip(n, st.fix, true))) {
+      // A fix with no ship record may already be in a release: its close
+      // came after the release run read its lists, or a record write failed.
+      if (st.fix && !st.shippedIn && (await releaseHolding(n, st.fix, true))) {
         st = await stateOf(n);
       }
       const want = wantedLabels(st);
@@ -420,7 +435,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const target = (payload.head_commit && payload.head_commit.id) || payload.after || tag;
     if (payload.deleted || payload.created === false) {
       log(`tag ${tag} was deleted or moved, not created: nothing to do`);
-    } else if (!pattern.test(tag)) {
+    } else if (!isRelease(tag, pattern)) {
       log(`tag ${tag} is not a release tag, nothing to do`);
     } else {
       const since = new Date(now() - RECENT_MS).toISOString();
@@ -432,7 +447,10 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           const st = await stateOf(n);
           if (st.fix && !st.shippedIn) {
             if (await tagContains(st.fix, target)) {
-              await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body: shipRecord(tag, st.fix) });
+              // The oldest release holding the fix is named, as on every other
+              // path; this tag when the tag list does not show it yet.
+              const held = (await releaseHolding(n, st.fix, false)) || tag;
+              await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body: shipRecord(held, st.fix) });
             } else {
               log(`#${n}: fix ${st.fix.slice(0, 7)} is not in ${tag}, still pending`);
             }
@@ -478,10 +496,10 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     await each(issues.map((i) => i.number), async (n) => {
       let st = await stateOf(n);
       const parts = [];
-      // Only an issue labeled shipped can have lost its record; a pending fix
-      // waits for the next release tag.
-      if (st.fix && !st.shippedIn && hasLabel(st.issue, LABELS.shipped)) {
-        const held = await recoverShip(n, st.fix, fix);
+      // A fix with no ship record may already be in a release; a fix in none
+      // costs one compare.
+      if (st.fix && !st.shippedIn) {
+        const held = await releaseHolding(n, st.fix, fix);
         if (held) {
           parts.push(`ship record missing (${held} holds the fix)`);
           if (fix) st = await stateOf(n);

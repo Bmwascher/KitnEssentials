@@ -261,6 +261,7 @@ test('deleted, moved and non-release tags do nothing', async () => {
   await tag(w, 'v5.0.2', { deleted: true, created: false });
   await tag(w, 'v5.0.2', { created: false, forced: true });
   await tag(w, 'nightly-1');
+  await tag(w, 'v5.1.0-beta.1');
   assert.equal(w.calls.length, before);
 });
 
@@ -506,20 +507,22 @@ test('a tag run ships a just-closed issue the close run has not labeled yet', as
   assert.match(w.said('717').at(-1), /v5\.0\.2/);
 });
 
-test('a shipped issue with no ship record (shipped before records existed) stays shipped', async () => {
-  const w = world();
-  w.issue(17, { labels: ['from-discord', 'shipped'] });
-  w.close(17, 'completed', 'aaaaaaa1');
-  w.thread('717', { applied_tags: ['t-retail', 's-ship'] });
-  w.tags = [{ name: 'nightly', commit: { sha: 'n1' } }, { name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
-  w.contains.set('aaaaaaa1...c-v5.0.1', 'ahead');
-  w.contains.set('aaaaaaa1...n1', 'ahead');
-  await go(w, 'issues', { action: 'reopened', issue: { number: 17 } }).catch(() => {});
-  await run({ eventName: 'schedule', payload: {}, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: quiet });
-  assert.deepEqual(labels(w, 17), ['shipped']);
-  assert.equal(w.tagOf('717'), 'Shipped');
-  assert.ok(w.issues.get(17).comments.some((c) => /discord-shipped-in: v5\.0\.1 fixes: aaaaaaa1/.test(c.body)), 'the record is rebuilt from the release tag, not the nightly');
-  assert.deepEqual(w.said('717'), []);
+test('a shipped issue with no ship record (shipped before records existed) stays shipped, from a close run or the sweep', async () => {
+  for (const via of ['close run', 'sweep']) {
+    const w = world();
+    w.issue(17, { labels: ['from-discord', 'shipped'] });
+    w.close(17, 'completed', 'aaaaaaa1');
+    w.thread('717', { applied_tags: ['t-retail', 's-ship'] });
+    w.tags = [{ name: 'nightly', commit: { sha: 'n1' } }, { name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
+    w.contains.set('aaaaaaa1...c-v5.0.1', 'ahead');
+    w.contains.set('aaaaaaa1...n1', 'ahead');
+    if (via === 'close run') await closed(w, 17);
+    else await run({ eventName: 'schedule', payload: {}, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: quiet });
+    assert.deepEqual(labels(w, 17), ['shipped'], via);
+    assert.equal(w.tagOf('717'), 'Shipped', via);
+    assert.ok(w.issues.get(17).comments.some((c) => /discord-shipped-in: v5\.0\.1 fixes: aaaaaaa1/.test(c.body)), `${via}: the record is rebuilt from the release tag, not the nightly`);
+    assert.deepEqual(w.said('717'), [], via);
+  }
 });
 
 test('the sweep reports a post with no status tag, and a missing ship record, into the job summary', async () => {
@@ -544,7 +547,7 @@ test('the sweep reports a post with no status tag, and a missing ship record, in
   assert.match(text, /#17: post \(no status\) -> Triaged/);
   assert.match(text, /#18: ship record missing \(v5\.0\.1 holds the fix\); post Fixed, next update -> Shipped/);
   assert.equal(w.issues.get(18).comments.length, 0, 'report mode writes nothing');
-  assert.equal(w.find('GET', /compare\/ccccccc3/).length, 0, 'a pending fix is not checked against every tag');
+  assert.equal(w.find('GET', /compare\/ccccccc3/).length, 1, 'a pending fix is checked against the newest release only');
 });
 
 test('the close run and a tag run that holds the fix, interleaved, tell the player once', async () => {
@@ -740,4 +743,67 @@ test('a needs-info label taken off while the run claims its ping sends nothing',
   await go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } });
   assert.deepEqual(w.said('717'), []);
   assert.ok(i.comments.some((c) => /discord-dropped/.test(c.body)));
+});
+
+// ---- A fix a release already holds -------------------------------------------------
+
+const RELEASES = [
+  { name: 'v5.0.3', commit: { sha: 'c-v5.0.3' }, annotated: true },
+  { name: 'v5.0.2', commit: { sha: 'c-v5.0.2' } },
+  { name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } },
+];
+
+test('a fix whose close comes after its release tag run is announced as Shipped, not Fixed', async () => {
+  const w = world();
+  w.issue(17);
+  w.tags = [{ name: 'v5.0.2', commit: { sha: 'c-v5.0.2' } }, { name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
+  w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+  await tag(w, 'v5.0.2');
+  w.close(17, 'completed', 'aaaaaaa1');
+  await closed(w, 17);
+  assert.deepEqual(labels(w, 17), ['shipped']);
+  assert.equal(w.tagOf('717'), 'Shipped');
+  assert.deepEqual(w.said('717'), ['The fix is out in one v5.0.2. Update your addons, and let us know here if you still see the problem.']);
+});
+
+test('the release named is the oldest of the newest tags that hold the fix, an annotated tag checked at its commit', async () => {
+  const w = world();
+  w.issue(17);
+  w.tags = RELEASES;
+  w.contains.set('aaaaaaa1...c-v5.0.3', 'ahead');
+  w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+  w.close(17, 'completed', 'aaaaaaa1');
+  await closed(w, 17);
+  assert.match(w.said('717')[0], /out in one v5\.0\.2\./);
+});
+
+test('a fix in no release costs one compare and is Fixed', async () => {
+  const w = world();
+  w.issue(17);
+  w.tags = RELEASES;
+  w.close(17, 'completed', 'bbbbbbb2');
+  await closed(w, 17);
+  assert.equal(w.find('GET', /compare\/bbbbbbb2/).length, 1);
+  assert.equal(w.tagOf('717'), 'Fixed, next update');
+});
+
+test('a release check that cannot be read fails the run instead of announcing Fixed', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  w.fail.push(['POST', /graphql$/, new Response('{}', { status: 502 }), 99]);
+  await assert.rejects(closed(w, 17), /#17/);
+  assert.deepEqual(w.said('717'), []);
+});
+
+test('a tag run names the oldest release holding an unrecorded fix, as the close run and the sweep do', async () => {
+  const w = world();
+  w.issue(17);
+  w.tags = RELEASES;
+  w.contains.set('aaaaaaa1...c-v5.0.3', 'ahead');
+  w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+  w.close(17, 'completed', 'aaaaaaa1');
+  await tag(w, 'v5.0.3');
+  assert.ok(w.issues.get(17).comments.some((c) => /discord-shipped-in: v5\.0\.2 fixes: aaaaaaa1/.test(c.body)));
+  assert.match(w.said('717').at(-1), /out in one v5\.0\.2\./);
 });

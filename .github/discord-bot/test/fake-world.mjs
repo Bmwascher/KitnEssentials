@@ -15,7 +15,7 @@ export function world() {
     threads: new Map(), // id -> { id, parent_id, applied_tags, archived, messages: [] }
     calls: [],
     nextId: 1,
-    tags: [], // [{ name, commit: { sha } }], newest first
+    tags: [], // [{ name, commit: { sha }, annotated }], newest first by commit date
     pageSize: 100, // nodes per GraphQL page
     clock: Date.now(), // created_at and updated_at
     hooks: [], // [method, RegExp, fn(call)] run before a matching call is served
@@ -111,7 +111,6 @@ export function world() {
       const status = w.contains.get(`${m[1]}...${decodeURIComponent(m[2])}`) || 'behind';
       return json({ status });
     }],
-    ['GET', /\/repos\/me\/one\/tags\?/, (m, url) => json(slice(w.tags, url))],
     ['PATCH', /\/repos\/me\/one\/issues\/comments\/(\d+)$/, (m, url, body) => {
       for (const i of w.issues.values()) {
         const c = i.comments.find((x) => x.id === Number(m[1]));
@@ -121,6 +120,13 @@ export function world() {
     }],
     ['POST', /api\.github\.com\/graphql$/, (m, url, body) => {
       const v = body.variables;
+      if (/refs\(refPrefix/.test(body.query)) {
+        const all = w.tags.map((t) => ({
+          name: t.name,
+          target: t.annotated ? { __typename: 'Tag', oid: `tag-${t.name}`, target: { oid: t.commit.sha } } : { __typename: 'Commit', oid: t.commit.sha },
+        }));
+        return json({ data: { repository: { refs: gqlPage(all, v.after) } } });
+      }
       if (/closedByPullRequestsReferences/.test(body.query)) {
         const all = [...w.prs.values()].filter((p) => p.closes.includes(v.number) && p.state === 'OPEN')
           .map((p) => ({ isDraft: !!p.draft, state: p.state, authorAssociation: p.author_association }));
