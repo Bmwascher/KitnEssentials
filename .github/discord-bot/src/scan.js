@@ -1,4 +1,4 @@
-// The Worker's scheduled jobs. Every few minutes `scan` puts one message with
+// The Worker's scheduled jobs. Every minute `scan` puts one message with
 // a "Send to GitHub" button into each new, open post in the configured forums.
 // A post that was closed or archived before a scan saw it gets none; the
 // right-click command still works there. Once
@@ -6,9 +6,11 @@
 // warns the moderators if the scan has stopped running or keeps failing.
 //
 // State lives in the Workers KV namespace bound as STATE. KV's free plan
-// allows 1,000 writes a day, so a scan writes its own state once per run:
+// allows 1,000 writes a day, so a scan writes its own state only when it
+// changed, or HEARTBEAT_MS after the last write, which tells the daily check
+// the scan is still running:
 //   scan:since   epoch ms; posts made at or before it are never messaged
-//   scan:state   {"last": epoch ms of the last run, whatever it found,
+//   scan:state   {"last": epoch ms of the last state write,
 //                 "through": {forum: the newest post id at or before which every
 //                             post there is handled, so a run reads KV only after it},
 //                 "error": {"at": epoch ms, "text": the last failure}}
@@ -26,10 +28,13 @@ const READ_BUDGET = 28;
 const GREET_BUDGET = 2 * MAX_GREET;
 const POST_BUDGET = 4;
 const MAX_KV_READS = 60;
-// A post that fails this many runs in a row (not a refusal) is given up on.
-const MAX_TRIES = 6;
+// A post that fails this many runs in a row (not a refusal) is given up on:
+// about 30 minutes of errors at one scan a minute. Each failed try is one KV
+// write, so the cost stays small.
+const MAX_TRIES = 30;
 const CALL_MS = 5000;
 const STALE_SCAN_MS = 60 * 60 * 1000;
+const HEARTBEAT_MS = 15 * 60 * 1000;
 const ERROR_SHOWN_MS = 24 * 60 * 60 * 1000;
 const DAILY_ARCHIVED_MS = 30 * 24 * 60 * 60 * 1000;
 const DAILY_ARCHIVE_PAGES = 6;
@@ -188,7 +193,10 @@ export async function scan(env, deps = {}) {
   } finally {
     const next = { last: now, through, error: state.error };
     if (errors.length) next.error = { at: now, text: `could not read or message ${errors.slice(0, 5).join(', ')}` };
-    await kv.put('scan:state', JSON.stringify(next));
+    const changed = JSON.stringify(through) !== JSON.stringify(state.through || {})
+      || (next.error && next.error.text) !== (state.error && state.error.text)
+      || now - (Number(state.last) || 0) >= HEARTBEAT_MS;
+    if (changed) await kv.put('scan:state', JSON.stringify(next));
   }
   return { greeted, left };
 }
@@ -284,4 +292,4 @@ export async function daily(env, deps = {}) {
 }
 
 // Which job a cron expression runs (wrangler.toml [triggers]).
-export const CRONS = { scan: '*/5 * * * *', daily: '0 15 * * *' };
+export const CRONS = { scan: '* * * * *', daily: '0 15 * * *' };

@@ -220,14 +220,15 @@ test('the daily check posts the scan alert even when a forum cannot be read, and
 
 // ---- Progress marks, archived posts, the daily check -----------------------------
 
-test('a post that keeps failing is given up on after six runs, and newer posts are never held back', async () => {
+test('a post that keeps failing is given up on after 30 runs, and newer posts are never held back', async () => {
   const kv = started(T0);
   const bad = idAt(T0 + 1000);
   const active = [{ id: bad, parent_id: '900' }];
   for (let i = 0; i < 70; i++) active.push({ id: idAt(T0 + 2000 + i), parent_id: '900' });
   const f = discord({ active, refuse: { [bad]: 500 } });
   let t = T0;
-  for (let run = 0; run < 12; run++) await scan(baseEnv(kv), { fetch: f, now: () => (t += 5 * 60000), log: () => {} });
+  // 30 failing runs, then runs for the posts the KV read limit held back.
+  for (let run = 0; run < 33; run++) await scan(baseEnv(kv), { fetch: f, now: () => (t += 5 * 60000), log: () => {} });
   assert.match(JSON.parse(kv.m.get(`thread:${bad}`)).skipped, /500/);
   assert.equal(new Set(sends(f).filter((id) => id !== bad)).size, 70, 'every other post got its button');
   assert.equal(stateOf(kv).through['900'], active.at(-1).id);
@@ -240,14 +241,23 @@ test('a post that keeps failing is given up on after six runs, and newer posts a
 
 
 
-test('a scan writes KV state once per run when nothing is new', async () => {
-  const kv = started(T0);
-  let writes = 0;
-  const put = kv.put;
-  kv.put = async (k, v) => { writes++; return put(k, v); };
-  const f = discord({ active: [] });
-  await scan(baseEnv(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
-  assert.equal(writes, 1);
+test('a scan writes its state only when something changed, or as a 15-minute heartbeat', async () => {
+  const MIN = 60 * 1000;
+  const a = idAt(T0 + 1000);
+  const failing = `could not read or message post ${a}`;
+  for (const [name, kv, opts, at, want] of [
+    ['idle under 15 minutes', started(T0), {}, T0 + 14 * MIN, 0],
+    ['idle at 15 minutes', started(T0), {}, T0 + 15 * MIN, 1],
+    ['a greeted post', started(T0), { active: [{ id: a, parent_id: '900' }] }, T0 + MIN, 1],
+    ['a new error', started(T0), { active: [{ id: a, parent_id: '900' }], refuse: { [a]: 500 } }, T0 + MIN, 1],
+    ['the same error again', started(T0, { error: { at: T0, text: failing } }), { active: [{ id: a, parent_id: '900' }], refuse: { [a]: 500 } }, T0 + MIN, 0],
+  ]) {
+    let writes = 0;
+    const put = kv.put;
+    kv.put = async (k, v) => { if (k === 'scan:state') writes++; return put(k, v); };
+    await scan(baseEnv(kv), { fetch: discord(opts), now: () => at, log: () => {} });
+    assert.equal(writes, want, name);
+  }
 });
 
 test('the daily check says nothing about archive pages when nothing is waiting', async () => {

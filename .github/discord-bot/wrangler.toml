@@ -5,10 +5,10 @@ name = "discord-issue-bot"
 main = "src/worker.js"
 compatibility_date = "2025-06-01"
 
-# The post scan every 5 minutes, and the daily check of waiting posts.
+# The post scan every minute, and the daily check of waiting posts.
 # These must match CRONS in src/scan.js.
 [triggers]
-crons = ["*/5 * * * *", "0 15 * * *"]
+crons = ["* * * * *", "0 15 * * *"]
 
 # Where the scan remembers which posts it has messaged. Create it once with
 # `npx wrangler@3 kv namespace create STATE`, then uncomment these three lines
