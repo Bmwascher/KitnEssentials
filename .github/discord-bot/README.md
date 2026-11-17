@@ -35,8 +35,8 @@ issue (reopening drops it). When a release tag holds that commit, the workflow
 writes a comment on the issue naming the release. A fix with no such comment
 is checked against the newest release tags, so a fix that a release tag
 pushed moments before its close already holds is announced as shipped, not as
-coming in the next update. Tags whose name holds alpha, beta, rc or pre never
-count as releases. The `pending-release` and `shipped` labels always follow
+coming in the next update. A tag whose name holds alpha, beta, rc or pre, not
+inside a longer word (`v2.0-beta`, `v2.0rc1`), never counts as a release. The `pending-release` and `shipped` labels always follow
 from these, so a release label added by hand is taken off again. Runs that
 overlap on one issue each read again after writing until the answer holds.
 
@@ -248,5 +248,7 @@ Each repo the bot files into needs its own copy of `discord-status.yml` and
 this folder. Set its push trigger to that repo's release tags, and the repo
 variable `RELEASE_TAG_PATTERN` to an anchored pattern that matches only them:
 for tags like `v5.0.120`, `tags: ['v*']` and `^v\d+\.\d+\.\d+$`; for tags like
-`30.8` or `31`, `tags: ['*']` and `^\d+(\.\d+)*$`. Tags whose name holds alpha,
-beta, rc or pre never count, whatever the pattern says.
+`30.8` or `31`, `tags: ['*']` and `^\d+(\.\d+)*$`. A tag whose name holds alpha,
+beta, rc or pre, not inside a longer word, never counts, whatever the pattern
+says. The guard misses `preview` and `1.0b1`, so a looser pattern must refuse
+those itself.

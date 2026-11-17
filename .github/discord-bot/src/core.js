@@ -84,7 +84,8 @@ export function guessFromTags(tagNames) {
 }
 
 // Player text goes into the issue as data: no HTML (so no fake marker comment)
-// and no @mentions that would notify GitHub users. A fenced code block keeps
+// and no @mentions that would notify GitHub users; each & is escaped, so a
+// typed entity such as &#64; shows as typed and never becomes an @. A fenced code block keeps
 // what the player typed, since Markdown shows it literally; only `<!--` is
 // broken there, so no marker comment can form. The bot writes both fence lines
 // itself, with more backticks than any run inside the block, so GitHub can
@@ -107,13 +108,13 @@ const TITLE = /"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|\(((?:[^()\\\n]|\\.)*
 // A no-preview link's destination, with an optional title.
 const NO_PREVIEW = new RegExp(`\\]\\(${BRACKETED_URL.source}(?:[ \\t]+(?:${TITLE.source}))?[ \\t]*\\)`);
 // One pass over text: a no-preview link, a bracketed URL, a run of backticks
-// or of three or more tildes with the backslashes before it, or a < or @.
-const PROSE = new RegExp([NO_PREVIEW.source, BRACKETED_URL.source, '(\\\\*)(`+|~{3,})', '[<@]'].join('|'), 'g');
+// or of three or more tildes with the backslashes before it, or a <, @ or &.
+const PROSE = new RegExp([NO_PREVIEW.source, BRACKETED_URL.source, '(\\\\*)(`+|~{3,})', '[<@&]'].join('|'), 'g');
 const PUNCT = /[!-/:-?[-`{-~]/g;
 // A zero-width space, written by code point so the source shows it.
 const ZWSP = String.fromCharCode(0x200b);
 const linkDest = (url) => url.replace(/@/g, '%40').replace(PUNCT, '\\$&');
-const plain = (s) => s.replace(/</g, '&lt;').replace(/@/g, `@${ZWSP}`);
+const plain = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/@/g, `@${ZWSP}`);
 const escapeEach = (s) => s.replace(/[\s\S]/g, '\\$&');
 // A title keeps its text: the player's escapes are read, then its quote
 // marks, backslashes and backticks are escaped, and its < and @ as anywhere
