@@ -45,8 +45,8 @@ export function world() {
     return c;
   };
   // `closer` is what GraphQL names as the closer: { pr: sha } for a merged PR
-  // (whose REST event carries no commit) or { commit: sha }, with `repo` to
-  // put it in another repository.
+  // (whose REST event carries no commit; `merged: false` for one that was
+  // not) or { commit: sha }, with `repo` to put it in another repository.
   // `duplicateOf` is the issue number (or { body, labels, repo }) it duplicates.
   w.close = (n, reason = 'completed', commit = null, closer = null, duplicateOf = null) => {
     const i = w.issues.get(n);
@@ -136,7 +136,7 @@ export function world() {
         const c = last && last.closer;
         const repository = { nameWithOwner: (c && c.repo) || 'me/one' };
         const closer = !c ? null
-          : c.pr ? { __typename: 'PullRequest', merged: true, mergeCommit: { oid: c.pr }, repository }
+          : c.pr ? { __typename: 'PullRequest', merged: c.merged !== false, mergeCommit: { oid: c.pr }, repository }
             : { __typename: 'Commit', oid: c.commit, repository };
         const d = last && last.duplicateOf;
         const dupIssue = typeof d === 'number' ? w.issues.get(d) : d;

@@ -85,11 +85,17 @@ export function guessFromTags(tagNames) {
 
 // Player text goes into the issue as data: no HTML (so no fake marker comment)
 // and no @mentions that would notify GitHub users. Discord's no-preview link
-// forms, [text](<url>) and <url>, lose their angle brackets first, so the
-// escaping does not break them; a bare URL still links on GitHub.
+// forms, [text](<url>) and <url>, become explicit Markdown links before the
+// escaping, so it does not break them. An explicit destination keeps every
+// character (a bare URL would lose trailing punctuation); the characters that
+// would end it early or be escaped are percent-encoded.
+const URL_IN_BRACKETS = /<(https?:\/\/[^\s<>]+)>/g;
+const linkDest = (url) => url.replace(/[()[\]@]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+
 export function neutralize(text) {
   return String(text || '')
-    .replace(/<(https?:\/\/[^\s<>]+)>/g, '$1')
+    .replace(/\]\(<(https?:\/\/[^\s<>]+)>\)/g, (m, url) => `](${linkDest(url)})`)
+    .replace(URL_IN_BRACKETS, (m, url) => `[${url.replace(/[[\]]/g, '\\$&')}](${linkDest(url)})`)
     .replace(/</g, '&lt;').replace(/@/g, '@​');
 }
 

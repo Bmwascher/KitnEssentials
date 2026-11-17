@@ -94,7 +94,14 @@ test('a TEMPLATES value that is not lists of field names falls back to the defau
 
 test('Discord no-preview links survive into the issue as working links', () => {
   assert.equal(C.neutralize('see [Guide](<https://example.com/a?b=1>) and <https://example.com/x>'),
-    'see [Guide](https://example.com/a?b=1) and https://example.com/x');
+    'see [Guide](https://example.com/a?b=1) and [https://example.com/x](https://example.com/x)');
   assert.equal(C.neutralize('<!-- discord-thread: 1 --> <b>'), '&lt;!-- discord-thread: 1 --> &lt;b>');
   assert.equal(C.neutralize('<https://a.example/<!--x>'), '&lt;https://a.example/&lt;!--x>');
+  // Every character of the destination survives: parentheses, trailing
+  // punctuation, an @ (which the mention escaping would otherwise change).
+  assert.equal(C.neutralize('[Guide](<https://example.com/a)b>)'), '[Guide](https://example.com/a%29b)');
+  assert.equal(C.neutralize('<https://example.com/W_(x)>'), '[https://example.com/W_(x)](https://example.com/W_%28x%29)');
+  assert.equal(C.neutralize('<https://example.com/search?q=wow!>'), '[https://example.com/search?q=wow!](https://example.com/search?q=wow!)');
+  assert.equal(C.neutralize('[Guide](<https://example.com/@user/p>)'), '[Guide](https://example.com/%40user/p)');
+  assert.equal(C.neutralize('<https://example.com/[1]>'), '[https://example.com/\\[1\\]](https://example.com/%5B1%5D)');
 });

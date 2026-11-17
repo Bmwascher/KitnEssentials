@@ -84,6 +84,21 @@ test('an issue closed by merging a PR, whose closed event carries no commit, is 
   assert.equal(w.tagOf('717'), 'Shipped');
 });
 
+test('a closer that is an unmerged PR is no fix; a closer that is a commit here is', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', null, { pr: 'eeeeeee5', merged: false });
+  await closed(w, 17);
+  assert.deepEqual(labels(w, 17), []);
+  assert.equal(w.tagOf('717'), 'Closed');
+  const w2 = world();
+  w2.issue(17);
+  w2.close(17, 'completed', null, { commit: 'fffffff6' });
+  await closed(w2, 17);
+  assert.deepEqual(labels(w2, 17), ['pending-release']);
+  assert.equal(w2.tagOf('717'), 'Fixed, next update');
+});
+
 test('a PR merged in another repository is not this repo\'s fix', async () => {
   const w = world();
   w.issue(17);
