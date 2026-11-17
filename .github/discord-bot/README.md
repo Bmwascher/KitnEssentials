@@ -147,8 +147,7 @@ Accepted on purpose; each line says how you would notice it.
 - A status note is changed by replacing its text, and GitHub cannot refuse a
   replace when the note changed since it was read. The bot reads a note again
   just before it sends or drops it; the window left is the time between that
-  read and the replace (one GitHub call, usually well under a second, at most
-  the 15-second call limit):
+  read and the replace taking effect (usually well under a second):
   - If a fix-mode sweep drops a note while a re-run marks its send failed,
     the note reads Dropped, and later sweeps no longer list the message as
     possibly not reaching the player.
