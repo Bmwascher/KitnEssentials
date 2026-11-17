@@ -7,7 +7,7 @@ import {
   STATUS, MESSAGES, PERMS, buildTitle, buildBody, labelsFor, cleanPostTitle,
   guessFromTags, normClient, normType, normRepoKey, parseRepos, timedFetch,
   parseForums, parseRoleIds, parseTemplates, templateCheck, templateSummary,
-  parseCustomId,
+  parseCustomId, templateLabels,
 } from './core.js';
 import { discordClient } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
@@ -27,6 +27,9 @@ const REPORT_BY_MS = 25000;
 const RELEASE_BY_MS = 29000;
 const CALL_MS = 8000;
 const TAIL_MS = 5000;
+// The forum's pinned template is advice only: its read gets at most 2 s, and
+// fileIssue ends it a full call's time before the filing's deadline.
+const TEMPLATE_MS = 2000;
 // Signed requests older than this are refused (a captured one cannot be replayed later).
 const MAX_AGE_S = 300;
 
@@ -141,6 +144,28 @@ async function openForm(interaction, env, deps, { threadId, messageId, greetingI
   });
 }
 
+// The fields to check a post against: the labels of its forum's pinned
+// template message when FORUMS names one and it can be read, else the
+// TEMPLATES setting or the defaults for the post's type. Read at each filing
+// (a few a day) and never stored, so an edited template counts at once and no
+// KV write is spent. `note` tells the moderator why the fallback was used.
+async function templateFields(cfg, forumId, type, env, deps, deadline) {
+  const fallback = cfg.templates[type] || [];
+  const info = cfg.forumInfo[forumId] || {};
+  if (info.badTemplate) return { fields: fallback, note: "the forum's template link is not a message link, so the default fields were checked" };
+  const link = info.template;
+  if (!link) return { fields: fallback, note: '' };
+  try {
+    const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, TEMPLATE_MS, deadline));
+    const msg = await discord.call('GET', `/channels/${link.channelId}/messages/${link.messageId}`);
+    const labels = templateLabels(msg && msg.content);
+    if (labels.length) return { fields: labels, note: '' };
+    return { fields: fallback, note: "the forum's pinned template has no labels, so the default fields were checked" };
+  } catch (e) {
+    return { fields: fallback, note: `could not read the forum's pinned template (${String(e.message).slice(0, 120)}), so the default fields were checked` };
+  }
+}
+
 // Runs after Discord already has its "thinking..." answer. Every call is timed,
 // and every outcome, partial ones included, is reported back to the moderator.
 export async function fileIssue(interaction, env, deps) {
@@ -220,8 +245,10 @@ export async function fileIssue(interaction, env, deps) {
     const message = await discord.call('GET', `/channels/${threadId}/messages/${messageId}`);
     const author = message.author || {};
     const by = interaction.member && interaction.member.user;
-    const fields = cfg.templates[type] || [];
-    const check = fields.length ? templateCheck(message.content, fields, (message.attachments || []).length) : [];
+    // The template read ends a full call's time before the filing's deadline,
+    // so the create can always start.
+    const template = await templateFields(cfg, thread.parent_id, type, env, deps, t0 + budgetMs - callMs);
+    const check = template.fields.length ? templateCheck(message.content, template.fields, (message.attachments || []).length) : [];
     creating = true;
     const issue = await gh.createIssue(repo, {
       title: buildTitle({ repoKey, client, module: v.module, title: v.title }),
@@ -242,6 +269,7 @@ export async function fileIssue(interaction, env, deps) {
 
     // The issue exists from here on: report it whatever else fails.
     const notes = [];
+    if (template.note) notes.push(template.note);
     try {
       const status = await discord.setStatus(threadId, STATUS.triaged);
       if (status.skipped) notes.push(`tag not set: ${status.skipped}`);

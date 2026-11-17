@@ -22,8 +22,10 @@ crons = ["* * * * *", "0 15 * * *"]
 # Several repos: {"KE":"owner/one","UI":"owner/two"}.
 REPOS = '{"KE":"Bmwascher/KitnEssentials"}'
 # The forums the bot works in, keyed by channel id, each with the client and
-# type every post there has ({} guesses from the post's tags), e.g.
-# {"111":{"client":"Retail","type":"Bug"},"222":{"client":"Forever","type":"Bug"},"333":{"type":"Feature"}}
+# type every post there has ({} guesses from the post's tags), and optionally
+# the message link of the forum's pinned template (right-click the template
+# message > Copy Message Link), whose labels the template check then uses, e.g.
+# {"111":{"client":"Retail","type":"Bug","template":"https://discord.com/channels/1/444/555"},"222":{"client":"Forever","type":"Bug"},"333":{"type":"Feature"}}
 # Required: while it is empty the bot does nothing anywhere.
 FORUMS = ""
 # The server those forums are in (the scan lists its posts).
@@ -36,5 +38,7 @@ MOD_CHANNEL_ID = ""
 # How old a post with no status must be before the daily list names it.
 STALE_DAYS = "3"
 # Optional: the template fields each type of post should fill, checked as
-# advice for moderators only. Default: see DEFAULT_TEMPLATES in src/core.js.
-# TEMPLATES = '{"Bug":["Version","Issue Details","Steps to Reproduce"],"Feature":["Summary"]}'
+# advice for moderators only, in a forum with no readable pinned template.
+# List every label of the template: a label left out reads as part of the
+# answer above it. Default: see DEFAULT_TEMPLATES in src/core.js.
+# TEMPLATES = '{"Bug":["Addon version","UI version","Updated with the game closed","What happened","What you expected","How to make it happen again","Screenshots"],"Feature":["Area","My idea or feedback","Why it matters","Screenshots"]}'

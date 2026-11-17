@@ -527,3 +527,42 @@ test('a button or form whose ids are not all digits is refused before any call',
   }
 });
 
+test('the template check reads the forum\'s pinned template, and falls back to the defaults with a note', async () => {
+  const LINK = 'https://discord.com/channels/1/960/961';
+  const pinned = '```\nWhat happened:\n(what went wrong)\n\nScreenshots:\n(attach)\n```';
+  const post = 'What happened:\nbags overlap\n\nScreenshots:\n';
+  for (const [link, answer, body, told] of [
+    [LINK, () => ({ id: '961', content: pinned }), /Template check \(advisory\): What happened present · Screenshots missing$/m, /^Created ONE #17: u Template: Screenshots missing\.$/],
+    [LINK, () => new Response('{"message":"Missing Access"}', { status: 403 }), /Template check \(advisory\): Addon version unsure/, /could not read the forum's pinned template \(.*403.*\), so the default fields were checked/],
+    [LINK, () => ({ id: '961', content: 'Welcome! Read the rules first.' }), /Template check \(advisory\): Addon version unsure/, /the forum's pinned template has no labels, so the default fields were checked/],
+    // A post's link pasted instead of the message's: nothing is read.
+    ['https://discord.com/channels/1/960', () => { throw new Error('read'); }, /Template check \(advisory\): Addon version unsure/, /the forum's template link is not a message link, so the default fields were checked/],
+  ]) {
+    const PIN = { ...env, FORUM_CHANNEL_IDS: '', FORUMS: JSON.stringify({ 900: { client: 'Retail', type: 'Bug', template: link } }) };
+    let created;
+    const f = fakeFetch(discordRoutes(githubRoutes([], [
+      ['GET', /\/channels\/960\/messages\/961$/, answer],
+      ['GET', /\/channels\/700\/messages\/800$/, () => ({ id: '800', content: post, author: { id: '42', username: 'pat' }, attachments: [] })],
+      ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, (b) => { created = b; return { number: 17, html_url: 'u' }; }],
+    ])));
+    const ctx = ctxFor();
+    await handle(await signed(submit()), PIN, ctx, { fetch: f, installationToken: async () => 'inst' });
+    await Promise.all(ctx.jobs);
+    assert.match(created.body, body);
+    assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, told);
+  }
+});
+
+test('a stalled pinned-template read near the deadline still leaves the create its full call time', async () => {
+  const PIN = { ...env, FORUM_CHANNEL_IDS: '', FORUMS: '{"900":{"client":"Retail","type":"Bug","template":"https://discord.com/channels/1/960/961"}}' };
+  const base = fakeFetch(discordRoutes(githubRoutes([], [
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u' })],
+  ])));
+  const hang = (url, init = {}) => (/\/channels\/960\/messages\/961$/.test(url) ? stall(init) : base(url, init));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), PIN, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 100, budgetMs: 300 });
+  const [res] = await Promise.all(ctx.jobs);
+  assert.equal(res.created, 17, JSON.stringify(res));
+  assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /could not read the forum's pinned template/);
+});
+

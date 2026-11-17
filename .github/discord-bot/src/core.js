@@ -293,8 +293,16 @@ export function timedFetch(fetchImpl, ms, deadline = Infinity) {
   };
 }
 
+// A Discord message link (right-click the message > Copy Message Link) -> the
+// channel and the message it names, or null.
+function messageLink(raw) {
+  const m = /^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/channels\/\d+\/(\d+)\/(\d+)\/?$/.exec(String(raw || '').trim());
+  return m ? { channelId: m[1], messageId: m[2] } : null;
+}
+
 // FORUMS is JSON keyed by forum channel id; each value may name the client and
-// type every post there has: {"123":{"client":"Retail","type":"Bug"}}. A value
+// type every post there has, and the link of the forum's pinned template
+// message: {"123":{"client":"Retail","type":"Bug","template":"https://discord.com/channels/1/2/3"}}. A value
 // of {} means "guess from the post's tags". The older FORUM_CHANNEL_IDS (a
 // comma list) still works and guesses for every forum. Broken JSON gives no
 // forums, so the bot works nowhere rather than everywhere.
@@ -307,12 +315,16 @@ export function parseForums(env) {
     for (const [id, v] of Object.entries(raw)) {
       if (!/^\d+$/.test(id)) continue;
       const o = v && typeof v === 'object' ? v : {};
-      out[id] = { client: normClient(o.client), type: normType(o.type) };
+      const template = messageLink(o.template);
+      // A template value that is not a message link is flagged, not dropped
+      // quietly, so the moderator's reply can say the defaults were checked.
+      const badTemplate = !template && String(o.template ?? '').trim() !== '';
+      out[id] = { client: normClient(o.client), type: normType(o.type), template, badTemplate };
     }
     return out;
   }
   for (const id of String(env.FORUM_CHANNEL_IDS || '').split(',').map((s) => s.trim()).filter(Boolean)) {
-    out[id] = { client: null, type: null };
+    out[id] = { client: null, type: null, template: null, badTemplate: false };
   }
   return out;
 }
@@ -386,6 +398,27 @@ export function templateCheck(content, fields, attachments = 0) {
     const answer = rest.filter((l) => l && !isHint(l));
     return { field, state: answer.length ? 'present' : 'missing' };
   });
+}
+
+// A line holding only a label: one to eight words of letters, digits, _, ',
+// / and -, then a colon and nothing after, with optional * bold marks. Any
+// other punctuation, such as "Screenshots (optional):", makes it no label.
+const LABEL_ONLY = /^\**\s*[A-Za-z0-9][\w'/-]*(?:\s+[\w'/-]+){0,7}\s*\**\s*:\s*\**$/;
+
+// The field labels of a template message: the label-only lines of its first
+// code block, or of the whole message when it has none. Hint lines in ( ) are
+// not labels. An empty list means the message holds no template.
+export function templateLabels(content) {
+  const text = String(content || '');
+  const block = /```[^\n]*\n([\s\S]*?)```/.exec(text);
+  const labels = [];
+  for (const line of (block ? block[1] : text).split('\n')) {
+    const l = line.trim();
+    if (!LABEL_ONLY.test(l)) continue;
+    const label = l.replace(/[*:]/g, '').trim();
+    if (!labels.some((x) => x.toLowerCase() === label.toLowerCase())) labels.push(label);
+  }
+  return labels;
 }
 
 export function templateSummary(check) {

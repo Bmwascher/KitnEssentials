@@ -239,5 +239,29 @@ test('button and form ids parse only when every id part is digits', () => {
   }
 });
 
+test('a template message gives the label lines of its code block, or of the whole message', () => {
+  for (const [content, want] of [
+    ['Search this forum first.\nCopy the box below:\n```\nArea:\n(which part)\n\n**My idea or feedback:**\n(what works)\n```', ['Area', 'My idea or feedback']],
+    ['Area:\n(x)\nWhy it matters:\n(y)', ['Area', 'Why it matters']],
+    ['Welcome! Read the rules first.', []],
+    ['```\nArea:\nScreenshots (optional):\n```', ['Area']],
+  ]) assert.deepEqual(C.templateLabels(content), want, content);
+});
+
+test('a forum can name its pinned template message by its link', () => {
+  // Copy Message Link gives /channels/<server>/<post>/<message>; a post's starter
+  // message has the post's own id, so the last two ids can be equal.
+  const f = C.parseForums({ FORUMS: JSON.stringify({
+    900: { type: 'Bug', template: 'https://discord.com/channels/1/950/951' },
+    901: { template: 'https://discord.com/channels/1/960/960' },
+    902: { template: 'not a link' },
+  }) });
+  assert.deepEqual(f['900'].template, { channelId: '950', messageId: '951' });
+  assert.deepEqual(f['901'].template, { channelId: '960', messageId: '960' });
+  assert.equal(f['902'].template, null);
+  // A value that is not a message link is flagged, so the moderator is told.
+  assert.deepEqual([f['900'].badTemplate, f['902'].badTemplate], [false, true]);
+});
+
 
 
