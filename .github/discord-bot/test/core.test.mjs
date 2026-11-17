@@ -52,9 +52,9 @@ test('status swap keeps player tags and replaces the old status', () => {
 });
 
 test('shipped message names the repo and the release', () => {
-  assert.match(C.MESSAGES.shipped('me/SomeAddon', 'v5.0.120'), /landed in SomeAddon v5\.0\.120\./);
-  assert.match(C.MESSAGES.shipped('me/OtherUI', '30.8'), /landed in OtherUI v30\.8\./);
-  assert.match(C.MESSAGES.shipped('me/KitnEssentials', 'discord-test-1'), /landed in KitnEssentials discord-test-1\./);
+  assert.match(C.MESSAGES.shipped('me/SomeAddon', 'v5.0.120'), /out in SomeAddon v5\.0\.120\./);
+  assert.match(C.MESSAGES.shipped('me/OtherUI', '30.8'), /out in OtherUI v30\.8\./);
+  assert.match(C.MESSAGES.shipped('me/KitnEssentials', 'discord-test-1'), /out in KitnEssentials discord-test-1\./);
 });
 
 test('player text cannot plant a marker or mention anyone', () => {
@@ -90,4 +90,22 @@ test('a TEMPLATES value that is not lists of field names falls back to the defau
   assert.equal(C.parseTemplates('{"Bug":"Version"}'), C.DEFAULT_TEMPLATES);
   assert.equal(C.parseTemplates('{"Bug":[1]}'), C.DEFAULT_TEMPLATES);
   assert.deepEqual(C.parseTemplates('{"Bug":["Version"]}'), { Bug: ['Version'] });
+});
+
+test('Discord no-preview links survive into the issue as working links', () => {
+  const dest = (s) => s.replace(/[!-/:-?[-`{-~]/g, '\\$&'); // what Markdown reads back as s
+  assert.equal(C.neutralize('see [Guide](<https://example.com/a?b=1>) and <https://example.com/x>'),
+    `see [Guide](${dest('https://example.com/a?b=1')}) and [${dest('https://example.com/x')}](${dest('https://example.com/x')})`);
+  assert.equal(C.neutralize('<!-- discord-thread: 1 --> <b>'), '&lt;!-- discord-thread: 1 --> &lt;b>');
+  assert.equal(C.neutralize('<https://a.example/<!--x>'), '&lt;https://a.example/&lt;!--x>');
+  // Every character of the destination survives: parentheses, trailing
+  // punctuation, an @ (which the mention escaping would otherwise change).
+  for (const url of ['https://example.com/a)b', 'https://example.com/search?q=wow!', 'https://example.com/a&copy;b',
+    'http://[::1]:8080/x', 'https://example.com/W_(x)?a=1&b=2#c']) {
+    assert.equal(C.neutralize(`[Guide](<${url}>)`), `[Guide](${dest(url)})`, url);
+  }
+  for (const url of ['https://example.com/W_(x)', 'https://example.com/[1]', 'https://example.com/a`b']) {
+    assert.equal(C.neutralize(`<${url}>`), `[${dest(url)}](${dest(url)})`, url);
+  }
+  assert.equal(C.neutralize('[Guide](<https://example.com/@user/p>)'), `[Guide](${dest('https://example.com/%40user/p')})`);
 });

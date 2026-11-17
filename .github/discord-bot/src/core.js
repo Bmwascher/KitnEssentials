@@ -84,9 +84,23 @@ export function guessFromTags(tagNames) {
 }
 
 // Player text goes into the issue as data: no HTML (so no fake marker comment)
-// and no @mentions that would notify GitHub users.
+// and no @mentions that would notify GitHub users. Discord's no-preview link
+// forms, [text](<url>) and <url>, become explicit Markdown links before the
+// escaping, so it does not break them. An explicit destination keeps every
+// character (a bare URL would lose trailing punctuation): Markdown takes a
+// backslashed punctuation mark literally, so every one is backslashed, which
+// leaves the URL itself unchanged. Only @ is percent-encoded, since the
+// mention escaping below would change it. A bare URL's link text gets the
+// same backslashes, so a backtick or bracket in it cannot break the link.
+const URL_IN_BRACKETS = /<(https?:\/\/[^\s<>]+)>/g;
+const PUNCT = /[!-/:-?[-`{-~]/g;
+const linkDest = (url) => url.replace(/@/g, '%40').replace(PUNCT, '\\$&');
+
 export function neutralize(text) {
-  return String(text || '').replace(/</g, '&lt;').replace(/@/g, '@​');
+  return String(text || '')
+    .replace(/\]\(<(https?:\/\/[^\s<>]+)>\)/g, (m, url) => `](${linkDest(url)})`)
+    .replace(URL_IN_BRACKETS, (m, url) => `[${url.replace(PUNCT, '\\$&')}](${linkDest(url)})`)
+    .replace(/</g, '&lt;').replace(/@/g, '@​');
 }
 
 function quote(text) {
@@ -161,13 +175,16 @@ export function repoDisplay(repoFullName, tag) {
 
 export const MESSAGES = {
   tracked: (key, n) => `Thanks! This is now tracked as ${key} #${n}. We'll post here when a fix is being tested and when it ships.`,
-  inProgress: () => 'A fix is up and being tested.',
-  fixed: () => 'The fix is merged and will be in the next update.',
-  shipped: (repoFullName, tag) => `The fix landed in ${repoDisplay(repoFullName, tag)}. Update the addon to get it, and reply here if it still happens.`,
-  done: () => 'Marked as done.',
-  closed: (reason) => reason === 'duplicate'
-    ? 'Closed as a duplicate of another report.'
-    : 'Closed without a change for now.',
+  inProgress: () => "Good news: a fix for this is being worked on and tested. We'll post here when it's done.",
+  fixed: () => "This is fixed! The fix will be in the next update. We'll post here when that update is out.",
+  shipped: (repoFullName, tag) => `The fix is out in ${repoDisplay(repoFullName, tag)}. Update your addons, and let us know here if you still see the problem.`,
+  done: () => "A moderator has closed this. If it's still happening for you, reply here and we'll take another look.",
+  // `link` is the other report's Discord post, when there is one.
+  closed: (reason, link) => {
+    if (reason !== 'duplicate') return "We've decided not to change this for now, so we're closing this post. Thanks for the suggestion!";
+    const other = link ? `another report (${link})` : 'another report';
+    return `This is the same problem as ${other}, so we'll follow it there and close this one. Thanks for reporting it!`;
+  },
   needsInfo: (uid) => `${uid ? `<@${uid}> ` : ''}Could you add a bit more detail? A screenshot, your addon version and the steps to make it happen help a lot.`,
 };
 

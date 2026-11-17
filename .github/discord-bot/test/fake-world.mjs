@@ -44,11 +44,15 @@ export function world() {
     w.issues.get(n).comments.push(c);
     return c;
   };
-  w.close = (n, reason = 'completed', commit = null) => {
+  // `closer` is what GraphQL names as the closer: { pr: sha } for a merged PR
+  // (whose REST event carries no commit; `merged: false` for one that was
+  // not) or { commit: sha }, with `repo` to put it in another repository.
+  // `duplicateOf` is the issue number (or { body, labels, repo }) it duplicates.
+  w.close = (n, reason = 'completed', commit = null, closer = null, duplicateOf = null) => {
     const i = w.issues.get(n);
     i.state = 'closed';
     i.state_reason = reason;
-    i.events.push({ id: w.nextId++, event: 'closed', commit_id: commit });
+    i.events.push({ id: w.nextId++, event: 'closed', commit_id: commit, closer, duplicateOf });
   };
   w.tagOf = (threadId) => {
     const id = w.threads.get(threadId).applied_tags.at(-1);
@@ -127,13 +131,26 @@ export function world() {
         const all = (p ? p.closes : []).map((c) => (typeof c === 'number' ? { number: c, repository: { nameWithOwner: 'me/one' } } : c));
         return json({ data: { repository: { pullRequest: p ? { closingIssuesReferences: gqlPage(all, v.after) } : null } } });
       }
+      if (/ClosedEvent/.test(body.query)) {
+        const last = w.issues.get(v.number).events.filter((e) => e.event === 'closed').at(-1);
+        const c = last && last.closer;
+        const repository = { nameWithOwner: (c && c.repo) || 'me/one' };
+        const closer = !c ? null
+          : c.pr ? { __typename: 'PullRequest', merged: c.merged !== false, mergeCommit: { oid: c.pr }, repository }
+            : { __typename: 'Commit', oid: c.commit, repository };
+        const d = last && last.duplicateOf;
+        const dupIssue = typeof d === 'number' ? w.issues.get(d) : d;
+        const dupLabels = [...(dupIssue && dupIssue.labels ? dupIssue.labels : [])].map((name) => ({ name }));
+        const duplicateOf = dupIssue ? { body: dupIssue.body, labels: { nodes: dupLabels }, repository: { nameWithOwner: dupIssue.repo || 'me/one' } } : null;
+        return json({ data: { repository: { issue: { timelineItems: { nodes: last ? [{ closer, duplicateOf }] : [] } } } } });
+      }
       return json({ errors: [{ message: 'unknown query' }] });
     }],
     ['GET', /discord\.com\/api\/v10\/channels\/(\d+)$/, (m) => {
       if (m[1] === FORUM.id) return json(FORUM);
       const t = w.threads.get(m[1]);
       if (!t) return json({ message: 'Unknown Channel' }, 404);
-      return json({ id: t.id, parent_id: t.parent_id, applied_tags: [...t.applied_tags], thread_metadata: { archived: t.archived } });
+      return json({ id: t.id, guild_id: '900', parent_id: t.parent_id, applied_tags: [...t.applied_tags], thread_metadata: { archived: t.archived } });
     }],
     ['PATCH', /discord\.com\/api\/v10\/channels\/(\d+)$/, (m, url, body) => {
       const t = w.threads.get(m[1]);

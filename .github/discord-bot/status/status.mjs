@@ -157,8 +157,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // The issue's newest `closed` event: its id, and its commit when that
   // commit is in this repo (a commit elsewhere can close it, but cannot be
   // compared with this repo's tags). GitHub closes an issue from a commit
-  // only when the commit reaches the default branch.
-  async function lastClose(n) {
+  // only when the commit reaches the default branch. `wantFix` is set only
+  // for a close as completed, the one kind whose fix is used.
+  async function lastClose(n, wantFix = false) {
     let last = null;
     for (let page = 1; ; page++) {
       const batch = await gh.call('GET', `/repos/${repo}/issues/${n}/events?per_page=100&page=${page}`);
@@ -167,13 +168,37 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     }
     if (!last) return null;
     const here = last.commit_id && (!last.commit_url || String(last.commit_url).includes(`/repos/${repo}/commits/`));
-    return { id: last.id, sha: here ? last.commit_id : null };
+    if (here) return { id: last.id, sha: last.commit_id };
+    return { id: last.id, sha: wantFix && !last.commit_id ? await closerSha(n) : null };
+  }
+
+  // A merged PR closes its issues with a `closed` event that carries no
+  // commit; GraphQL names the closer instead. The
+  // newest ClosedEvent's closer: a merged PR's merge commit, or a commit,
+  // when it belongs to this repo.
+  async function closerSha(n) {
+    const data = await graphql(`query($owner: String!, $name: String!, $number: Int!) {
+      repository(owner: $owner, name: $name) { issue(number: $number) {
+        timelineItems(itemTypes: [CLOSED_EVENT], last: 1) { nodes { ... on ClosedEvent { closer {
+          __typename
+          ... on PullRequest { merged mergeCommit { oid } repository { nameWithOwner } }
+          ... on Commit { oid repository { nameWithOwner } }
+        } } } }
+      } }
+    }`, { owner, name, number: n });
+    const issue = data && data.repository && data.repository.issue;
+    const node = issue && issue.timelineItems && issue.timelineItems.nodes[0];
+    const c = node && node.closer;
+    if (!c || !c.repository || String(c.repository.nameWithOwner).toLowerCase() !== repo.toLowerCase()) return null;
+    if (c.__typename === 'PullRequest') return c.merged && c.mergeCommit ? c.mergeCommit.oid : null;
+    if (c.__typename === 'Commit') return c.oid || null;
+    return null;
   }
 
   async function stateOf(n) {
     const issue = await gh.getIssue(repo, n);
     const closedDone = issue.state === 'closed' && issue.state_reason === 'completed';
-    const close = issue.state === 'closed' ? await lastClose(n) : null;
+    const close = issue.state === 'closed' ? await lastClose(n, issue.state_reason === 'completed') : null;
     const fix = closedDone && close && close.sha ? close.sha : null;
     const records = await recordsOf(n);
     const ship = fix ? records.shipped.find((s) => s.fixes.includes(fix)) : null;
@@ -305,6 +330,33 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     await deliver(moved.n, moved.threadId, note, text, status);
   }
 
+  // The Discord post of the issue this one was closed as a duplicate of, when
+  // that issue is in this repo and the bot filed it. Only a nicety: any
+  // failure gives null and the message goes out without the link.
+  async function duplicateLink(n) {
+    try {
+      const data = await graphql(`query($owner: String!, $name: String!, $number: Int!) {
+        repository(owner: $owner, name: $name) { issue(number: $number) {
+          timelineItems(itemTypes: [CLOSED_EVENT], last: 1) { nodes { ... on ClosedEvent {
+            duplicateOf { ... on Issue { body labels(first: 100) { nodes { name } } repository { nameWithOwner } } }
+          } } }
+        } }
+      }`, { owner, name, number: n });
+      const issue = data && data.repository && data.repository.issue;
+      const node = issue && issue.timelineItems && issue.timelineItems.nodes[0];
+      const d = node && node.duplicateOf;
+      if (!d || !d.repository || String(d.repository.nameWithOwner).toLowerCase() !== repo.toLowerCase()) return null;
+      const filed = ((d.labels && d.labels.nodes) || []).some((l) => l.name === LABELS.fromDiscord);
+      const m = filed && parseMarker(d.body);
+      if (!m) return null;
+      const ch = await discord.getChannel(m.threadId);
+      return ch && ch.guild_id ? `https://discord.com/channels/${ch.guild_id}/${m.threadId}` : null;
+    } catch (err) {
+      log(`#${n}: could not find the duplicate's post: ${err.message}`);
+      return null;
+    }
+  }
+
   // The message for a post showing `status`, keyed by the fact it tells,
   // or null when that status has none.
   async function messageFor(n, st, status) {
@@ -314,7 +366,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     }
     if (status === STATUS.closed && st.close) {
       const reason = st.issue.state_reason;
-      return { key: `closed-${st.close.id}`, text: reason === 'completed' ? MESSAGES.done() : MESSAGES.closed(reason) };
+      if (reason === 'completed') return { key: `closed-${st.close.id}`, text: MESSAGES.done() };
+      const link = reason === 'duplicate' ? await duplicateLink(n) : null;
+      return { key: `closed-${st.close.id}`, text: MESSAGES.closed(reason, link) };
     }
     if (status === STATUS.inProgress) {
       // Once per time the issue is open: a second PR, or a PR back from
