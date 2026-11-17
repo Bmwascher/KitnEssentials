@@ -167,7 +167,32 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     }
     if (!last) return null;
     const here = last.commit_id && (!last.commit_url || String(last.commit_url).includes(`/repos/${repo}/commits/`));
-    return { id: last.id, sha: here ? last.commit_id : null };
+    if (here) return { id: last.id, sha: last.commit_id };
+    return { id: last.id, sha: last.commit_id ? null : await closerSha(n) };
+  }
+
+  // A merged PR closes its issues with a `closed` event that carries no
+  // commit (seen live, 2026-11-16); GraphQL names the closer instead. The
+  // newest ClosedEvent's closer: a merged PR's merge commit, or a commit,
+  // when it belongs to this repo.
+  async function closerSha(n) {
+    const [owner, name] = repo.split('/');
+    const data = await graphql(`query($owner: String!, $name: String!, $number: Int!) {
+      repository(owner: $owner, name: $name) { issue(number: $number) {
+        timelineItems(itemTypes: [CLOSED_EVENT], last: 1) { nodes { ... on ClosedEvent { closer {
+          __typename
+          ... on PullRequest { merged mergeCommit { oid } repository { nameWithOwner } }
+          ... on Commit { oid repository { nameWithOwner } }
+        } } } }
+      } }
+    }`, { owner, name, number: n });
+    const issue = data && data.repository && data.repository.issue;
+    const node = issue && issue.timelineItems && issue.timelineItems.nodes[0];
+    const c = node && node.closer;
+    if (!c || !c.repository || String(c.repository.nameWithOwner).toLowerCase() !== repo.toLowerCase()) return null;
+    if (c.__typename === 'PullRequest') return c.merged && c.mergeCommit ? c.mergeCommit.oid : null;
+    if (c.__typename === 'Commit') return c.oid || null;
+    return null;
   }
 
   async function stateOf(n) {

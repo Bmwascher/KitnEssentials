@@ -71,6 +71,28 @@ test('an issue closed by a commit is pending-release and the post says Fixed, on
   assert.match(w.issues.get(17).comments[0].body, /<!-- discord-told: fixed-aaaaaaa1 -->/);
 });
 
+test('an issue closed by merging a PR, whose closed event carries no commit, is Fixed by the merge commit', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', null, { pr: 'ccccccc3' });
+  await closed(w, 17);
+  assert.deepEqual(labels(w, 17), ['pending-release']);
+  assert.equal(w.tagOf('717'), 'Fixed, next update');
+  w.tags = [{ name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
+  w.contains.set('ccccccc3...c-v5.0.1', 'ahead');
+  await tag(w, 'v5.0.1');
+  assert.equal(w.tagOf('717'), 'Shipped');
+});
+
+test('a PR merged in another repository is not this repo\'s fix', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', null, { pr: 'ddddddd4', repo: 'someone/else' });
+  await closed(w, 17);
+  assert.deepEqual(labels(w, 17), []);
+  assert.equal(w.tagOf('717'), 'Closed');
+});
+
 test('rerunning the close records nothing twice and says nothing twice', async () => {
   const w = world();
   w.issue(17);
