@@ -87,7 +87,9 @@ KitnEssentials) before the real ones. Roughly 45 minutes.
 2. **Discord app.** At discord.com/developers/applications: New Application >
    Bot > Reset Token (keep it). Under Privileged Gateway Intents switch on
    **Message Content** (the bot reads the post it is pointed at; it never listens
-   to the server). Under Bot, switch **Public Bot** off so only you can invite it.
+   to the server). Under Installation set **Install Link** to None first
+   (Discord will not save the next step while a default install link exists),
+   then under Bot switch **Public Bot** off so only you can invite it.
    Note the Application ID and Public Key from General Information.
 3. **Invite it** with OAuth2 > URL Generator: scopes `bot` + `applications.commands`,
    permissions View Channels, Read Message History, Send Messages in Threads,
