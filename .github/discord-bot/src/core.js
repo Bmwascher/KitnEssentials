@@ -84,9 +84,13 @@ export function guessFromTags(tagNames) {
 }
 
 // Player text goes into the issue as data: no HTML (so no fake marker comment)
-// and no @mentions that would notify GitHub users.
+// and no @mentions that would notify GitHub users. Discord's no-preview link
+// forms, [text](<url>) and <url>, lose their angle brackets first, so the
+// escaping does not break them; a bare URL still links on GitHub.
 export function neutralize(text) {
-  return String(text || '').replace(/</g, '&lt;').replace(/@/g, '@​');
+  return String(text || '')
+    .replace(/<(https?:\/\/[^\s<>]+)>/g, '$1')
+    .replace(/</g, '&lt;').replace(/@/g, '@​');
 }
 
 function quote(text) {

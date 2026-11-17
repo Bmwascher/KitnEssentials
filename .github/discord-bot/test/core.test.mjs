@@ -91,3 +91,10 @@ test('a TEMPLATES value that is not lists of field names falls back to the defau
   assert.equal(C.parseTemplates('{"Bug":[1]}'), C.DEFAULT_TEMPLATES);
   assert.deepEqual(C.parseTemplates('{"Bug":["Version"]}'), { Bug: ['Version'] });
 });
+
+test('Discord no-preview links survive into the issue as working links', () => {
+  assert.equal(C.neutralize('see [Guide](<https://example.com/a?b=1>) and <https://example.com/x>'),
+    'see [Guide](https://example.com/a?b=1) and https://example.com/x');
+  assert.equal(C.neutralize('<!-- discord-thread: 1 --> <b>'), '&lt;!-- discord-thread: 1 --> &lt;b>');
+  assert.equal(C.neutralize('<https://a.example/<!--x>'), '&lt;https://a.example/&lt;!--x>');
+});
