@@ -109,3 +109,85 @@ test('Discord no-preview links survive into the issue as working links', () => {
   }
   assert.equal(C.neutralize('[Guide](<https://example.com/@user/p>)'), `[Guide](${dest('https://example.com/%40user/p')})`);
 });
+
+const fence = (n, word = '') => '`'.repeat(n) + word;
+
+test('a fenced code block keeps what the player typed, between fence lines the bot writes', () => {
+  const inner = 'in function <Interface/AddOns/X.lua:12> @user <https://x.example/a> `x` $y ~~~';
+  for (const [text, want] of [
+    [`${fence(3, 'lua')}\n${inner}\n${fence(3)}`, `${fence(3, 'lua')}\n${inner}\n${fence(3)}`],
+    // A tilde fence, and an unclosed one, get backtick fence lines, closed.
+    [`~~~\n${inner}\n~~~`, `${fence(3)}\n${inner}\n${fence(3)}`],
+    [`${fence(3)}\n${inner}`, `${fence(3)}\n${inner}\n${fence(3)}`],
+    // A closing line indented up to three spaces ends the block; what follows is text.
+    [`${fence(3)}\nx\n  ${fence(4)}\n@y <b>`, `${fence(3)}\nx\n${fence(3)}\n@\u200By &lt;b>`],
+    // A line the bot does not take as the end stays inside, and the bot's fence outruns it.
+    [`${fence(3)}\nx\n\t${fence(3)}\n@y <b>`, `${fence(4)}\nx\n\t${fence(3)}\n@y <b>\n${fence(4)}`],
+    // Windows and old Mac line endings are line endings.
+    [`${fence(3)}\r\nx\r\n${fence(3)}\r\n@y <b>`, `${fence(3)}\nx\n${fence(3)}\n@\u200By &lt;b>`],
+    [`${fence(3)}\rx\r${fence(3)}\r@y`, `${fence(3)}\nx\n${fence(3)}\n@\u200By`],
+    // A language word GitHub draws instead of showing the code is dropped.
+    [`${fence(3, 'mermaid')}\nx\n${fence(3)}`, `${fence(3)}\nx\n${fence(3)}`],
+  ]) assert.equal(C.neutralize(text), want, text);
+});
+
+test('a fence-like line the bot does not accept is text, with its marks escaped', () => {
+  const esc = (s) => s.replace(/[`~]/g, '\\$&');
+  for (const [text, want] of [
+    ['  ```\n<b>\n  ```', `${esc('  ```')}\n&lt;b>\n${esc('  ```')}`],
+    ['- ```\n<b>', `${esc('- ```')}\n&lt;b>`],
+    ['> ~~~\n> <b>', `> ${esc('~~~')}\n> &lt;b>`],
+    ['```lua title\n<b>', `${esc('```lua title')}\n&lt;b>`],
+    // GitHub reads at most 255 backticks of a fence line, so a block holding a run that long stays text.
+    [`~~~\n${fence(255)}\n~~~\n<b>`, `${esc('~~~')}\n${esc(fence(255))}\n${esc('~~~')}\n&lt;b>`],
+  ]) assert.equal(C.neutralize(text), want, text);
+});
+
+test('inline code is text: backticks and long tilde runs are escaped, dollar signs left as typed', () => {
+  for (const [text, want] of [
+    ['`<b> @x`', '\\`&lt;b> @\u200Bx\\`'],
+    ['a ` <b>', 'a \\` &lt;b>'],
+    ['``a ` b``', '\\`\\`a \\` b\\`\\`'],
+    // A mark the player already escaped stays as it is.
+    ['\\`a` and \\$5', '\\`a\\` and \\$5'],
+    ['$x$ ~~~ ~~y~~', '$x$ \\~\\~\\~ ~~y~~'],
+  ]) assert.equal(C.neutralize(text), want, text);
+  // A name sits inside the bot's own line: all of it is text.
+  const body = C.buildBody({ content: 'x', reporterName: '```@x <b>', threadUrl: 'u', client: 'Retail', threadId: '2', reporterId: '77' });
+  assert.ok(body.includes('**\\`\\`\\`@\u200Bx &lt;b>**'), body);
+});
+
+test('a marker comment planted inside code is broken, and only the bot marker parses', () => {
+  const content = '`<!-- discord-thread: 9 reporter: 9 -->`\n```\n<!-- discord-thread: 8 -->\n```';
+  const body = C.buildBody({ content, reporterName: 'Pat', threadUrl: 'u', client: 'Retail', threadId: '2', reporterId: '77' });
+  assert.equal([...body.matchAll(/<!--/g)].length, 1, 'only the bot marker is a comment');
+  assert.deepEqual(C.parseMarker(body), { threadId: '2', reporterId: '77' });
+  assert.match(body, /\n> <\u200B!-- discord-thread: 8 -->\n/);
+  assert.ok(body.includes('> \\`&lt;!-- discord-thread: 9 reporter: 9 -->\\`'), body);
+});
+
+test('a titled no-preview link becomes one working link that keeps its title', () => {
+  const dest = (s) => s.replace(/[!-/:-?[-`{-~]/g, '\\$&');
+  const url = 'https://example.com/a?b=1';
+  for (const title of ['"hover <b>"', "'hover <b>'", '(hover <b>)']) {
+    assert.equal(C.neutralize(`[Guide](<${url}> ${title})`), `[Guide](${dest(url)} "hover &lt;b>")`, title);
+  }
+  // The title stays title text: a URL is not turned into a link, backticks
+  // open no code, and the player's escaped quote stays a quote.
+  const guide = (title) => C.neutralize(`[Guide](<https://example.com> ${title})`);
+  const out = (title) => `[Guide](${dest('https://example.com')} ${title})`;
+  assert.equal(guide('"See <https://docs.example> @x"'), out('"See &lt;https://docs.example> @\u200Bx"'));
+  assert.equal(guide('"Use `config`"'), out('"Use \\`config\\`"'));
+  assert.equal(guide('"say \\"hi\\""'), out('"say \\"hi\\""'));
+});
+
+test('an escaped backtick and a bracketed URL holding backticks are prose, not code', () => {
+  const dest = (s) => s.replace(/[!-/:-?[-`{-~]/g, '\\$&');
+  assert.equal(C.neutralize('\\`<b> @user`'), '\\`&lt;b> @\u200Buser\\`');
+  const url = 'https://example.com/a`b`';
+  assert.equal(C.neutralize(`<${url}>`), `[${dest(url)}](${dest(url)})`);
+  const a = 'https://x.example/a`';
+  const b = 'https://y.example/b`';
+  assert.equal(C.neutralize(`<${a}> and <${b}>`), `[${dest(a)}](${dest(a)}) and [${dest(b)}](${dest(b)})`);
+});
+

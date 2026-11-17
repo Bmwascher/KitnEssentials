@@ -84,24 +84,110 @@ export function guessFromTags(tagNames) {
 }
 
 // Player text goes into the issue as data: no HTML (so no fake marker comment)
-// and no @mentions that would notify GitHub users. Discord's no-preview link
-// forms, [text](<url>) and <url>, become explicit Markdown links before the
-// escaping, so it does not break them. An explicit destination keeps every
+// and no @mentions that would notify GitHub users. A fenced code block keeps
+// what the player typed, since Markdown shows it literally; only `<!--` is
+// broken there, so no marker comment can form. The bot writes both fence lines
+// itself, with more backticks than any run inside the block, so GitHub can
+// end the block only where the bot does, whatever the player typed. All else
+// is text: each backtick, and each run of three or more tildes, is
+// backslashed, so GitHub shows it as typed and opens no code or fence there.
+// A $ is left alone: GitHub draws $a$ as math even when escaped, and keeps
+// what is inside escaped, so it costs only looks.
+// Discord's no-preview link forms, [text](<url>), [text](<url> "title") and
+// <url>, become explicit Markdown links. An explicit destination keeps every
 // character (a bare URL would lose trailing punctuation): Markdown takes a
 // backslashed punctuation mark literally, so every one is backslashed, which
-// leaves the URL itself unchanged. Only @ is percent-encoded, since the
-// mention escaping below would change it. A bare URL's link text gets the
-// same backslashes, so a backtick or bracket in it cannot break the link.
-const URL_IN_BRACKETS = /<(https?:\/\/[^\s<>]+)>/g;
+// leaves the URL itself unchanged. Only @ is percent-encoded, since a mention
+// escape would change it. A bare URL's link text gets the same backslashes,
+// so a backtick or bracket in it cannot break the link. One pass handles
+// each piece once, so a title or a link's text is never rewritten again.
+const BRACKETED_URL = /<(https?:\/\/[^\s<>]+)>/;
+// A link title in any of its three forms, with backslash escapes.
+const TITLE = /"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|\(((?:[^()\\\n]|\\.)*)\)/;
+// A no-preview link's destination, with an optional title.
+const NO_PREVIEW = new RegExp(`\\]\\(${BRACKETED_URL.source}(?:[ \\t]+(?:${TITLE.source}))?[ \\t]*\\)`);
+// One pass over text: a no-preview link, a bracketed URL, a run of backticks
+// or of three or more tildes with the backslashes before it, or a < or @.
+const PROSE = new RegExp([NO_PREVIEW.source, BRACKETED_URL.source, '(\\\\*)(`+|~{3,})', '[<@]'].join('|'), 'g');
 const PUNCT = /[!-/:-?[-`{-~]/g;
+// A zero-width space, written by code point so the source shows it.
+const ZWSP = String.fromCharCode(0x200b);
 const linkDest = (url) => url.replace(/@/g, '%40').replace(PUNCT, '\\$&');
+const plain = (s) => s.replace(/</g, '&lt;').replace(/@/g, `@${ZWSP}`);
+const escapeEach = (s) => s.replace(/[\s\S]/g, '\\$&');
+// A title keeps its text: the player's escapes are read, then its quote
+// marks, backslashes and backticks are escaped, and its < and @ as anywhere
+// else (a title shows the &lt; entity as <).
+const linkTitle = (t) => plain(t.replace(/\\([!-/:-@[-`{-~])/g, '$1').replace(/[\\"`]/g, '\\$&'));
+
+function neutralizeProse(text) {
+  return text.replace(PROSE, (m, url, t1, t2, t3, bare, slashes, marks) => {
+    if (url) {
+      const title = t1 ?? t2 ?? t3;
+      return title === undefined ? `](${linkDest(url)})` : `](${linkDest(url)} "${linkTitle(title)}")`;
+    }
+    if (bare) return `[${plain(bare.replace(PUNCT, '\\$&'))}](${linkDest(bare)})`;
+    // A mark the player escaped stays as it is; the rest are escaped.
+    if (marks) return slashes + (slashes.length % 2 ? marks[0] + escapeEach(marks.slice(1)) : escapeEach(marks));
+    return plain(m);
+  });
+}
+
+// CR and CRLF are line endings to GitHub too; one form keeps lines aligned.
+const lf = (text) => String(text || '').replace(/\r\n?/g, '\n');
+
+// A fence the bot accepts: a line that starts, with no indent, with three or
+// more backticks or tildes, then at most one plain language word. Any other
+// fence-like line is text, its marks escaped, so GitHub opens nothing there.
+const FENCE_OPEN = /^(`{3,}|~{3,})[ \t]*([A-Za-z0-9+#.-]*)[ \t]*$/;
+// Language words GitHub draws as a diagram, formula or map instead of
+// showing the code; the block keeps its code and loses the word.
+const DRAWN = new Set(['mermaid', 'math', 'geojson', 'topojson', 'stl']);
+// GitHub reads at most this many backticks of a fence line, so a block that
+// holds a run this long cannot be outrun and stays text.
+const MAX_FENCE = 255;
+const longestRun = (lines) => Math.max(0, ...lines.flatMap((l) => (l.match(/`+/g) || []).map((r) => r.length)));
 
 export function neutralize(text) {
-  return String(text || '')
-    .replace(/\]\(<(https?:\/\/[^\s<>]+)>\)/g, (m, url) => `](${linkDest(url)})`)
-    .replace(URL_IN_BRACKETS, (m, url) => `[${url.replace(PUNCT, '\\$&')}](${linkDest(url)})`)
-    .replace(/</g, '&lt;').replace(/@/g, '@​');
+  const lines = lf(text).split('\n');
+  const out = [];
+  let prose = [];
+  const flush = () => {
+    if (prose.length) out.push(neutralizeProse(prose.join('\n')));
+    prose = [];
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const open = FENCE_OPEN.exec(lines[i]);
+    if (!open) {
+      prose.push(lines[i]);
+      continue;
+    }
+    // The block ends at a line of up to three spaces, then the same mark at
+    // least as long, then only spaces or tabs (CommonMark), or at the end of
+    // the text. Where it ends here only decides how much shows as code: the
+    // fence lines written below leave GitHub no other place to end it.
+    const close = new RegExp('^ {0,3}' + open[1][0] + '{' + open[1].length + ',}[ \\t]*$');
+    let end = i + 1;
+    while (end < lines.length && !close.test(lines[end])) end++;
+    const body = lines.slice(i + 1, end);
+    const longest = longestRun(body);
+    if (longest >= MAX_FENCE) {
+      prose.push(...lines.slice(i, end + 1));
+    } else {
+      flush();
+      const fence = '`'.repeat(Math.max(3, longest + 1));
+      const word = DRAWN.has(open[2].toLowerCase()) ? '' : open[2];
+      out.push([fence + word, ...body.map((l) => l.replace(/<!--/g, `<${ZWSP}!--`)), fence].join('\n'));
+    }
+    i = end;
+  }
+  flush();
+  return out.join('\n');
 }
+
+// A name sits inside a line of the bot's own, where no code block can form,
+// so all of it is text.
+const neutralizeInline = (text) => neutralizeProse(lf(text));
 
 function quote(text) {
   const t = neutralize(text).trim() || '(no text, see the Discord post)';
@@ -123,12 +209,12 @@ export function parseMarker(body) {
 
 export function buildBody({ content, reporterName, threadUrl, client, attachments, threadId, reporterId, sentBy, templateLine }) {
   const lines = ['## Report', '', quote(content), ''];
-  lines.push(`Reported by **${neutralize(reporterName)}** in [the Discord post](${threadUrl}) · client ${client}`);
+  lines.push(`Reported by **${neutralizeInline(reporterName)}** in [the Discord post](${threadUrl}) · client ${client}`);
   if (attachments && attachments.length) {
     lines.push('', `${attachments.length} attachment(s) on the Discord post (open the post to see them; Discord image links expire).`);
   }
   if (templateLine) lines.push('', `Template check (advisory): ${templateLine}`);
-  if (sentBy) lines.push('', `_Sent from Discord by ${neutralize(sentBy)}._`);
+  if (sentBy) lines.push('', `_Sent from Discord by ${neutralizeInline(sentBy)}._`);
   lines.push('', marker({ threadId, reporterId }));
   return lines.join('\n');
 }
