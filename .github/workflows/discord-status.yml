@@ -7,10 +7,12 @@ name: Discord status
 # DISCORD_BOT_TOKEN secret is set.
 # pull_request_target (not pull_request) so contributor PRs from forks still
 # update Discord; it runs this repo's own script and never checks out PR code.
-# Only a PR whose author has a role on the repo shows as In progress.
+# Only a PR whose author has a role on the repo shows as In progress. An edit
+# counts when it changed the description or the base, which is how a
+# `Refs #N` turned into `Fixes #N` moves the post.
 on:
   pull_request_target:
-    types: [opened, reopened, ready_for_review, converted_to_draft, closed]
+    types: [opened, edited, reopened, ready_for_review, converted_to_draft, closed]
   issues:
     types: [closed, reopened, labeled]
   push:
@@ -23,18 +25,23 @@ on:
     - cron: '17 9 * * *'
   workflow_dispatch:
 
+# actions: read lets the sweep check whether the run behind an unsent message
+# can still be re-run.
 permissions:
   contents: read
   issues: write
   pull-requests: read
+  actions: read
 
 jobs:
   status:
-    # Skipped before it can queue: labels other than needs-info, and tag
-    # deletions or moves (only a newly created tag is a release).
+    # Skipped before it can queue: labels other than needs-info, tag
+    # deletions or moves (only a newly created tag is a release), and PR
+    # edits of the title alone.
     if: >-
       (github.event_name != 'issues' || github.event.action != 'labeled' || github.event.label.name == 'needs-info') &&
-      (github.event_name != 'push' || (github.event.created && !github.event.deleted))
+      (github.event_name != 'push' || (github.event.created && !github.event.deleted)) &&
+      (github.event.action != 'edited' || github.event.changes.body || github.event.changes.base)
     # Release tags run one at a time; one PR's events run in order; everything
     # else runs alone. Runs on one issue may still overlap: each rereads after
     # writing until it agrees, and the sweep repairs what a failure left.
