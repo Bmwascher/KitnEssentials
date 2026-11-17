@@ -233,8 +233,10 @@ export async function daily(env, deps = {}) {
     const state = (await readJson(kv, 'scan:state')) || {};
     const last = Number(state.last) || 0;
     const alert = [];
-    if (now - last > STALE_SCAN_MS) {
-      alert.push(`The post scan has not run for ${Math.round((now - last) / 60000)} minutes: new posts are not getting their button. Check the Worker's cron trigger.`);
+    // An idle scan writes its state only every HEARTBEAT_MS, so the last run
+    // may be up to that much newer than the saved time.
+    if (now - last > STALE_SCAN_MS + HEARTBEAT_MS) {
+      alert.push(`The post scan has not run for at least ${Math.round((now - last - HEARTBEAT_MS) / 60000)} minutes: new posts are not getting their button. Check the Worker's cron trigger.`);
     }
     if (state.error && now - state.error.at < ERROR_SHOWN_MS) {
       alert.push(`The post scan hit a problem at ${new Date(state.error.at).toISOString()}: ${state.error.text}. Check the bot's permissions in those channels.`);

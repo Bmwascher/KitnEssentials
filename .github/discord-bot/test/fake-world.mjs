@@ -118,6 +118,13 @@ export function world() {
     // from the world's start.
     ['GET', /\/repos\/me\/one\/actions\/runs\/(\d+)$/, (m) => json(w.runs.get(m[1])
       || { id: Number(m[1]), status: 'completed', run_attempt: 1, created_at: new Date(w.start).toISOString() })],
+    ['GET', /\/repos\/me\/one\/issues\/comments\/(\d+)$/, (m) => {
+      for (const i of w.issues.values()) {
+        const c = i.comments.find((x) => x.id === Number(m[1]));
+        if (c) return json(c);
+      }
+      return json({ message: 'nf' }, 404);
+    }],
     ['PATCH', /\/repos\/me\/one\/issues\/comments\/(\d+)$/, (m, url, body) => {
       for (const i of w.issues.values()) {
         const c = i.comments.find((x) => x.id === Number(m[1]));

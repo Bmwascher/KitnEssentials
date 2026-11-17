@@ -385,9 +385,16 @@ export function templateCheck(content, fields, attachments = 0) {
   const lines = text.split('\n');
   // A label may carry words before the field name ("Addon Version:").
   const labels = fields.map((f) => new RegExp(`^\\W*(?:[a-z][\\w ]*\\s)?${escapeRe(f)}[^:\\n]*:\\**`, 'i'));
+  // A line that two fields match ("UI version:" for "Version" and "UI
+  // version") belongs to the field with the longer name.
+  const owner = (l) => {
+    let best = -1;
+    labels.forEach((re, j) => { if (re.test(l) && (best < 0 || fields[j].length > fields[best].length)) best = j; });
+    return best;
+  };
   return fields.map((field, k) => {
     if (/screenshot|image|visual/i.test(field) && attachments > 0) return { field, state: 'present' };
-    const at = lines.findIndex((l) => labels[k].test(l.trim()));
+    const at = lines.findIndex((l) => owner(l.trim()) === k);
     if (at < 0) return { field, state: 'unsure' };
     const rest = [lines[at].trim().replace(labels[k], '').trim()];
     for (let i = at + 1; i < lines.length; i++) {

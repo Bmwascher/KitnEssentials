@@ -266,16 +266,25 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     throw new Error(`#${n}: more than ${MAX_PAGES * 100} tags, too many to read`);
   }
 
+  // The issue's state, after checking a fix with no ship record against the
+  // releases: its close may have come after the release run read its lists,
+  // a record write may have failed, or the issue may have closed while this
+  // run settled its post. A fix in no release is checked once per run: a tag
+  // made later starts its own run.
+  const unreleased = new Set();
+  async function releasedState(n) {
+    const st = await stateOf(n);
+    if (!st.fix || st.shippedIn || unreleased.has(st.fix)) return st;
+    if (await releaseHolding(n, st.fix, true)) return stateOf(n);
+    unreleased.add(st.fix);
+    return st;
+  }
+
   // Write the release labels the state gives, then read again; repeat while
   // another run's write changed the answer in between.
   async function settleLabels(n) {
     for (let i = 0; i < SETTLE_TRIES; i++) {
-      let st = await stateOf(n);
-      // A fix with no ship record may already be in a release: its close
-      // came after the release run read its lists, or a record write failed.
-      if (st.fix && !st.shippedIn && (await releaseHolding(n, st.fix, true))) {
-        st = await stateOf(n);
-      }
+      const st = await releasedState(n);
       const want = wantedLabels(st);
       for (const l of want) if (!hasLabel(st.issue, l)) await gh.addLabels(repo, n, [l]);
       for (const l of RELEASE) if (!want.includes(l) && hasLabel(st.issue, l)) await gh.removeLabel(repo, n, l);
@@ -292,6 +301,28 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const head = outcome === 'sent' ? 'Delivery confirmed' : outcome === 'unconfirmed' ? UNCONFIRMED : `Dropped (${reason})`;
     const hidden = note.body.slice(note.body.indexOf('\n\n<!--'));
     await gh.call('PATCH', `/repos/${repo}/issues/comments/${note.id}`, { body: `${head}: ${note.text}${hidden}\n<!-- discord-${outcome} -->` });
+  }
+
+  // A note's body as it is now, or null once anything marked it (a re-run, a
+  // sweep, a moderator) or it was deleted. A note is read again just before it
+  // is sent or dropped, so no write lands on a newer outcome.
+  async function unmarked(note) {
+    let cur;
+    try {
+      cur = await gh.call('GET', `/repos/${repo}/issues/comments/${note.id}`);
+    } catch (e) {
+      if (/-> 404 /.test(e.message)) return null;
+      throw e;
+    }
+    const body = ((cur && cur.body) || '').replace(/\r\n?/g, '\n');
+    return /<!--\s*discord-(sent|dropped|unconfirmed|sending)\s*-->/.test(body) ? null : body;
+  }
+
+  async function dropNote(note, reason) {
+    const body = await unmarked(note);
+    if (body === null) return;
+    note.body = body;
+    await settleNote(note, 'dropped', reason);
   }
 
   // The note for a message. A note already made for this key owns it: this
@@ -317,7 +348,12 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // went out before its sent mark failed is never sent again. A failed send
   // marks it unconfirmed, for the sweep, and fails the run.
   async function deliver(n, threadId, note, text, status, ping = []) {
-    note.body = `${note.body}\n<!-- discord-sending -->`;
+    const body = await unmarked(note);
+    if (body === null) {
+      log(`#${n}: the note for "${text.slice(0, 60)}" was marked meanwhile; not sent`);
+      return;
+    }
+    note.body = `${body}\n<!-- discord-sending -->`;
     await gh.call('PATCH', `/repos/${repo}/issues/comments/${note.id}`, { body: note.body });
     try {
       await discord.send(threadId, text, ping);
@@ -341,9 +377,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   async function settlePost(n, tell) {
     const notes = [];
     for (let i = 0; i < SETTLE_TRIES; i++) {
-      const st = await stateOf(n);
+      const st = await releasedState(n);
       if (!eligible(st.issue)) {
-        for (const c of notes) await settleNote(c.note, 'dropped', 'no longer true');
+        for (const c of notes) await dropNote(c.note, 'no longer true');
         return null;
       }
       const threadId = parseMarker(st.issue.body).threadId;
@@ -362,7 +398,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         // A deleted post can never be told; its issue still moves.
         if (!/-> 404 /.test(e.message)) throw e;
         log(`#${n}: Discord post is gone (${e.message.slice(0, 120)})`);
-        for (const c of notes) await settleNote(c.note, 'dropped', 'the Discord post is gone');
+        for (const c of notes) await dropNote(c.note, 'the Discord post is gone');
         return null;
       }
       if (r.skipped) {
@@ -381,7 +417,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           notes.push({ note: own, key: m.key, text: m.text, status: want });
         }
       }
-      const after = await stateOf(n);
+      const after = await releasedState(n);
       const again = wantedStatus(after, after.issue.state === 'open' ? await prsFor(n) : []);
       if (again === want) return { n, threadId, st: after, notes };
     }
@@ -391,11 +427,11 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // Send a claimed message when the fact it tells still holds. Another run
   // may have moved the issue on since; that run tells its own news.
   async function tellNote(moved, c) {
-    const st = await stateOf(moved.n);
+    const st = await releasedState(moved.n);
     const nowStatus = wantedStatus(st, st.issue.state === 'open' ? await prsFor(moved.n) : []);
     const still = nowStatus === c.status && (await messageFor(moved.n, st, c.status));
     if (!still || still.key !== c.key) {
-      await settleNote(c.note, 'dropped', 'no longer true');
+      await dropNote(c.note, 'no longer true');
       return;
     }
     await deliver(moved.n, moved.threadId, c.note, c.text, c.status);
@@ -554,7 +590,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         handled.add(n);
         const note = await claim(n, `needs-info-${String(payload.issue.updated_at || 'once').replace(/\W/g, '')}`, text, null, true);
         if (note && !hasLabel(await gh.getIssue(repo, n), LABELS.needsInfo)) {
-          await settleNote(note, 'dropped', 'no longer true');
+          await dropNote(note, 'no longer true');
         } else if (note) {
           // A locked post does not unarchive on a new message; reopen it first.
           // A deleted post fails here, before the send, and drops the note.
@@ -562,7 +598,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
             if (/-> 404 /.test(e.message)) return true;
             throw e;
           });
-          if (gone) await settleNote(note, 'dropped', 'the Discord post is gone');
+          if (gone) await dropNote(note, 'the Discord post is gone');
           else await deliver(n, m.threadId, note, text, null, m.reporterId ? [m.reporterId] : []);
         }
       }
@@ -666,7 +702,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       log(line);
       report.push(line);
       if (!fix) return;
-      for (const s of stale) await settleNote(s.note, 'dropped', s.reason);
+      for (const s of stale) await dropNote(s.note, s.reason);
       if (owed.length) await settleLabels(n);
       else await sync(n, false);
     });

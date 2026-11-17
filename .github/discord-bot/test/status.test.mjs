@@ -1102,6 +1102,64 @@ test('a note edited in the browser, with CRLF line ends, keeps its key and messa
   assert.match(fixedNotes(w)[0].body, /^Dropped \(no longer true\): This is fixed!/);
 });
 
+test('a sweep drop does not overwrite a note a re-run marked after the sweep read it', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  refuseTagWrite(w);
+  await assert.rejects(closeRun(w, RUN), /#17/);
+  Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
+  w.clock += 60 * 60 * 1000;
+  // The run's re-run marks the note while the sweep is judging it.
+  w.hooks.push(['GET', /actions\/runs\/555$/, async () => {
+    const note = fixedNotes(w)[0];
+    note.body = `${note.body}\n<!-- discord-sending -->\n<!-- discord-unconfirmed -->`;
+  }]);
+  await sweepFix(w, []);
+  assert.equal(fixedNotes(w).length, 1);
+  assert.match(fixedNotes(w)[0].body, /<!-- discord-unconfirmed -->$/);
+  assert.doesNotMatch(fixedNotes(w)[0].body, /^Dropped/);
+});
+
+test('a re-run does not send a note a moderator marked sent after the re-run took it over', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  refuseTagWrite(w);
+  await assert.rejects(closeRun(w, RUN), /#17/);
+  // The moderator sends it by hand and marks the note while the re-run moves the post.
+  let marked = false;
+  w.hooks.push(['PATCH', /channels\/717$/, async () => {
+    if (marked) return;
+    marked = true;
+    const note = fixedNotes(w)[0];
+    note.body = `${note.body}\n<!-- discord-sent -->`;
+  }]);
+  await closeRun(w, { ...RUN, GITHUB_RUN_ATTEMPT: '2' });
+  assert.ok(marked);
+  assert.equal(w.tagOf('717'), 'Fixed, next update');
+  assert.deepEqual(w.said('717'), []);
+  assert.match(fixedNotes(w)[0].body, /<!-- discord-sent -->$/);
+});
+
+test('an issue closed while a PR run settles its post, by a fix already released, is announced as Shipped', async () => {
+  const w = world();
+  w.issue(17);
+  w.tags = [{ name: 'v5.0.2', commit: { sha: 'c-v5.0.2' } }];
+  w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  let raced = false;
+  w.hooks.push(['PATCH', /channels\/717$/, async () => {
+    if (raced) return;
+    raced = true;
+    w.close(17, 'completed', 'aaaaaaa1');
+  }]);
+  await prEvent(w, 5);
+  assert.ok(raced);
+  assert.equal(w.tagOf('717'), 'Shipped');
+  assert.deepEqual(w.said('717'), ['The fix is out in one v5.0.2. Update your addons, and let us know here if you still see the problem.']);
+});
+
 test('a needs-info ping whose label was taken off is dropped by the fix-mode sweep', async () => {
   const w = world();
   const i = w.issue(17);

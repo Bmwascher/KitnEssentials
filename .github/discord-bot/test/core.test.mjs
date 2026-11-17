@@ -211,6 +211,14 @@ test('a published template pasted with its code marks reads all missing blank an
   }
 });
 
+test('a label whose name holds another field\'s name answers only its own field, in either order', () => {
+  for (const fields of [['UI version', 'Version'], ['Version', 'UI version']]) {
+    const want = fields.map((f) => (f === 'UI version' ? 'present' : 'missing'));
+    assert.deepEqual(states('UI version:\n2.0\nVersion:\n(hint)', fields), want, fields.join(', '));
+    assert.deepEqual(states('Version:\n(hint)\nUI version:\n2.0', fields), want, `${fields.join(', ')}, swapped lines`);
+  }
+});
+
 test('the template check: an answer may open with a short line and a colon, a hint is no answer, attachments and absent labels', () => {
   for (const [content, fields, attachments, want] of [
     ['What happened:\nGot this error:\n```lua\nattempt to index a nil value\n```\n\nScreenshots:\nnone', ['What happened', 'Screenshots'], 0, ['present', 'present']],

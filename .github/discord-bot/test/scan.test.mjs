@@ -115,8 +115,15 @@ test('the daily check warns when the scan has stopped, and logs when no channel 
   const f = discord();
   const out = [];
   await daily(baseEnv(kv), { fetch: f, now: () => T0 + 3 * HOUR, log: (s) => out.push(s) });
-  assert.match(out.join('\n'), /scan has not run for 180 minutes/);
+  assert.match(out.join('\n'), /scan has not run for at least 165 minutes/);
   assert.equal(f.find('POST', /\/messages$/).length, 0);
+});
+
+test('a saved scan time older than an hour by less than the heartbeat raises no alarm', async () => {
+  const kv = started(T0);
+  const out = [];
+  await daily(baseEnv(kv), { fetch: discord(), now: () => T0 + 70 * 60 * 1000, log: (s) => out.push(s) });
+  assert.doesNotMatch(out.join('\n'), /scan has not run/);
 });
 
 test('the Worker runs the daily check on its daily cron and the scan otherwise', async () => {
@@ -214,7 +221,7 @@ test('the daily check posts the scan alert even when a forum cannot be read, and
   await daily(env, { fetch: f, now: () => T0 + 3 * HOUR, log: () => {} });
   const posted = f.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content);
   assert.equal(posted.length, 2);
-  assert.match(posted[0], /scan has not run for 180 minutes/);
+  assert.match(posted[0], /scan has not run for at least 165 minutes/);
   assert.match(posted[1], /Could not read forum 901/);
 });
 
