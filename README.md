@@ -1,4 +1,4 @@
-# KitnEssentials
+# KitnEssentials 2.0
 
 [![Lint](https://github.com/Bmwascher/KitnEssentials/actions/workflows/lint.yml/badge.svg)](https://github.com/Bmwascher/KitnEssentials/actions/workflows/lint.yml)
 [![Test](https://github.com/Bmwascher/KitnEssentials/actions/workflows/test.yml/badge.svg)](https://github.com/Bmwascher/KitnEssentials/actions/workflows/test.yml)
