@@ -87,10 +87,12 @@ export function guessFromTags(tagNames) {
 // and no @mentions that would notify GitHub users. Discord's no-preview link
 // forms, [text](<url>) and <url>, become explicit Markdown links before the
 // escaping, so it does not break them. An explicit destination keeps every
-// character (a bare URL would lose trailing punctuation); the characters that
-// would end it early or be escaped are percent-encoded.
+// character (a bare URL would lose trailing punctuation): Markdown takes a
+// backslashed punctuation mark literally, so every one is backslashed, which
+// leaves the URL itself unchanged. Only @ is percent-encoded, since the
+// mention escaping below would change it.
 const URL_IN_BRACKETS = /<(https?:\/\/[^\s<>]+)>/g;
-const linkDest = (url) => url.replace(/[()[\]@]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+const linkDest = (url) => url.replace(/@/g, '%40').replace(/[!-/:-?[-`{-~]/g, '\\$&');
 
 export function neutralize(text) {
   return String(text || '')
