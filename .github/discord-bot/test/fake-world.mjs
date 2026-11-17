@@ -20,7 +20,9 @@ export function world() {
     clock: Date.now(), // created_at and updated_at
     hooks: [], // [method, RegExp, fn(call)] run before a matching call is served
     fail: [], // [method, RegExp, Response | Error, times]
+    runs: new Map(), // workflow run id -> { status, run_attempt, created_at }
   };
+  w.start = w.clock;
 
   w.issue = (n, over = {}) => {
     const thread = over.thread || String(700 + n);
@@ -40,7 +42,8 @@ export function world() {
     return t;
   };
   w.record = (n, body, login = BOT) => {
-    const c = { id: w.nextId++, user: { login }, body, created_at: new Date(w.clock).toISOString() };
+    const id = w.nextId++;
+    const c = { id, user: { login }, body, created_at: new Date(w.clock).toISOString(), html_url: `https://github.com/${w.repo}/issues/${n}#issuecomment-${id}` };
     w.issues.get(n).comments.push(c);
     return c;
   };
@@ -111,6 +114,10 @@ export function world() {
       const status = w.contains.get(`${m[1]}...${decodeURIComponent(m[2])}`) || 'behind';
       return json({ status });
     }],
+    // A workflow run: one set in `w.runs`, else a finished first attempt
+    // from the world's start.
+    ['GET', /\/repos\/me\/one\/actions\/runs\/(\d+)$/, (m) => json(w.runs.get(m[1])
+      || { id: Number(m[1]), status: 'completed', run_attempt: 1, created_at: new Date(w.start).toISOString() })],
     ['PATCH', /\/repos\/me\/one\/issues\/comments\/(\d+)$/, (m, url, body) => {
       for (const i of w.issues.values()) {
         const c = i.comments.find((x) => x.id === Number(m[1]));
