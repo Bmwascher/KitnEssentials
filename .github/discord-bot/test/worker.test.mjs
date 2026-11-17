@@ -511,3 +511,19 @@ test('a post the bot already filed is found from its record without reading the 
   assert.equal(f.find('GET', /issues\?state=all/).length, 0);
   assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /Already tracked: ONE #17/);
 });
+
+test('a button or form whose ids are not all digits is refused before any call', async () => {
+  for (const req of [
+    { ...press(HELPER), data: { custom_id: 'send:700/../x', component_type: 2 } },
+    { ...submit(), data: { ...submit().data, custom_id: 'gh:700:800x' } },
+    { ...submit(), data: { ...submit().data, custom_id: 'gh:700' } },
+  ]) {
+    const f = fakeFetch(discordRoutes());
+    const ctx = ctxFor();
+    const j = await (await handle(await signed(req), P3, ctx, { fetch: f })).json();
+    assert.match(j.data.content, /not valid/, req.data.custom_id);
+    assert.equal(f.calls.length, 0, req.data.custom_id);
+    assert.equal(ctx.jobs.length, 0, req.data.custom_id);
+  }
+});
+

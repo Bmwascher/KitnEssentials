@@ -230,4 +230,14 @@ test('release tags: plain version numbers by default, and never a pre-release wh
   assert.equal(C.isRelease('discord-test-1', loose), true);
 });
 
+test('button and form ids parse only when every id part is digits', () => {
+  assert.deepEqual(C.parseCustomId('send:700'), { kind: 'send', threadId: '700' });
+  assert.deepEqual(C.parseCustomId('gh:700:800'), { kind: 'form', threadId: '700', messageId: '800', greetingId: '' });
+  assert.deepEqual(C.parseCustomId('gh:700:800:950'), { kind: 'form', threadId: '700', messageId: '800', greetingId: '950' });
+  for (const bad of ['send:7a', 'send:', 'gh:700', 'gh:700:800:950:1', 'gh:7/0:800', 'xx:700:800', '', undefined]) {
+    assert.equal(C.parseCustomId(bad), null, String(bad));
+  }
+});
+
+
 

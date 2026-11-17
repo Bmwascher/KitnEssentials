@@ -14,10 +14,10 @@
 //                 "error": {"at": epoch ms, "text": the last failure}}
 //   thread:<id>  {"greeting": message id, "skipped": reason, "tries": failed sends,
 //                 "issue": {"repo", "number"}}
-import { parseForums, snowflakeMs, timedFetch, currentStatus } from './core.js';
+import { parseForums, snowflakeMs, timedFetch, currentStatus, SEND_BUTTON } from './core.js';
 import { discordClient } from './discord.js';
 
-export const SEND_BUTTON = 'send';
+export { SEND_BUTTON };
 // Workers' free plan allows 50 outgoing calls per run. Each greeting costs two
 // (a look at the post's last messages, then the send) and has its own share,
 // so reading the forums can never use up what the greetings need.

@@ -323,6 +323,19 @@ export function parseRoleIds(raw) {
   return String(raw || '').split(',').map((s) => s.trim()).filter((s) => /^\d+$/.test(s));
 }
 
+// The custom id of the thread button ("send:<post>") and of the form
+// ("gh:<post>:<message>[:<button message>]"). Their parts go into API paths,
+// so they are taken only when every part is digits.
+export const SEND_BUTTON = 'send';
+export function parseCustomId(id) {
+  const s = String(id || '');
+  let m = new RegExp(`^${SEND_BUTTON}:(\\d+)$`).exec(s);
+  if (m) return { kind: 'send', threadId: m[1] };
+  m = /^gh:(\d+):(\d+)(?::(\d+))?$/.exec(s);
+  if (m) return { kind: 'form', threadId: m[1], messageId: m[2], greetingId: m[3] || '' };
+  return null;
+}
+
 // A Discord id's creation time in epoch ms.
 export function snowflakeMs(id) {
   return Number(BigInt(id) >> 22n) + 1420070400000;

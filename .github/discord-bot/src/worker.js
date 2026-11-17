@@ -7,6 +7,7 @@ import {
   STATUS, MESSAGES, PERMS, buildTitle, buildBody, labelsFor, cleanPostTitle,
   guessFromTags, normClient, normType, normRepoKey, parseRepos, timedFetch,
   parseForums, parseRoleIds, parseTemplates, templateCheck, templateSummary,
+  parseCustomId,
 } from './core.js';
 import { discordClient } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
@@ -82,6 +83,7 @@ const hasRole = (member, roles) => !!member && (member.roles || []).some((r) => 
 // Moderators (right-click) or an approved role (the button) may send.
 const allowed = (member, cfg) => canUse(member) || hasRole(member, cfg.roles);
 const NOT_ALLOWED = 'Only moderators and approved roles can send posts to GitHub.';
+const BAD_IDS = 'Nothing was created: this button or form is not valid. Press the button or right-click the post to try again.';
 
 const input = (id, label, value, opts = {}) => ({
   type: 1,
@@ -143,7 +145,7 @@ async function openForm(interaction, env, deps, { threadId, messageId, greetingI
 // and every outcome, partial ones included, is reported back to the moderator.
 export async function fileIssue(interaction, env, deps) {
   const cfg = config(env);
-  const [, threadId, messageId, greetingId] = interaction.data.custom_id.split(':');
+  const { threadId, messageId, greetingId } = parseCustomId(interaction.data.custom_id);
   const v = modalValues(interaction.data);
   const repoKey = normRepoKey(v.repo, cfg.repos);
   const client = normClient(v.client);
@@ -301,17 +303,19 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
   }
 
   if (interaction.type === 3 && String(interaction.data.custom_id).startsWith(`${SEND_BUTTON}:`)) {
+    const ids = parseCustomId(interaction.data.custom_id);
+    if (!ids) return reply(BAD_IDS);
     const cfg = config(env);
     if (!cfg.roles.length && !canUse(interaction.member)) {
       return reply('The button is not set up yet: APPROVED_ROLE_IDS is empty. A moderator can right-click the post > Apps > Send to GitHub.');
     }
     if (!allowed(interaction.member, cfg)) return reply(NOT_ALLOWED);
-    const threadId = interaction.data.custom_id.split(':')[1];
     // A forum post's first message has the post's own id.
-    return openForm(interaction, env, deps, { threadId, messageId: threadId, greetingId: interaction.message && interaction.message.id });
+    return openForm(interaction, env, deps, { threadId: ids.threadId, messageId: ids.threadId, greetingId: interaction.message && interaction.message.id });
   }
 
   if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('gh:')) {
+    if (!parseCustomId(interaction.data.custom_id)) return reply(BAD_IDS);
     const cfg = config(env);
     if (!allowed(interaction.member, cfg)) return reply(NOT_ALLOWED);
     if (!cfg.forums.length) return reply('The bot is not set up yet: FORUMS is empty.');
