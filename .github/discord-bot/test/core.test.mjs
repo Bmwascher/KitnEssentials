@@ -191,3 +191,34 @@ test('an escaped backtick and a bracketed URL holding backticks are prose, not c
   assert.equal(C.neutralize(`<${a}> and <${b}>`), `[${dest(a)}](${dest(a)}) and [${dest(b)}](${dest(b)})`);
 });
 
+const BLANK = {
+  Bug: ['Addon version:', '(from your addon manager, or "not sure")', '', 'UI version:', '(from your addon manager, or "not sure")', '',
+    'Updated with the game closed:', '(yes, no, or not sure)', '', 'What happened:', '(what you were doing, and what went wrong)', '',
+    'What you expected:', '(what should have happened instead)', '', 'How to make it happen again:',
+    '(what you did, in order. If it only happened once, say so)', '', 'Screenshots:', '(attach full-screen screenshots, or write "none")'],
+  Feature: ['Area:', '(which part of the addon or UI, or "not sure")', '', 'My idea or feedback:', '(what works well, feels awkward, or is missing)', '',
+    'Why it matters:', '(what you are trying to do. An example helps)', '', 'Screenshots:', '(optional: attach one, or write "none")'],
+};
+const states = (content, fields, attachments = 0) => C.templateCheck(content, fields, attachments).map((c) => c.state);
+
+test('a published template pasted with its code marks reads all missing blank and all present filled', () => {
+  for (const kind of ['Bug', 'Feature']) {
+    const fields = C.DEFAULT_TEMPLATES[kind];
+    const blank = ['```', ...BLANK[kind], '```'].join('\n');
+    assert.deepEqual(states(blank, fields), fields.map(() => 'missing'), `${kind} blank`);
+    const filled = blank.replace(/^\(.*\)$/gm, 'an answer');
+    assert.deepEqual(states(filled, fields), fields.map(() => 'present'), `${kind} filled`);
+  }
+});
+
+test('the template check: an answer may open with a short line and a colon, a hint is no answer, attachments and absent labels', () => {
+  for (const [content, fields, attachments, want] of [
+    ['What happened:\nGot this error:\n```lua\nattempt to index a nil value\n```\n\nScreenshots:\nnone', ['What happened', 'Screenshots'], 0, ['present', 'present']],
+    ['What happened:\nNote: only in raids', ['What happened'], 0, ['present']],
+    ['What happened:\n(what you were doing)', ['What happened'], 0, ['missing']],
+    ['Screenshots:\n', ['Screenshots'], 1, ['present']],
+    ['it broke', ['Area'], 0, ['unsure']],
+  ]) assert.deepEqual(states(content, fields, attachments), want, content);
+});
+
+

@@ -487,7 +487,7 @@ test('an approved role can submit the form; a player cannot', async () => {
 
 test('the template check is noted in the issue and told to the moderator, never the player', async () => {
   let created;
-  const post = '**Addon Version:** 1.2\n**Issue Details:**\nbags overlap\n**Steps to Reproduce:**\n1.\n2.\n**Supporting Screenshots:**\n*(attach below)*';
+  const post = '```\nAddon version:\n1.2\n\nUI version:\n(from your addon manager, or "not sure")\n\nUpdated with the game closed:\nyes\n\nWhat happened:\nbags overlap\n\nWhat you expected:\nno overlap\n\nHow to make it happen again:\n(what you did, in order)\n\nScreenshots:\n(attach full-screen screenshots, or write "none")\n```';
   const f = fakeFetch(discordRoutes(githubRoutes([], [
     ['GET', /\/channels\/700\/messages\/800$/, () => ({ id: '800', content: post, author: { id: '42', username: 'pat' }, attachments: [] })],
     ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, (b) => { created = b; return { number: 17, html_url: 'u' }; }],
@@ -495,8 +495,8 @@ test('the template check is noted in the issue and told to the moderator, never 
   const ctx = ctxFor();
   await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
   await Promise.all(ctx.jobs);
-  assert.match(created.body, /Template check \(advisory\): Version present · Issue Details present · Steps to Reproduce missing · Supporting Screenshots missing/);
-  assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /Template: Steps to Reproduce missing, Supporting Screenshots missing\./);
+  assert.match(created.body, /Template check \(advisory\): Addon version present · UI version missing · Updated with the game closed present · What happened present · What you expected present · How to make it happen again missing · Screenshots missing/);
+  assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /Template: UI version missing, How to make it happen again missing, Screenshots missing\./);
   assert.doesNotMatch(f.find('POST', /\/channels\/700\/messages$/)[0].body.content, /Template/);
 });
 

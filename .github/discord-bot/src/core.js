@@ -319,11 +319,11 @@ export function snowflakeMs(id) {
   return Number(BigInt(id) >> 22n) + 1420070400000;
 }
 
-// The template fields each kind of post should fill. TEMPLATES (JSON, same
-// shape) replaces these.
+// The template fields each kind of post should fill, as the published help
+// templates label them. TEMPLATES (JSON, same shape) replaces these.
 export const DEFAULT_TEMPLATES = {
-  Bug: ['Version', 'Issue Details', 'Steps to Reproduce', 'Supporting Screenshots'],
-  Feature: ['Category', 'Summary', 'Detailed Description'],
+  Bug: ['Addon version', 'UI version', 'Updated with the game closed', 'What happened', 'What you expected', 'How to make it happen again', 'Screenshots'],
+  Feature: ['Area', 'My idea or feedback', 'Why it matters', 'Screenshots'],
 };
 
 export function parseTemplates(raw) {
@@ -338,7 +338,9 @@ export function parseTemplates(raw) {
 }
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const isHint = (s) => /^\*?\s*\(.*\)\s*\*?$/.test(s) || /^\d+\.\s*$/.test(s);
+// Not an answer: a hint in ( ), a bare list number, or code-block marks (a
+// template pasted with its ``` lines).
+const isHint = (s) => /^\*?\s*\(.*\)\s*\*?$/.test(s) || /^\d+\.\s*$/.test(s) || /^`+\w*$/.test(s);
 
 // Advisory check of a post against its template: for each field, "present"
 // (labeled and answered), "missing" (labeled, left empty) or "unsure" (no
