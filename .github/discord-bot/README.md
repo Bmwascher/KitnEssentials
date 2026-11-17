@@ -57,7 +57,9 @@ the message goes out, even if another run has moved the post in the meantime.
 A message is never sent twice. GitHub allows re-runs for 30 days from the
 run's first attempt. Once the run has ended, an owed message that no re-run
 could send (its post is gone, or what it says is no longer true) is listed,
-and a fix-mode sweep marks it `Dropped`.
+and a fix-mode sweep marks it `Dropped`. A `Dropped` message was never sent,
+so if the same news comes true again (a PR back from draft), the bot writes a
+new note and sends it.
 
 A daily sweep lists anything still out of step in the job summary, a post with
 no status tag and an unconfirmed message included (and, with

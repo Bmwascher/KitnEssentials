@@ -325,17 +325,21 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     await settleNote(note, 'dropped', reason);
   }
 
+  // The notes that own their message: a Dropped note was never sent, so when
+  // the same news comes true again, a new note is written for it.
+  const owningNote = (told, key) => told.find((t) => t.key === key && t.state !== 'dropped');
+
   // The note for a message. A note already made for this key owns it: this
   // run takes it over only with `adopt`, when it is this run's own note from
   // an earlier attempt and was never sent (a re-run). Otherwise this run
   // writes a note, and of two runs writing at once the later drops its own.
   async function claim(n, key, text, status, adopt = false) {
-    const existing = (await recordsOf(n)).told.find((t) => t.key === key);
+    const existing = owningNote((await recordsOf(n)).told, key);
     if (existing) return adopt && runId && existing.run === runId && existing.state === 'attempted' ? existing : null;
     const body = noteRecord(key, text, status, runId);
     const mine = await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body });
     const note = { id: mine && mine.id, body, text };
-    const first = (await recordsOf(n)).told.find((t) => t.key === key);
+    const first = owningNote((await recordsOf(n)).told, key);
     if (first && mine && first.id !== mine.id) {
       await settleNote(note, 'dropped', 'another run claimed it');
       return null;
@@ -412,7 +416,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         // after an earlier attempt of this run wrote its note and stopped. A
         // re-run still sends that note, its own and never marked as sending.
         const m = await messageFor(n, st, want);
-        const own = m && (await recordsOf(n)).told.find((t) => t.key === m.key);
+        const own = m && owningNote((await recordsOf(n)).told, m.key);
         if (own && own.run === runId && own.state === 'attempted' && !notes.some((c) => c.note.id === own.id)) {
           notes.push({ note: own, key: m.key, text: m.text, status: want });
         }
@@ -440,6 +444,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // Labels, then the post, then the messages claimed on the way. The sweep
   // syncs with `tell` off: it never messages anyone.
   async function sync(n, tell = true) {
+    handled.add(n);
     await settleLabels(n);
     const moved = await settlePost(n, tell);
     if (moved) for (const c of moved.notes) await tellNote(moved, c);
@@ -495,11 +500,13 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     return null;
   }
 
-  // One issue's failure is logged and the rest still run; the job fails at the end.
+  // The issues this run synced or pinged; a re-run's owed scan skips only
+  // these, so an issue the event passed over is still scanned.
   const handled = new Set();
+
+  // One issue's failure is logged and the rest still run; the job fails at the end.
   async function each(numbers, fn) {
     for (const n of numbers) {
-      handled.add(n);
       try {
         await fn(n);
       } catch (e) {
@@ -659,7 +666,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       const stale = [];
       const seen = new Set();
       for (const t of st.records.told) {
-        if (seen.has(t.key)) continue;
+        if (t.state === 'dropped' || seen.has(t.key)) continue;
         seen.add(t.key);
         if (t.state === 'unconfirmed') {
           parts.push(`message "${t.text}" may not have reached the player (${t.url})`);

@@ -1172,6 +1172,44 @@ test('a release tagged while a close run writes its labels is announced as Shipp
   assert.deepEqual(w.said('717'), ['The fix is out in one v5.0.4. Update your addons, and let us know here if you still see the problem.']);
 });
 
+test('a re-run of a PR run sends the Shipped message it owes for an issue that closed while it ran', async () => {
+  const w = world();
+  w.issue(17);
+  w.tags = [{ name: 'v5.0.2', commit: { sha: 'c-v5.0.2' } }];
+  w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  let moves = 0;
+  // The first move closes the issue; the Shipped move is then refused once.
+  w.hooks.push(['PATCH', /channels\/717$/, async () => {
+    moves++;
+    if (moves === 1) w.close(17, 'completed', 'aaaaaaa1');
+    if (moves === 2) refuseTagWrite(w);
+  }]);
+  const pr = (over) => go(w, PR, { action: 'opened', pull_request: { number: 5 } }, over);
+  await assert.rejects(pr(RUN), /#17/);
+  assert.equal(w.said('717').filter((m) => /out in/.test(m)).length, 0);
+  await pr({ ...RUN, GITHUB_RUN_ATTEMPT: '2' });
+  assert.equal(w.tagOf('717'), 'Shipped');
+  assert.equal(w.said('717').filter((m) => /out in/.test(m)).length, 1);
+});
+
+test('an In progress note the sweep dropped does not stop the message when a PR is ready again', async () => {
+  const w = world();
+  w.issue(17);
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  const pr = (over) => go(w, PR, { action: 'ready_for_review', pull_request: { number: 5 } }, over);
+  refuseTagWrite(w);
+  await assert.rejects(pr(RUN), /#17/);
+  w.prs.get(5).draft = true;
+  w.clock += 60 * 60 * 1000;
+  await sweepFix(w, []);
+  assert.ok(w.issues.get(17).comments.some((c) => /^Dropped \(no longer true\): /.test(c.body)));
+  w.prs.get(5).draft = false;
+  await pr({ GITHUB_RUN_ID: '556' });
+  assert.equal(w.tagOf('717'), 'In progress');
+  assert.deepEqual(w.said('717'), ["Good news: a fix for this is being worked on and tested. We'll post here when it's done."]);
+});
+
 test('a re-run does not send a note a moderator marked sent after the re-run took it over', async () => {
   const w = world();
   w.issue(17);
