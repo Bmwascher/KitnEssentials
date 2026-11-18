@@ -40,10 +40,12 @@ import { discordClient } from './discord.js';
 export { SEND_BUTTON };
 // Workers' free plan allows 50 outgoing calls per run. A greeting costs two
 // (a look at the post's last messages, then the send) and a queue card three
-// (the post as it is now, its first message, then the card). Greetings,
-// cards and the scan's own reads (the active posts, the bot's id, the queue
-// channel) each have their own client, so cards can never use up what the
-// greetings need. The daily check's forum reads keep their own share.
+// (that look, unless the greeting made it in the same pass, the post as it
+// is now, then the card; a post busier than 100 messages takes one more,
+// for its first message, and waits when the card share is spent).
+// Greetings, cards and the scan's own reads (the active posts, the bot's id,
+// the queue channel) each have their own client, so cards can never use up
+// what the greetings need. The daily check's forum reads keep their own share.
 const MAX_GREET = 8;
 const MAX_CARDS = 8;
 const READ_BUDGET = 3;
@@ -163,7 +165,8 @@ const TRACKED_START = MESSAGES.tracked('\u0000', 0).split('\u0000')[0];
 // The bot's own messages among the post's last 100: its greeting (the
 // buttonless one, or an old one still showing its button), and its "now
 // tracked" reply, which means the post was filed even when its filing record
-// is missing or not yet visible here.
+// is missing or not yet visible here. The post's first message, which has
+// the post's own id, is among them unless the post is busier than that.
 async function lookIn(discord, threadId, myId) {
   const recent = (await discord.call('GET', `/channels/${threadId}/messages?limit=100`)) || [];
   const me = recent.length ? await myId() : null;
@@ -172,6 +175,8 @@ async function lookIn(discord, threadId, myId) {
   return {
     receipt: receipt ? receipt.id : null,
     greeting: mine.find((m) => hasButton(m, threadId) || m.content === GREETING) || null,
+    starter: recent.find((m) => m.id === threadId) || null,
+    full: recent.length >= 100,
   };
 }
 
@@ -225,30 +230,38 @@ export async function scan(env, deps = {}) {
     const atQueue = (p) => p.catch((err) => { throw Object.assign(err, { queue: true }); });
     const queueRead = () => (queued = queued || atQueue(discord.call('GET', `/channels/${queue}/messages?limit=100`)).then((m) => m || []));
     // The post's queue card: the bot's own card already there, else a new
-    // one, for a post still open now. The active list was read at the start
-    // of the run, so the post is read again: one deleted since (a 404, a
-    // refusal), archived, locked or moved out of the configured forums gets
-    // no card. A post whose first message is gone gets a card with no send
-    // button, since the form files that message.
-    const cardFor = async (t) => {
+    // one. The post's last 100 messages come first (the look its greeting
+    // made in this pass, else a new one): the bot's "now tracked" reply
+    // there means the post was filed, so it gets no card, and the post's
+    // first message is found there, or read on its own in a busier post.
+    // The post itself is read last, just before the card goes out, since the
+    // active list was read at the start of the run: one deleted since (a
+    // 404, a refusal), archived, locked or moved out of the configured
+    // forums gets no card. A post whose first message is gone gets a card
+    // with no send button, since the form files that message.
+    const cardFor = async (t, seen) => {
       const msgs = await queueRead();
       const mine = msgs.length ? await myId() : null;
       const had = msgs.find((m) => isCardFor(m, t.id, mine, env.GUILD_ID));
       if (had) return { card: had.id };
-      const now = await carder.getChannel(t.id);
-      const meta = now.thread_metadata || {};
-      if (meta.archived || meta.locked) return { cardSkipped: `the post was ${meta.archived ? 'archived' : 'locked'} before its card went out` };
-      if (!forums[now.parent_id]) return { cardSkipped: 'the post is no longer in a configured forum' };
-      let starter = null;
-      try {
-        starter = await carder.getMessage(t.id, t.id);
-      } catch (err) {
-        if (!/ -> 404 /.test(err.message)) throw err;
+      const look = seen || await lookIn(carder, t.id, myId);
+      if (look.receipt) return { tracked: look.receipt };
+      let starter = look.starter;
+      if (!starter && look.full) {
+        try {
+          starter = await carder.getMessage(t.id, t.id);
+        } catch (err) {
+          if (!/ -> 404 /.test(err.message)) throw err;
+        }
       }
+      const post = await carder.getChannel(t.id);
+      const meta = post.thread_metadata || {};
+      if (meta.archived || meta.locked) return { cardSkipped: `the post was ${meta.archived ? 'archived' : 'locked'} before its card went out` };
+      if (!forums[post.parent_id]) return { cardSkipped: 'the post is no longer in a configured forum' };
       const author = starter && starter.author;
-      const info = forums[now.parent_id] || {};
+      const info = forums[post.parent_id];
       return { card: (await atQueue(carder.call('POST', `/channels/${queue}/messages`, queueCard({
-        guildId: env.GUILD_ID, forumId: now.parent_id, postId: t.id, postName: now.name || t.name,
+        guildId: env.GUILD_ID, forumId: post.parent_id, postId: t.id, postName: post.name || t.name,
         author: author ? { name: personName(author), username: author.username } : null, client: info.client, type: info.type,
         starterGone: !starter,
       })))).id };
@@ -266,8 +279,8 @@ export async function scan(env, deps = {}) {
       .filter((t) => snowflakeMs(t.id) > since && BigInt(t.id) > mark(through, t.parent_id))
       .filter((t) => !(t.thread_metadata && (t.thread_metadata.locked || t.thread_metadata.archived)))
       .sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
-    // Posts past the greeting mark are new. They go first, so their reads
-    // and greetings never wait behind an older post's card retry.
+    // Posts past the greeting mark are new: their reads and greetings never
+    // wait behind an older post's card retry.
     const isNew = new Set(fresh.filter((t) => BigInt(t.id) > mark(greetedTo, t.parent_id)).map((t) => t.id));
     let reads = 0;
     // Both of a post's records are read strictly: a value the bot could not
@@ -349,11 +362,13 @@ export async function scan(env, deps = {}) {
       if (told) name(t.id, label);
       return { greeted: giveUp || greetedNow, finished: giveUp };
     };
-    // One post's pass: its greeting, then its card. It never throws, so one
-    // post's failure stays with it. `greeted`: the greeting is settled;
-    // `finished`: nothing is left to do.
-    const visit = async (t) => {
+    // One post's greeting step. It never throws, so one post's failure stays
+    // with it. `greeted`: the greeting is settled; `finished`: nothing is
+    // left to do; `owes`: the card is still to try, with the look at the
+    // post its greeting made, if any.
+    const greet = async (t) => {
       let rec = null;
+      let seen = null;
       try {
         rec = (await read(`thread:${t.id}`)) || {};
         if (finished(rec, queue)) return restored(t, rec);
@@ -364,7 +379,7 @@ export async function scan(env, deps = {}) {
           // The greeting share counts only posts that try a greeting.
           if (tried >= MAX_GREET) { left++; return { greeted: false, finished: false }; }
           tried++;
-          const seen = await lookIn(greeter, t.id, myId);
+          seen = await lookIn(greeter, t.id, myId);
           if (seen.receipt) {
             // Filed and told, though its filing record is missing or not yet
             // visible here: no greeting after the receipt, and no card.
@@ -383,20 +398,42 @@ export async function scan(env, deps = {}) {
           await putRecord(t.id, rec);
         }
         if (finished(rec, queue)) return { greeted: true, finished: true };
-        if (carded >= MAX_CARDS) { left++; return { greeted: true, finished: false }; }
-        carded++;
-        rec = { ...rec, ...(await cardFor(t)) };
+        return { greeted: true, finished: false, owes: { t, rec, seen } };
+      } catch (err) {
+        return failed(t, rec, err);
+      }
+    };
+    // A post's card, once its greeting is settled, within this run's card
+    // share. It never throws either.
+    const card = async ({ t, rec, seen }) => {
+      if (carded >= MAX_CARDS) { left++; return { greeted: true, finished: false }; }
+      carded++;
+      try {
+        rec = { ...rec, ...(await cardFor(t, seen)) };
         await putRecord(t.id, rec);
         return { greeted: true, finished: true };
       } catch (err) {
         return failed(t, rec, err);
       }
     };
+    // New posts' greetings first; then older posts' card retries, so a run
+    // of new posts never starves them; then the new posts' cards, with what
+    // is left of the card share. An older post past the card share waits
+    // unread.
     const outcome = new Map();
-    for (const t of [...fresh.filter((x) => isNew.has(x.id)), ...fresh.filter((x) => !isNew.has(x.id))]) {
+    const owed = [];
+    for (const t of fresh.filter((x) => isNew.has(x.id))) {
       if (reads >= MAX_KV_READS) { left++; continue; }
-      outcome.set(t.id, await visit(t));
+      const o = await greet(t);
+      outcome.set(t.id, o);
+      if (o.owes) owed.push(o.owes);
     }
+    for (const t of fresh.filter((x) => !isNew.has(x.id))) {
+      if (reads >= MAX_KV_READS || carded >= MAX_CARDS) { left++; continue; }
+      const o = await greet(t);
+      outcome.set(t.id, o.owes ? await card(o.owes) : o);
+    }
+    for (const o of owed) outcome.set(o.t.id, await card(o));
     // Each mark moves past a forum's posts, oldest first, up to the first
     // with work left: `through` past posts with nothing left to do,
     // `greetedTo` past new posts whose greeting is settled.

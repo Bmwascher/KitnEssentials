@@ -251,7 +251,8 @@ test('a queue read that fails keeps the greeting saved and the progress mark beh
   delete refuse[556];
   const before = f.calls.length;
   await scan(withQueue(kv), { fetch: f, now: () => T0 + 6 * 60000, log: () => {} });
-  assert.deepEqual(f.calls.slice(before).filter((c) => c.url.includes(`/channels/${a}/messages?`)), [], 'a saved greeting is never looked for or sent again');
+  // The card's one look at the post is for a receipt and the first message; no greeting is sent again (below).
+  assert.equal(f.calls.slice(before).filter((c) => c.url.includes(`/channels/${a}/messages?`)).length, 1, 'one look at the post, for its card');
   assert.deepEqual(sends(f), [a, '556']);
   assert.deepEqual(JSON.parse(kv.m.get(`thread:${a}`)), { greeting: 'm1', buttonless: true, tries: 1, card: 'm2' });
   assert.equal(stateOf(kv).through['900'], a);
@@ -274,9 +275,10 @@ test('a refused queue skips the card and keeps the greeting', async () => {
   }
 });
 
-test('cards owed by older posts never take the greetings\' share; a post over the card share waits and spends no try', async () => {
+test('cards owed by older posts go before new posts\' cards and never take the greetings\' share; a post over the card share waits and spends no try', async () => {
   const owed = Array.from({ length: 8 }, (_, i) => idAt(T0 + 1000 * (i + 1)));
-  const kv = started(T0);
+  // The scan that greeted the older posts moved the greeting mark past them.
+  const kv = started(T0, { greeted: { 900: owed.at(-1) } });
   for (const id of owed) await kv.put(`thread:${id}`, JSON.stringify({ greeting: 'g', buttonless: true, tries: 1 }));
   const fresh = Array.from({ length: 8 }, (_, i) => ({ id: idAt(T0 + 100000 + 1000 * i), parent_id: '900', name: 'x' }));
   const f = discord({ active: [...owed.map((id) => ({ id, parent_id: '900', name: 'x' })), ...fresh] });
@@ -374,8 +376,9 @@ test('a record written twice in one pass waits out KV\'s one write a second, and
     const at = puts.filter(([k]) => k === `thread:${id}`).map(([, ms]) => ms);
     for (let i = 1; i < at.length; i++) assert.ok(at[i] - at[i - 1] >= 1000, `post ${id}: writes at ${at.join(', ')} ms`);
   }
-  assert.deepEqual(sends(f), [a, '556', b, '556'], 'the first post\'s failed writes stop nothing');
-  assert.deepEqual(JSON.parse(kv.m.get(`thread:${b}`)), { greeting: 'm3', buttonless: true, card: 'm4' });
+  // New posts are greeted first, then carded.
+  assert.deepEqual(sends(f), [a, b, '556', '556'], 'the first post\'s failed writes stop nothing');
+  assert.deepEqual(JSON.parse(kv.m.get(`thread:${b}`)), { greeting: 'm2', buttonless: true, card: 'm4' });
   assert.match(stateOf(kv).error.text, new RegExp(`the record of queue card for post ${a}`));
 });
 
@@ -396,7 +399,36 @@ test('new posts come first: older posts\' card retries and posts filed before th
   assert.deepEqual(r.greeted, [fresh], 'the new post is greeted');
   assert.ok(reads <= 60, `within the KV reads: ${reads}`);
   assert.ok(f.calls.length <= 50, `within the call budget: ${f.calls.length} calls`);
-  assert.equal(f.find('POST', /\/channels\/556\/messages$/).length, 8, 'the card share goes on');
+  const carded = f.find('POST', /\/channels\/556\/messages$/).map((c) => c.body.components[0].components.at(-1).url.split('/').at(-1));
+  assert.deepEqual(carded, older.slice(0, 8), 'the card share goes to the oldest posts owed one, before the new post');
+});
+
+test('a card still owed finds the receipt of a filing whose record is missing, and goes out to no one', async () => {
+  const a = idAt(T0 + 1000);
+  const kv = started(T0, { greeted: { 900: a } });
+  await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g1', buttonless: true, tries: 1 }));
+  const receipt = { id: 'r1', author: { id: 'b', bot: true }, content: MESSAGES.tracked('ONE', 3) };
+  const f = discord({ active: [{ id: a, parent_id: '900', name: 'x' }], said: { [a]: [receipt] } });
+  await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+  assert.deepEqual(sends(f), []);
+  assert.equal(JSON.parse(kv.m.get(`thread:${a}`)).tracked, 'r1');
+  assert.equal(stateOf(kv).through['900'], a);
+});
+
+test('a post archived while the scan reads its messages gets no card: the post is read last, just before the card', async () => {
+  const a = idAt(T0 + 1000);
+  const kv = started(T0, { greeted: { 900: a } });
+  await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g1', buttonless: true }));
+  const post = { id: a, parent_id: '900', name: 'x' };
+  const base = discord({ active: [post], said: { [a]: [{ id: a, author: { id: '42', username: 'kira_99' } }] } });
+  // A moderator archives the post while the scan reads its messages or its first message.
+  const fetch = (url, init = {}) => {
+    if ((init.method || 'GET') === 'GET' && url.includes(`/channels/${a}/messages`)) post.thread_metadata = { archived: true };
+    return base(url, init);
+  };
+  await scan(withQueue(kv), { fetch, now: () => T0 + 5 * 60000, log: () => {} });
+  assert.equal(base.find('POST', /\/channels\/556\/messages$/).length, 0);
+  assert.match(JSON.parse(kv.m.get(`thread:${a}`)).cardSkipped, /archived/);
 });
 
 test('a post whose receipt is already there (its filing record missing) gets no greeting and no card', async () => {
