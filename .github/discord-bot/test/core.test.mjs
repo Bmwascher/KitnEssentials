@@ -261,13 +261,48 @@ test('button and form ids parse only when every id part is digits', () => {
   }
 });
 
+// A help-post template as forums pin it: bold labels, italic hints, a list.
+const PINNED = ['**Addon Version:** *(Found in your addon management client)*', '**UI Version:** *(Found in your addon management client)*',
+  '**Updated addons outside of game? (Yes/No):**', '', '**Issue Details:**', '', '**Steps to Reproduce:**', '1.', '2.', '3.', '',
+  '**Supporting Screenshots:**', '*(Please attach uncropped, full-screen screenshots below showing both the issue and your entire UI)*'].join('\n');
+
 test('a template message gives the label lines of its code block, or of the whole message', () => {
+  const req = (...names) => names.map((name) => ({ name, optional: false }));
   for (const [content, want] of [
-    ['Search this forum first.\nCopy the box below:\n```\nArea:\n(which part)\n\n**My idea or feedback:**\n(what works)\n```', ['Area', 'My idea or feedback']],
-    ['Area:\n(x)\nWhy it matters:\n(y)', ['Area', 'Why it matters']],
+    ['Search this forum first.\nCopy the box below:\n```\nArea:\n(which part)\n\n**My idea or feedback:**\n(what works)\n```', req('Area', 'My idea or feedback')],
+    ['Area:\n(x)\nWhy it matters:\n(y)', req('Area', 'Why it matters')],
     ['Welcome! Read the rules first.', []],
-    ['```\nArea:\nScreenshots (optional):\n```', ['Area']],
+    // Text on the opening line is the block's first line unless it is one plain language word.
+    ['```UI Version:\nArea:\n```', req('UI Version', 'Area')],
+    ['```Version:\nArea:\n```', req('Version', 'Area')],
+    ['```yaml\nArea:\n```', req('Area')],
+    ['```c++\nArea:\n```', req('Area')],
+    ['```\nUI Version: (Found in your addon management client)\n```', req('UI Version')],
+    ['```\nUpdated addons outside of game? (Yes/No): \n```', req('Updated addons outside of game')],
+    ['```\nArea:\nScreenshots (optional):\n```', [...req('Area'), { name: 'Screenshots', optional: true }]],
+    // Only the word "optional" marks a label optional.
+    ['```\nScreenshots (nonoptional):\n```', req('Screenshots')],
+    ['```\nNote: only in raids\n```', []],
+    [PINNED, req('Addon Version', 'UI Version', 'Updated addons outside of game', 'Issue Details', 'Steps to Reproduce', 'Supporting Screenshots')],
   ]) assert.deepEqual(C.templateLabels(content), want, content);
+});
+
+test('template gaps leave out present fields and optional ones', () => {
+  const check = (states) => Object.entries(states).map(([field, state]) => ({ field, state }));
+  for (const [why, states, optional, want] of [
+    ['an optional field left blank', { Area: 'present', Screenshots: 'missing' }, ['Screenshots'], []],
+    ['an optional field filled', { Area: 'present', Screenshots: 'present' }, ['Screenshots'], []],
+    ['a required field missing and one unsure', { Area: 'missing', 'Why it matters': 'unsure', Screenshots: 'present' }, [], ['Area missing', 'Why it matters unsure']],
+    ['every field present', { Area: 'present' }, [], []],
+  ]) assert.deepEqual(C.templateGaps(check(states), optional), want, why);
+});
+
+test('a failed template read gives the moderator a plain note', () => {
+  for (const [err, want] of [
+    [new Error('Discord GET /channels/1/messages/2 -> 404 {"message": "Unknown Message", "code": 10008}'), /^the template message was not found; check the forum's template link, so the default fields were checked$/],
+    [new Error('Discord GET /channels/1/messages/2 -> 403 {"message": "Missing Access"}'), /^the bot may not read the template message; check its access to that post, so the default fields were checked$/],
+    [Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }), /^the template message could not be read just now, so the default fields were checked$/],
+  ]) assert.match(C.templateNote(err), want, err.message);
 });
 
 test('a forum can name its pinned template message by its link', () => {

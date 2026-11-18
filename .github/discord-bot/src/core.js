@@ -415,27 +415,47 @@ export function templateCheck(content, fields, attachments = 0) {
   });
 }
 
-// A line holding only a label: one to eight words of letters, digits, _, ',
-// / and -, then a colon and nothing after, with optional * bold marks. Any
-// other punctuation, such as "Screenshots (optional):", makes it no label.
-const LABEL_ONLY = /^\**\s*[A-Za-z0-9][\w'/-]*(?:\s+[\w'/-]+){0,7}\s*\**\s*:\s*\**$/;
+// A label line: one to eight words of letters, digits, _, ', / and -; then
+// optionally a ? and a ( ) group; the colon; then at most one ( ) hint, which
+// may be in * marks. * bold marks may wrap the name or the whole line. Any
+// other text after the colon ("Note: only in raids") makes it no label.
+const LABEL_LINE = /^\**\s*([A-Za-z0-9][\w'/-]*(?:\s+[\w'/-]+){0,7})\s*\??\s*(?:\(([^()]*)\))?\s*\**\s*:\s*\**\s*(?:\**\([^()]*\)\**)?\s*$/;
 
-// The field labels of a template message: the label-only lines of its first
-// code block, or of the whole message when it has none. Hint lines in ( ) are
-// not labels. An empty list means the message holds no template.
+// The field labels of a template message: the label lines of its first code
+// block, or of the whole message when it has none. Discord shows text on a
+// block's opening line unless it is one plain language word (the word
+// FENCE_OPEN takes), so that text is the block's first line. A label with
+// the word "optional" in its ( ) before the colon is optional. An empty list
+// means the message holds no template.
 export function templateLabels(content) {
   const text = String(content || '');
-  const block = /```[^\n]*\n([\s\S]*?)```/.exec(text);
+  const block = /```([^\n]*)\n([\s\S]*?)```/.exec(text);
+  const lines = (block ? block[2] : text).split('\n');
+  if (block && !FENCE_OPEN.test('```' + block[1])) lines.unshift(block[1]);
   const labels = [];
-  for (const line of (block ? block[1] : text).split('\n')) {
-    const l = line.trim();
-    if (!LABEL_ONLY.test(l)) continue;
-    const label = l.replace(/[*:]/g, '').trim();
-    if (!labels.some((x) => x.toLowerCase() === label.toLowerCase())) labels.push(label);
+  for (const line of lines) {
+    const m = LABEL_LINE.exec(line.trim());
+    if (!m) continue;
+    const name = m[1].trim();
+    if (labels.some((x) => x.name.toLowerCase() === name.toLowerCase())) continue;
+    labels.push({ name, optional: /\boptional\b/i.test(m[2] || '') });
   }
   return labels;
 }
 
-export function templateSummary(check) {
-  return check.map((c) => `${c.field} ${c.state}`).join(' · ');
+// The fields a post did not answer, as "field state". The issue's template
+// line and the moderator's note both come from it, so they agree. An
+// optional field is never a gap.
+export function templateGaps(check, optional = []) {
+  const skip = new Set(optional.map((f) => f.toLowerCase()));
+  return check.filter((c) => c.state !== 'present' && !skip.has(c.field.toLowerCase())).map((c) => `${c.field} ${c.state}`);
+}
+
+// The moderator's note when the template message could not be read; the raw
+// error goes to the log.
+export function templateNote(err) {
+  const status = (/^Discord \S+ \S+ -> (\d{3}) /.exec(String((err && err.message) || '')) || [])[1];
+  if (status === '404') return "the template message was not found; check the forum's template link, so the default fields were checked";
+  if (status === '403') return 'the bot may not read the template message; check its access to that post, so the default fields were checked';
+  return 'the template message could not be read just now, so the default fields were checked';
 }

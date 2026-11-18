@@ -6,8 +6,8 @@
 import {
   STATUS, MESSAGES, PERMS, buildTitle, buildBody, labelsFor, cleanPostTitle,
   guessFromTags, normClient, normType, normRepoKey, parseRepos, timedFetch,
-  parseForums, parseRoleIds, parseTemplates, templateCheck, templateSummary,
-  parseCustomId, templateLabels,
+  parseForums, parseRoleIds, parseTemplates, templateCheck, templateGaps,
+  templateNote, parseCustomId, templateLabels,
 } from './core.js';
 import { discordClient } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
@@ -149,20 +149,23 @@ async function openForm(interaction, env, deps, { threadId, messageId, greetingI
 // TEMPLATES setting or the defaults for the post's type. Read at each filing
 // (a few a day) and never stored, so an edited template counts at once and no
 // KV write is spent. `note` tells the moderator why the fallback was used.
-async function templateFields(cfg, forumId, type, env, deps, deadline) {
-  const fallback = cfg.templates[type] || [];
+async function templateFields(cfg, forumId, type, env, deps, deadline, log) {
+  const fallback = { fields: cfg.templates[type] || [], optional: [] };
   const info = cfg.forumInfo[forumId] || {};
-  if (info.badTemplate) return { fields: fallback, note: "the forum's template link is not a message link, so the default fields were checked" };
+  if (info.badTemplate) return { ...fallback, note: "the forum's template link is not a message link, so the default fields were checked" };
   const link = info.template;
-  if (!link) return { fields: fallback, note: '' };
+  if (!link) return { ...fallback, note: '' };
   try {
     const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, TEMPLATE_MS, deadline));
     const msg = await discord.call('GET', `/channels/${link.channelId}/messages/${link.messageId}`);
     const labels = templateLabels(msg && msg.content);
-    if (labels.length) return { fields: labels, note: '' };
-    return { fields: fallback, note: "the forum's pinned template has no labels, so the default fields were checked" };
+    if (labels.length) {
+      return { fields: labels.map((l) => l.name), optional: labels.filter((l) => l.optional).map((l) => l.name), note: '' };
+    }
+    return { ...fallback, note: "the forum's pinned template has no labels, so the default fields were checked" };
   } catch (e) {
-    return { fields: fallback, note: `could not read the forum's pinned template (${String(e.message).slice(0, 120)}), so the default fields were checked` };
+    log(`template read failed: ${e.message}`);
+    return { ...fallback, note: templateNote(e) };
   }
 }
 
@@ -247,8 +250,9 @@ export async function fileIssue(interaction, env, deps) {
     const by = interaction.member && interaction.member.user;
     // The template read ends a full call's time before the filing's deadline,
     // so the create can always start.
-    const template = await templateFields(cfg, thread.parent_id, type, env, deps, t0 + budgetMs - callMs);
+    const template = await templateFields(cfg, thread.parent_id, type, env, deps, t0 + budgetMs - callMs, log);
     const check = template.fields.length ? templateCheck(message.content, template.fields, (message.attachments || []).length) : [];
+    const gaps = templateGaps(check, template.optional);
     creating = true;
     const issue = await gh.createIssue(repo, {
       title: buildTitle({ repoKey, client, module: v.module, title: v.title }),
@@ -261,7 +265,7 @@ export async function fileIssue(interaction, env, deps) {
         client,
         attachments: message.attachments,
         sentBy: by ? (by.global_name || by.username) : null,
-        templateLine: check.length ? templateSummary(check) : null,
+        templateLine: check.length ? gaps.join(' · ') || 'every field present' : null,
       }),
       labels: labelsFor({ type, client }),
     });
@@ -288,8 +292,7 @@ export async function fileIssue(interaction, env, deps) {
         await discord.send(threadId, MESSAGES.tracked(repoKey, issue.number));
       }
     } catch (e) { notes.push(`note in the post not sent: ${e.message.slice(0, 300)}`); }
-    const gaps = check.filter((c) => c.state !== 'present');
-    const tmpl = gaps.length ? ` Template: ${gaps.map((c) => `${c.field} ${c.state}`).join(', ')}.` : '';
+    const tmpl = gaps.length ? ` Template: ${gaps.join(', ')}.` : '';
     await followup(`Created ${repoKey} #${issue.number}: ${issue.html_url}${notes.length ? ` (${notes.join('; ')})` : ''}${tmpl}`);
     return { created: issue.number, notes };
   } catch (e) {

@@ -495,7 +495,7 @@ test('the template check is noted in the issue and told to the moderator, never 
   const ctx = ctxFor();
   await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
   await Promise.all(ctx.jobs);
-  assert.match(created.body, /Template check \(advisory\): Addon version present · UI version missing · Updated with the game closed present · What happened present · What you expected present · How to make it happen again missing · Screenshots missing/);
+  assert.match(created.body, /Template check \(advisory\): UI version missing · How to make it happen again missing · Screenshots missing$/m);
   assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /Template: UI version missing, How to make it happen again missing, Screenshots missing\./);
   assert.doesNotMatch(f.find('POST', /\/channels\/700\/messages$/)[0].body.content, /Template/);
 });
@@ -531,12 +531,14 @@ test('the template check reads the forum\'s pinned template, and falls back to t
   const LINK = 'https://discord.com/channels/1/960/961';
   const pinned = '```\nWhat happened:\n(what went wrong)\n\nScreenshots:\n(attach)\n```';
   const post = 'What happened:\nbags overlap\n\nScreenshots:\n';
-  for (const [link, answer, body, told] of [
-    [LINK, () => ({ id: '961', content: pinned }), /Template check \(advisory\): What happened present · Screenshots missing$/m, /^Created ONE #17: u Template: Screenshots missing\.$/],
-    [LINK, () => new Response('{"message":"Missing Access"}', { status: 403 }), /Template check \(advisory\): Addon version unsure/, /could not read the forum's pinned template \(.*403.*\), so the default fields were checked/],
-    [LINK, () => ({ id: '961', content: 'Welcome! Read the rules first.' }), /Template check \(advisory\): Addon version unsure/, /the forum's pinned template has no labels, so the default fields were checked/],
+  for (const [link, answer, body, told, raw] of [
+    [LINK, () => ({ id: '961', content: pinned }), /Template check \(advisory\): Screenshots missing$/m, /^Created ONE #17: u Template: Screenshots missing\.$/, null],
+    // An optional field left blank is no gap, in the issue or the reply.
+    [LINK, () => ({ id: '961', content: pinned.replace('Screenshots:', 'Screenshots (optional):') }), /Template check \(advisory\): every field present$/m, /^Created ONE #17: u$/, null],
+    [LINK, () => new Response('{"message":"Missing Access"}', { status: 403 }), /Template check \(advisory\): Addon version unsure/, /\(the bot may not read the template message; check its access to that post, so the default fields were checked\)/, /template read failed: .*403.*Missing Access/],
+    [LINK, () => ({ id: '961', content: 'Welcome! Read the rules first.' }), /Template check \(advisory\): Addon version unsure/, /the forum's pinned template has no labels, so the default fields were checked/, null],
     // A post's link pasted instead of the message's: nothing is read.
-    ['https://discord.com/channels/1/960', () => { throw new Error('read'); }, /Template check \(advisory\): Addon version unsure/, /the forum's template link is not a message link, so the default fields were checked/],
+    ['https://discord.com/channels/1/960', () => { throw new Error('read'); }, /Template check \(advisory\): Addon version unsure/, /the forum's template link is not a message link, so the default fields were checked/, null],
   ]) {
     const PIN = { ...env, FORUM_CHANNEL_IDS: '', FORUMS: JSON.stringify({ 900: { client: 'Retail', type: 'Bug', template: link } }) };
     let created;
@@ -546,10 +548,15 @@ test('the template check reads the forum\'s pinned template, and falls back to t
       ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, (b) => { created = b; return { number: 17, html_url: 'u' }; }],
     ])));
     const ctx = ctxFor();
-    await handle(await signed(submit()), PIN, ctx, { fetch: f, installationToken: async () => 'inst' });
+    const logged = [];
+    await handle(await signed(submit()), PIN, ctx, { fetch: f, installationToken: async () => 'inst', log: (s) => logged.push(s) });
     await Promise.all(ctx.jobs);
     assert.match(created.body, body);
-    assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, told);
+    const reply = f.find('PATCH', /\/webhooks\//)[0].body.content;
+    assert.match(reply, told);
+    assert.doesNotMatch(reply, /Discord GET|Missing Access/);
+    if (raw) assert.ok(logged.some((l) => raw.test(l)), `the raw error is logged: ${logged}`);
+    else assert.deepEqual(logged, []);
   }
 });
 
@@ -563,5 +570,5 @@ test('a stalled pinned-template read near the deadline still leaves the create i
   await handle(await signed(submit()), PIN, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 100, budgetMs: 300 });
   const [res] = await Promise.all(ctx.jobs);
   assert.equal(res.created, 17, JSON.stringify(res));
-  assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /could not read the forum's pinned template/);
+  assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /the template message could not be read just now, so the default fields were checked/);
 });
