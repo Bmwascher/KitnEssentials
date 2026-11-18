@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from '../src/core.js';
-import { stall } from './fake-fetch.mjs';
+import { discordClient } from '../src/discord.js';
+import { stall, fakeFetch } from './fake-fetch.mjs';
 
 test('title follows [ONE][Client][Module] Title', () => {
   assert.equal(C.buildTitle({ repoKey: 'ONE', client: 'Retail', module: 'Bags', title: ' Icons overlap ' }),
@@ -381,3 +382,24 @@ test('a forum can name its pinned template message by its link', () => {
   // A value that is not a message link is flagged, so the moderator is told.
   assert.deepEqual([f['900'].badTemplate, f['902'].badTemplate], [false, true]);
 });
+
+test('a reply pings its target; a refused reply goes once more plain, and any other error is thrown', async () => {
+  const plainBody = { content: 'hi', allowed_mentions: { parse: [], users: [] } };
+  const reply = { content: 'hi', allowed_mentions: { parse: [], users: [], replied_user: true }, message_reference: { message_id: '800', fail_if_not_exists: false } };
+  for (const [why, answers, opts, sent, outcome] of [
+    ['a pinged reply', [200], { replyTo: '800' }, [reply], 'sent'],
+    ['a refused reply goes once more, plain', [400, 200], { replyTo: '800' }, [reply, plainBody], 'refused'],
+    ['a server error is thrown, with no second send', [500], { replyTo: '800' }, [reply], 'thrown'],
+  ]) {
+    const queue = [...answers];
+    const f = fakeFetch([['POST', /\/channels\/700\/messages$/, () => {
+      const status = queue.shift();
+      return status === 200 ? { id: '1' } : new Response('{"message":"x"}', { status });
+    }]]);
+    const send = discordClient('t', f).send('700', 'hi', [], opts);
+    if (outcome === 'thrown') await assert.rejects(send, / -> 500 /, why);
+    else assert.equal((await send).replyRefused, outcome === 'refused' ? true : undefined, why);
+    assert.deepEqual(f.calls.map((c) => c.body), sent, why);
+  }
+});
+

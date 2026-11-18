@@ -24,11 +24,27 @@ export function discordClient(token, fetchImpl = fetch) {
   return {
     call,
     getChannel: (id) => call('GET', `/channels/${id}`),
-    // Never pings anyone unless a user id is passed explicitly.
-    send: (channelId, content, pingUserIds = []) => call('POST', `/channels/${channelId}/messages`, {
-      content,
-      allowed_mentions: { parse: [], users: pingUserIds },
-    }),
+    getMessage: (channelId, messageId) => call('GET', `/channels/${channelId}/messages/${messageId}`),
+    // The bot's own user: only its messages count as its greeting or card.
+    me: () => call('GET', '/users/@me'),
+    // Never pings anyone unless a user id is passed, or it replies, which
+    // pings the target's author. A reply Discord refuses (400: a system
+    // message as the target) was never posted, so it goes once more as a
+    // plain message, marked `replyRefused`.
+    async send(channelId, content, pingUserIds = [], { replyTo = null } = {}) {
+      const plainBody = { content, allowed_mentions: { parse: [], users: pingUserIds } };
+      if (!replyTo) return call('POST', `/channels/${channelId}/messages`, plainBody);
+      try {
+        return await call('POST', `/channels/${channelId}/messages`, {
+          content,
+          allowed_mentions: { ...plainBody.allowed_mentions, replied_user: true },
+          message_reference: { message_id: replyTo, fail_if_not_exists: false },
+        });
+      } catch (e) {
+        if (!/ -> 400 /.test(e.message)) throw e;
+        return { ...(await call('POST', `/channels/${channelId}/messages`, plainBody)), replyRefused: true };
+      }
+    },
     // Swap the status tag on a forum post, keeping every other tag. A post
     // that already shows it is left alone. `from` is the status it showed.
     // `beforeMove(from)`, when given, runs once the post is known not to show
