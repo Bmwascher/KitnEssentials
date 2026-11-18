@@ -733,7 +733,8 @@ test('a tag run re-checks a new fix that closed the issue while it ran', async (
 
 test('lists are followed past their first page: recent issues, tags and linked PRs', async () => {
   const w = world();
-  for (let n = 100; n < 205; n++) { w.issue(n); w.close(n, 'not_planned', null); }
+  // Posts 1100 to 1204: the fake's default 700 + n would reach the forum's id (900) and the server's (800).
+  for (let n = 100; n < 205; n++) { w.issue(n, { thread: String(1000 + n) }); w.close(n, 'not_planned', null); }
   w.issue(17);
   w.close(17, 'completed', 'aaaaaaa1');
   w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
@@ -1370,18 +1371,32 @@ const sweepRun = (w, mode, out = [], over = {}) => run({
 const OWED = 'Notification attempted: x\n\n<!-- discord-told: fixed-aaaaaaa1 -->\n<!-- discord-told-status: Fixed, next update -->\n<!-- discord-told-run: 555 -->';
 
 test('the sweep lists a post it cannot read, judges none of its notes, and fails at its end', async () => {
+  for (const [why, read, status] of [
+    ['the post read is refused', /discord\.com\/api\/v10\/channels\/717$/, 403],
+    // A 404 from the post's forum says nothing about the post.
+    ['the forum read answers 404', /discord\.com\/api\/v10\/channels\/900$/, 404],
+  ]) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    w.record(17, OWED);
+    w.fail.push(['GET', read, new Response('{"message":"x"}', { status }), 1]);
+    const out = [];
+    await assert.rejects(sweepRun(w, 'fix', out), /#17/, why);
+    assert.match(out.join('\n'), /#17: .*Discord post not read \(see the log\)/, why);
+    assert.match(w.issues.get(17).comments[0].body, /^Notification attempted:/, `${why}: the owed note is not dropped`);
+  }
+});
+
+test('a GitHub 404 while a status write claims its note fails the issue, and never reads as a deleted post', async () => {
   const w = world();
   w.issue(17);
   w.close(17, 'completed', 'aaaaaaa1');
-  w.record(17, OWED);
-  const real = w.fetch;
-  w.fetch = async (url, init = {}) => ((init.method || 'GET') === 'GET' && /discord\.com\/api\/v10\/channels\/717$/.test(url)
-    ? new Response('{"message":"Missing Access"}', { status: 403 })
-    : real(url, init));
+  w.fail.push(['POST', /api\.github\.com\/repos\/me\/one\/issues\/17\/comments$/, new Response('{"message":"Not Found"}', { status: 404 }), 1]);
   const out = [];
-  await assert.rejects(sweepRun(w, 'fix', out), /#17/);
-  assert.match(out.join('\n'), /#17: .*Discord post not read \(see the log\)/);
-  assert.match(w.issues.get(17).comments[0].body, /^Notification attempted:/, 'the owed note is not dropped');
+  await assert.rejects(run({ eventName: 'issues', payload: { repository, action: 'closed', issue: { number: 17 } }, env, fetchImpl: w.fetch, log: (s) => out.push(s) }), /#17/);
+  assert.doesNotMatch(out.join('\n'), /Discord post is gone/);
+  assert.deepEqual(w.said('717'), []);
 });
 
 test('the issue\'s opened run sets the status GitHub calls for on a post that shows none, and tells no one', async () => {

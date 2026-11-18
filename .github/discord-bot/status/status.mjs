@@ -14,7 +14,7 @@
 import { readFileSync, appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { STATUS, LABELS, MESSAGES, parseMarker, parseFiledMessage, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN } from '../src/core.js';
-import { discordClient } from '../src/discord.js';
+import { discordClient, postGone } from '../src/discord.js';
 import { githubClient } from '../src/github.js';
 
 const hasLabel = (issue, name) => (issue.labels || []).some((l) => (l.name || l) === name);
@@ -407,8 +407,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         // tag. A status with news still takes the fifth slot, as at filing.
         r = await discord.setStatus(threadId, want, beforeMove, { dropOther: want !== STATUS.triaged });
       } catch (e) {
-        // A deleted post can never be told; its issue still moves.
-        if (!/-> 404 /.test(e.message)) throw e;
+        // A deleted post can never be told; its issue still moves. Only the
+        // post's own read or write answering 404 says it is gone.
+        if (!postGone(e, threadId)) throw e;
         log(`#${n}: Discord post is gone (${e.message.slice(0, 120)})`);
         for (const c of notes) await dropNote(c.note, 'the Discord post is gone');
         return null;
@@ -686,7 +687,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         shown = await discord.statusOf(threadId, status);
       } catch (e) {
         // The issue's failure line at the end of the sweep logs the error.
-        if (!/-> 404 /.test(e.message)) {
+        // Only the post's own read answering 404 says it is gone.
+        if (!postGone(e, threadId)) {
           unread = e;
           parts.push('Discord post not read (see the log)');
         }

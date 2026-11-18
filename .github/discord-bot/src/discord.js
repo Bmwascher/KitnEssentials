@@ -3,6 +3,12 @@ import { nextAppliedTags, currentStatus, otherTags } from './core.js';
 
 const API = 'https://discord.com/api/v10';
 
+// A post is gone only when a request for the post itself (its read or its
+// tag write) answers 404; a 404 from its forum, or from GitHub, says nothing
+// about the post.
+export const postGone = (err, threadId) => new RegExp(`^Discord (?:GET|PATCH) /channels/${threadId} -> 404 `)
+  .test(String((err && err.message) || ''));
+
 export function discordClient(token, fetchImpl = fetch) {
   async function call(method, path, body) {
     const res = await fetchImpl(`${API}${path}`, {
@@ -57,33 +63,33 @@ export function discordClient(token, fetchImpl = fetch) {
     // archived or not. `from` is the status it showed. `beforeMove(from)`,
     // when given, runs once the post is known not to show the status, before
     // anything is written, even when nothing can be written.
-    // Discord takes only a whole tag list, so the post is read again just
-    // before the write: a tag added meanwhile is kept, and a status another
-    // writer set meanwhile stops the write (`raced`), so the caller decides
-    // again from what the post shows. A move unarchives the post, as before.
-    // With `dropOther` false, a post with no status and five other tags is
-    // left as it is rather than lose one of them.
+    // Discord takes only a whole tag list, so the post and its forum's tags
+    // are read again just before the write: a tag added, or a status tag
+    // renamed, meanwhile is seen, and a status another writer set meanwhile
+    // stops the write (`raced`), so the caller decides again from what the
+    // post shows. A move unarchives the post, as before. With `dropOther`
+    // false, a post with no status and five other tags is left as it is
+    // rather than lose one of them.
     async setStatus(threadId, statusName, beforeMove, { dropOther = true } = {}) {
       const { thread, forum } = await threadAndForum(threadId);
-      const avail = forum.available_tags;
-      const from = currentStatus(thread.applied_tags, avail, statusName);
+      const from = currentStatus(thread.applied_tags, forum.available_tags, statusName);
       if (from === statusName) return { from, tags: thread.applied_tags || [] };
       if (beforeMove) await beforeMove(from);
-      const plan = (t) => {
+      const plan = (t, avail) => {
         const applied = t.applied_tags || [];
         const tags = nextAppliedTags(applied, avail, statusName);
         if (!tags) return { skipped: `forum has no "${statusName}" tag` };
         if (!dropOther && otherTags(applied, avail).length >= 5) return { skipped: `no free tag slot for "${statusName}"` };
         return { tags };
       };
-      let p = plan(thread);
+      let p = plan(thread, forum.available_tags);
       if (p.skipped) return { from, skipped: p.skipped };
-      const fresh = await call('GET', `/channels/${threadId}`);
-      if (currentStatus(fresh.applied_tags, avail, statusName) !== from) return { from, raced: true };
-      p = plan(fresh);
+      const fresh = await threadAndForum(threadId);
+      if (currentStatus(fresh.thread.applied_tags, fresh.forum.available_tags, statusName) !== from) return { from, raced: true };
+      p = plan(fresh.thread, fresh.forum.available_tags);
       if (p.skipped) return { from, skipped: p.skipped };
       const patch = { applied_tags: p.tags };
-      if (archivedOf(fresh)) patch.archived = false;
+      if (archivedOf(fresh.thread)) patch.archived = false;
       await call('PATCH', `/channels/${threadId}`, patch);
       return { from, tags: p.tags };
     },

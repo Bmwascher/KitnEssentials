@@ -465,3 +465,17 @@ test('status writes read the post again first, never reopen a post already showi
   const f = fakeFetch([['GET', /\/channels\/700$/, () => post(['p', 't'])], ['GET', /\/channels\/900$/, () => forum]]);
   assert.equal(await discordClient('t', f).statusOf('700', 'Triaged'), 'Triaged', 'statusOf reads the wanted status wherever it sits');
 });
+
+test('a status tag renamed to a staff tag between the reads is read with the forum as it is now', async () => {
+  const tags = [{ id: 'a', name: 'A' }, { id: 'b2', name: 'B' }, { id: 'c', name: 'C' }, { id: 'x', name: 'Staff note' }, { id: 'z', name: 'Closed' }, { id: 't', name: 'Triaged' }];
+  // Staff rename the post's Closed tag to a name of their own while the bot reads.
+  const forums = [{ id: '900', available_tags: tags }, { id: '900', available_tags: tags.map((t) => (t.id === 'z' ? { ...t, name: 'Needs review' } : t)) }];
+  const f = fakeFetch([
+    ['GET', /\/channels\/700$/, () => ({ id: '700', parent_id: '900', applied_tags: ['a', 'b2', 'c', 'x', 'z'] })],
+    ['GET', /\/channels\/900$/, () => (forums.length > 1 ? forums.shift() : forums[0])],
+    ['PATCH', /\/channels\/700$/, () => ({})],
+  ]);
+  const r = await discordClient('t', f).setStatus('700', 'Triaged', undefined, { dropOther: false });
+  assert.deepEqual(f.find('PATCH', /\/channels\/700$/), [], 'no staff tag is dropped');
+  assert.equal(r.raced, true, 'the caller decides again from the post as it is now');
+});
