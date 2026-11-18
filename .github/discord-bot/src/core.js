@@ -385,23 +385,62 @@ export function parseForums(env) {
   return out;
 }
 
-// Role ids allowed to press the thread button (comma list), besides
+// Role ids allowed to press the send button (comma list), besides
 // moderators. Empty: moderators only.
 export function parseRoleIds(raw) {
   return String(raw || '').split(',').map((s) => s.trim()).filter((s) => /^\d+$/.test(s));
 }
 
-// The custom id of the thread button ("send:<post>") and of the form
-// ("gh:<post>:<message>[:<button message>]"). Their parts go into API paths,
-// so they are taken only when every part is digits.
+// The custom id of the send button ("send:<post>") and of the form
+// ("gh:<post>:<message>[:<button message or 0>[:<queue card>]]"). Their parts
+// go into API paths, so they are taken only when every part is digits.
 export const SEND_BUTTON = 'send';
 export function parseCustomId(id) {
   const s = String(id || '');
   let m = new RegExp(`^${SEND_BUTTON}:(\\d+)$`).exec(s);
   if (m) return { kind: 'send', threadId: m[1] };
-  m = /^gh:(\d+):(\d+)(?::(\d+))?$/.exec(s);
-  if (m) return { kind: 'form', threadId: m[1], messageId: m[2], greetingId: m[3] || '' };
+  m = /^gh:(\d+):(\d+)(?::(\d+)(?::(\d+))?)?$/.exec(s);
+  if (m) return { kind: 'form', threadId: m[1], messageId: m[2], greetingId: m[3] && m[3] !== '0' ? m[3] : '', cardId: m[4] || '' };
   return null;
+}
+
+// A post or person name inside a message of the bot's own: Discord's
+// Markdown marks are backslashed, so a name cannot format or mention.
+function discordText(s) {
+  return String(s ?? '').replace(/\s*\n\s*/g, ' ').replace(/[\\*_~|>`<[\]]/g, '\\$&');
+}
+
+const openPost = (guildId, postId) => ({ type: 2, style: 5, label: 'Open post', url: `https://discord.com/channels/${guildId}/${postId}` });
+export const cardHead = (forumId, postName) => `**New post in <#${forumId}>:** ${discordText(postName)}`;
+
+// The queue channel's card for a post nobody has filed: its name, who posted
+// it and what kind it is, with the send button and a link. Unknown parts are
+// left out. The form files the post's first message, so a post whose first
+// message is gone gets no send button, only the way to file it by hand.
+export function queueCard({ guildId, forumId, postId, postName, author, client, type, starterGone = false }) {
+  const by = author ? `by ${discordText(author.name)}${author.username ? ` (\`${String(author.username).replace(/`/g, '')}\`)` : ''}` : '';
+  const second = [by, type, client].filter(Boolean).join(' · ');
+  const lines = [cardHead(forumId, postName), second,
+    starterGone ? 'Its first message was deleted: open the post and right-click a message › Apps › Send to GitHub.' : ''].filter(Boolean);
+  return {
+    content: lines.join('\n'),
+    allowed_mentions: { parse: [] },
+    components: [{ type: 1, components: [
+      ...(starterGone ? [] : [{ type: 2, style: 1, label: 'Send to GitHub', custom_id: `${SEND_BUTTON}:${postId}` }]),
+      openPost(guildId, postId),
+    ] }],
+  };
+}
+
+// The card once its post is filed. `head` is the card's first line as
+// Discord shows it (already escaped), or cardHead for the post; `by`, the
+// filer, is left out when unknown.
+export function filedCard({ guildId, postId, head, key, number, by }) {
+  return {
+    content: `~~${head}~~\n**Filed as ${key} #${number}**${by ? ` by ${discordText(by)}` : ''}`,
+    allowed_mentions: { parse: [] },
+    components: [{ type: 1, components: [openPost(guildId, postId)] }],
+  };
 }
 
 // A Discord id's creation time in epoch ms.

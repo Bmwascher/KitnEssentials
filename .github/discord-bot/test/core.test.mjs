@@ -291,10 +291,35 @@ test('release tags: plain version numbers by default, and never a pre-release wh
 
 test('button and form ids parse only when every id part is digits', () => {
   assert.deepEqual(C.parseCustomId('send:700'), { kind: 'send', threadId: '700' });
-  assert.deepEqual(C.parseCustomId('gh:700:800'), { kind: 'form', threadId: '700', messageId: '800', greetingId: '' });
-  assert.deepEqual(C.parseCustomId('gh:700:800:950'), { kind: 'form', threadId: '700', messageId: '800', greetingId: '950' });
-  for (const bad of ['send:7a', 'send:', 'gh:700', 'gh:700:800:950:1', 'gh:7/0:800', 'xx:700:800', '', undefined]) {
+  // A card's form carries the card id fourth; a 0 greeting part means none.
+  for (const [id, greetingId, cardId] of [
+    ['gh:700:800', '', ''], ['gh:700:800:950', '950', ''], ['gh:700:800:950:96', '950', '96'], ['gh:700:800:0:96', '', '96'],
+  ]) assert.deepEqual(C.parseCustomId(id), { kind: 'form', threadId: '700', messageId: '800', greetingId, cardId }, id);
+  for (const bad of ['send:7a', 'send:', 'gh:700', 'gh:700:800:950:1:2', 'gh:700:800:0:96x', 'gh:7/0:800', 'xx:700:800', '', undefined]) {
     assert.equal(C.parseCustomId(bad), null, String(bad));
+  }
+});
+
+test('a queue card links the post and sends it; once filed it strikes its own first line', () => {
+  const post = { guildId: '1', forumId: '900', postId: '700', postName: '**Bags** ||spoiler|| @everyone <@5>' };
+  const card = C.queueCard({ ...post, author: { name: 'Kira_x', username: 'kira_99' }, client: 'Retail', type: 'Bug' });
+  assert.equal(card.content, '**New post in <#900>:** \\*\\*Bags\\*\\* \\|\\|spoiler\\|\\| @everyone \\<@5\\>\nby Kira\\_x (`kira_99`) · Bug · Retail');
+  assert.deepEqual(card.allowed_mentions, { parse: [] });
+  assert.deepEqual(card.components[0].components.map((b) => [b.label, b.custom_id, b.url]), [
+    ['Send to GitHub', 'send:700', undefined], ['Open post', undefined, 'https://discord.com/channels/1/700'],
+  ]);
+  assert.equal(C.queueCard({ ...post, postName: 'x' }).content, '**New post in <#900>:** x', 'unknown parts are left out');
+  // A post whose first message is gone cannot be filed from a button: the card says how to file it instead.
+  const gone = C.queueCard({ ...post, postName: 'x', starterGone: true });
+  assert.equal(gone.content, '**New post in <#900>:** x\nIts first message was deleted: open the post and right-click a message › Apps › Send to GitHub.');
+  assert.deepEqual(gone.components[0].components.map((b) => [b.label, b.custom_id, b.url]), [['Open post', undefined, 'https://discord.com/channels/1/700']]);
+  // The head is the card's first line as shown, already escaped: it is not escaped again.
+  const head = C.cardHead('900', 'a_b');
+  for (const [by, line] of [['Bite', '**Filed as ONE #10** by Bite'], [undefined, '**Filed as ONE #10**']]) {
+    const filed = C.filedCard({ guildId: '1', postId: '700', head, key: 'ONE', number: 10, by });
+    assert.equal(filed.content, `~~**New post in <#900>:** a\\_b~~\n${line}`, line);
+    assert.deepEqual(filed.allowed_mentions, { parse: [] }, line);
+    assert.deepEqual(filed.components[0].components.map((b) => [b.label, b.url]), [['Open post', 'https://discord.com/channels/1/700']], line);
   }
 });
 
