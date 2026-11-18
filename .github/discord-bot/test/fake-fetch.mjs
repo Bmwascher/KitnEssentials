@@ -41,7 +41,7 @@ export const FORUM = {
   id: '900',
   available_tags: [
     { id: 't-retail', name: 'Retail' }, { id: 't-forever', name: 'Forever' },
-    { id: 't-bug', name: 'Bug' }, { id: 't-feedback', name: 'Feedback/Request' },
+    { id: 't-bug', name: 'Bug' }, { id: 't-feedback', name: 'Feedback/Request' }, { id: 't-staff', name: 'Staff note' },
     { id: 's-tri', name: 'Triaged' }, { id: 's-prog', name: 'In progress' },
     { id: 's-fix', name: 'Fixed, next update' }, { id: 's-ship', name: 'Shipped' },
     { id: 's-closed', name: 'Closed' },

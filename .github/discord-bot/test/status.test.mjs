@@ -1358,3 +1358,64 @@ test('a needs-info ping to a deleted post drops its note', async () => {
   await go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } });
   assert.ok(i.comments.some((c) => /^Dropped \(the Discord post is gone\): /.test(c.body)));
 });
+
+// ---- The opened run and the sweep --------------------------------------------------
+
+const tagsOf = (w, id) => w.threads.get(id).applied_tags;
+const sweepRun = (w, mode, out = [], over = {}) => run({
+  eventName: 'schedule', payload: { schedule: '17 9 * * *' },
+  env: { ...env, SWEEP_MODE: mode, GITHUB_REPOSITORY: 'me/one', ...over }, fetchImpl: w.fetch, log: (s) => out.push(s),
+});
+// A Fixed note another run (555) wrote and still owes.
+const OWED = 'Notification attempted: x\n\n<!-- discord-told: fixed-aaaaaaa1 -->\n<!-- discord-told-status: Fixed, next update -->\n<!-- discord-told-run: 555 -->';
+
+test('the sweep lists a post it cannot read, judges none of its notes, and fails at its end', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  w.record(17, OWED);
+  const real = w.fetch;
+  w.fetch = async (url, init = {}) => ((init.method || 'GET') === 'GET' && /discord\.com\/api\/v10\/channels\/717$/.test(url)
+    ? new Response('{"message":"Missing Access"}', { status: 403 })
+    : real(url, init));
+  const out = [];
+  await assert.rejects(sweepRun(w, 'fix', out), /#17/);
+  assert.match(out.join('\n'), /#17: .*Discord post not read \(see the log\)/);
+  assert.match(w.issues.get(17).comments[0].body, /^Notification attempted:/, 'the owed note is not dropped');
+});
+
+test('the issue\'s opened run sets the status GitHub calls for on a post that shows none, and tells no one', async () => {
+  const w = world();
+  w.issue(17);
+  w.threads.get('717').applied_tags = ['t-retail'];
+  await go(w, 'issues', { action: 'opened', issue: { number: 17 } });
+  assert.equal(w.tagOf('717'), 'Triaged');
+  assert.deepEqual(w.said('717'), []);
+});
+
+test('an opened run never drops a staff tag to show Triaged', async () => {
+  const w = world();
+  w.issue(17);
+  // A late create left the post with no status and five tags of its own.
+  const five = ['t-retail', 't-forever', 't-bug', 't-feedback', 't-staff'];
+  w.threads.get('717').applied_tags = [...five];
+  const out = [];
+  await run({ eventName: 'issues', payload: { repository, action: 'opened', issue: { number: 17 } }, env, fetchImpl: w.fetch, log: (s) => out.push(s) });
+  assert.deepEqual(tagsOf(w, '717'), five);
+  assert.match(out.join('\n'), /#17: no free tag slot for "Triaged"/);
+});
+
+test('an opened run that starts after a fix PR opened tells In progress itself, and the PR\'s own run adds nothing', async () => {
+  const w = world();
+  w.issue(17);
+  w.threads.get('717').applied_tags = ['t-retail'];
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  const told = () => w.said('717').filter((m) => /worked on/.test(m)).length;
+  const notes = () => w.issues.get(17).comments.filter((c) => /discord-told-status: In progress/.test(c.body)).length;
+  await go(w, 'issues', { action: 'opened', issue: { number: 17 } });
+  assert.equal(w.tagOf('717'), 'In progress', 'set by the opened run');
+  assert.deepEqual([told(), notes()], [1, 1], 'told, with its note, by the opened run');
+  await prEvent(w, 5);
+  assert.equal(w.tagOf('717'), 'In progress');
+  assert.deepEqual([told(), notes()], [1, 1], 'the PR\'s run adds neither');
+});

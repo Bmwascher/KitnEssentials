@@ -403,7 +403,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       } : undefined;
       let r;
       try {
-        r = await discord.setStatus(threadId, want, beforeMove);
+        // Triaged says only that the issue is filed: it never costs a staff
+        // tag. A status with news still takes the fifth slot, as at filing.
+        r = await discord.setStatus(threadId, want, beforeMove, { dropOther: want !== STATUS.triaged });
       } catch (e) {
         // A deleted post can never be told; its issue still moves.
         if (!/-> 404 /.test(e.message)) throw e;
@@ -411,8 +413,12 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         for (const c of notes) await dropNote(c.note, 'the Discord post is gone');
         return null;
       }
+      // Another writer moved the status just before this write: decide again
+      // from what the post shows now.
+      if (r.raced) continue;
       if (r.skipped) {
-        // The forum has no such tag: the post did not move, and this move's
+        // The forum has no such tag, or no free slot for Triaged: the post did
+        // not move, and this move's
         // message stays owed until a re-run once the tag exists.
         log(`#${n}: ${r.skipped}`);
         return { n, threadId, st, notes: notes.filter((c) => c.status !== want) };
@@ -636,7 +642,13 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           else await deliver(n, m.threadId, note, text, null, m.reporterId ? [m.reporterId] : []);
         }
       }
-    } else if (['closed', 'reopened'].includes(payload.action)) {
+    } else if (['opened', 'closed', 'reopened'].includes(payload.action)) {
+      // At `opened` the Worker has tagged a post with no status Triaged and
+      // said "now tracked" itself, or tagged nothing when GitHub answered it
+      // late: this run puts the post's status in step with GitHub. Triaged
+      // has no message; when GitHub already calls for one that has (a fix PR
+      // opened, a close, before this run started), this run tells it, and
+      // the note rules let only one run send it.
       await each([n], async () => {
         if (!(await botIssue(n))) return;
         await sync(n);
@@ -666,11 +678,19 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       const status = wantedStatus(st, st.issue.state === 'open' ? await prsFor(n) : []);
       const threadId = parseMarker(st.issue.body).threadId;
       let shown;
+      // A post read that fails for any reason but a 404 leaves the post
+      // neither judged nor repaired, and its notes unjudged: it is not gone.
+      let unread = null;
       try {
-        shown = await discord.statusOf(threadId);
+        // A post carrying the wanted status tag shows it, wherever it sits.
+        shown = await discord.statusOf(threadId, status);
       } catch (e) {
-        if (!/-> 404 /.test(e.message)) throw e;
-        shown = undefined; // the post is gone
+        // The issue's failure line at the end of the sweep logs the error.
+        if (!/-> 404 /.test(e.message)) {
+          unread = e;
+          parts.push('Discord post not read (see the log)');
+        }
+        shown = undefined; // the post is gone, or was not read
       }
       if (!(want.length === has.length && want.every((l) => has.includes(l)))) {
         parts.push(`labels ${has.join(', ') || '(none)'} -> ${want.join(', ') || '(none)'}`);
@@ -692,7 +712,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       const owed = [];
       const stale = [];
       const seen = new Set();
-      for (const t of st.records.told) {
+      for (const t of unread ? [] : st.records.told) {
         if (t.released || seen.has(t.key)) continue;
         seen.add(t.key);
         if (t.state === 'unconfirmed') {
@@ -735,6 +755,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       const line = `#${n}: ${parts.join('; ')}`;
       log(line);
       report.push(line);
+      if (unread) throw new Error(`#${n}: Discord post not read (${unread.message.slice(0, 200)})`);
       if (!fix) return;
       for (const s of stale) await dropNote(s.note, s.reason);
       if (owed.length) await settleLabels(n);
