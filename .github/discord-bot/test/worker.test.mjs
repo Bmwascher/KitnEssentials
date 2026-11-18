@@ -356,14 +356,15 @@ test('a create that answered late is found again: the player gets the reply, the
   await handle(await signed(submit()), { ...env, QUEUE_CHANNEL_ID: '556', STATE: kv }, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
   const [res] = await Promise.all(ctx.jobs);
   assert.equal(res.created, 17);
-  assert.equal(base.find('PATCH', /\/webhooks\//)[0].body.content, 'Created ONE #17: u/17 (GitHub answered late; the post\'s status tag comes from the issue\'s first workflow run)');
+  // The template result goes with a late create too.
+  assert.equal(base.find('PATCH', /\/webhooks\//)[0].body.content, 'Created ONE #17: u/17 (GitHub answered late; the post\'s status tag comes from the issue\'s first workflow run) Template: Addon version unsure, UI version unsure, Updated with the game closed unsure, What happened unsure, What you expected unsure, How to make it happen again unsure.');
   assert.deepEqual(JSON.parse(kv.m.get('issue:700')), { repo: 'me/test-one', number: 17, key: 'ONE', by: 'moddy' }, 'the filing is recorded');
   const [receipt, ...more] = base.find('POST', /\/channels\/700\/messages$/);
   assert.deepEqual(more, [], 'one receipt');
   assert.equal(receipt.body.content, MESSAGES.tracked('ONE', 17), 'the player is told');
   assert.deepEqual(receipt.body.message_reference, { message_id: '800', fail_if_not_exists: false });
   assert.match(base.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, /\n\*\*Filed as ONE #17\*\* by moddy$/, 'the card loses its button');
-  const pos = (method, re) => base.calls.findIndex((c) => c.method === method && re.test(c.url));
+  const pos = (method, re) => at(base, method, re);
   const marked = pos('PATCH', /\/channels\/556\/messages\/96$/);
   assert.ok(pos('PATCH', /\/webhooks\//) < marked && pos('POST', /\/channels\/700\/messages$/) < marked, 'the card last');
   assert.equal(base.find('DELETE', /labels\/discord-lock-700$/).length, 1);
@@ -380,7 +381,7 @@ test('a late create whose record save never answers still reports in time', asyn
   await handle(await signed(submit()), { ...env, STATE: kv }, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50, kvMs: 50 });
   const [res] = await Promise.all(ctx.jobs);
   assert.equal(res.created, 17);
-  assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /^Created ONE #17: u\/17 \(GitHub answered late; .*post record not saved: no answer in 50 ms\)$/);
+  assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /^Created ONE #17: u\/17 \(GitHub answered late; .*post record not saved: no answer in 50 ms\) Template: .*\.$/);
 });
 
 test('a server error on create is an unknown outcome too', async () => {
@@ -530,7 +531,13 @@ const STARTER = ['GET', /\/channels\/700\/messages\/700$/, () => ({ id: '700', c
 const WITH_BUTTON = { id: '950', content: 'old', components: [{ type: 1, components: [{ type: 2, custom_id: 'send:700' }] }] };
 const RECEIPT = { id: '950', content: 'Thanks! This is now tracked as ONE #9.', components: [] };
 const refusal = () => new Response('{"message":"Missing Permissions"}', { status: 403 });
-const at = (f, method, re) => f.calls.findIndex((c) => c.method === method && re.test(c.url));
+// The position of a call, which must have been made: an order check never
+// passes on a call that is missing.
+const at = (f, method, re) => {
+  const i = f.calls.findIndex((c) => c.method === method && re.test(c.url));
+  assert.ok(i >= 0, `no ${method} ${re}`);
+  return i;
+};
 
 test('a card press with no filing opens the form with the card id fourth; an old in-post button carries its greeting id', async () => {
   for (const [why, req, id] of [
@@ -674,6 +681,9 @@ test('an old button greeting is retired once the reply exists, and becomes the n
     // The reply may exist: a second receipt would repeat it.
     ['the reply has an unknown outcome: nothing is edited', WITH_BUTTON, [['POST', /\/channels\/700\/messages$/, () => new Response('{}', { status: 500 })]], 0,
       null, [/^note in the post may not have been sent: .*500/]],
+    // An edit whose answer was lost may have made the greeting the note.
+    ['the reply is refused and the edit has an unknown outcome', WITH_BUTTON, [['POST', /\/channels\/700\/messages$/, refusal], ['PATCH', /\/messages\/950$/, () => new Response('{}', { status: 500 })]], 0,
+      { content: MESSAGES.tracked('ONE', 17), components: [], allowed_mentions: { parse: [] } }, [/^note in the post may not have been sent: .*500/]],
   ]) {
     const kv = fakeKv({ 'thread:700': JSON.stringify({ greeting: '950' }) });
     const f = fakeFetch(discordRoutes(githubRoutes([], [
@@ -966,6 +976,7 @@ test('one lock per post: a filing into the second repo takes its lock in LOCK_RE
     ['held by another send', true, { busy: true }],
     // The lock repo is named, not taken from the order of REPOS.
     ['REPOS listed the other way round', false, { created: 21, notes: [] }, '{"TWO":"me/test-two","ONE":"me/test-one"}'],
+    ['held, with REPOS listed the other way round', true, { busy: true }, '{"TWO":"me/test-two","ONE":"me/test-one"}'],
   ]) {
     const f = fakeFetch(discordRoutes(githubRoutes([], [
       ['POST', /api\.github\.com\/repos\/me\/test-one\/labels$/, () => (held
@@ -979,6 +990,62 @@ test('one lock per post: a filing into the second repo takes its lock in LOCK_RE
     assert.equal(f.find('POST', /test-two\/labels$/).length, 0, `${why}: no lock in the chosen repo`);
     assert.equal(f.find('DELETE', /test-one\/labels\/discord-lock-700$/).length, held ? 0 : 1, `${why}: released where it was taken`);
     assert.equal(f.find('POST', /\/issues$/).length, held ? 0 : 1, why);
-    if (held) assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /another send of this post is running.*delete the label discord-lock-700 in me\/test-one/, why);
+    // A filing that holds the lock may be between its last search and its create: the advice waits until any filing has ended.
+    if (held) {
+      assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content,
+        /another send of this post is running, or one stopped partway\. Wait a few minutes, then send it again\. If it still says this and no issue for this post appears in any repo the bot files into, delete the label discord-lock-700 in me\/test-one and send it again\.$/, why);
+    }
   }
+});
+
+test('a reply Discord refuses goes out plain, and the Worker log says so', async () => {
+  let posts = 0;
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['POST', /\/channels\/700\/messages$/, () => (++posts === 1 ? new Response('{"message":"Cannot reply to a system message"}', { status: 400 }) : { id: '2' })],
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
+  ])));
+  const ctx = ctxFor();
+  const logged = [];
+  await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst', log: (s) => logged.push(s) });
+  const [res] = await Promise.all(ctx.jobs);
+  assert.deepEqual([res.created, res.notes], [17, []]);
+  const [reply, plain] = f.find('POST', /\/channels\/700\/messages$/).map((c) => c.body);
+  assert.deepEqual([reply.message_reference.message_id, plain.message_reference], ['800', undefined]);
+  assert.ok(logged.some((l) => /^post 700: Discord refused the reply; the note went out plain, with no ping$/.test(l)), logged.join('\n'));
+});
+
+test('a long template result never costs the moderator the issue\'s link', async () => {
+  // A valid pinned template of sixty long labels, none answered.
+  const labels = Array.from({ length: 60 }, (_, i) => `Field ${String(i).padStart(2, '0')} with quite a long label name`);
+  const PIN = { ...env, FORUM_CHANNEL_IDS: '', FORUMS: '{"900":{"client":"Retail","type":"Bug","template":"https://discord.com/channels/1/960/961"}}' };
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /\/channels\/960\/messages\/961$/, () => ({ id: '961', content: labels.map((l) => `${l}:`).join('\n') })],
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u' })],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), PIN, ctx, { fetch: f, installationToken: async () => 'inst' });
+  await Promise.all(ctx.jobs);
+  const told = f.find('PATCH', /\/webhooks\//)[0].body.content;
+  assert.ok(told.length <= 2000, `${told.length} characters`);
+  assert.match(told, /^Created ONE #17: u Template: Field 00 with quite a long label name unsure, /);
+});
+
+test('the card lookup after the lock\'s release keeps to the release\'s end', async () => {
+  const clock = shiftClock();
+  try {
+    let gets = 0;
+    // The record reads under the lock answer; the lookup after the release would never answer.
+    const kv = { get: () => (++gets <= 2 ? Promise.resolve(null) : new Promise(() => {})), put: async () => {} };
+    const f = fakeFetch(discordRoutes(githubRoutes([], [
+      ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
+      // The release ends past 29 s.
+      ['DELETE', /api\.github\.com\/repos\/me\/test-one\/labels\/discord-lock-700$/, () => { clock.at(29500); return null; }],
+    ])));
+    const ctx = ctxFor();
+    const started = performance.now();
+    await handle(await signed(submit()), { ...QUEUE, STATE: kv }, ctx, { fetch: f, installationToken: async () => 'inst', log: () => {} });
+    const [res] = await Promise.all(ctx.jobs);
+    assert.equal(res.created, 17);
+    assert.ok(performance.now() - started < 1000, 'no lookup starts past the release\'s end');
+  } finally { clock.restore(); }
 });

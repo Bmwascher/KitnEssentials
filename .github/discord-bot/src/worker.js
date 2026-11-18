@@ -16,6 +16,8 @@ import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton
 
 export const COMMAND_NAME = 'Send to GitHub';
 const EPHEMERAL = 64;
+// Discord refuses a message longer than this.
+const MAX_REPLY = 2000;
 // Discord wants the first answer within 3 s, counted from the moment the
 // request arrives: a press's check for an existing filing (KV reads
 // included) ends by 1.5 s, and the form's lookups by 2.6 s; a lookup gets at
@@ -277,14 +279,17 @@ async function retireButton(discord, threadId, id, replaced) {
   }
 }
 
-// "Now tracked" as a reply to the filed message, which pings its author. Only
-// a refusal (4xx) means no reply was posted: then the greeting becomes the
-// note. After any other failure the reply may exist, and a second receipt
-// would repeat it. A buttonless greeting is never deleted, and never edited
-// when the reply works.
-async function tellTracked(discord, { threadId, messageId, text, old, greeting }) {
+// "Now tracked" as a reply to the filed message, which pings its author. A
+// reply Discord refuses as a reply goes once more plain (`send`), and the
+// log says so. Only a refusal (4xx) means no message was posted: then the
+// greeting becomes the note. After any other failure the reply may exist,
+// and a second receipt would repeat it; the same holds for that edit. A
+// buttonless greeting is never deleted, and never edited when the reply
+// works.
+async function tellTracked(discord, log, { threadId, messageId, text, old, greeting }) {
   try {
-    await discord.send(threadId, text, [], { replyTo: messageId });
+    const sent = await discord.send(threadId, text, [], { replyTo: messageId });
+    if (sent && sent.replyRefused) log(`post ${threadId}: Discord refused the reply; the note went out plain, with no ping`);
   } catch (e) {
     if (!/ -> 4\d\d /.test(e.message)) return [`note in the post may not have been sent: ${e.message.slice(0, 300)}`];
     if (!greeting) return [`note in the post not sent: ${e.message.slice(0, 300)}`];
@@ -292,7 +297,7 @@ async function tellTracked(discord, { threadId, messageId, text, old, greeting }
       await discord.call('PATCH', `/channels/${threadId}/messages/${greeting}`, { content: text, components: [], allowed_mentions: { parse: [] } });
       return [];
     } catch (e2) {
-      return [`note in the post not sent: ${e2.message.slice(0, 300)}`];
+      return [`note in the post ${/ -> 4\d\d /.test(e2.message) ? 'not sent' : 'may not have been sent'}: ${e2.message.slice(0, 300)}`];
     }
   }
   return old ? retireButton(discord, threadId, old, true) : [];
@@ -404,7 +409,10 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
   const { callMs = CALL_MS, budgetMs = FILE_BUDGET_MS, kvMs = KV_MS } = deps; // tests shorten these
   const f = timedFetch(deps.fetch, callMs, t0 + budgetMs);
   const discord = discordClient(env.DISCORD_BOT_TOKEN, f);
-  const followup = async (content) => {
+  // The issue's link comes first, so a long template result is what Discord's
+  // length cuts.
+  const followup = async (text) => {
+    const content = text.length > MAX_REPLY ? `${text.slice(0, MAX_REPLY - 1)}…` : text;
     try {
       const res = await timedFetch(deps.fetch, TAIL_MS, t0 + REPORT_BY_MS)(
         `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
@@ -448,6 +456,10 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
   // The card to mark Filed as, once the lock is released: optional work
   // never holds the lock.
   let cardAfter = null;
+  // The template check's result, for the moderator on either create path.
+  let gaps = [];
+  let tmplNote = '';
+  const gapText = () => (gaps.length ? ` Template: ${gaps.join(', ')}.` : '');
   try {
     if (!cfg.lockRepo) {
       await followup("Nothing was created: the bot is not set up yet. REPOS names more than one repo, so LOCK_REPO must name the repo that holds every filing's lock.");
@@ -506,7 +518,9 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
       return { error: e.message, uncertain: 'lock' };
     }
     if (!locked) {
-      await followup(`Nothing was created: another send of this post is running, or one stopped partway. If no issue appears, delete the label ${lockLabel(threadId)} in ${cfg.lockRepo} and try again.`);
+      // The holder may be between its last search and its create, so no
+      // issue shows yet: the label is cleared only once any filing has ended.
+      await followup(`Nothing was created: another send of this post is running, or one stopped partway. Wait a few minutes, then send it again. If it still says this and no issue for this post appears in any repo the bot files into, delete the label ${lockLabel(threadId)} in ${cfg.lockRepo} and send it again.`);
       return { busy: true };
     }
     // The post's records, read under the lock, each waited on for at most
@@ -577,7 +591,8 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     // so the create can always start.
     const template = await templateFields(cfg, thread.parent_id, type, env, deps, t0 + budgetMs - callMs, log);
     const check = template.fields.length ? templateCheck(message.content, template.fields, (message.attachments || []).length) : [];
-    const gaps = templateGaps(check, template.optional);
+    gaps = templateGaps(check, template.optional);
+    tmplNote = template.note;
     creating = true;
     const issue = await gh.createIssue(repo, {
       title: buildTitle({ repoKey, client, module: v.module, title: v.title }),
@@ -614,11 +629,10 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     try {
       await within(kvMs, saveIssueRecord(kv, threadId, { repo, number: issue.number, key: repoKey, by: modName }));
     } catch (e) { notes.push(`post record not saved: ${e.message.slice(0, 200)}`); }
-    notes.push(...await tellTracked(teller, {
+    notes.push(...await tellTracked(teller, log, {
       threadId, messageId, text: MESSAGES.tracked(repoKey, issue.number), old: oldGreeting, greeting: greetingId || (rec && rec.greeting),
     }));
-    const tmpl = gaps.length ? ` Template: ${gaps.join(', ')}.` : '';
-    await followup(`Created ${repoKey} #${issue.number}: ${issue.html_url}${notes.length ? ` (${notes.join('; ')})` : ''}${tmpl}`);
+    await followup(`Created ${repoKey} #${issue.number}: ${issue.html_url}${notes.length ? ` (${notes.join('; ')})` : ''}${gapText()}`);
     cardAfter = { cardId, head, key: repoKey, number: issue.number, by: modName };
     return { created: issue.number, notes };
   } catch (e) {
@@ -632,14 +646,14 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
         // record, the player's receipt (the issue's own run assumes the
         // Worker sent it), the moderator's report, and, after the lock's
         // release, the card.
-        const late = [];
+        const late = tmplNote ? [tmplNote] : [];
         await within(kvMs, saveIssueRecord(env.STATE, threadId, { repo, number: found.number, key: repoKey, by: modName }))
           .catch((err) => late.push(`post record not saved: ${err.message.slice(0, 200)}`));
         const tail = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, TAIL_MS, t0 + TRACKED_BY_MS));
-        late.push(...await tellTracked(tail, {
+        late.push(...await tellTracked(tail, log, {
           threadId, messageId, text: MESSAGES.tracked(repoKey, found.number), old: oldGreeting, greeting: greetingId || (rec && rec.greeting),
         }));
-        await followup(`Created ${repoKey} #${found.number}: ${found.html_url} (GitHub answered late; the post's status tag comes from the issue's first workflow run${late.length ? `; ${late.join('; ')}` : ''})`);
+        await followup(`Created ${repoKey} #${found.number}: ${found.html_url} (GitHub answered late; the post's status tag comes from the issue's first workflow run${late.length ? `; ${late.join('; ')}` : ''})${gapText()}`);
         cardAfter = { cardId, head: thread ? cardHead(thread.parent_id, thread.name) : '', key: repoKey, number: found.number, by: modName };
         return { created: found.number, late: true };
       }
@@ -655,9 +669,11 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     }
     // Last, and after the release, the card. With no card id from the form,
     // the scan's record is read again: a scan may have posted the card while
-    // this filing ran. Both the read and the edit have an end.
+    // this filing ran. The read and the edit both end by the release's end.
     if (cardAfter && cfg.queue) {
-      const latest = cardAfter.cardId ? null : await within(kvMs, readStrict(env.STATE, `thread:${threadId}`)).catch(() => rec);
+      const kvLeft = Math.min(kvMs, t0 + RELEASE_BY_MS - Date.now());
+      const latest = cardAfter.cardId ? null
+        : kvLeft > 0 ? await within(kvLeft, readStrict(env.STATE, `thread:${threadId}`)).catch(() => rec) : rec;
       await markCard(discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, TAIL_MS, t0 + RELEASE_BY_MS)), cfg, log, {
         ...cardAfter, cardId: cardAfter.cardId || cardOf(latest), guildId: interaction.guild_id, postId: threadId,
       });
