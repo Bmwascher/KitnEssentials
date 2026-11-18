@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, createVerify } from 'node:crypto';
 import { handle, COMMAND_NAME } from '../src/worker.js';
 import { importAppKey, appJwt } from '../src/github.js';
+import { MESSAGES } from '../src/core.js';
 import { fakeFetch, fakeKv, FORUM, stall } from './fake-fetch.mjs';
 
 const keys = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
@@ -115,7 +116,8 @@ test('submitting files the issue, tags the post Triaged and tells the player', a
   assert.deepEqual(f.find('PATCH', /\/channels\/700$/)[0].body, { applied_tags: ['t-retail', 't-bug', 's-tri'] });
   const msg = f.find('POST', /\/channels\/700\/messages$/)[0].body;
   assert.match(msg.content, /tracked as ONE #17/);
-  assert.deepEqual(msg.allowed_mentions, { parse: [], users: [] });
+  assert.deepEqual(msg.message_reference, { message_id: '800', fail_if_not_exists: false });
+  assert.deepEqual(msg.allowed_mentions, { parse: [], users: [], replied_user: true });
   assert.match(f.find('PATCH', /\/webhooks\/app\/itok/)[0].body.content, /Created ONE #17/);
 });
 
@@ -459,10 +461,17 @@ test('a lost connection on create (a plain Error on Workers) keeps the lock; a 4
 const P3 = { ...env, FORUM_CHANNEL_IDS: '', FORUMS: '{"900":{"client":"Forever","type":"Feature"}}', APPROVED_ROLE_IDS: '77' };
 const HELPER = { permissions: '0', roles: ['77'], user: { id: '8', username: 'helper' } };
 const press = (member) => ({ type: 3, member, channel_id: '700', message: { id: '950' }, data: { custom_id: 'send:700', component_type: 2 } });
+// A press checks every configured repo for the post before the form opens:
+// here neither holds it.
+const searched = (extra = []) => fakeFetch(discordRoutes([
+  ...extra,
+  ['GET', /api\.github\.com\/repos\/me\/test-(one|two)\/issues\?state=all.*labels=from-discord/, () => []],
+]));
+const INST = { installationToken: async () => 'inst' };
 
 test('an approved role presses the button and gets the form, pre-filled from the forum', async () => {
-  const f = fakeFetch(discordRoutes());
-  const j = await (await handle(await signed(press(HELPER)), P3, ctxFor(), { fetch: f })).json();
+  const f = searched();
+  const j = await (await handle(await signed(press(HELPER)), P3, ctxFor(), { fetch: f, ...INST })).json();
   assert.equal(j.type, 9);
   assert.equal(j.data.custom_id, 'gh:700:700:950', 'thread, its first message, the button message');
   const val = Object.fromEntries(j.data.components.map((row) => [row.components[0].custom_id, row.components[0].value]));
@@ -478,27 +487,245 @@ test('the button refuses anyone without an approved role, and with no roles set 
 });
 
 test('a moderator can still press the button with no roles set', async () => {
-  const j = await (await handle(await signed(press(MOD)), { ...P3, APPROVED_ROLE_IDS: '' }, ctxFor(), { fetch: fakeFetch(discordRoutes()) })).json();
+  const j = await (await handle(await signed(press(MOD)), { ...P3, APPROVED_ROLE_IDS: '' }, ctxFor(), { fetch: searched(), ...INST })).json();
   assert.equal(j.type, 9);
 });
 
 const buttonSubmit = (member = HELPER) => ({ ...submit(), member, data: { ...submit().data, custom_id: 'gh:700:800:950' } });
 
-test('filing from the button turns the button message into the note, and remembers the issue', async () => {
-  const kv = fakeKv({ 'thread:700': JSON.stringify({ greeting: '950' }) });
-  const f = fakeFetch(discordRoutes(githubRoutes([], [
-    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
-    ['PATCH', /\/channels\/700\/messages\/950$/, () => ({})],
-  ])));
-  const ctx = ctxFor();
-  await handle(await signed(buttonSubmit()), { ...P3, STATE: kv }, ctx, { fetch: f, installationToken: async () => 'inst' });
-  const [res] = await Promise.all(ctx.jobs);
-  assert.equal(res.created, 17);
-  const edit = f.find('PATCH', /\/channels\/700\/messages\/950$/)[0].body;
-  assert.match(edit.content, /tracked as ONE #17/);
-  assert.deepEqual(edit.components, [], 'the button is gone');
-  assert.equal(f.find('POST', /\/channels\/700\/messages$/).length, 0, 'no second bot message');
-  assert.deepEqual(JSON.parse(kv.m.get('thread:700')), { greeting: '950', issue: { repo: 'me/test-one', number: 17 } });
+// ---- The queue card, the press check and the tracked reply ------------------------
+
+const QUEUE = { ...P3, QUEUE_CHANNEL_ID: '556' };
+// A press on the post's card in the queue channel, outside the post.
+const CARD = { id: '96', content: '**New post in <#900>:** Bags\nby Kira (`kira_99`) · Bug · Retail' };
+const cardPress = (member) => ({ ...press(member), guild_id: '1', channel_id: '556', message: CARD });
+const STARTER = ['GET', /\/channels\/700\/messages\/700$/, () => ({ id: '700', content: 'first', author: { id: '42', username: 'op' }, attachments: [] })];
+const WITH_BUTTON = { id: '950', content: 'old', components: [{ type: 1, components: [{ type: 2, custom_id: 'send:700' }] }] };
+const RECEIPT = { id: '950', content: 'Thanks! This is now tracked as ONE #9.', components: [] };
+const refusal = () => new Response('{"message":"Missing Permissions"}', { status: 403 });
+const at = (f, method, re) => f.calls.findIndex((c) => c.method === method && re.test(c.url));
+
+test('a card press with no filing opens the form with the card id fourth; an old in-post button carries its greeting id', async () => {
+  for (const [why, req, id] of [
+    ['a queue card', cardPress(HELPER), 'gh:700:700:0:96'],
+    ['an old greeting in the post', press(HELPER), 'gh:700:700:950'],
+  ]) {
+    const j = await (await handle(await signed(req), QUEUE, ctxFor(), { fetch: searched(), ...INST })).json();
+    assert.equal(j.data.custom_id, id, why);
+  }
+  const j = await (await handle(await signed(cardPress(PLAYER)), QUEUE, ctxFor(), { fetch: searched(), ...INST })).json();
+  assert.match(j.data.content, /Only moderators and approved roles/);
+});
+
+test('a card press on a post that cannot be read says why, never that the forum is wrong', async () => {
+  for (const [why, answer, want] of [
+    ['the post was deleted', () => new Response('{"message":"Unknown Channel"}', { status: 404 }), /^This post no longer exists\.$/],
+    ['a passing failure', () => new Response('{}', { status: 500 }), /^Could not read the post just now\. Press the button again\.$/],
+  ]) {
+    const f = searched([['GET', /\/channels\/700$/, answer]]);
+    const j = await (await handle(await signed(cardPress(HELPER)), QUEUE, ctxFor(), { fetch: f, ...INST })).json();
+    assert.match(j.data.content, want, why);
+  }
+});
+
+test('a press on a filed post answers Already tracked, opens no form, and the pressed message stops offering the button', async () => {
+  const issue = (over = {}) => () => ({ number: 3, html_url: 'https://github.com/me/test-one/issues/3', ...over });
+  const status = (s) => () => new Response('{"message":"x"}', { status: s });
+  const record = { 'issue:700': JSON.stringify({ repo: 'me/test-one', number: 3, key: 'ONE', by: 'Bite' }) };
+  const struck = '~~**New post in <#900>:** Bags~~';
+  const marked = [{ number: 9, html_url: 'https://github.com/me/test-two/issues/9', repository_url: 'https://api.github.com/repos/me/test-two', body: '<!-- discord-thread: 700 reporter: 42 -->' }];
+  const inst = async () => 'inst';
+  // `one` and `two` answer the configured repos' issue lists, searched when no
+  // record names a live issue.
+  for (const [why, entries, read, req, want, edit, two = [], token = inst, one = []] of [
+    ['no record and no marker anywhere: the form opens', {}, issue(), cardPress(HELPER), null, null],
+    ['no record, but a configured repo holds the post\'s marker', {}, issue(), cardPress(HELPER), /^Already tracked as TWO #9: https:\/\/github\.com\/me\/test-two\/issues\/9$/,
+      ['556', '96', { content: `${struck}\n**Filed as TWO #9**` }], marked],
+    ['a live issue', record, issue(), cardPress(HELPER), /^Already tracked as ONE #3: https:\/\/github\.com\/me\/test-one\/issues\/3$/,
+      ['556', '96', { content: `${struck}\n**Filed as ONE #3** by Bite` }]],
+    ['a transferred issue: named where it is now', record,
+      issue({ number: 31, html_url: 'https://github.com/me/test-three/issues/31', repository_url: 'https://api.github.com/repos/me/test-three' }), cardPress(HELPER),
+      /^Already tracked as me\/test-three #31: https:\/\/github\.com\/me\/test-three\/issues\/31$/, ['556', '96', { content: `${struck}\n**Filed as me/test-three #31** by Bite` }]],
+    ['an older record: no filer named', { 'thread:700': JSON.stringify({ greeting: '951', issue: { repo: 'me/test-one', number: 3 } }) }, issue(), cardPress(HELPER),
+      /^Already tracked as ONE #3: /, ['556', '96', { content: `${struck}\n**Filed as ONE #3**` }]],
+    // A 404 is also what an issue the app can no longer see answers.
+    ['the saved issue answers 404: refused, naming it', record, status(404), cardPress(HELPER),
+      /^Could not check ONE #3 in me\/test-one \(404\): it may be gone, or the app may have lost access there\. Nothing was opened\. If it is gone, a bot admin can clear this post's filing record \(the KV key issue:700, or the "issue" field of thread:700 for a post filed before this version\), and the post can then be sent again\.$/, null],
+    ['the saved issue was deleted (410) and no marker is found: the form opens', record, status(410), cardPress(HELPER), null, null],
+    // A match found by the search after the saved issue was deleted is another filing: the record's filer is not its filer.
+    ['the saved issue was deleted (410) and another in its repo holds the marker: no filer named', record, status(410), cardPress(HELPER),
+      /^Already tracked as ONE #5: /, ['556', '96', { content: `${struck}\n**Filed as ONE #5**` }], [], inst,
+      [{ number: 5, html_url: 'https://github.com/me/test-one/issues/5', repository_url: 'https://api.github.com/repos/me/test-one', body: '<!-- discord-thread: 700 reporter: 42 -->' }]],
+    ['GitHub fails: press again', record, status(500), cardPress(HELPER), /^Could not check whether this post is already on GitHub\. Press the button again\.$/, null],
+    // A failed token says nothing about the issue.
+    ['the token request answers 410: press again', record, issue(), cardPress(HELPER), /^Could not check whether this post is already on GitHub\./, null, [],
+      async () => { throw new Error('GitHub GET /repos/me/test-one/installation -> 410 {}'); }],
+    ['a configured repo cannot be searched: press again', {}, issue(), cardPress(HELPER), /^Could not check whether this post is already on GitHub\./, null, status(500)],
+    ['a damaged record', { 'issue:700': '{"repo"' }, issue(), cardPress(HELPER), /^This post's saved record is damaged \(issue:700\)\. Nothing was opened\. A bot admin can delete that KV key; then press again\.$/, null],
+    ['an empty record', { 'issue:700': '' }, issue(), cardPress(HELPER), /^This post's saved record is damaged \(issue:700\)/, null],
+    ['an old in-post button', record, issue(), press(HELPER), /^Already tracked as ONE #3: /, ['700', '950', { components: [] }]],
+  ]) {
+    const f = fakeFetch(discordRoutes([
+      ['GET', /api\.github\.com\/repos\/me\/test-one\/issues\/3$/, read],
+      ['GET', /api\.github\.com\/repos\/me\/test-one\/issues\?state=all.*labels=from-discord/, () => one],
+      ['GET', /api\.github\.com\/repos\/me\/test-two\/issues\?state=all.*labels=from-discord/, typeof two === 'function' ? two : () => two],
+      ['PATCH', /\/channels\/(556|700)\/messages\/(96|950)$/, () => ({})],
+    ]));
+    const ctx = ctxFor();
+    const j = await (await handle(await signed(req), { ...QUEUE, STATE: fakeKv(entries) }, ctx, { fetch: f, installationToken: token, log: () => {} })).json();
+    await Promise.all(ctx.jobs);
+    if (want) {
+      assert.deepEqual([j.type, j.data.flags], [4, 64], `${why}: a private reply`);
+      assert.match(j.data.content, want, why);
+    } else assert.equal(j.type, 9, `${why}: the form`);
+    const edits = f.find('PATCH', /\/messages\/(96|950)$/);
+    assert.equal(edits.length, edit ? 1 : 0, why);
+    if (edit) {
+      assert.match(edits[0].url, new RegExp(`/channels/${edit[0]}/messages/${edit[1]}$`), why);
+      for (const [k, v] of Object.entries(edit[2])) assert.deepEqual(edits[0].body[k], v, why);
+    }
+    assert.equal(f.find('POST', /\/channels\/700\/messages$/).length, 0, `${why}: no player message`);
+  }
+});
+
+test('a press check that cannot finish asks for another press', async () => {
+  const record = fakeKv({ 'issue:700': JSON.stringify({ repo: 'me/test-one', number: 3, key: 'ONE', by: 'Bite' }) });
+  for (const [why, kv, fetchOf] of [
+    ['the record read fails', { get: async () => { throw new Error('KV down'); } }, (f) => f],
+    ['the record read never answers', { get: () => new Promise(() => {}) }, (f) => f],
+    ['GitHub stalls past the deadline', record, (f) => (url, init = {}) => (/issues\/3$/.test(url) ? stall(init) : f(url, init))],
+    ['the marker search stalls past the deadline', fakeKv(), (f) => (url, init = {}) => (/issues\?state=all/.test(url) ? stall(init) : f(url, init))],
+  ]) {
+    const f = fakeFetch(discordRoutes());
+    const j = await (await handle(await signed(cardPress(HELPER)), { ...QUEUE, STATE: kv }, ctxFor(),
+      { fetch: fetchOf(f), installationToken: async () => 'inst', log: () => {}, pressMs: 50 })).json();
+    assert.match(j.data.content, /^Could not check whether this post is already on GitHub\. Press the button again\.$/, why);
+  }
+});
+
+test('filing replies to the filed message with a ping, leaves the greeting alone, records the filing and marks the card last', async () => {
+  for (const [why, req, messageId, by] of [
+    ['from the queue card', { ...submit(), member: HELPER, channel_id: '556', data: { ...submit().data, custom_id: 'gh:700:700:0:96' } }, '700', 'helper'],
+    ['by right-click on a later message, the card from the record', submit(), '800', 'moddy'],
+  ]) {
+    const kv = fakeKv({ 'thread:700': JSON.stringify({ greeting: '951', buttonless: true, card: '96' }) });
+    const f = fakeFetch(discordRoutes(githubRoutes([], [
+      STARTER,
+      ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
+      ['PATCH', /\/channels\/556\/messages\/96$/, () => ({})],
+    ])));
+    const ctx = ctxFor();
+    await handle(await signed(req), { ...QUEUE, STATE: kv }, ctx, { fetch: f, installationToken: async () => 'inst' });
+    const [res] = await Promise.all(ctx.jobs);
+    assert.deepEqual(res, { created: 17, notes: [] }, why);
+    const [sent, ...more] = f.find('POST', /\/channels\/700\/messages$/);
+    assert.deepEqual(more, [], why);
+    assert.equal(sent.body.content, MESSAGES.tracked('ONE', 17), why);
+    assert.deepEqual(sent.body.message_reference, { message_id: messageId, fail_if_not_exists: false }, why);
+    assert.deepEqual(sent.body.allowed_mentions, { parse: [], users: [], replied_user: true }, why);
+    assert.equal(f.calls.filter((c) => /\/messages\/951$/.test(c.url)).length, 0, `${why}: the greeting is left alone`);
+    const card = f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body;
+    assert.match(card.content, new RegExp(`^~~.*~~\\n\\*\\*Filed as ONE #17\\*\\* by ${by}$`), why);
+    const marked = at(f, 'PATCH', /\/channels\/556\/messages\/96$/);
+    assert.ok(at(f, 'POST', /\/channels\/700\/messages$/) < marked, `${why}: the player's reply first`);
+    assert.ok(at(f, 'PATCH', /\/webhooks\//) < marked, `${why}: the moderator's result first`);
+    assert.ok(at(f, 'DELETE', /labels\/discord-lock-700$/) < marked, `${why}: the card waits for the lock's release, never the other way round`);
+    assert.deepEqual(JSON.parse(kv.m.get('thread:700')), { greeting: '951', buttonless: true, card: '96' }, `${why}: the scan's record is untouched`);
+    assert.deepEqual(JSON.parse(kv.m.get('issue:700')), { repo: 'me/test-one', number: 17, key: 'ONE', by }, why);
+  }
+});
+
+test('an old button greeting is retired once the reply exists, and becomes the note only when the reply was refused', async () => {
+  for (const [why, greeting, over, deleted, edit, notes] of [
+    ['the delete works', WITH_BUTTON, [], 1, null, []],
+    ['the delete is refused: the button is stripped', WITH_BUTTON, [['DELETE', /\/messages\/950$/, refusal]], 1, { components: [] }, []],
+    ['the delete and the strip are refused', WITH_BUTTON, [['DELETE', /\/messages\/950$/, refusal], ['PATCH', /\/messages\/950$/, refusal]], 1, { components: [] }, [/^the old button was not removed: .*403/]],
+    ['an earlier receipt shows no button: left alone', RECEIPT, [], 0, null, []],
+    ['the reply is refused: the greeting becomes the note', WITH_BUTTON, [['POST', /\/channels\/700\/messages$/, refusal]], 0,
+      { content: MESSAGES.tracked('ONE', 17), components: [], allowed_mentions: { parse: [] } }, []],
+    // The reply may exist: a second receipt would repeat it.
+    ['the reply has an unknown outcome: nothing is edited', WITH_BUTTON, [['POST', /\/channels\/700\/messages$/, () => new Response('{}', { status: 500 })]], 0,
+      null, [/^note in the post may not have been sent: .*500/]],
+  ]) {
+    const kv = fakeKv({ 'thread:700': JSON.stringify({ greeting: '950' }) });
+    const f = fakeFetch(discordRoutes(githubRoutes([], [
+      ...over,
+      ['GET', /\/channels\/700\/messages\/950$/, () => greeting],
+      ['DELETE', /\/channels\/700\/messages\/950$/, () => null],
+      ['PATCH', /\/channels\/700\/messages\/950$/, () => ({})],
+      ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
+    ])));
+    const ctx = ctxFor();
+    await handle(await signed(submit()), { ...env, STATE: kv }, ctx, { fetch: f, installationToken: async () => 'inst' });
+    const [res] = await Promise.all(ctx.jobs);
+    assert.equal(res.created, 17, why);
+    assert.equal(f.find('DELETE', /\/messages\/950$/).length, deleted, why);
+    assert.deepEqual(f.find('PATCH', /\/messages\/950$/).map((c) => c.body).at(-1) ?? null, edit, why);
+    assert.equal(res.notes.length, notes.length, `${why}: ${res.notes}`);
+    notes.forEach((re, i) => assert.match(res.notes[i], re, why));
+  }
+});
+
+test('already tracked on submit: no reply, an old button greeting only loses its button, the filing is recorded, and the card says Filed as', async () => {
+  for (const [why, greeting, stripped] of [['an old greeting with its button', WITH_BUTTON, [{ components: [] }]], ['an earlier receipt', RECEIPT, []]]) {
+    const kv = fakeKv({ 'thread:700': JSON.stringify({ greeting: '950', card: '96' }) });
+    const f = fakeFetch(discordRoutes(githubRoutes([{ number: 17, html_url: 'u/17', body: '<!-- discord-thread: 700 reporter: 42 -->' }], [
+      ['GET', /\/channels\/700\/messages\/950$/, () => greeting],
+      ['PATCH', /\/channels\/700\/messages\/950$/, () => ({})],
+      ['PATCH', /\/channels\/556\/messages\/96$/, () => ({})],
+    ])));
+    const ctx = ctxFor();
+    await handle(await signed(submit()), { ...QUEUE, STATE: kv }, ctx, { fetch: f, installationToken: async () => 'inst' });
+    assert.deepEqual(await Promise.all(ctx.jobs), [{ duplicate: 17 }], why);
+    assert.equal(f.find('POST', /\/channels\/700\/messages$/).length, 0, `${why}: no reply`);
+    assert.equal(f.find('DELETE', /\/messages\/950$/).length, 0, `${why}: never deleted`);
+    assert.deepEqual(f.find('PATCH', /\/messages\/950$/).map((c) => c.body), stripped, why);
+    assert.match(f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, /\n\*\*Filed as ONE #17\*\*$/, why);
+    assert.ok(at(f, 'PATCH', /\/webhooks\//) < at(f, 'PATCH', /\/channels\/556\/messages\/96$/), `${why}: the moderator hears first`);
+    assert.deepEqual(JSON.parse(kv.m.get('issue:700')), { repo: 'me/test-one', number: 17, key: 'ONE', by: null }, `${why}: found by the search and saved`);
+    assert.equal(f.find('PATCH', /\/webhooks\//)[0].body.content, 'Already tracked: ONE #17 u/17', why);
+  }
+});
+
+test('filing leaves a status the post shows, also one a workflow set just before the write', async () => {
+  // The post is read when the filing starts, then by the tag write, then again just before it writes.
+  for (const [why, reads] of [
+    ['In progress from the start', [['t-retail', 's-prog']]],
+    ['In progress set between the tag write\'s two reads', [['t-retail'], ['t-retail'], ['t-retail', 's-prog']]],
+  ]) {
+    const queue = [...reads];
+    const f = fakeFetch(discordRoutes(githubRoutes([], [
+      ['GET', /\/channels\/700$/, () => ({ id: '700', parent_id: '900', name: 'x', applied_tags: queue.length > 1 ? queue.shift() : queue[0] })],
+      ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
+    ])));
+    const ctx = ctxFor();
+    await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
+    const [res] = await Promise.all(ctx.jobs);
+    assert.deepEqual([res.created, res.notes], [17, []], why);
+    assert.equal(f.find('PATCH', /\/channels\/700$/).length, 0, `${why}: In progress stays`);
+  }
+});
+
+test('a slow tag write cannot use up the player\'s receipt: each has its own end', async () => {
+  const clock = shiftClock();
+  try {
+    let reads = 0;
+    const base = fakeFetch(discordRoutes(githubRoutes([], [
+      ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
+    ])));
+    // The post's second read is the tag write's: it stalls, and the clock
+    // stands at 20.5 s when it ends.
+    const hang = (url, init = {}) => ((init.method || 'GET') === 'GET' && /\/channels\/700$/.test(url) && ++reads === 2
+      ? stall(init, () => clock.at(20500))
+      : base(url, init));
+    const ctx = ctxFor();
+    await handle(await signed(submit()), env, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
+    const [res] = await Promise.all(ctx.jobs);
+    assert.equal(res.created, 17);
+    assert.ok(res.notes.some((n) => /^tag not set: /.test(n)), res.notes.join('; '));
+    assert.equal(base.find('POST', /\/channels\/700\/messages$/).length, 1, 'the receipt went out');
+    assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /^Created ONE #17/);
+  } finally { clock.restore(); }
 });
 
 test('an approved role can submit the form; a player cannot', async () => {

@@ -77,16 +77,6 @@ const readJson = async (kv, key) => {
   try { return JSON.parse(raw); } catch { return null; }
 };
 
-export async function threadRecord(kv, threadId) {
-  return kv ? readJson(kv, `thread:${threadId}`) : null;
-}
-
-export async function saveThreadRecord(kv, threadId, patch) {
-  if (!kv) return;
-  const rec = (await threadRecord(kv, threadId)) || {};
-  await kv.put(`thread:${threadId}`, JSON.stringify({ ...rec, ...patch }));
-}
-
 // A record as stored, or null when there is none. A value that is empty or
 // not JSON throws with `damaged` set to its key, and a failed read throws as
 // it is: neither is "no record".

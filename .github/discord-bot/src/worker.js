@@ -1,22 +1,28 @@
 // Cloudflare Worker that answers Discord interactions over HTTP (no gateway,
-// no always-on server). Two ways in, one form: the "Send to GitHub" button
-// the scheduled scan puts in each new post (approved roles), or right-click
-// a post > Apps > "Send to GitHub" (moderators). Submitting the form files
-// the issue.
+// no always-on server). Two ways in, one form: the "Send to GitHub" button on
+// a post's card in the staff queue channel (approved roles), or right-click a
+// post > Apps > "Send to GitHub" (moderators). A press on a post already
+// filed answers "Already tracked" instead of opening the form. Submitting the
+// form files the issue and replies to the filed message in the post.
 import {
   STATUS, MESSAGES, PERMS, buildTitle, buildBody, labelsFor, cleanPostTitle, personName,
   guessFromTags, normClient, normType, normRepoKey, parseRepos, timedFetch,
   parseForums, parseRoleIds, parseTemplates, templateCheck, templateGaps,
-  templateNote, parseCustomId, templateLabels,
+  templateNote, parseCustomId, templateLabels, filedCard, cardHead,
 } from './core.js';
 import { discordClient } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
-import { scan, daily, CRONS, SEND_BUTTON, threadRecord, saveThreadRecord } from './scan.js';
+import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton } from './scan.js';
 
 export const COMMAND_NAME = 'Send to GitHub';
 const EPHEMERAL = 64;
-// Discord wants the first answer within 3 s; the form's lookups get 1.5 s.
+// Discord wants the first answer within 3 s, counted from the moment the
+// request arrives: a press's check for an existing filing (KV reads
+// included) ends by 1.5 s, and the form's lookups by 2.6 s; a lookup gets at
+// most 1.5 s.
 const FORM_LOOKUP_MS = 1500;
+const PRESS_BY_MS = 1500;
+const FORM_BY_MS = 2600;
 // Workers cancel waitUntil work about 30 s after the response, so every phase
 // has a hard end, counted from the start: the filing's calls by 15 s, a
 // re-check of an unknown create by 20 s, the report to the moderator by 25 s,
@@ -27,6 +33,15 @@ const REPORT_BY_MS = 25000;
 const RELEASE_BY_MS = 29000;
 const CALL_MS = 8000;
 const TAIL_MS = 5000;
+// Every KV wait has an end: a read or write is waited on for at most 1.5 s,
+// so a slow one cannot hold the filing, its lock, the player's receipt or
+// the moderator's result. After a create, the Triaged tag ends by 18 s and
+// the player's receipt has its own end at 23 s, so a slow tag write cannot
+// use up the receipt's time. The queue card is marked after the lock's
+// release, by the release's own end.
+const KV_MS = 1500;
+const TAG_BY_MS = 18000;
+const TRACKED_BY_MS = 23000;
 // The forum's pinned template is advice only: its read gets at most 2 s, and
 // fileIssue ends it a full call's time before the filing's deadline.
 const TEMPLATE_MS = 2000;
@@ -63,6 +78,7 @@ export function config(env) {
   return {
     repos, forums: Object.keys(forumInfo), forumInfo,
     roles: parseRoleIds(env.APPROVED_ROLE_IDS), templates: parseTemplates(env.TEMPLATES),
+    queue: env.QUEUE_CHANNEL_ID || '',
   };
 }
 
@@ -103,13 +119,20 @@ function modalValues(data) {
   return out;
 }
 
-async function openForm(interaction, env, deps, { threadId, messageId, greetingId = '' }) {
+async function openForm(interaction, env, deps, { threadId, messageId, greetingId = '', cardId = '', deadline = Date.now() + FORM_LOOKUP_MS }) {
   const cfg = config(env);
   if (!cfg.forums.length) return reply('The bot is not set up yet: FORUMS is empty.');
-  const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, Date.now() + FORM_LOOKUP_MS));
+  const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, deadline));
   let ch = interaction.channel && interaction.channel.id === threadId ? interaction.channel : {};
   if (!ch.parent_id || !ch.applied_tags) {
-    ch = await discord.getChannel(threadId).catch(() => ch);
+    try {
+      ch = await discord.getChannel(threadId);
+    } catch (e) {
+      // A card press brings no post with it: say why the form cannot open.
+      if (!ch.parent_id) {
+        return reply(/ -> 404 /.test(e.message) ? 'This post no longer exists.' : 'Could not read the post just now. Press the button again.');
+      }
+    }
   }
   if (!cfg.forums.includes(ch.parent_id)) {
     return reply('This only works on posts in the forums the bot is set up for.');
@@ -131,7 +154,7 @@ async function openForm(interaction, env, deps, { threadId, messageId, greetingI
   return json({
     type: 9,
     data: {
-      custom_id: `gh:${threadId}:${messageId}${greetingId ? `:${greetingId}` : ''}`,
+      custom_id: `gh:${threadId}:${messageId}${greetingId || cardId ? `:${greetingId || '0'}` : ''}${cardId ? `:${cardId}` : ''}`,
       title: 'Send to GitHub',
       components: [
         input('repo', `Repo (${keys.join(' or ')})`, keys[0], { max: 10 }),
@@ -169,18 +192,212 @@ async function templateFields(cfg, forumId, type, env, deps, deadline, log) {
   }
 }
 
+// Where an issue is now: reading a transferred issue follows GitHub's
+// redirect, so its repo comes from the answer.
+function whereIs(issue, fallbackRepo) {
+  const m = /\/repos\/([^/]+\/[^/]+)$/.exec(String(issue.repository_url || ''));
+  return { repo: m ? m[1] : fallbackRepo, number: issue.number };
+}
+// Repo names compare without case: GitHub answers in its own casing, which a
+// REPOS entry may not match.
+const sameRepo = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+const keyOf = (cfg, repo) => Object.keys(cfg.repos).find((k) => sameRepo(cfg.repos[k], repo)) || repo;
+const httpStatus = (e) => (/-> (\d{3}) /.exec(e.message) || [])[1] || e.message.slice(0, 120);
+
+// The one rule for a post's saved issue, shared by the press and the filing.
+// It is read with a token for its own repo, the token and the read failing
+// apart: `issue` when live; `gone` only on the issue read's own 410
+// (deleted); anything else is `unclear`, with why, since a 404 is also what
+// an issue the app can no longer see answers, and a failed token says
+// nothing about the issue.
+async function readSaved(saved, tokenFor, f) {
+  let gh;
+  try {
+    gh = githubClient(await tokenFor(saved.repo), f);
+  } catch (e) {
+    return { unclear: `no access: ${httpStatus(e)}` };
+  }
+  try {
+    return { issue: await gh.getIssue(saved.repo, saved.number) };
+  } catch (e) {
+    if (/-> 410 /.test(e.message)) return { gone: true };
+    return { unclear: httpStatus(e), notFound: /-> 404 /.test(e.message) };
+  }
+}
+
+// The post's marker searched in every given repo at once, so the wait is the
+// slowest repo's, not their sum. The first match in the given order wins; a
+// failure in any repo throws, naming it.
+async function searchRepos(repos, postId, tokenFor, f) {
+  const found = await Promise.all(repos.map(async (r) => {
+    try {
+      return await githubClient(await tokenFor(r), f).findByThread(r, postId);
+    } catch (e) {
+      throw new Error(`could not check ${r} for this post (${e.message.slice(0, 200)}). Try again.`);
+    }
+  }));
+  const at = found.findIndex(Boolean);
+  return at < 0 ? null : { issue: found[at], repo: repos[at] };
+}
+
+// A write waited on for at most `ms`; past that it is reported as not
+// confirmed, and what follows goes on.
+function within(ms, p) {
+  let timer;
+  return Promise.race([p, new Promise((_, no) => { timer = setTimeout(() => no(new Error(`no answer in ${ms} ms`)), ms); })])
+    .finally(() => clearTimeout(timer));
+}
+
+// An old greeting still showing the post's send button: deleted once a new
+// reply replaces it, else (or when the delete fails) only its button goes. One
+// that no longer shows it, such as an earlier filing's receipt, is left alone.
+async function retireButton(discord, threadId, id, replaced) {
+  let msg;
+  try {
+    msg = await discord.getMessage(threadId, id);
+  } catch (e) {
+    return / -> 404 /.test(e.message) ? [] : [`the old button was not removed: ${e.message.slice(0, 200)}`];
+  }
+  if (!hasButton(msg, threadId)) return [];
+  if (replaced) {
+    try {
+      await discord.call('DELETE', `/channels/${threadId}/messages/${id}`);
+      return [];
+    } catch { /* strip the button instead */ }
+  }
+  try {
+    await discord.call('PATCH', `/channels/${threadId}/messages/${id}`, { components: [] });
+    return [];
+  } catch (e) {
+    return [`the old button was not removed: ${e.message.slice(0, 200)}`];
+  }
+}
+
+// "Now tracked" as a reply to the filed message, which pings its author. Only
+// a refusal (4xx) means no reply was posted: then the greeting becomes the
+// note. After any other failure the reply may exist, and a second receipt
+// would repeat it. A buttonless greeting is never deleted, and never edited
+// when the reply works.
+async function tellTracked(discord, { threadId, messageId, text, old, greeting }) {
+  try {
+    await discord.send(threadId, text, [], { replyTo: messageId });
+  } catch (e) {
+    if (!/ -> 4\d\d /.test(e.message)) return [`note in the post may not have been sent: ${e.message.slice(0, 300)}`];
+    if (!greeting) return [`note in the post not sent: ${e.message.slice(0, 300)}`];
+    try {
+      await discord.call('PATCH', `/channels/${threadId}/messages/${greeting}`, { content: text, components: [], allowed_mentions: { parse: [] } });
+      return [];
+    } catch (e2) {
+      return [`note in the post not sent: ${e2.message.slice(0, 300)}`];
+    }
+  }
+  return old ? retireButton(discord, threadId, old, true) : [];
+}
+
+// The post's queue card once the post is filed: struck through, "Filed as",
+// only the Open post link. It goes after the lock's release; a failed edit
+// is logged, and a press on the card later answers "Already tracked" and
+// marks it.
+async function markCard(discord, cfg, log, { cardId, guildId, postId, head, key, number, by }) {
+  if (!cardId || !cfg.queue) return;
+  await discord.call('PATCH', `/channels/${cfg.queue}/messages/${cardId}`, filedCard({ guildId, postId, head, key, number, by }))
+    .catch((e) => log(`queue card ${cardId} not updated: ${e.message.slice(0, 200)}`));
+}
+
+// A saved issue that answers 404 cannot be told from one the app can no
+// longer see (a transfer out of reach, lost access), so nothing goes ahead.
+// The way out clears only the post's filing association: its greeting and
+// card ids stay.
+function couldNotCheck(cfg, saved, postId, why, done) {
+  const key = keyOf(cfg, saved.repo);
+  const what = key !== saved.repo ? `${key} #${saved.number} in ${saved.repo}` : `${saved.repo} #${saved.number}`;
+  return `Could not check ${what} (${why}): it may be gone, or the app may have lost access there. ${done} If it is gone, a bot admin can clear this post's filing record (the KV key issue:${postId}, or the "issue" field of thread:${postId} for a post filed before this version), and the post can then be sent again.`;
+}
+
+// A press on a post already filed answers "Already tracked" at once, and the
+// pressed message stops offering the button: a queue card becomes its filed
+// form, an old greeting loses its button. The saved record names the issue;
+// with none, or when its issue was deleted, every configured repo is
+// searched for the post's marker, since a filing's record can be missing
+// while its issue exists. Discord wants an answer within 3 s, so every wait
+// here, KV included, ends by PRESS_BY_MS from the request's arrival; the
+// form opens only after a check that finished and found nothing, and any
+// other end asks for another press. Returns the reply, or null to open the form.
+async function pressCheck(interaction, env, deps, cfg, postId, t0, ctx) {
+  const log = deps.log || console.error;
+  const { pressMs = PRESS_BY_MS } = deps; // tests shorten it
+  const end = t0 + pressMs;
+  const f = timedFetch(deps.fetch, pressMs, end);
+  const wait = (p) => within(Math.max(0, end - Date.now()), p);
+  const tokenFor = (repo) => (deps.installationToken || installationToken)({ appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY, repo }, f);
+  const again = reply('Could not check whether this post is already on GitHub. Press the button again.');
+  let saved;
+  try {
+    const filed = await wait(readStrict(env.STATE, `issue:${postId}`));
+    const rec = filed ? null : await wait(readStrict(env.STATE, `thread:${postId}`));
+    saved = filed || (rec && rec.issue) || null;
+  } catch (e) {
+    if (e.damaged) return reply(`This post's saved record is damaged (${e.damaged}). Nothing was opened. A bot admin can delete that KV key; then press again.`);
+    log(`press check failed after ${Date.now() - t0} ms: ${e.message.slice(0, 200)}`);
+    return again;
+  }
+  let issue = null;
+  let foundIn = null;
+  let fromSaved = false;
+  // Getting a token signs a key, so it waits under the same deadline.
+  const timedToken = (repo) => wait(tokenFor(repo));
+  try {
+    if (saved) {
+      const r = await readSaved(saved, timedToken, f);
+      if (r.issue) {
+        issue = r.issue;
+        foundIn = saved.repo;
+        fromSaved = true;
+      } else if (r.notFound) {
+        return reply(couldNotCheck(cfg, saved, postId, '404', 'Nothing was opened.'));
+      } else if (!r.gone) {
+        log(`press check failed after ${Date.now() - t0} ms: ${r.unclear}`);
+        return again;
+      }
+    }
+    if (!issue) {
+      const hit = await searchRepos(Object.values(cfg.repos), postId, timedToken, f);
+      if (hit) ({ issue, repo: foundIn } = hit);
+    }
+  } catch (e) {
+    log(`press check failed after ${Date.now() - t0} ms: ${e.message.slice(0, 200)}`);
+    return again;
+  }
+  if (!issue) return null;
+  const where = whereIs(issue, foundIn);
+  const key = keyOf(cfg, where.repo);
+  // The filer is the record's only for the issue the record names: a search
+  // match after that issue was deleted is another filing.
+  const by = fromSaved ? saved.by || null : null;
+  const pressed = interaction.message || {};
+  const edit = interaction.channel_id === postId
+    ? { components: [] }
+    : filedCard({ guildId: interaction.guild_id, postId, head: String(pressed.content || '').split('\n')[0], key, number: where.number, by });
+  const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, CALL_MS));
+  ctx.waitUntil(discord.call('PATCH', `/channels/${interaction.channel_id}/messages/${pressed.id}`, edit)
+    .catch((e) => log(`pressed message not updated: ${e.message.slice(0, 200)}`)));
+  return reply(`Already tracked as ${key} #${where.number}: ${issue.html_url}`);
+}
+
 // Runs after Discord already has its "thinking..." answer. Every call is timed,
 // and every outcome, partial ones included, is reported back to the moderator.
-export async function fileIssue(interaction, env, deps) {
+// `t0` is the moment the request arrived; every phase's end counts from it.
+export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
   const cfg = config(env);
-  const { threadId, messageId, greetingId } = parseCustomId(interaction.data.custom_id);
+  const { threadId, messageId, greetingId, cardId } = parseCustomId(interaction.data.custom_id);
+  // The moderator who sent the form, as the card and the filing record name them.
+  const modName = interaction.member && interaction.member.user ? personName(interaction.member.user, interaction.member) : null;
   const v = modalValues(interaction.data);
   const repoKey = normRepoKey(v.repo, cfg.repos);
   const client = normClient(v.client);
   const type = normType(v.type);
   const log = deps.log || console.error;
-  const { callMs = CALL_MS, budgetMs = FILE_BUDGET_MS } = deps; // tests shorten these
-  const t0 = Date.now();
+  const { callMs = CALL_MS, budgetMs = FILE_BUDGET_MS, kvMs = KV_MS } = deps; // tests shorten these
   const f = timedFetch(deps.fetch, callMs, t0 + budgetMs);
   const discord = discordClient(env.DISCORD_BOT_TOKEN, f);
   const followup = async (content) => {
@@ -202,6 +419,14 @@ export async function fileIssue(interaction, env, deps) {
   let locked = false;
   let keepLock = false;
   let creating = false;
+  let thread = null;
+  let rec = null;
+  let saved = null;
+  // The post's queue card: the form's, else the scan's record of the post.
+  const cardOf = (r) => cardId || (r && r.card) || '';
+  // The card to mark Filed as, once the lock is released: optional work
+  // never holds the lock.
+  let cardAfter = null;
   try {
     const ghToken = await (deps.installationToken || installationToken)(
       { appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY, repo }, f);
@@ -210,7 +435,7 @@ export async function fileIssue(interaction, env, deps) {
     ghRelease = githubClient(ghToken, timedFetch(deps.fetch, TAIL_MS, t0 + RELEASE_BY_MS));
 
     // The form may have been opened before the forum list changed: check again.
-    const thread = await discord.getChannel(threadId);
+    thread = await discord.getChannel(threadId);
     if (!cfg.forums.includes(thread.parent_id)) {
       await followup('Nothing was created: this post is not in a forum the bot is set up for.');
       return { refused: 'forum' };
@@ -220,15 +445,39 @@ export async function fileIssue(interaction, env, deps) {
     // granted has left its issue to be found. The post's KV record, when it
     // names the issue, saves reading the whole issue list.
     const kv = env.STATE;
-    const rec = await threadRecord(kv, threadId).catch(() => null);
+    rec = await within(kvMs, readStrict(kv, `thread:${threadId}`)).catch(() => null);
+    const filed = await within(kvMs, readStrict(kv, `issue:${threadId}`)).catch(() => null);
+    // The issue the post was filed as: the Worker's record, or an older
+    // record that kept it beside the greeting.
+    saved = filed || (rec && rec.issue) || null;
     const already = async () => {
       let existing = null;
-      if (rec && rec.issue && rec.issue.repo === repo) {
-        existing = await gh.getIssue(repo, rec.issue.number).catch((e) => { if (/-> 404 /.test(e.message)) return null; throw e; });
+      if (saved && sameRepo(saved.repo, repo)) {
+        existing = await gh.getIssue(repo, saved.number).catch((e) => { if (/-> 404 /.test(e.message)) return null; throw e; });
       }
       if (!existing) existing = await gh.findByThread(repo, threadId);
-      if (existing) await followup(`Already tracked: ${repoKey} #${existing.number} ${existing.html_url}`);
       return existing;
+    };
+    // An old greeting: the one pressed in the post, or the record's when it
+    // was written before greetings lost their button.
+    const oldGreeting = greetingId || (rec && rec.greeting && !rec.buttonless ? rec.greeting : '');
+    const head = cardHead(thread.parent_id, thread.name);
+    // Already tracked: the record learns where the issue is now, an old
+    // greeting only loses its button (no new reply replaces it), the
+    // moderator is told, and then, after the lock's release, the card says
+    // Filed as.
+    const tracked = async (where, say, by) => {
+      const key = keyOf(cfg, where.repo);
+      const notes = [];
+      if (!(saved && sameRepo(saved.repo, where.repo) && saved.number === where.number)) {
+        try {
+          await within(kvMs, saveIssueRecord(kv, threadId, { repo: where.repo, number: where.number, key, by }));
+        } catch (e) { notes.push(`post record not saved: ${e.message.slice(0, 200)}`); }
+      }
+      if (oldGreeting) notes.push(...await retireButton(discord, threadId, oldGreeting, false));
+      await followup(`${say(key)}${notes.length ? ` (${notes.join('; ')})` : ''}`);
+      cardAfter = { cardId: cardOf(rec), head, key, number: where.number, by };
+      return { duplicate: where.number };
     };
     try {
       locked = await gh.claimThread(repo, threadId);
@@ -243,7 +492,13 @@ export async function fileIssue(interaction, env, deps) {
       return { busy: true };
     }
     const existing = await already();
-    if (existing) return { duplicate: existing.number };
+    if (existing) {
+      const where = whereIs(existing, repo);
+      const by = saved && sameRepo(saved.repo, where.repo) && saved.number === where.number ? saved.by : null;
+      // Awaited here, so the lock is released, and the card marked, only
+      // after the record, the old button and the moderator's message.
+      return await tracked(where, (key) => `Already tracked: ${key} #${where.number} ${existing.html_url}`, by);
+    }
 
     const message = await discord.call('GET', `/channels/${threadId}/messages/${messageId}`);
     const author = message.author || {};
@@ -279,29 +534,31 @@ export async function fileIssue(interaction, env, deps) {
     });
     creating = false;
 
-    // The issue exists from here on: report it whatever else fails.
+    // The issue exists from here on: report it whatever else fails. The tag
+    // write and the player's receipt each have their own end, after the
+    // filing's, so a slow create cannot starve them and a slow tag write
+    // cannot use up the receipt's time.
+    const tagger = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, callMs, t0 + TAG_BY_MS));
+    const teller = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, callMs, t0 + TRACKED_BY_MS));
     const notes = [];
     if (template.note) notes.push(template.note);
+    // Triaged goes only on a post with no status, as the post shows it just
+    // before the write: the issue's own `opened` run, and any later run, set
+    // the status GitHub calls for, and this write must not take it back.
+    const shown = new Error('the post already shows a status');
     try {
-      const status = await discord.setStatus(threadId, STATUS.triaged);
+      const status = await tagger.setStatus(threadId, STATUS.triaged, (from) => { if (from) throw shown; });
       if (status.skipped) notes.push(`tag not set: ${status.skipped}`);
-    } catch (e) { notes.push(`tag not set: ${e.message.slice(0, 300)}`); }
+    } catch (e) { if (e !== shown) notes.push(`tag not set: ${e.message.slice(0, 300)}`); }
     try {
-      await saveThreadRecord(kv, threadId, { issue: { repo, number: issue.number } });
+      await within(kvMs, saveIssueRecord(kv, threadId, { repo, number: issue.number, key: repoKey, by: modName }));
     } catch (e) { notes.push(`post record not saved: ${e.message.slice(0, 200)}`); }
-    // One bot message per post: the button's message becomes the note.
-    const greeting = greetingId || (rec && rec.greeting);
-    try {
-      if (greeting) {
-        await discord.call('PATCH', `/channels/${threadId}/messages/${greeting}`, {
-          content: MESSAGES.tracked(repoKey, issue.number), components: [], allowed_mentions: { parse: [] },
-        });
-      } else {
-        await discord.send(threadId, MESSAGES.tracked(repoKey, issue.number));
-      }
-    } catch (e) { notes.push(`note in the post not sent: ${e.message.slice(0, 300)}`); }
+    notes.push(...await tellTracked(teller, {
+      threadId, messageId, text: MESSAGES.tracked(repoKey, issue.number), old: oldGreeting, greeting: greetingId || (rec && rec.greeting),
+    }));
     const tmpl = gaps.length ? ` Template: ${gaps.join(', ')}.` : '';
     await followup(`Created ${repoKey} #${issue.number}: ${issue.html_url}${notes.length ? ` (${notes.join('; ')})` : ''}${tmpl}`);
+    cardAfter = { cardId, head, key: repoKey, number: issue.number, by: modName };
     return { created: issue.number, notes };
   } catch (e) {
     // A create that got no answer may still have happened on GitHub's side:
@@ -323,10 +580,23 @@ export async function fileIssue(interaction, env, deps) {
     if (locked && !keepLock) {
       try { await ghRelease.releaseThread(repo, threadId); } catch (e) { log(`lock ${lockLabel(threadId)} not released: ${e.message}`); }
     }
+    // Last, and after the release, the card. With no card id from the form,
+    // the scan's record is read again: a scan may have posted the card while
+    // this filing ran. Both the read and the edit have an end.
+    if (cardAfter && cfg.queue) {
+      const latest = cardAfter.cardId ? null : await within(kvMs, readStrict(env.STATE, `thread:${threadId}`)).catch(() => rec);
+      await markCard(discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, TAIL_MS, t0 + RELEASE_BY_MS)), cfg, log, {
+        ...cardAfter, cardId: cardAfter.cardId || cardOf(latest), guildId: interaction.guild_id, postId: threadId,
+      });
+    }
   }
 }
 
 export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(...a) }) {
+  // Discord's 3 s for the first answer runs from here: reading the body and
+  // checking the signature count against it. Every path's deadlines count
+  // from this moment: the press, the right-click form and the filing.
+  const t0 = Date.now();
   if (request.method !== 'POST') return new Response('ok');
   const body = await request.text();
   const ok = await verifyDiscord(env.DISCORD_PUBLIC_KEY,
@@ -338,7 +608,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
 
   if (interaction.type === 2 && interaction.data.name === COMMAND_NAME) {
     if (!canUse(interaction.member)) return reply('Only moderators and admins can send posts to GitHub.');
-    return openForm(interaction, env, deps, { threadId: interaction.channel_id, messageId: interaction.data.target_id });
+    return openForm(interaction, env, deps, { threadId: interaction.channel_id, messageId: interaction.data.target_id, deadline: t0 + FORM_BY_MS });
   }
 
   if (interaction.type === 3 && String(interaction.data.custom_id).startsWith(`${SEND_BUTTON}:`)) {
@@ -349,8 +619,17 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
       return reply('The button is not set up yet: APPROVED_ROLE_IDS is empty. A moderator can right-click the post > Apps > Send to GitHub.');
     }
     if (!allowed(interaction.member, cfg)) return reply(NOT_ALLOWED);
-    // A forum post's first message has the post's own id.
-    return openForm(interaction, env, deps, { threadId: ids.threadId, messageId: ids.threadId, greetingId: interaction.message && interaction.message.id });
+    // A press on a post already filed answers at once and opens no form.
+    const answered = await pressCheck(interaction, env, deps, cfg, ids.threadId, t0, ctx);
+    if (answered) return answered;
+    // A forum post's first message has the post's own id. A press on a queue
+    // card, outside the post, carries the card's id; one on an old greeting
+    // in the post carries the greeting's.
+    const pressed = (interaction.message && interaction.message.id) || '';
+    const fromCard = interaction.channel_id !== ids.threadId;
+    return openForm(interaction, env, deps, {
+      threadId: ids.threadId, messageId: ids.threadId, greetingId: fromCard ? '' : pressed, cardId: fromCard ? pressed : '', deadline: t0 + FORM_BY_MS,
+    });
   }
 
   if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('gh:')) {
@@ -366,7 +645,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     if (!String(v.title || '').trim()) problems.push('Title is empty.');
     if (problems.length) return reply(`Nothing was created. ${problems.join(' ')} Press the button or right-click the post to try again.`);
 
-    ctx.waitUntil(fileIssue(interaction, env, deps));
+    ctx.waitUntil(fileIssue(interaction, env, deps, t0));
     return json({ type: 5, data: { flags: EPHEMERAL } });
   }
 
