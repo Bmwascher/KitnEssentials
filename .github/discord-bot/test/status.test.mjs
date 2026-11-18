@@ -415,6 +415,50 @@ test('needs-info reopens an archived post, then pings only the reporter', async 
   const m = w.threads.get('717').messages[0];
   assert.match(m.content, /^<@42> /);
   assert.deepEqual(m.allowed_mentions, { parse: [], users: ['42'] });
+  assert.equal(m.message_reference, undefined, 'a mention, not a reply');
+});
+
+test('each status message replies to the filed message with a ping; an older issue only when its first message is the reporter\'s', async () => {
+  const filedBody = '## Report\n\n> hi\n\n<!-- discord-message: 333 -->\n<!-- discord-thread: 717 reporter: 42 -->';
+  const steps = [
+    ['In progress', (w) => { w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] }); return prEvent(w, 5); }],
+    ['Fixed', (w) => { w.close(17, 'completed', 'aaaaaaa1'); return closed(w, 17); }],
+    ['Closed by hand', (w) => { w.close(17, 'completed', null); return closed(w, 17); }],
+    ['Shipped', (w) => { w.close(17, 'completed', 'aaaaaaa1'); w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead'); return tag(w, 'v5.0.2'); }],
+  ];
+  for (const [why, over, starter, target] of [
+    ['filed with its message id', { body: filedBody }, null, '333'],
+    ['older, its first message by the reporter', {}, { author: { id: '42' } }, '717'],
+    ['older, its first message by someone else', {}, { author: { id: '43' } }, null],
+    ['older, its first message unreadable', {}, null, null],
+  ]) {
+    for (const [status, step] of steps) {
+      const w = world();
+      w.issue(17, over);
+      if (starter) w.threads.get('717').starter = starter;
+      await step(w);
+      const sent = w.threads.get('717').messages;
+      const at = `${why}, ${status}`;
+      assert.equal(sent.length, 1, at);
+      if (target) {
+        assert.deepEqual(sent[0].message_reference, { message_id: target, fail_if_not_exists: false }, at);
+        assert.deepEqual(sent[0].allowed_mentions, { parse: [], users: [], replied_user: true }, at);
+      } else {
+        assert.equal(sent[0].message_reference, undefined, at);
+        assert.deepEqual(sent[0].allowed_mentions, { parse: [], users: [] }, at);
+      }
+    }
+  }
+});
+
+test('a re-run sends an older note in its own words, so the player and the note agree', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  w.record(17, 'Notification attempted: This is fixed! Old words.\n\n<!-- discord-told: fixed-aaaaaaa1 -->\n<!-- discord-told-status: Fixed, next update -->\n<!-- discord-told-run: 555 -->');
+  await go(w, 'issues', { action: 'closed', issue: { number: 17 } }, { GITHUB_RUN_ID: '555', GITHUB_RUN_ATTEMPT: '2' });
+  assert.deepEqual(w.said('717'), ['This is fixed! Old words.']);
+  assert.match(w.issues.get(17).comments[0].body, /^Delivery confirmed: This is fixed! Old words\.\n/);
 });
 
 // ---- Message ownership, closing commits, missing tags -----------------------------

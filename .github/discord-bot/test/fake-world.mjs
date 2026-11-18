@@ -180,6 +180,13 @@ export function world() {
       if (body.archived === false) t.archived = false;
       return json({});
     }],
+    // One message: the post's starter (`starter` on the thread, its id the
+    // thread's), or a message the bot sent there (ids count from 1).
+    ['GET', /discord\.com\/api\/v10\/channels\/(\d+)\/messages\/(\d+)$/, (m) => {
+      const t = w.threads.get(m[1]);
+      const msg = t && (m[2] === t.id ? t.starter : t.messages[Number(m[2]) - 1]);
+      return msg ? json({ id: m[2], ...msg }) : json({ message: 'Unknown Message' }, 404);
+    }],
     ['POST', /discord\.com\/api\/v10\/channels\/(\d+)\/messages$/, (m, url, body) => {
       const t = w.threads.get(m[1]);
       if (!t) return json({ message: 'Unknown Channel' }, 404);
