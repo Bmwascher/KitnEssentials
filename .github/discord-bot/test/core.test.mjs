@@ -52,9 +52,9 @@ test('status swap keeps player tags and replaces the old status', () => {
 });
 
 test('shipped message names the repo and the release', () => {
-  assert.match(C.MESSAGES.shipped('me/SomeAddon', 'v5.0.120'), /out in SomeAddon v5\.0\.120\./);
-  assert.match(C.MESSAGES.shipped('me/OtherUI', '30.8'), /out in OtherUI v30\.8\./);
-  assert.match(C.MESSAGES.shipped('me/KitnEssentials', 'discord-test-1'), /out in KitnEssentials discord-test-1\./);
+  assert.match(C.MESSAGES.shipped('me/SomeAddon', 'v5.0.120'), /^\*\*Out now in SomeAddon v5\.0\.120\.\*\* /);
+  assert.match(C.MESSAGES.shipped('me/OtherUI', '30.8'), /^\*\*Out now in OtherUI v30\.8\.\*\* /);
+  assert.match(C.MESSAGES.shipped('me/OtherAddon', 'discord-test-1'), /^\*\*Out now in OtherAddon discord-test-1\.\*\* /);
 });
 
 test('player text cannot plant a marker or mention anyone', () => {

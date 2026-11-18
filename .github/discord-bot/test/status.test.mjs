@@ -23,7 +23,7 @@ test('a member PR that will close the issue moves the post to In progress and sa
   await prEvent(w, 5);
   await prEvent(w, 5, 'reopened');
   assert.equal(w.tagOf('717'), 'In progress');
-  assert.deepEqual(w.said('717'), ["Good news: a fix for this is being worked on and tested. We'll post here when it's done."]);
+  assert.deepEqual(w.said('717'), ["**In progress.** A fix for this is being worked on and tested. We'll post here when it's done."]);
 });
 
 test('a PR from an outside author, or a draft, leaves the post where it is', async () => {
@@ -67,9 +67,9 @@ test('an issue closed by a commit is pending-release and the post says Fixed, on
   await closed(w, 17);
   assert.deepEqual(labels(w, 17), ['pending-release']);
   assert.equal(w.tagOf('717'), 'Fixed, next update');
-  assert.deepEqual(w.said('717'), ["This is fixed! The fix will be in the next update. We'll post here when that update is out."]);
+  assert.deepEqual(w.said('717'), ["**Fixed!** The fix will be in the next update. We'll post here when that update is out."]);
   assert.match(w.issues.get(17).comments[0].body, /<!-- discord-told: fixed-aaaaaaa1 -->/);
-  assert.match(w.issues.get(17).comments[0].body, /^Delivery confirmed: This is fixed!/);
+  assert.match(w.issues.get(17).comments[0].body, /^Delivery confirmed: \*\*Fixed!\*\*/);
 });
 
 test('an issue closed by merging a PR, whose closed event carries no commit, is Fixed by the merge commit', async () => {
@@ -115,7 +115,7 @@ test('a duplicate links the other report\'s Discord post', async () => {
   w.issue(18);
   w.close(17, 'duplicate', null, null, 18);
   await closed(w, 17);
-  assert.deepEqual(w.said('717'), ["This is the same problem as another report (https://discord.com/channels/800/718), so we'll follow it there and close this one. Thanks for reporting it!"]);
+  assert.deepEqual(w.said('717'), ["**Duplicate.** This is the same problem as another report (https://discord.com/channels/800/718), so we'll follow it there and close this one. Thanks for reporting it!"]);
 });
 
 test('a duplicate of an issue with no Discord post, not filed by the bot, or in another repo, goes out without a link', async () => {
@@ -164,7 +164,7 @@ test('an issue closed by hand gets no release label and a neutral note', async (
   await closed(w, 17);
   assert.deepEqual(labels(w, 17), []);
   assert.equal(w.tagOf('717'), 'Closed');
-  assert.deepEqual(w.said('717'), ["A moderator has closed this. If it's still happening for you, reply here and we'll take another look."]);
+  assert.deepEqual(w.said('717'), ["**Closed.** A moderator has closed this. If it's still happening for you, reply here and we'll take another look."]);
 });
 
 test('closing as not planned or duplicate tells the player', async () => {
@@ -207,7 +207,7 @@ test('a release tag holding the fix ships the issue and names the version, once'
   const bodies = w.issues.get(17).comments.map((c) => c.body);
   assert.equal(bodies.filter((b) => /<!-- discord-shipped-in: v5\.0\.2 fixes: aaaaaaa1 -->/.test(b)).length, 1, 'one ship record');
   assert.equal(bodies.length, 3, 'told Fixed, the ship record, told Shipped');
-  assert.match(w.said('717').at(-1), /out in one v5\.0\.2/);
+  assert.match(w.said('717').at(-1), /Out now in one v5\.0\.2/);
   assert.equal(w.said('717').length, 2);
 });
 
@@ -317,7 +317,7 @@ test('a fix closed while a ship is writing labels ends pending, with the post at
   assert.ok(raced);
   assert.deepEqual(labels(w, 17), ['pending-release']);
   assert.equal(w.tagOf('717'), 'Fixed, next update');
-  assert.equal(w.said('717').filter((m) => /out in /.test(m)).length, 0, 'no Shipped message for the old fix');
+  assert.equal(w.said('717').filter((m) => /Out now in /.test(m)).length, 0, 'no Shipped message for the old fix');
 });
 
 test('a ship of an old fix, then a reopen and a new fix before the tag run settles, sends no Shipped message', async () => {
@@ -341,7 +341,7 @@ test('a ship of an old fix, then a reopen and a new fix before the tag run settl
   assert.ok(raced);
   assert.deepEqual(labels(w, 17), ['pending-release'], 'bbbbbbb2 is not in v5.0.2');
   assert.equal(w.tagOf('717'), 'Fixed, next update');
-  assert.equal(w.said('717').filter((m) => /out in /.test(m)).length, 0);
+  assert.equal(w.said('717').filter((m) => /Out now in /.test(m)).length, 0);
 });
 
 test('an In progress write that loses to a ship is put back to Shipped', async () => {
@@ -367,7 +367,7 @@ test('an In progress write that loses to a ship is put back to Shipped', async (
   assert.ok(raced);
   assert.equal(w.tagOf('717'), 'Shipped');
   assert.equal(w.said('717').filter((m) => /worked on/.test(m)).length, 0, 'the stale In progress is not sent');
-  assert.equal(w.said('717').filter((m) => /out in /.test(m)).length, 1);
+  assert.equal(w.said('717').filter((m) => /Out now in /.test(m)).length, 1);
 });
 
 // ---- Sweep -----------------------------------------------------------------
@@ -428,7 +428,7 @@ test('a merged PR and the close it causes, in either order, tell the player once
     w.prs.get(5).state = 'MERGED';
     w.close(17, 'completed', 'aaaaaaa1');
     if (prFirst) { await prEvent(w, 5, 'closed'); await closed(w, 17); } else { await closed(w, 17); await prEvent(w, 5, 'closed'); }
-    assert.deepEqual(w.said('717'), ["Good news: a fix for this is being worked on and tested. We'll post here when it's done.", "This is fixed! The fix will be in the next update. We'll post here when that update is out."], `prFirst=${prFirst}`);
+    assert.deepEqual(w.said('717'), ["**In progress.** A fix for this is being worked on and tested. We'll post here when it's done.", "**Fixed!** The fix will be in the next update. We'll post here when that update is out."], `prFirst=${prFirst}`);
     assert.equal(w.tagOf('717'), 'Fixed, next update');
   }
 });
@@ -461,8 +461,8 @@ test('an issue reopened after shipping, then closed by hand, is Closed and says 
   await closed(w, 17);
   assert.deepEqual(labels(w, 17), []);
   assert.equal(w.tagOf('717'), 'Closed');
-  assert.equal(w.said('717').at(-1), "A moderator has closed this. If it's still happening for you, reply here and we'll take another look.");
-  assert.equal(w.said('717').filter((m) => /out in /.test(m)).length, 1);
+  assert.equal(w.said('717').at(-1), "**Closed.** A moderator has closed this. If it's still happening for you, reply here and we'll take another look.");
+  assert.equal(w.said('717').filter((m) => /Out now in /.test(m)).length, 1);
 });
 
 test('a commit in another repo that closed the issue is not taken as its fix', async () => {
@@ -473,7 +473,7 @@ test('a commit in another repo that closed the issue is not taken as its fix', a
   await closed(w, 17);
   assert.deepEqual(labels(w, 17), []);
   assert.equal(w.tagOf('717'), 'Closed');
-  assert.deepEqual(w.said('717'), ["A moderator has closed this. If it's still happening for you, reply here and we'll take another look."]);
+  assert.deepEqual(w.said('717'), ["**Closed.** A moderator has closed this. If it's still happening for you, reply here and we'll take another look."]);
 });
 
 test('a forum missing a status tag does not repeat the message on every sync', async () => {
@@ -567,7 +567,7 @@ test('the close run and a tag run that holds the fix, interleaved, tell the play
     if (tagFirst) await tag(w, 'v5.0.2'); else await closed(w, 17);
     assert.ok(raced);
     assert.equal(w.tagOf('717'), 'Shipped', `tagFirst=${tagFirst}`);
-    assert.equal(w.said('717').filter((m) => /out in /.test(m)).length, 1, `tagFirst=${tagFirst}: Shipped once`);
+    assert.equal(w.said('717').filter((m) => /Out now in /.test(m)).length, 1, `tagFirst=${tagFirst}: Shipped once`);
     assert.ok(w.said('717').length >= 1);
   }
 });
@@ -625,9 +625,9 @@ test('a Shipped message that went stale before sending is dropped, not sent', as
   }]);
   await tag(w, 'v5.0.2');
   assert.ok(raced);
-  assert.equal(w.said('717').filter((m) => /out in /.test(m)).length, 0);
+  assert.equal(w.said('717').filter((m) => /Out now in /.test(m)).length, 0);
   assert.ok(w.issues.get(17).comments.some((c) => /discord-told: shipped-[\s\S]*discord-dropped/.test(c.body)));
-  assert.ok(w.issues.get(17).comments.some((c) => /^Dropped \(no longer true\): The fix is out/.test(c.body)));
+  assert.ok(w.issues.get(17).comments.some((c) => /^Dropped \(no longer true\): \*\*Out now in/.test(c.body)));
 });
 
 test('a message whose send failed is listed by the sweep, which sends nothing', async () => {
@@ -640,8 +640,8 @@ test('a message whose send failed is listed by the sweep, which sends nothing', 
   const out = [];
   await run({ eventName: 'schedule', payload: {}, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: (s) => out.push(s), now: () => w.clock });
   assert.deepEqual(w.said('717'), []);
-  assert.match(out.join('\n'), /#17: message "This is fixed! The fix will be in the next update\. We.ll post here when that update is out\." may not have reached the player \(https:\/\/github\.com\/me\/one\/issues\/17#issuecomment-\d+\)/);
-  assert.ok(w.issues.get(17).comments.some((c) => /^Unconfirmed \(the send failed; the player may not have it\): This is fixed!/.test(c.body)));
+  assert.match(out.join('\n'), /#17: message "\*\*Fixed!\*\* The fix will be in the next update\. We.ll post here when that update is out\." may not have reached the player \(https:\/\/github\.com\/me\/one\/issues\/17#issuecomment-\d+\)/);
+  assert.ok(w.issues.get(17).comments.some((c) => /^Unconfirmed \(the send failed; the player may not have it\): \*\*Fixed!\*\*/.test(c.body)));
 });
 
 test('a Shipped message for an old release is dropped when the issue has shipped again in a newer one', async () => {
@@ -766,7 +766,7 @@ test('a fix whose close comes after its release tag run is announced as Shipped,
   await closed(w, 17);
   assert.deepEqual(labels(w, 17), ['shipped']);
   assert.equal(w.tagOf('717'), 'Shipped');
-  assert.deepEqual(w.said('717'), ['The fix is out in one v5.0.2. Update your addons, and let us know here if you still see the problem.']);
+  assert.deepEqual(w.said('717'), ['**Out now in one v5.0.2.** Update your addons, and let us know here if you still see the problem.']);
 });
 
 test('the release named is the oldest of the newest tags that hold the fix, an annotated tag checked at its commit', async () => {
@@ -777,7 +777,7 @@ test('the release named is the oldest of the newest tags that hold the fix, an a
   w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
   w.close(17, 'completed', 'aaaaaaa1');
   await closed(w, 17);
-  assert.match(w.said('717')[0], /out in one v5\.0\.2\./);
+  assert.match(w.said('717')[0], /Out now in one v5\.0\.2\./);
 });
 
 test('a fix in no release costs one compare per release check, a few checks per run, and is Fixed', async () => {
@@ -812,7 +812,7 @@ test('a tag run names the oldest release holding an unrecorded fix, as the close
   w.close(17, 'completed', 'aaaaaaa1');
   await tag(w, 'v5.0.3');
   assert.ok(w.issues.get(17).comments.some((c) => /discord-shipped-in: v5\.0\.2 fixes: aaaaaaa1/.test(c.body)));
-  assert.match(w.said('717').at(-1), /out in one v5\.0\.2\./);
+  assert.match(w.said('717').at(-1), /Out now in one v5\.0\.2\./);
 });
 
 // ---- Notes and owed messages --------------------------------------------------------
@@ -865,7 +865,7 @@ test('a message stopped by a setup problem stays owed: the sweep leaves the post
     }
     assert.equal(w.tagOf('717'), 'Triaged', problem);
     assert.deepEqual(w.said('717'), [], problem);
-    assert.match(fixedNotes(w)[0].body, /^Notification attempted: This is fixed!/, problem);
+    assert.match(fixedNotes(w)[0].body, /^Notification attempted: \*\*Fixed!\*\*/, problem);
 
     broken = false;
     // A sweep right after the failure leaves the post too.
@@ -874,7 +874,7 @@ test('a message stopped by a setup problem stays owed: the sweep leaves the post
     w.clock += 60 * 60 * 1000;
     const out = [];
     await sweepFix(w, out);
-    assert.match(out.join('\n'), /#17: .*owed message "This is fixed!.*re-run https:\/\/github\.com\/me\/one\/actions\/runs\/555/, problem);
+    assert.match(out.join('\n'), /#17: .*owed message "\*\*Fixed!\*\*.*re-run https:\/\/github\.com\/me\/one\/actions\/runs\/555/, problem);
     assert.equal(w.tagOf('717'), 'Triaged', `${problem}: the sweep leaves the post`);
     assert.deepEqual(labels(w, 17), ['pending-release'], problem);
 
@@ -882,7 +882,7 @@ test('a message stopped by a setup problem stays owed: the sweep leaves the post
     assert.equal(w.tagOf('717'), 'Fixed, next update', problem);
     assert.equal(w.said('717').length, 1, problem);
     assert.equal(fixedNotes(w).length, 1, `${problem}: the re-run sends the owed note and writes no new one`);
-    assert.match(fixedNotes(w)[0].body, /^Delivery confirmed: This is fixed!/, problem);
+    assert.match(fixedNotes(w)[0].body, /^Delivery confirmed: \*\*Fixed!\*\*/, problem);
   }
 });
 
@@ -912,7 +912,7 @@ test('an owed message is sent by a re-run of its run even after another run or a
     assert.equal(fixedNotes(w).length, 1, mover);
     await closeRun(w, RUN);
     assert.equal(w.said('717').length, 1, `${mover}: the re-run sends the owed message`);
-    assert.match(fixedNotes(w)[0].body, /^Delivery confirmed: This is fixed!/, mover);
+    assert.match(fixedNotes(w)[0].body, /^Delivery confirmed: \*\*Fixed!\*\*/, mover);
     await closeRun(w, RUN);
     assert.equal(w.said('717').length, 1, `${mover}: a second re-run sends nothing more`);
   }
@@ -933,7 +933,7 @@ test('a message that went out before its note was marked sent is never sent agai
   w.clock += 60 * 60 * 1000;
   const out = [];
   await sweepFix(w, out);
-  assert.match(out.join('\n'), /message "This is fixed!.*" may not have reached the player \(https:/);
+  assert.match(out.join('\n'), /message "\*\*Fixed!\*\*.*" may not have reached the player \(https:/);
 });
 
 test('a re-run of a tag run days later still finds the issue it owes a message, and sends it once', async () => {
@@ -1010,7 +1010,7 @@ test('a note whose run GitHub no longer lets re-run holds nothing, however new t
     setup(w);
     const out = [];
     await sweepFix(w, out);
-    assert.match(out.join('\n'), /message "This is fixed!.*" was not sent .*can no longer be re-run/, why);
+    assert.match(out.join('\n'), /message "\*\*Fixed!\*\*.*" was not sent .*can no longer be re-run/, why);
     assert.equal(w.tagOf('717'), 'Fixed, next update', `${why}: the sweep repairs the post`);
     assert.deepEqual(w.said('717'), [], why);
   }
@@ -1030,7 +1030,7 @@ test('a note whose run is still queued or running is neither listed nor dropped,
     w.clock += 60 * 60 * 1000;
     const out = [];
     await sweepFix(w, out);
-    assert.doesNotMatch(out.join('\n'), /This is fixed!/, why);
+    assert.doesNotMatch(out.join('\n'), /\*\*Fixed!\*\*/, why);
     assert.match(fixedNotes(w)[0].body, /^Notification attempted: /, `${why}: the note is left for its run`);
     assert.equal(w.tagOf('717'), 'Triaged', `${why}: the post is left as it is`);
     assert.deepEqual(w.said('717'), [], why);
@@ -1056,7 +1056,7 @@ test('the sweep reads old "Told the player" notes, a moderator\'s mark clears a 
   const out = [];
   await sweepFix(w, out);
   const said = out.join('\n');
-  assert.doesNotMatch(said, /News legacy-sent|News cleared|This is fixed/);
+  assert.doesNotMatch(said, /News legacy-sent|News cleared|Fixed!|This is fixed/);
   assert.match(said, /message "News legacy-open" may not have been sent \(https:/);
   assert.match(said, /message "News listed" may not have reached the player \(https:/);
 });
@@ -1084,7 +1084,7 @@ test('an owed message no re-run could send is dropped by the fix-mode sweep, whi
     w.clock += 60 * 60 * 1000;
     const out = [];
     await sweepFix(w, out);
-    assert.match(out.join('\n'), new RegExp(`owed message "This is fixed!.*" ${line.source}`), why);
+    assert.match(out.join('\n'), new RegExp(`owed message "\\*\\*Fixed!\\*\\*.*" ${line.source}`), why);
     assert.equal(fixedNotes(w)[0].body.split(':')[0], `Dropped (${reason})`, why);
     assert.deepEqual(labels(w, 17), wantLabels, why);
     assert.equal(thread.messages.length, sent, `${why}: the sweep sends nothing`);
@@ -1103,7 +1103,7 @@ test('a note edited in the browser, with CRLF line ends, keeps its key and messa
   w.clock += 60 * 60 * 1000;
   await sweepFix(w, []);
   assert.equal(fixedNotes(w).length, 1, 'the note keeps its key');
-  assert.match(fixedNotes(w)[0].body, /^Dropped \(no longer true\): This is fixed!/);
+  assert.match(fixedNotes(w)[0].body, /^Dropped \(no longer true\): \*\*Fixed!\*\*/);
 });
 
 test('a sweep drop does not overwrite a note a re-run marked after the sweep read it', async () => {
@@ -1169,7 +1169,7 @@ test('a release tagged while a close run writes its labels is announced as Shipp
   assert.ok(raced);
   assert.deepEqual(labels(w, 17), ['shipped']);
   assert.equal(w.tagOf('717'), 'Shipped');
-  assert.deepEqual(w.said('717'), ['The fix is out in one v5.0.4. Update your addons, and let us know here if you still see the problem.']);
+  assert.deepEqual(w.said('717'), ['**Out now in one v5.0.4.** Update your addons, and let us know here if you still see the problem.']);
 });
 
 test('a re-run of a PR run sends the Shipped message it owes for an issue that closed while it ran', async () => {
@@ -1187,10 +1187,10 @@ test('a re-run of a PR run sends the Shipped message it owes for an issue that c
   }]);
   const pr = (over) => go(w, PR, { action: 'opened', pull_request: { number: 5 } }, over);
   await assert.rejects(pr(RUN), /#17/);
-  assert.equal(w.said('717').filter((m) => /out in/.test(m)).length, 0);
+  assert.equal(w.said('717').filter((m) => /Out now in/.test(m)).length, 0);
   await pr({ ...RUN, GITHUB_RUN_ATTEMPT: '2' });
   assert.equal(w.tagOf('717'), 'Shipped');
-  assert.equal(w.said('717').filter((m) => /out in/.test(m)).length, 1);
+  assert.equal(w.said('717').filter((m) => /Out now in/.test(m)).length, 1);
 });
 
 test('a note a moderator marked dropped keeps its message closed, even after the sweep dropped it', async () => {
@@ -1230,7 +1230,7 @@ test('an In progress note the sweep dropped does not stop the message when a PR 
   w.prs.get(5).draft = false;
   await pr({ GITHUB_RUN_ID: '556' });
   assert.equal(w.tagOf('717'), 'In progress');
-  assert.deepEqual(w.said('717'), ["Good news: a fix for this is being worked on and tested. We'll post here when it's done."]);
+  assert.deepEqual(w.said('717'), ["**In progress.** A fix for this is being worked on and tested. We'll post here when it's done."]);
 });
 
 test('a re-run does not send a note a moderator marked sent after the re-run took it over', async () => {
@@ -1269,7 +1269,7 @@ test('an issue closed while a PR run settles its post, by a fix already released
   await prEvent(w, 5);
   assert.ok(raced);
   assert.equal(w.tagOf('717'), 'Shipped');
-  assert.deepEqual(w.said('717'), ['The fix is out in one v5.0.2. Update your addons, and let us know here if you still see the problem.']);
+  assert.deepEqual(w.said('717'), ['**Out now in one v5.0.2.** Update your addons, and let us know here if you still see the problem.']);
 });
 
 test('a needs-info ping whose label was taken off is dropped by the fix-mode sweep', async () => {
@@ -1303,7 +1303,7 @@ test('a post with no status tag, overtaken while it settles, still gets its mess
   await closeRun(w, RUN);
   assert.equal(patches, 3);
   assert.equal(w.tagOf('717'), 'Fixed, next update');
-  assert.deepEqual(w.said('717'), ["This is fixed! The fix will be in the next update. We'll post here when that update is out."]);
+  assert.deepEqual(w.said('717'), ["**Fixed!** The fix will be in the next update. We'll post here when that update is out."]);
 });
 
 test('a needs-info ping to a deleted post drops its note', async () => {

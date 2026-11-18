@@ -273,15 +273,15 @@ export function isRelease(name, pattern) {
 
 export const MESSAGES = {
   tracked: (key, n) => `Thanks! This is now tracked as ${key} #${n}. We'll post here when a fix is being tested and when it ships.`,
-  inProgress: () => "Good news: a fix for this is being worked on and tested. We'll post here when it's done.",
-  fixed: () => "This is fixed! The fix will be in the next update. We'll post here when that update is out.",
-  shipped: (repoFullName, tag) => `The fix is out in ${repoDisplay(repoFullName, tag)}. Update your addons, and let us know here if you still see the problem.`,
-  done: () => "A moderator has closed this. If it's still happening for you, reply here and we'll take another look.",
+  inProgress: () => "**In progress.** A fix for this is being worked on and tested. We'll post here when it's done.",
+  fixed: () => "**Fixed!** The fix will be in the next update. We'll post here when that update is out.",
+  shipped: (repoFullName, tag) => `**Out now in ${repoDisplay(repoFullName, tag)}.** Update your addons, and let us know here if you still see the problem.`,
+  done: () => "**Closed.** A moderator has closed this. If it's still happening for you, reply here and we'll take another look.",
   // `link` is the other report's Discord post, when there is one.
   closed: (reason, link) => {
-    if (reason !== 'duplicate') return "We've decided not to change this for now, so we're closing this post. Thanks for the suggestion!";
+    if (reason !== 'duplicate') return "**Not planned.** We've decided not to change this for now, so we're closing this post. Thanks for the suggestion!";
     const other = link ? `another report (${link})` : 'another report';
-    return `This is the same problem as ${other}, so we'll follow it there and close this one. Thanks for reporting it!`;
+    return `**Duplicate.** This is the same problem as ${other}, so we'll follow it there and close this one. Thanks for reporting it!`;
   },
   needsInfo: (uid) => `${uid ? `<@${uid}> ` : ''}Could you add a bit more detail? A screenshot, your addon version and the steps to make it happen help a lot.`,
 };
