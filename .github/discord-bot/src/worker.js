@@ -79,6 +79,10 @@ export function config(env) {
     repos, forums: Object.keys(forumInfo), forumInfo,
     roles: parseRoleIds(env.APPROVED_ROLE_IDS), templates: parseTemplates(env.TEMPLATES),
     queue: env.QUEUE_CHANNEL_ID || '',
+    // Every filing of a post takes its lock in this one repo, whichever repo
+    // it goes to. It is named, never taken from the order of REPOS, so
+    // reordering REPOS cannot move it; with one repo it is that repo.
+    lockRepo: env.LOCK_REPO || (Object.keys(repos).length === 1 ? Object.values(repos)[0] : ''),
   };
 }
 
@@ -422,17 +426,42 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
   let thread = null;
   let rec = null;
   let saved = null;
+  let oldGreeting = '';
+  let lockGh;
+  // One token per repo this filing touches.
+  const tokens = new Map();
+  const tokenFor = (r) => {
+    if (!tokens.has(r)) tokens.set(r, (deps.installationToken || installationToken)({ appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY, repo: r }, f));
+    return tokens.get(r);
+  };
+  // A token the filing cannot start without: its failure files nothing and
+  // names the repo to try again for.
+  const access = async (r) => {
+    try {
+      return await tokenFor(r);
+    } catch (e) {
+      throw new Error(`could not get access to ${r} (${e.message.slice(0, 200)}). Try again.`);
+    }
+  };
   // The post's queue card: the form's, else the scan's record of the post.
   const cardOf = (r) => cardId || (r && r.card) || '';
   // The card to mark Filed as, once the lock is released: optional work
   // never holds the lock.
   let cardAfter = null;
   try {
-    const ghToken = await (deps.installationToken || installationToken)(
-      { appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY, repo }, f);
+    if (!cfg.lockRepo) {
+      await followup("Nothing was created: the bot is not set up yet. REPOS names more than one repo, so LOCK_REPO must name the repo that holds every filing's lock.");
+      return { refused: 'setup' };
+    }
+    const ghToken = await access(repo);
     gh = githubClient(ghToken, f);
     ghRecheck = githubClient(ghToken, timedFetch(deps.fetch, TAIL_MS, t0 + RECHECK_BY_MS));
-    ghRelease = githubClient(ghToken, timedFetch(deps.fetch, TAIL_MS, t0 + RELEASE_BY_MS));
+    // One lock per post, in LOCK_REPO whichever repo the form chose: GitHub
+    // makes a label once, so of two filings of one post, into the same repo
+    // or different ones, only one holds it.
+    const lockToken = await access(cfg.lockRepo);
+    lockGh = githubClient(lockToken, f);
+    ghRelease = githubClient(lockToken, timedFetch(deps.fetch, TAIL_MS, t0 + RELEASE_BY_MS));
 
     // The form may have been opened before the forum list changed: check again.
     thread = await discord.getChannel(threadId);
@@ -445,22 +474,11 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     // granted has left its issue to be found. The post's KV record, when it
     // names the issue, saves reading the whole issue list.
     const kv = env.STATE;
-    rec = await within(kvMs, readStrict(kv, `thread:${threadId}`)).catch(() => null);
-    const filed = await within(kvMs, readStrict(kv, `issue:${threadId}`)).catch(() => null);
-    // The issue the post was filed as: the Worker's record, or an older
-    // record that kept it beside the greeting.
-    saved = filed || (rec && rec.issue) || null;
-    const already = async () => {
-      let existing = null;
-      if (saved && sameRepo(saved.repo, repo)) {
-        existing = await gh.getIssue(repo, saved.number).catch((e) => { if (/-> 404 /.test(e.message)) return null; throw e; });
-      }
-      if (!existing) existing = await gh.findByThread(repo, threadId);
-      return existing;
-    };
-    // An old greeting: the one pressed in the post, or the record's when it
-    // was written before greetings lost their button.
-    const oldGreeting = greetingId || (rec && rec.greeting && !rec.buttonless ? rec.greeting : '');
+    // Every configured repo, the chosen one first, is searched for the
+    // post's marker, so a post filed anywhere is never filed again. The issue
+    // list is consistent at once, unlike search; a list that fails, in any
+    // repo, stops the filing. The saved issue was checked before this.
+    const already = () => searchRepos([repo, ...Object.values(cfg.repos).filter((x) => x !== repo)], threadId, tokenFor, f);
     const head = cardHead(thread.parent_id, thread.name);
     // Already tracked: the record learns where the issue is now, an old
     // greeting only loses its button (no new reply replaces it), the
@@ -480,24 +498,67 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
       return { duplicate: where.number };
     };
     try {
-      locked = await gh.claimThread(repo, threadId);
+      locked = await lockGh.claimThread(cfg.lockRepo, threadId);
     } catch (e) {
       // The lock label may exist even though the answer was lost.
       if (!unknownOutcome(e)) throw e;
-      await followup(`Nothing was created: GitHub did not confirm the lock (${e.message.slice(0, 200)}). If a later send says another send is running, delete the label ${lockLabel(threadId)} in ${repo} and try again.`);
+      await followup(`Nothing was created: GitHub did not confirm the lock (${e.message.slice(0, 200)}). If a later send says another send is running, delete the label ${lockLabel(threadId)} in ${cfg.lockRepo} and try again.`);
       return { error: e.message, uncertain: 'lock' };
     }
     if (!locked) {
-      await followup(`Nothing was created: another send of this post is running, or one stopped partway. If no issue appears, delete the label ${lockLabel(threadId)} in ${repo} and try again.`);
+      await followup(`Nothing was created: another send of this post is running, or one stopped partway. If no issue appears, delete the label ${lockLabel(threadId)} in ${cfg.lockRepo} and try again.`);
       return { busy: true };
     }
-    const existing = await already();
+    // The post's records, read under the lock, each waited on for at most
+    // KV_MS (`kvMs`). One that cannot be read is not "none": it may name an issue the
+    // search cannot see (one moved to a repo the bot does not file in), so
+    // nothing is filed.
+    try {
+      rec = await within(kvMs, readStrict(kv, `thread:${threadId}`));
+      const filed = await within(kvMs, readStrict(kv, `issue:${threadId}`));
+      // The issue the post was filed as: the Worker's record, or an older
+      // record that kept it beside the greeting.
+      saved = filed || (rec && rec.issue) || null;
+    } catch (e) {
+      await followup(e.damaged
+        ? `Nothing was created: this post's saved record is damaged (${e.damaged}). A bot admin can delete that KV key; then send the post again.`
+        : "Nothing was created: could not read this post's saved record just now. Try again.");
+      return { refused: 'record' };
+    }
+    // An old greeting: the one pressed in the post, or the record's when it
+    // was written before greetings lost their button.
+    oldGreeting = greetingId || (rec && rec.greeting && !rec.buttonless ? rec.greeting : '');
+    // One post, one issue: the saved issue is read first, in whichever repo
+    // it is. A live one refuses the filing, named where it is now, with the
+    // filer kept. Only that issue's own 410 (deleted) lets the filing go on:
+    // a 404 is also what an issue the app can no longer see answers (moved
+    // out of reach, or lost access), in the chosen repo as anywhere, and a
+    // failed token says nothing about the issue.
+    if (saved) {
+      const found = await readSaved(saved, tokenFor, f);
+      if (found.issue) {
+        // Where the issue is now decides the advice: one already in the
+        // chosen repo needs no transfer, wherever the record saw it.
+        const where = whereIs(found.issue, saved.repo);
+        if (sameRepo(where.repo, repo)) {
+          return await tracked(where, (key) => `Already tracked: ${key} #${where.number} ${found.issue.html_url}`, saved.by || null);
+        }
+        const said = await tracked(where, (key) => `Already tracked as ${key} #${where.number}: ${found.issue.html_url}. Nothing was created in ${repo}; to move the report, transfer the issue on GitHub.`, saved.by || null);
+        return { ...said, repo: where.repo };
+      }
+      if (!found.gone) {
+        await followup(couldNotCheck(cfg, saved, threadId, found.unclear, 'Nothing was created.'));
+        return { refused: 'saved-issue' };
+      }
+    }
+    // A search that finds nothing runs once more before the create: an issue
+    // that shifted between two pages of a list while it was read is found
+    // the second time.
+    const existing = (await already()) || (await already());
     if (existing) {
-      const where = whereIs(existing, repo);
-      const by = saved && sameRepo(saved.repo, where.repo) && saved.number === where.number ? saved.by : null;
-      // Awaited here, so the lock is released, and the card marked, only
-      // after the record, the old button and the moderator's message.
-      return await tracked(where, (key) => `Already tracked: ${key} #${where.number} ${existing.html_url}`, by);
+      const where = whereIs(existing.issue, existing.repo);
+      const elsewhere = sameRepo(where.repo, repo) ? '' : `. Nothing was created in ${repo}.`;
+      return await tracked(where, (key) => `Already tracked: ${key} #${where.number} ${existing.issue.html_url}${elsewhere}`, null);
     }
 
     const message = await discord.call('GET', `/channels/${threadId}/messages/${messageId}`);
@@ -567,18 +628,30 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     if (creating && unknownOutcome(e)) {
       const found = await ghRecheck.findByThread(repo, threadId).catch(() => null);
       if (found) {
-        await followup(`Created ${repoKey} #${found.number}: ${found.html_url} (GitHub answered late; the post's tag and note were not set)`);
+        // Each step has its own end, so none can starve the next: the
+        // record, the player's receipt (the issue's own run assumes the
+        // Worker sent it), the moderator's report, and, after the lock's
+        // release, the card.
+        const late = [];
+        await within(kvMs, saveIssueRecord(env.STATE, threadId, { repo, number: found.number, key: repoKey, by: modName }))
+          .catch((err) => late.push(`post record not saved: ${err.message.slice(0, 200)}`));
+        const tail = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, TAIL_MS, t0 + TRACKED_BY_MS));
+        late.push(...await tellTracked(tail, {
+          threadId, messageId, text: MESSAGES.tracked(repoKey, found.number), old: oldGreeting, greeting: greetingId || (rec && rec.greeting),
+        }));
+        await followup(`Created ${repoKey} #${found.number}: ${found.html_url} (GitHub answered late; the post's status tag comes from the issue's first workflow run${late.length ? `; ${late.join('; ')}` : ''})`);
+        cardAfter = { cardId, head: thread ? cardHead(thread.parent_id, thread.name) : '', key: repoKey, number: found.number, by: modName };
         return { created: found.number, late: true };
       }
       keepLock = true;
-      await followup(`The issue may have been created: GitHub did not answer in time. If none appears in ${repo} within a few minutes, delete the label ${lockLabel(threadId)} there and send the post again.`);
+      await followup(`The issue may have been created: GitHub did not answer in time. If none appears in ${repo} within a few minutes, delete the label ${lockLabel(threadId)} in ${cfg.lockRepo} and send the post again.`);
       return { error: e.message, uncertain: true };
     }
     await followup(`Nothing was created: ${e.message.slice(0, 1500)}`);
     return { error: e.message };
   } finally {
     if (locked && !keepLock) {
-      try { await ghRelease.releaseThread(repo, threadId); } catch (e) { log(`lock ${lockLabel(threadId)} not released: ${e.message}`); }
+      try { await ghRelease.releaseThread(cfg.lockRepo, threadId); } catch (e) { log(`lock ${lockLabel(threadId)} not released: ${e.message}`); }
     }
     // Last, and after the release, the card. With no card id from the form,
     // the scan's record is read again: a scan may have posted the card while

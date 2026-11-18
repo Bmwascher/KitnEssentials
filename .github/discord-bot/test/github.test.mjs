@@ -19,3 +19,14 @@ test('removing a label tolerates only "already gone"', async () => {
   const refused = fakeFetch([['DELETE', /labels/, () => new Response('no', { status: 403 })]]);
   await assert.rejects(githubClient('t', refused).removeLabel('me/r', 1, 'x'), /403/);
 });
+
+test('the marker search reads only issues updated since shortly before the post was made', async () => {
+  const made = Date.UTC(2026, 10, 18);
+  const post = String(BigInt(made - 1420070400000) << 22n);
+  const f = fakeFetch([['GET', /\/issues\?/, () => [{ number: 7, body: `<!-- discord-thread: ${post} reporter: 42 -->` }]]]);
+  assert.equal((await githubClient('t', f).findByThread('me/r', post)).number, 7);
+  const since = Date.parse(new URL(f.calls[0].url).searchParams.get('since'));
+  // Before the post, so its own issue is never left out, and close to it, so
+  // the list does not grow with every issue ever filed.
+  assert.ok(since <= made && since > made - 24 * 60 * 60 * 1000, `since ${new Date(since).toISOString()}`);
+});

@@ -11,7 +11,7 @@ const pubHex = Buffer.from(await crypto.subtle.exportKey('raw', keys.publicKey))
 const env = {
   DISCORD_PUBLIC_KEY: pubHex, DISCORD_BOT_TOKEN: 'bot-token',
   GITHUB_APP_ID: '1', GITHUB_APP_PRIVATE_KEY: 'unused',
-  REPOS: '{"ONE":"me/test-one","TWO":"me/test-two"}', FORUM_CHANNEL_IDS: '900',
+  REPOS: '{"ONE":"me/test-one","TWO":"me/test-two"}', LOCK_REPO: 'me/test-one', FORUM_CHANNEL_IDS: '900',
 };
 const MOD = { permissions: String(1n << 34n), user: { id: '5', username: 'moddy' } };
 const PLAYER = { permissions: '0', user: { id: '6', username: 'pat' } };
@@ -43,6 +43,7 @@ function githubRoutes(existing = [], extra = []) {
   return [
     ...extra,
     ['GET', /api\.github\.com\/repos\/me\/test-one\/issues\?state=all.*labels=from-discord/, () => existing],
+    ['GET', /api\.github\.com\/repos\/me\/test-two\/issues\?state=all.*labels=from-discord/, () => []],
     ['POST', /api\.github\.com\/repos\/me\/test-one\/labels$/, () => new Response('{}', { status: 201 })],
     ['DELETE', /api\.github\.com\/repos\/me\/test-one\/labels\/discord-lock-700$/, () => null],
   ];
@@ -276,8 +277,8 @@ test('a send that finished while this one waited for the lock is not filed again
   await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
   assert.deepEqual(await Promise.all(ctx.jobs), [{ duplicate: 17 }]);
   assert.equal(f.find('POST', /\/issues$/).length, 0);
-  const order = f.calls.filter((c) => /labels(\/discord-lock-700)?$|issues\?state=all/.test(c.url)).map((c) => c.method);
-  assert.deepEqual(order, ['POST', 'GET', 'DELETE'], 'lock, one look, release');
+  const order = f.calls.filter((c) => /labels(\/discord-lock-700)?$|test-one\/issues\?state=all/.test(c.url)).map((c) => c.method);
+  assert.deepEqual(order, ['POST', 'GET', 'DELETE'], 'lock, one look in the chosen repo, release');
 });
 
 test('once the issue exists, a failed tag or post note is reported, never as a failed create', async () => {
@@ -298,7 +299,7 @@ test('a stalled call ends the send with a report to the mod', async () => {
   const base = fakeFetch(discordRoutes(githubRoutes()));
   // The issue list never answers; only the call's own time limit ends it.
   let aborted = 0;
-  const hangList = (url, init = {}) => (/issues\?state=all/.test(url)
+  const hangList = (url, init = {}) => (/test-one\/issues\?state=all/.test(url)
     ? stall(init, () => { aborted++; })
     : base(url, init));
   const ctx = ctxFor();
@@ -340,20 +341,46 @@ test('a create that got no answer is reported as maybe created, not as nothing',
   assert.equal(base.find('DELETE', /labels\/discord-lock-700$/).length, 0, 'the lock stays until the outcome is known');
 });
 
-test('a create that answered late is found again and reported as created', async () => {
+test('a create that answered late is found again: the player gets the reply, the moderator the result, and the card is marked last', async () => {
   let looks = 0;
+  // Two searches before the create find nothing; the re-check after it finds the issue.
   const base = fakeFetch(discordRoutes(githubRoutes([], [
-    ['GET', /issues\?state=all.*labels=from-discord/, () => (++looks <= 1 ? [] : [{ number: 17, html_url: 'u/17', body: '<!-- discord-thread: 700 reporter: 42 -->' }])],
+    ['GET', /test-one\/issues\?state=all.*labels=from-discord/, () => (++looks <= 2 ? [] : [{ number: 17, html_url: 'u/17', body: '<!-- discord-thread: 700 reporter: 42 -->' }])],
+    ['PATCH', /\/channels\/556\/messages\/96$/, () => ({})],
   ])));
   const hang = (url, init = {}) => (init.method === 'POST' && /\/issues$/.test(url)
     ? stall(init)
     : base(url, init));
   const ctx = ctxFor();
-  await handle(await signed(submit()), env, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
+  const kv = fakeKv({ 'thread:700': JSON.stringify({ card: '96' }) });
+  await handle(await signed(submit()), { ...env, QUEUE_CHANNEL_ID: '556', STATE: kv }, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
   const [res] = await Promise.all(ctx.jobs);
   assert.equal(res.created, 17);
-  assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /^Created ONE #17/);
+  assert.equal(base.find('PATCH', /\/webhooks\//)[0].body.content, 'Created ONE #17: u/17 (GitHub answered late; the post\'s status tag comes from the issue\'s first workflow run)');
+  assert.deepEqual(JSON.parse(kv.m.get('issue:700')), { repo: 'me/test-one', number: 17, key: 'ONE', by: 'moddy' }, 'the filing is recorded');
+  const [receipt, ...more] = base.find('POST', /\/channels\/700\/messages$/);
+  assert.deepEqual(more, [], 'one receipt');
+  assert.equal(receipt.body.content, MESSAGES.tracked('ONE', 17), 'the player is told');
+  assert.deepEqual(receipt.body.message_reference, { message_id: '800', fail_if_not_exists: false });
+  assert.match(base.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, /\n\*\*Filed as ONE #17\*\* by moddy$/, 'the card loses its button');
+  const pos = (method, re) => base.calls.findIndex((c) => c.method === method && re.test(c.url));
+  const marked = pos('PATCH', /\/channels\/556\/messages\/96$/);
+  assert.ok(pos('PATCH', /\/webhooks\//) < marked && pos('POST', /\/channels\/700\/messages$/) < marked, 'the card last');
   assert.equal(base.find('DELETE', /labels\/discord-lock-700$/).length, 1);
+});
+
+test('a late create whose record save never answers still reports in time', async () => {
+  let looks = 0;
+  const base = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /test-one\/issues\?state=all.*labels=from-discord/, () => (++looks <= 2 ? [] : [{ number: 17, html_url: 'u/17', body: '<!-- discord-thread: 700 reporter: 42 -->' }])],
+  ])));
+  const hang = (url, init = {}) => (init.method === 'POST' && /\/issues$/.test(url) ? stall(init) : base(url, init));
+  const kv = { get: async () => null, put: () => new Promise(() => {}) };
+  const ctx = ctxFor();
+  await handle(await signed(submit()), { ...env, STATE: kv }, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50, kvMs: 50 });
+  const [res] = await Promise.all(ctx.jobs);
+  assert.equal(res.created, 17);
+  assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /^Created ONE #17: u\/17 \(GitHub answered late; .*post record not saved: no answer in 50 ms\)$/);
 });
 
 test('a server error on create is an unknown outcome too', async () => {
@@ -401,8 +428,8 @@ test('each closing phase has its own end: a late re-check is skipped but the rep
     await handle(await signed(submit()), env, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 50 });
     const [res] = await Promise.all(ctx.jobs);
     assert.equal(res.uncertain, true);
-    const looks = base.find('GET', /issues\?state=all.*labels=from-discord/).length;
-    assert.equal(looks, 1, 'no re-check after 20 s');
+    const looks = base.find('GET', /test-one\/issues\?state=all.*labels=from-discord/).length;
+    assert.equal(looks, 2, 'the two searches before the create, and no re-check after 20 s');
     assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /may have been created/);
   } finally { clock.restore(); }
 });
@@ -825,4 +852,128 @@ test('a stalled pinned-template read near the deadline still leaves the create i
   const [res] = await Promise.all(ctx.jobs);
   assert.equal(res.created, 17, JSON.stringify(res));
   assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /the template message could not be read just now, so the default fields were checked/);
+});
+
+test('one post, one issue: the saved record, then every configured repo, is checked before filing', async () => {
+  const live = () => ({ number: 9, html_url: 'https://github.com/me/test-two/issues/9' });
+  const moved = () => ({ number: 31, html_url: 'https://github.com/me/test-three/issues/31', repository_url: 'https://api.github.com/repos/me/test-three' });
+  const status = (s) => () => new Response('{"message":"x"}', { status: s });
+  const list = (items) => () => items;
+  const marked = { number: 9, html_url: 'https://github.com/me/test-two/issues/9', repository_url: 'https://api.github.com/repos/me/test-two', body: '<!-- discord-thread: 700 reporter: 42 -->' };
+  const inst = async () => 'inst';
+  const tokenFails = (s, bad = 'me/test-two') => async ({ repo }) => {
+    if (repo === bad) throw new Error(`GitHub GET /repos/${bad}/installation -> ${s} {"message":"x"}`);
+    return 'inst';
+  };
+  const movedIn = () => ({ number: 40, html_url: 'https://github.com/me/test-one/issues/40', repository_url: 'https://api.github.com/repos/me/test-one' });
+  // GitHub names the repo in its own casing, which REPOS need not match.
+  const caseIn = () => ({ number: 40, html_url: 'https://github.com/Me/Test-One/issues/40', repository_url: 'https://api.github.com/repos/Me/Test-One' });
+  // A list that misses the post's issue the first time and holds it the
+  // second, as when the issue shifted between two pages while it was read.
+  const secondTime = (items) => { let n = 0; return () => (++n <= 1 ? [] : items); };
+  const inOne = { number: 17, html_url: 'https://github.com/me/test-one/issues/17', repository_url: 'https://api.github.com/repos/me/test-one', body: '<!-- discord-thread: 700 reporter: 42 -->' };
+  // A record from before the filing record kept the issue beside the greeting.
+  const legacy = (repo, number) => ({ 'thread:700': JSON.stringify({ issue: { repo, number } }) });
+  const elsewhere = legacy('me/test-two', 9);
+  const brokenKv = { get: async () => { throw new Error('KV down'); }, put: async () => {} };
+  const silentKv = { get: () => new Promise(() => {}), put: async () => {} };
+  const made = { repo: 'me/test-one', number: 17, key: 'ONE', by: 'moddy' };
+  const movedTo = { repo: 'me/test-three', number: 31, key: 'me/test-three', by: null };
+  const way = 'If it is gone, a bot admin can clear this post\'s filing record \\(the KV key issue:700, or the "issue" field of thread:700 for a post filed before this version\\), and the post can then be sent again\\.$';
+  // `two` and `one` answer the configured repos' issue lists; `saved` is the
+  // issue:700 record afterward, repo and number together; a legacy record
+  // that already names the issue where it is gets none.
+  for (const [why, entries, read, token, two, want, told, saved, one = list([])] of [
+    ['a live issue in the other repo', elsewhere, live, inst, list([]), { duplicate: 9, repo: 'me/test-two' },
+      /^Already tracked as TWO #9: https:\/\/github\.com\/me\/test-two\/issues\/9\. Nothing was created in me\/test-one; to move the report, transfer the issue on GitHub\.$/, null],
+    ['moved on from the other repo: named and recorded where it is now', elsewhere, moved, inst, list([]), { duplicate: 31, repo: 'me/test-three' },
+      /^Already tracked as me\/test-three #31: https:\/\/github\.com\/me\/test-three\/issues\/31\. Nothing was created/, movedTo],
+    // The filer stays known when the issue moved.
+    ['moved on, with the filer on record', { 'issue:700': JSON.stringify({ repo: 'me/test-two', number: 9, key: 'TWO', by: 'Bite' }) }, moved, inst, list([]),
+      { duplicate: 31, repo: 'me/test-three' }, /^Already tracked as me\/test-three #31: /, { ...movedTo, by: 'Bite' }],
+    ['deleted there (410)', elsewhere, status(410), inst, list([]), { created: 17, notes: [] }, /^Created ONE #17/, made],
+    ['not found there (404)', elsewhere, status(404), inst, list([]), { refused: 'saved-issue' },
+      new RegExp(`^Could not check TWO #9 in me/test-two \\(404\\): it may be gone, or the app may have lost access there\\. Nothing was created\\. ${way}`), null],
+    // A transfer can leave the record naming a repo the form does not offer.
+    ['not found in a repo the form does not offer', legacy('me/test-three', 31), status(404), inst, list([]), { refused: 'saved-issue' },
+      new RegExp(`^Could not check me/test-three #31 \\(404\\): it may be gone, or the app may have lost access there\\. Nothing was created\\. ${way}`), null],
+    // The app files in its own repo, but a 404 there too may be an issue moved out of its reach.
+    ['not found in the chosen repo (404)', legacy('me/test-one', 17), status(404), inst, list([]), { refused: 'saved-issue' },
+      new RegExp(`^Could not check ONE #17 in me/test-one \\(404\\): .*Nothing was created\\. ${way}`), null],
+    ['no token for the other repo', elsewhere, live, tokenFails(404), list([]), { refused: 'saved-issue' }, /^Could not check TWO #9 in me\/test-two \(no access: 404\)/, null],
+    // Only the issue's own 410 means deleted, never the token's.
+    ['the token request answers 410', elsewhere, live, tokenFails(410), list([]), { refused: 'saved-issue' }, /^Could not check TWO #9 in me\/test-two \(no access: 410\)/, null],
+    ['no record and no marker anywhere: filed', {}, live, inst, list([]), { created: 17, notes: [] }, /^Created ONE #17/, made],
+    ['no record, but the other repo holds the post\'s marker', {}, live, inst, list([marked]), { duplicate: 9 },
+      /^Already tracked: TWO #9 https:\/\/github\.com\/me\/test-two\/issues\/9\. Nothing was created in me\/test-one\.$/, { repo: 'me/test-two', number: 9, key: 'TWO', by: null }],
+    ['the other repo cannot be listed', {}, live, inst, status(500), 'error', /^Nothing was created: could not check me\/test-two for this post \(.*500.*\)\. Try again\.$/, null],
+    ['the chosen repo cannot be listed', {}, live, inst, list([]), 'error', /^Nothing was created: could not check me\/test-one for this post \(.*500.*\)\. Try again\.$/, null, status(500)],
+    ['the record read fails', 'unreadable', live, inst, list([]), { refused: 'record' }, /^Nothing was created: could not read this post's saved record just now\. Try again\.$/, undefined],
+    ['the record read never answers', 'silent', live, inst, list([]), { refused: 'record' }, /^Nothing was created: could not read this post's saved record just now\. Try again\.$/, undefined],
+    ['the filing record is not JSON', { 'issue:700': '{"repo": "me/test-tw' }, live, inst, list([]), { refused: 'record' },
+      /^Nothing was created: this post's saved record is damaged \(issue:700\)\. A bot admin can delete that KV key; then send the post again\.$/, undefined],
+    ['the scan\'s record is an empty string', { 'thread:700': '' }, live, inst, list([]), { refused: 'record' }, /^Nothing was created: this post's saved record is damaged \(thread:700\)/, undefined],
+    ['the same repo, deleted (410): the search runs and files', legacy('me/test-one', 17), status(410), inst, list([]), { created: 17, notes: [] }, /^Created ONE #17/, made],
+    // Where the issue is now decides the advice, not where the record saw it.
+    ['moved out of the chosen repo: the transfer advice', legacy('me/test-one', 17), moved, inst, list([]), { duplicate: 31, repo: 'me/test-three' },
+      /^Already tracked as me\/test-three #31: .*Nothing was created in me\/test-one; to move the report, transfer the issue on GitHub\.$/, movedTo],
+    ['moved into the chosen repo: no transfer advice', elsewhere, movedIn, inst, list([]), { duplicate: 40 },
+      /^Already tracked: ONE #40 https:\/\/github\.com\/me\/test-one\/issues\/40$/, { repo: 'me/test-one', number: 40, key: 'ONE', by: null }],
+    ['in the chosen repo, named by GitHub in another case: no transfer advice', elsewhere, caseIn, inst, list([]), { duplicate: 40 },
+      /^Already tracked: ONE #40 https:\/\/github\.com\/Me\/Test-One\/issues\/40$/, { repo: 'Me/Test-One', number: 40, key: 'ONE', by: null }],
+    ['no token for the chosen repo', {}, live, tokenFails(500, 'me/test-one'), list([]), 'error',
+      /^Nothing was created: could not get access to me\/test-one \(.*500.*\)\. Try again\.$/, null],
+    ['the second search finds what the first missed: no create', {}, live, inst, list([]), { duplicate: 17 },
+      /^Already tracked: ONE #17 https:\/\/github\.com\/me\/test-one\/issues\/17$/, { repo: 'me/test-one', number: 17, key: 'ONE', by: null }, secondTime([inOne])],
+  ]) {
+    const kv = entries === 'unreadable' ? brokenKv : entries === 'silent' ? silentKv : fakeKv(entries);
+    const f = fakeFetch(discordRoutes(githubRoutes([], [
+      ['GET', /api\.github\.com\/repos\/me\/test-(one|two|three)\/issues\/(9|17|31)$/, read],
+      ['GET', /api\.github\.com\/repos\/me\/test-one\/issues\?state=all.*labels=from-discord/, one],
+      ['GET', /api\.github\.com\/repos\/me\/test-two\/issues\?state=all.*labels=from-discord/, two],
+      ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
+    ])));
+    const ctx = ctxFor();
+    await handle(await signed(submit()), { ...env, STATE: kv }, ctx, { fetch: f, installationToken: token, log: () => {}, kvMs: 50 });
+    const [res] = await Promise.all(ctx.jobs);
+    if (want === 'error') assert.ok(res.error, why);
+    else assert.deepEqual(res, want, why);
+    assert.equal(f.find('POST', /\/issues$/).length, want.created ? 1 : 0, why);
+    assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, told, why);
+    if (saved !== undefined) {
+      assert.deepEqual(kv.m.has('issue:700') ? JSON.parse(kv.m.get('issue:700')) : null, saved, `${why}: the filing record`);
+    }
+  }
+});
+
+test('with several repos and no LOCK_REPO set, nothing is filed and the moderator is told why', async () => {
+  const f = fakeFetch(discordRoutes(githubRoutes()));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), { ...env, LOCK_REPO: '' }, ctx, { fetch: f, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(ctx.jobs), [{ refused: 'setup' }]);
+  assert.equal(f.find('POST', /\/labels$|\/issues$/).length, 0);
+  assert.equal(f.find('PATCH', /\/webhooks\//)[0].body.content, 'Nothing was created: the bot is not set up yet. REPOS names more than one repo, so LOCK_REPO must name the repo that holds every filing\'s lock.');
+});
+
+test('one lock per post: a filing into the second repo takes its lock in LOCK_REPO, and a lock held there stops it', async () => {
+  for (const [why, held, want, repos = env.REPOS] of [
+    ['free', false, { created: 21, notes: [] }],
+    ['held by another send', true, { busy: true }],
+    // The lock repo is named, not taken from the order of REPOS.
+    ['REPOS listed the other way round', false, { created: 21, notes: [] }, '{"TWO":"me/test-two","ONE":"me/test-one"}'],
+  ]) {
+    const f = fakeFetch(discordRoutes(githubRoutes([], [
+      ['POST', /api\.github\.com\/repos\/me\/test-one\/labels$/, () => (held
+        ? new Response('{"message":"Validation Failed","errors":[{"resource":"Label","code":"already_exists","field":"name"}]}', { status: 422 })
+        : new Response('{}', { status: 201 }))],
+      ['POST', /api\.github\.com\/repos\/me\/test-two\/issues$/, () => ({ number: 21, html_url: 'u/21' })],
+    ])));
+    const ctx = ctxFor();
+    await handle(await signed(submit({ repo: 'two' })), { ...env, REPOS: repos }, ctx, { fetch: f, installationToken: async () => 'inst' });
+    assert.deepEqual(await Promise.all(ctx.jobs), [want], why);
+    assert.equal(f.find('POST', /test-two\/labels$/).length, 0, `${why}: no lock in the chosen repo`);
+    assert.equal(f.find('DELETE', /test-one\/labels\/discord-lock-700$/).length, held ? 0 : 1, `${why}: released where it was taken`);
+    assert.equal(f.find('POST', /\/issues$/).length, held ? 0 : 1, why);
+    if (held) assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /another send of this post is running.*delete the label discord-lock-700 in me\/test-one/, why);
+  }
 });
