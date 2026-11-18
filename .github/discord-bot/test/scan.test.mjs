@@ -447,6 +447,80 @@ test('a long daily alert goes out in whole lines under 1,900 characters, and wha
   assert.ok(posts.some((id) => logged.includes(`/channels/1/${id}`)), 'the rest is in the log');
 });
 
+test('a damaged record is never taken for no record or for a filing, nor written over: the post is skipped and named', async () => {
+  for (const [why, key, value] of [
+    ['the scan\'s record is not JSON', 'thread', '{"greeting"'],
+    ['the scan\'s record is not a record', 'thread', '[]'],
+    ['the filing record is JSON null', 'issue', 'null'],
+    ['the filing record names no issue', 'issue', '{}'],
+  ]) {
+    const a = idAt(T0 + 1000);
+    const kv = started(T0);
+    await kv.put(`${key}:${a}`, value);
+    const f = discord({ active: [{ id: a, parent_id: '900' }] });
+    await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+    assert.deepEqual(sends(f), [], `${why}: no greeting and no card`);
+    assert.equal(kv.m.get(`${key}:${a}`), value, `${why}: left as it was`);
+    assert.match(stateOf(kv).error.text, new RegExp(`post ${a} \\(its saved record ${key}:${a} is damaged\\)`), why);
+    assert.deepEqual(stateOf(kv).gaveUp.map((g) => [g.post, g.what]), [[a, `damaged record ${key}:${a}`]], why);
+    assert.equal(stateOf(kv).through['900'], a, `${why}: the post holds back nothing`);
+  }
+});
+
+test('a give-up is named once its record says so, and only once', async () => {
+  const a = idAt(T0 + 1000);
+  const kv = started(T0);
+  await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g', buttonless: true, tries: 29 }));
+  const put = kv.put;
+  let failWrites = true;
+  kv.put = async (k, v) => { if (failWrites && k === `thread:${a}`) throw new Error('KV PUT failed: 500'); return put(k, v); };
+  const f = discord({ active: [{ id: a, parent_id: '900', name: 'x' }], refuse: { 556: 500 } });
+  await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+  assert.equal(stateOf(kv).gaveUp, undefined, 'not named while its record says nothing');
+  failWrites = false;
+  await scan(withQueue(kv), { fetch: f, now: () => T0 + 6 * 60000, log: () => {} });
+  await scan(withQueue(kv), { fetch: f, now: () => T0 + 7 * 60000, log: () => {} });
+  assert.deepEqual(stateOf(kv).gaveUp.map((g) => g.post), [a]);
+});
+
+test('a give-up whose state write was lost, or written over by an overlapping scan, is named again from its record', async () => {
+  const a = idAt(T0 + 1000);
+  for (const [why, setup] of [
+    ['the state write failed', async (kv) => {
+      await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g', buttonless: true, tries: 29 }));
+      const put = kv.put;
+      let once = true;
+      kv.put = async (k, v) => { if (once && k === 'scan:state') { once = false; throw new Error('KV PUT failed: 500'); } return put(k, v); };
+      const f = discord({ active: [{ id: a, parent_id: '900', name: 'x' }], refuse: { 556: 500 } });
+      await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} }).catch(() => {});
+    }],
+    ['an overlapping scan wrote the state without it', async (kv) => {
+      await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g', buttonless: true, cardSkipped: 'x', gaveUp: { at: T0 + 5 * 60000, what: 'queue card' } }));
+    }],
+  ]) {
+    const kv = started(T0);
+    await setup(kv);
+    await scan(withQueue(kv), { fetch: discord({ active: [{ id: a, parent_id: '900', name: 'x' }] }), now: () => T0 + 6 * 60000, log: () => {} });
+    assert.deepEqual((stateOf(kv).gaveUp || []).map((g) => [g.post, g.what, g.at]), [[a, 'queue card', T0 + 5 * 60000]], why);
+  }
+});
+
+test('a give-up saved just after a daily check read the state is named by the next one, and none is named twice', async () => {
+  const D = T0 + 24 * HOUR;
+  const [early, late] = [idAt(T0 + 1000), idAt(T0 + 2000)];
+  const kv = started(T0, { last: D, gaveUp: [{ at: D - 2 * HOUR, post: early, what: 'queue card' }] });
+  const out = [];
+  await daily(withQueue(kv), { fetch: discord(), now: () => D, log: (s) => out.push(s) });
+  // The minute's scan, which ran in the same minute, saves its give-up after the check read the state.
+  const state = stateOf(kv);
+  await kv.put('scan:state', JSON.stringify({ ...state, last: D + 24 * HOUR, gaveUp: [...state.gaveUp, { at: D - 30000, post: late, what: 'queue card' }] }));
+  const next = [];
+  await daily(withQueue(kv), { fetch: discord(), now: () => D + 24 * HOUR + 60000, log: (s) => next.push(s) });
+  assert.match(out.join('\n'), new RegExp(`/channels/1/${early}`));
+  assert.match(next.join('\n'), new RegExp(`- queue card: https://discord\\.com/channels/1/${late}`), 'named by the next check');
+  assert.doesNotMatch(next.join('\n'), new RegExp(`/channels/1/${early}`), 'named once');
+});
+
 
 
 test('posts already handled are not read from KV again', async () => {

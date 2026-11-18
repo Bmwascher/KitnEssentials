@@ -18,18 +18,22 @@
 //                 "greeted": {forum: the same, for the greeting alone: posts past
 //                             it are new, and go before any card retry},
 //                 "error": {"at": epoch ms, "text": the last failure},
-//                 "gaveUp": [{"at", "post", "what": "greeting" or "queue card"}],
-//                             each kept a day for the daily alert}
+//                 "gaveUp": [{"at", "post", "what": "greeting", "queue card" or
+//                             "damaged record <key>"}], each kept two days
+//                             for the daily alert}
 //   thread:<id>  the scan's record of a post: {"greeting": message id,
 //                 "buttonless": true for the greeting without a button,
 //                 "card": queue card id, "cardSkipped": why no card goes out,
 //                 "skipped": why no greeting goes out, "tracked": the bot's
 //                 "now tracked" reply found in the post, "tries": failed
-//                 passes, the greeting's and the card's together}; one from
-//                 before the filing record may hold "issue"
+//                 passes, the greeting's and the card's together, "gaveUp":
+//                 {"at", "what"} once the scan gave up on it and names it};
+//                 one from before the filing record may hold "issue"
 //   issue:<id>   the Worker's record once the post is filed: {"repo",
 //                 "number", "key", "by"}
-// Each key has one writer: the scan writes thread:, the Worker issue:.
+//   daily:named  the posts of the give-ups a daily check has named
+// Each key has one writer: the scan writes thread: and scan:, the Worker
+// issue:, the daily check daily:named.
 import { parseForums, snowflakeMs, timedFetch, currentStatus, SEND_BUTTON, queueCard, personName, MESSAGES, discordText } from './core.js';
 import { discordClient } from './discord.js';
 
@@ -61,6 +65,9 @@ const CALL_MS = 5000;
 const STALE_SCAN_MS = 60 * 60 * 1000;
 const HEARTBEAT_MS = 15 * 60 * 1000;
 const ERROR_SHOWN_MS = 24 * 60 * 60 * 1000;
+// A give-up stays in the state two days, so one saved just after a daily
+// check read the state is still there for the next.
+const GAVE_UP_KEPT_MS = 2 * 24 * 60 * 60 * 1000;
 const DAILY_ARCHIVED_MS = 30 * 24 * 60 * 60 * 1000;
 const DAILY_ARCHIVE_PAGES = 6;
 const ANSWERED = 'answered';
@@ -77,18 +84,25 @@ const readJson = async (kv, key) => {
   try { return JSON.parse(raw); } catch { return null; }
 };
 
-// A record as stored, or null when there is none. A value that is empty or
-// not JSON throws with `damaged` set to its key, and a failed read throws as
-// it is: neither is "no record".
+// What the bot writes: a record is an object, and an issue (a filing record,
+// or an older record's "issue") names its repo and number.
+const isRecord = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+const isIssue = (v) => isRecord(v) && typeof v.repo === 'string' && v.repo.includes('/') && Number.isInteger(v.number) && v.number > 0;
+
+// A record as stored, or null when there is none (or no namespace is bound,
+// as before the scan is set up). A value the bot could not have written
+// (empty, not JSON, or not shaped as above) throws with `damaged` set to its
+// key, and a failed read throws as it is: neither is "no record", nor a
+// filing.
 export async function readStrict(kv, key) {
   if (!kv) return null;
   const raw = await kv.get(key);
   if (raw === null || raw === undefined) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    throw Object.assign(new Error(`the KV value at ${key} is damaged (empty or not JSON)`), { damaged: key });
-  }
+  let v = null;
+  try { v = JSON.parse(raw); } catch { /* damaged, below */ }
+  const ok = key.startsWith('issue:') ? isIssue(v) : isRecord(v) && (v.issue === undefined || isIssue(v.issue));
+  if (!ok) throw Object.assign(new Error(`the KV value at ${key} is damaged (not a record the bot wrote)`), { damaged: key });
+  return v;
 }
 
 export async function saveIssueRecord(kv, threadId, rec) {
@@ -185,6 +199,14 @@ export async function scan(env, deps = {}) {
   const greeted = [];
   const errors = [];
   const gaveUpNow = [];
+  // The give-ups the state still holds. A post is named once.
+  const kept = (state.gaveUp || []).filter((g) => now - g.at < GAVE_UP_KEPT_MS);
+  const named = new Set(kept.map((g) => g.post));
+  const name = (post, what, at = now) => {
+    if (named.has(post)) return;
+    named.add(post);
+    gaveUpNow.push({ at, post, what });
+  };
   let left = 0;
   try {
     const discord = budgetClient(env, deps, READ_BUDGET);
@@ -248,10 +270,12 @@ export async function scan(env, deps = {}) {
     // and greetings never wait behind an older post's card retry.
     const isNew = new Set(fresh.filter((t) => BigInt(t.id) > mark(greetedTo, t.parent_id)).map((t) => t.id));
     let reads = 0;
-    const read = async (key, strict = false) => {
+    // Both of a post's records are read strictly: a value the bot could not
+    // have written is never taken for "no record", so it is never written over.
+    const read = async (key) => {
       if (reads >= MAX_KV_READS) throw new BudgetSpent('KV reads for this run are spent');
       reads++;
-      return strict ? readStrict(kv, key) : readJson(kv, key);
+      return readStrict(kv, key);
     };
     let tried = 0;
     let carded = 0;
@@ -265,6 +289,66 @@ export async function scan(env, deps = {}) {
         wroteAt.set(id, clock());
       }
     };
+    // A finished post whose record says the scan gave up on it, but which
+    // the state does not name (its state write was lost, or an overlapping
+    // scan wrote over it), is named again from its record.
+    const restored = (t, rec) => {
+      const g = rec.gaveUp;
+      if (g && now - g.at < GAVE_UP_KEPT_MS) name(t.id, g.what, g.at);
+      return { greeted: true, finished: true };
+    };
+    // A failed pass. Out of this run's calls or reads, or with its record
+    // unread, the post waits, spends no try, and nothing overwrites its
+    // record. A scan record the bot could not have written is never written
+    // over either: the post is given up on at once, and named. Any other
+    // failure raises the post's one tries count; at MAX_TRIES, on a refusal,
+    // or over a damaged filing record, the post is given up on, and once its
+    // greeting is out only its card. A named give-up is named only once its
+    // record says so.
+    const failed = async (t, rec, err) => {
+      const greetedNow = !!(rec && rec.greeting);
+      if (err.damaged && !rec) {
+        log(`post ${t.id} skipped: ${err.message}`);
+        errors.push(`post ${t.id} (its saved record ${err.damaged} is damaged)`);
+        name(t.id, `damaged record ${err.damaged}`);
+        return { greeted: true, finished: true };
+      }
+      if (err instanceof BudgetSpent || !rec) {
+        if (!rec && !(err instanceof BudgetSpent)) {
+          log(`post ${t.id} left for the next run: its record could not be read: ${err.message}`);
+          errors.push(`the record of post ${t.id}`);
+        }
+        left++;
+        return { greeted: greetedNow, finished: false };
+      }
+      const what = greetedNow ? `queue card for post ${t.id}` : `post ${t.id}`;
+      const tries = (rec.tries || 0) + 1;
+      const giveUp = !!err.damaged || refused(err) || tries >= MAX_TRIES;
+      // A refusal by the post itself (deleted, closed to the bot) is that
+      // post's own end, as before; one by the queue channel is a setup
+      // problem every later post shares, so it is named, as are 30 tries
+      // and a damaged record.
+      const told = giveUp && (!!err.damaged || !refused(err) || !!err.queue);
+      log(`${what} ${giveUp ? 'skipped' : 'left for the next run'}: ${err.message}`);
+      if (!giveUp) {
+        errors.push(what);
+        left++;
+      } else if (told) {
+        errors.push(`${what} (${err.damaged ? `its saved record ${err.damaged} is damaged` : refused(err) ? 'the queue channel refused the bot' : `gave up after ${tries} tries`})`);
+      }
+      const label = err.damaged ? `damaged record ${err.damaged}` : greetedNow ? 'queue card' : 'greeting';
+      try {
+        await putRecord(t.id, giveUp
+          ? { ...rec, [greetedNow ? 'cardSkipped' : 'skipped']: err.message.slice(0, 200), ...(told ? { gaveUp: { at: now, what: label } } : {}) }
+          : { ...rec, tries });
+      } catch (e) {
+        log(`${what}: its record was not saved: ${e.message}`);
+        errors.push(`the record of ${what}`);
+        return { greeted: greetedNow, finished: false };
+      }
+      if (told) name(t.id, label);
+      return { greeted: giveUp || greetedNow, finished: giveUp };
+    };
     // One post's pass: its greeting, then its card. It never throws, so one
     // post's failure stays with it. `greeted`: the greeting is settled;
     // `finished`: nothing is left to do.
@@ -272,10 +356,10 @@ export async function scan(env, deps = {}) {
       let rec = null;
       try {
         rec = (await read(`thread:${t.id}`)) || {};
-        if (finished(rec, queue)) return { greeted: true, finished: true };
+        if (finished(rec, queue)) return restored(t, rec);
         // A post filed before this pass (by right-click, or from its card
         // after the greeting) gets no greeting and no card.
-        if (await read(`issue:${t.id}`, true)) return { greeted: true, finished: true };
+        if (await read(`issue:${t.id}`)) return { greeted: true, finished: true };
         if (!rec.greeting) {
           // The greeting share counts only posts that try a greeting.
           if (tried >= MAX_GREET) { left++; return { greeted: false, finished: false }; }
@@ -305,41 +389,7 @@ export async function scan(env, deps = {}) {
         await putRecord(t.id, rec);
         return { greeted: true, finished: true };
       } catch (err) {
-        const greetedNow = !!(rec && rec.greeting);
-        // Out of this run's calls or reads, or the record itself unread: the
-        // post waits, spends no try, and nothing overwrites its record.
-        if (err instanceof BudgetSpent || !rec) {
-          if (!rec && !(err instanceof BudgetSpent)) {
-            log(`post ${t.id} left for the next run: its record could not be read: ${err.message}`);
-            errors.push(`the record of post ${t.id}`);
-          }
-          left++;
-          return { greeted: greetedNow, finished: false };
-        }
-        // One count for the post's pass, greeting and card together. Once
-        // the greeting is out, giving up skips only the card.
-        const what = greetedNow ? `queue card for post ${t.id}` : `post ${t.id}`;
-        const tries = (rec.tries || 0) + 1;
-        const giveUp = refused(err) || tries >= MAX_TRIES;
-        log(`${what} ${giveUp ? 'skipped' : 'left for the next run'}: ${err.message}`);
-        if (!giveUp) {
-          errors.push(what);
-          left++;
-        } else if (!refused(err) || err.queue) {
-          // A refusal by the post itself (deleted, closed to the bot) is that
-          // post's own end, as before; one by the queue channel is a setup
-          // problem every later post shares, so it is named too.
-          errors.push(`${what} (${refused(err) ? 'the queue channel refused the bot' : `gave up after ${tries} tries`})`);
-          gaveUpNow.push({ post: t.id, what: greetedNow ? 'queue card' : 'greeting' });
-        }
-        try {
-          await putRecord(t.id, giveUp ? { ...rec, [greetedNow ? 'cardSkipped' : 'skipped']: err.message.slice(0, 200) } : { ...rec, tries });
-        } catch (e) {
-          log(`${what}: its record was not saved: ${e.message}`);
-          errors.push(`the record of ${what}`);
-          return { greeted: greetedNow, finished: false };
-        }
-        return { greeted: giveUp || greetedNow, finished: giveUp };
+        return failed(t, rec, err);
       }
     };
     const outcome = new Map();
@@ -369,9 +419,9 @@ export async function scan(env, deps = {}) {
   } finally {
     const next = { last: now, through, greeted: greetedTo, error: state.error };
     if (errors.length) next.error = { at: now, text: `could not read or message ${errors.slice(0, 5).join(', ')}` };
-    // Every post given up on stays named for a day, whatever errors follow,
-    // so the daily alert lists each one.
-    const gaveUp = [...(state.gaveUp || []).filter((g) => now - g.at < ERROR_SHOWN_MS), ...gaveUpNow.map((g) => ({ at: now, ...g }))];
+    // Every post given up on stays named for two days, whatever errors
+    // follow, so the daily alert lists each one.
+    const gaveUp = [...kept, ...gaveUpNow];
     if (gaveUp.length) next.gaveUp = gaveUp;
     const changed = JSON.stringify(through) !== JSON.stringify(state.through || {})
       || JSON.stringify(greetedTo) !== JSON.stringify({ ...state.through, ...state.greeted })
@@ -385,7 +435,7 @@ export async function scan(env, deps = {}) {
 
 // E4 and the scan alert, posted to MOD_CHANNEL_ID (logged when it is unset).
 // The alert goes first, on its own, so a forum that cannot be read never
-// holds it back. The daily check writes no state.
+// holds it back. The daily check writes only which give-ups it named.
 export async function daily(env, deps = {}) {
   const log = deps.log || console.log;
   const now = (deps.now || Date.now)();
@@ -433,12 +483,18 @@ export async function daily(env, deps = {}) {
     if (state.error && now - state.error.at < ERROR_SHOWN_MS) {
       alert.push(`The post scan hit a problem at ${new Date(state.error.at).toISOString()}: ${state.error.text}. Check the bot's permissions in those channels.`);
     }
-    const gaveUp = (state.gaveUp || []).filter((g) => now - g.at < ERROR_SHOWN_MS);
+    // Every give-up no daily check has named yet: one the minute's scan
+    // saved just after the last check read the state is named by this one,
+    // and none twice.
+    const all = state.gaveUp || [];
+    const shown = new Set([].concat((await readJson(kv, 'daily:named')) || []));
+    const gaveUp = all.filter((g) => !shown.has(g.post));
     if (gaveUp.length) {
-      alert.push(`In the last day the post scan gave up on these, after ${MAX_TRIES} tries or because the queue channel refused the bot; a moderator can file each post by right-click:`);
+      alert.push(`In the last day the post scan gave up on these, after ${MAX_TRIES} tries, because the queue channel refused the bot, or because a saved record is damaged; a moderator can file each post by right-click:`);
       for (const g of gaveUp) alert.push(`- ${g.what}: https://discord.com/channels/${env.GUILD_ID}/${g.post}`);
     }
     if (alert.length) { await postLines(alert); alerted = true; }
+    if (gaveUp.length) await kv.put('daily:named', JSON.stringify(all.map((g) => g.post)));
   }
 
   const tagsByForum = new Map();
