@@ -229,29 +229,34 @@ export function labelsFor({ type, client }) {
   return out;
 }
 
-// New applied_tags for a forum post: keep every non-status tag, swap the status.
-// Discord allows at most 5 applied tags; the status tag always wins a slot.
-export function nextAppliedTags(current, available, statusName) {
+// A post's tags other than the bot's status tags: staff and player tags.
+export function otherTags(current, available) {
   const statusNames = new Set(Object.values(STATUS).map((s) => s.toLowerCase()));
   const byId = new Map((available || []).map((t) => [t.id, t]));
-  const keep = (current || []).filter((id) => {
+  return (current || []).filter((id) => {
     const t = byId.get(id);
     return !(t && statusNames.has(t.name.toLowerCase()));
   });
+}
+
+// New applied_tags for a forum post: keep every non-status tag, swap the status.
+// Discord allows at most 5 applied tags; the status tag always wins a slot.
+export function nextAppliedTags(current, available, statusName) {
+  const keep = otherTags(current, available);
   const target = (available || []).find((t) => t.name.toLowerCase() === statusName.toLowerCase());
   if (!target) return null; // forum has no such tag: caller leaves tags alone
   return [...keep.slice(0, 4), target.id];
 }
 
-// The status a post shows now (a status tag's canonical name), or null.
-export function currentStatus(applied, available) {
+// The status a post shows now (a status tag's canonical name), or null. A
+// post carrying the `prefer` status tag shows it, wherever the tag sits: a
+// second status tag beside it is no reason to move, or reopen, the post.
+export function currentStatus(applied, available, prefer = null) {
   const byLower = new Map(Object.values(STATUS).map((s) => [s.toLowerCase(), s]));
   const byId = new Map((available || []).map((t) => [t.id, t]));
-  for (const id of applied || []) {
-    const t = byId.get(id);
-    if (t && byLower.has(t.name.toLowerCase())) return byLower.get(t.name.toLowerCase());
-  }
-  return null;
+  const shown = (applied || []).map((id) => byId.get(id)).filter((t) => t && byLower.has(t.name.toLowerCase()))
+    .map((t) => byLower.get(t.name.toLowerCase()));
+  return prefer && shown.includes(prefer) ? prefer : (shown[0] || null);
 }
 
 // "owner/SomeAddon" + "v5.0.120" -> "SomeAddon v5.0.120"; a tag that does not

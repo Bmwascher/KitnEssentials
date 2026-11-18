@@ -41,14 +41,22 @@ test('body quotes the reporter, links the post and carries the marker', () => {
 });
 
 
-test('status swap keeps player tags and replaces the old status', () => {
+test('a status swap keeps the other tags; a post shows a wanted status wherever its tag sits', () => {
   const avail = [{ id: 'r', name: 'Retail' }, { id: 'b', name: 'Bug' }, { id: 't', name: 'Triaged' }, { id: 'p', name: 'In progress' }];
-  assert.deepEqual(C.nextAppliedTags(['r', 'b', 't'], avail, 'In progress'), ['r', 'b', 'p']);
-  assert.equal(C.nextAppliedTags(['r'], avail, 'Shipped'), null);
-  const many = ['a', 'b2', 'c', 'd', 'e'].map((id) => ({ id, name: id }));
-  const out = C.nextAppliedTags(many.map((t) => t.id), [...many, ...avail], 'Triaged');
-  assert.equal(out.length, 5);
-  assert.equal(out[4], 't');
+  const five = ['a', 'b2', 'c', 'd', 'e'].map((id) => ({ id, name: id }));
+  const all = [...five, ...avail];
+  for (const [why, args, want] of [
+    ['the status replaces the old one and keeps the rest', [['r', 'b', 't'], avail, 'In progress'], ['r', 'b', 'p']],
+    ['five other tags: the status takes the fifth slot', [five.map((t) => t.id), all, 'Triaged'], ['a', 'b2', 'c', 'd', 't']],
+    ['the forum has no such tag', [['r'], avail, 'Shipped'], null],
+  ]) assert.deepEqual(C.nextAppliedTags(...args), want, why);
+  for (const [why, applied, prefer, want] of [
+    ['the first status tag', ['p', 't', 'r'], undefined, 'In progress'],
+    ['the wanted status second: shown all the same', ['p', 't', 'r'], 'Triaged', 'Triaged'],
+    ['the wanted status absent: the first status tag', ['p', 'r'], 'Triaged', 'In progress'],
+    ['no status tag', ['r'], 'Triaged', null],
+  ]) assert.equal(C.currentStatus(applied, avail, prefer), want, why);
+  assert.deepEqual(C.otherTags(['a', 't', 'b2', 'p'], all), ['a', 'b2'], 'every tag but the status tags');
 });
 
 test('shipped message names the repo and the release', () => {
