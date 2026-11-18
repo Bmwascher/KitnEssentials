@@ -1,0 +1,26 @@
+name: Discord probe (opened)
+
+# Temporary probe for the Discord bot's branch 2 (claim C7): does an issue the
+# bot's GitHub App creates start an `issues` `opened` run, and does the event
+# carry the issue's labels? Prints only; delete after the probe.
+on:
+  issues:
+    types: [opened]
+
+permissions: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print the event
+        env:
+          ACTOR: ${{ github.actor }}
+          NUMBER: ${{ github.event.issue.number }}
+          LABELS: ${{ join(github.event.issue.labels.*.name, ', ') }}
+          VAR_SEEN: ${{ vars.RELEASE_TAG_PATTERN != '' }}
+        run: |
+          echo "actor: $ACTOR"
+          echo "issue: #$NUMBER"
+          echo "labels: $LABELS"
+          echo "repo variable readable: $VAR_SEEN"
