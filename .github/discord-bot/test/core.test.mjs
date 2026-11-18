@@ -403,3 +403,40 @@ test('a reply pings its target; a refused reply goes once more plain, and any ot
   }
 });
 
+test('status writes read the post again first, never reopen a post already showing its status, and drop a staff tag only when asked', async () => {
+  const forum = { id: '900', available_tags: [{ id: 'r', name: 'Retail' }, { id: 'x', name: 'Staff note' }, { id: 'a', name: 'A' },
+    { id: 'b2', name: 'B' }, { id: 'c', name: 'C' }, { id: 't', name: 'Triaged' }, { id: 'p', name: 'In progress' }] };
+  const post = (tags, archived = false) => ({ id: '700', parent_id: '900', applied_tags: tags, thread_metadata: { archived } });
+  const five = ['r', 'x', 'a', 'b2', 'c'];
+  for (const [why, reads, write, patches, out] of [
+    ['a status another writer set between the reads: no write', [post(['r']), post(['r', 'p'])],
+      (d) => d.setStatus('700', 'Triaged'), [], { raced: true }],
+    ['a tag added between the reads is kept', [post(['r']), post(['r', 'x'])],
+      (d) => d.setStatus('700', 'Triaged'), [{ applied_tags: ['r', 'x', 't'] }], { raced: false }],
+    // A second status tag is no reason to reopen an archived post, in either order.
+    ['an archived post showing its status first, beside a second status tag', [post(['t', 'p', 'r'], true)],
+      (d) => d.setStatus('700', 'Triaged'), [], { from: 'Triaged' }],
+    ['an archived post showing its status second', [post(['p', 't', 'r'], true)],
+      (d) => d.setStatus('700', 'Triaged'), [], { from: 'Triaged' }],
+    ['an archived post whose status moves: reopened in the same write', [post(['r', 't'], true)],
+      (d) => d.setStatus('700', 'In progress'), [{ applied_tags: ['r', 'p'], archived: false }], { from: 'Triaged' }],
+    // A status run never drops a staff tag to show Triaged.
+    ['no status and five other tags, nothing to drop: no write', [post(five)],
+      (d) => d.setStatus('700', 'Triaged', undefined, { dropOther: false }), [], { skipped: true }],
+    ['the same at filing, as today: the fifth tag makes room', [post(five), post(five)],
+      (d) => d.setStatus('700', 'Triaged'), [{ applied_tags: ['r', 'x', 'a', 'b2', 't'] }], { skipped: false }],
+  ]) {
+    const queue = [...reads];
+    const f = fakeFetch([
+      ['GET', /\/channels\/700$/, () => (queue.length > 1 ? queue.shift() : queue[0])],
+      ['GET', /\/channels\/900$/, () => forum],
+      ['PATCH', /\/channels\/700$/, () => ({})],
+    ]);
+    const r = await write(discordClient('t', f));
+    assert.deepEqual(f.find('PATCH', /\/channels\/700$/).map((c) => c.body), patches, why);
+    for (const [k, v] of Object.entries(out)) assert.equal(typeof v === 'boolean' ? !!r[k] : r[k], v, `${why}: ${k}`);
+  }
+  const f = fakeFetch([['GET', /\/channels\/700$/, () => post(['p', 't'])], ['GET', /\/channels\/900$/, () => forum]]);
+  assert.equal(await discordClient('t', f).statusOf('700', 'Triaged'), 'Triaged', 'statusOf reads the wanted status wherever it sits');
+});
+
