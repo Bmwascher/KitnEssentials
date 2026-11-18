@@ -4,7 +4,7 @@
 // a post > Apps > "Send to GitHub" (moderators). Submitting the form files
 // the issue.
 import {
-  STATUS, MESSAGES, PERMS, buildTitle, buildBody, labelsFor, cleanPostTitle,
+  STATUS, MESSAGES, PERMS, buildTitle, buildBody, labelsFor, cleanPostTitle, personName,
   guessFromTags, normClient, normType, normRepoKey, parseRepos, timedFetch,
   parseForums, parseRoleIds, parseTemplates, templateCheck, templateGaps,
   templateNote, parseCustomId, templateLabels,
@@ -247,6 +247,15 @@ export async function fileIssue(interaction, env, deps) {
 
     const message = await discord.call('GET', `/channels/${threadId}/messages/${messageId}`);
     const author = message.author || {};
+    // A webhook's author id names no user: the issue shows its name alone.
+    const reporterId = message.webhook_id ? null : author.id;
+    // The server nickname is a nicety: any failure files with the display
+    // name. A 404 is a member who left; any other failure is logged.
+    const member = reporterId
+      ? await discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, t0 + budgetMs - callMs))
+        .call('GET', `/guilds/${interaction.guild_id}/members/${reporterId}`)
+        .catch((e) => { if (!/ -> 404 /.test(e.message)) log(`member read failed: ${e.message.slice(0, 200)}`); return null; })
+      : null;
     const by = interaction.member && interaction.member.user;
     // The template read ends a full call's time before the filing's deadline,
     // so the create can always start.
@@ -258,13 +267,12 @@ export async function fileIssue(interaction, env, deps) {
       title: buildTitle({ repoKey, client, module: v.module, title: v.title }),
       body: buildBody({
         content: message.content,
-        reporterName: author.global_name || author.username || 'unknown',
-        reporterId: author.id,
+        reporter: { name: personName(author, member), username: author.username, id: reporterId },
+        sender: by ? { name: personName(by, interaction.member), username: by.username, id: by.id } : null,
         threadId,
+        messageId,
         threadUrl: `https://discord.com/channels/${interaction.guild_id}/${threadId}`,
-        client,
         attachments: message.attachments,
-        sentBy: by ? (by.global_name || by.username) : null,
         templateLine: check.length ? gaps.join(' · ') || 'every field present' : null,
       }),
       labels: labelsFor({ type, client }),

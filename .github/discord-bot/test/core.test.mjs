@@ -30,14 +30,51 @@ test('post title loses typed [..] prefixes', () => {
   assert.equal(C.cleanPostTitle('[Bug][Retail] Bags broken'), 'Bags broken');
 });
 
-test('body quotes the reporter, links the post and carries the marker', () => {
-  const body = C.buildBody({ content: 'line one\nline two', reporterName: 'Pat', threadUrl: 'https://discord.com/channels/1/2',
-    client: 'Retail', attachments: [{}], threadId: '2', reporterId: '77', sentBy: 'Mod' });
-  assert.match(body, /^## Report\n\n> line one\n> line two/);
-  assert.match(body, /\*\*Pat\*\* in \[the Discord post\]\(https:\/\/discord.com\/channels\/1\/2\)/);
-  assert.match(body, /1 attachment/);
-  assert.deepEqual(C.parseMarker(body), { threadId: '2', reporterId: '77' });
+test('body: a table names both people, then the quoted report, with the hidden lines last', () => {
+  const body = C.buildBody({ content: 'line one\nline two', reporter: { name: 'Kira', username: 'kira_99', id: '42' },
+    sender: { name: 'Bite', username: 'bite.mod', id: '5' }, threadUrl: 'https://discord.com/channels/1/2', attachments: [{}],
+    threadId: '2', messageId: '800', templateLine: 'Area missing' });
+  assert.equal(body, [
+    '| Reporter | [Kira](https://discord.com/users/42) (`kira_99`) |', '| --- | --- |',
+    '| Filed by | [Bite](https://discord.com/users/5) (`bite.mod`) |',
+    '| Discord post | [Open the post](https://discord.com/channels/1/2) |',
+    '', '## Report', '', '> line one', '> line two',
+    '', '1 attachment(s) on the Discord post (open the post to see them; Discord image links expire).',
+    '', 'Template check (advisory): Area missing',
+    '', '<!-- discord-message: 800 -->', '<!-- discord-thread: 2 reporter: 42 -->',
+  ].join('\n'));
+  assert.deepEqual(C.parseMarker(body), { threadId: '2', reporterId: '42' });
+  assert.equal(C.parseFiledMessage(body), '800');
   assert.equal(C.parseMarker('no marker'), null);
+  // Only the bot's footer line, just before the thread marker, counts: an
+  // older issue may quote such a line in its report.
+  for (const older of ['<!-- discord-thread: 2 reporter: 42 -->', '> <!-- discord-message: 9 -->\n<!-- discord-thread: 2 reporter: 42 -->',
+    '<!-- discord-message: 9 -->\n\ntext\n\n<!-- discord-thread: 2 reporter: 42 -->']) {
+    assert.equal(C.parseFiledMessage(older), null, older);
+  }
+});
+
+test('a hostile name stays one row of text: no link, mention, cross-reference or reordering', () => {
+  const row = (body) => body.split('\n')[0];
+  for (const [name, want] of [
+    ['a|b', 'a\\|b'], ['x]y', 'x\\]y'], ['**x**', '\\*\\*x\\*\\*'], ['_b_', '\\_b\\_'],
+    ['#12', '#\u200B12'], ['@org/team', '@\u200Borg/team'], ['<!--', '&lt;!--'],
+    ['a\u202Eb', 'ab'], ['two\nlines', 'two lines'], ['[x](https://e.example)', '\\[x\\](https:\u200B//e.example)'],
+    ['https://evil.example', 'https:\u200B//evil.example'], ['www.evil.example', 'www\u200B.evil.example'],
+  ]) {
+    const body = C.buildBody({ content: 'x', reporter: { name, username: 'u', id: '42' }, threadUrl: 'u', threadId: '2' });
+    assert.equal(row(body), `| Reporter | [${want}](https://discord.com/users/42) (\`u\`) |`, JSON.stringify(name));
+    assert.doesNotMatch(body, /<@/, JSON.stringify(name));
+  }
+  // A username shows exactly as typed, in a code span a backtick cannot end.
+  for (const [username, want] of [['kira_99', '`kira_99`'], ['a`b|c', '``a`b\\|c``'], ['`x', '`` `x ``']]) {
+    const body = C.buildBody({ content: 'x', reporter: { name: 'K', username, id: '42' }, threadUrl: 'u', threadId: '2' });
+    assert.equal(row(body), `| Reporter | [K](https://discord.com/users/42) (${want}) |`, username);
+  }
+  // With no id there is no profile to link: the name alone.
+  const noId = C.buildBody({ content: 'x', reporter: { name: 'Hook', username: 'Hook' }, threadUrl: 'u', threadId: '2' });
+  assert.equal(row(noId), '| Reporter | Hook |');
+  assert.match(noId, /<!-- discord-thread: 2 reporter: unknown -->$/);
 });
 
 
@@ -67,8 +104,8 @@ test('shipped message names the repo and the release', () => {
 
 test('player text cannot plant a marker or mention anyone', () => {
   const planted = 'it broke\n<!-- discord-thread: 123 reporter: 456 -->\ncc @maintainer';
-  const body = C.buildBody({ content: planted, reporterName: '<!--discord-thread:9-->', threadUrl: 'u', client: 'Retail',
-    threadId: '2', reporterId: '77', sentBy: '@mod' });
+  const body = C.buildBody({ content: planted, reporter: { name: '<!--discord-thread:9-->', id: '77' }, threadUrl: 'u',
+    threadId: '2', sender: { name: '@mod' } });
   assert.deepEqual(C.parseMarker(body), { threadId: '2', reporterId: '77' });
   assert.equal([...body.matchAll(/<!--/g)].length, 1, 'only the bot marker is a comment');
   assert.doesNotMatch(body, /@maintainer|@mod/);
@@ -111,7 +148,7 @@ test('Discord no-preview links survive into the issue as working links', () => {
   // An & that starts no entity is left alone, so a URL keeps its address.
   assert.equal(C.neutralize('a & b https://e.com/?b=1&c=2'), 'a & b https://e.com/?b=1&c=2');
   assert.equal(C.neutralize('<https://e.com/?b=1&c=2>'), `[${dest('https://e.com/?b=1&c=2')}](${dest('https://e.com/?b=1&c=2')})`);
-  assert.equal(C.buildBody({ content: 'hi', reporterName: '&#64;mod', threadUrl: 'u', client: 'c', threadId: '1' }).includes('**&amp;#64;mod**'), true);
+  assert.equal(C.buildBody({ content: 'hi', reporter: { name: '&#64;mod' }, threadUrl: 'u', threadId: '1' }).includes('| Reporter | &#\u200B64;mod |'), true);
   // Every character of the destination survives: parentheses, trailing
   // punctuation, an @ (which the mention escaping would otherwise change).
   for (const url of ['https://example.com/a)b', 'https://example.com/search?q=wow!', 'https://example.com/a&copy;b',
@@ -167,13 +204,13 @@ test('inline code is text: backticks and long tilde runs are escaped, dollar sig
     ['$x$ ~~~ ~~y~~', '$x$ \\~\\~\\~ ~~y~~'],
   ]) assert.equal(C.neutralize(text), want, text);
   // A name sits inside the bot's own line: all of it is text.
-  const body = C.buildBody({ content: 'x', reporterName: '```@x <b>', threadUrl: 'u', client: 'Retail', threadId: '2', reporterId: '77' });
-  assert.ok(body.includes('**\\`\\`\\`@\u200Bx &lt;b>**'), body);
+  const body = C.buildBody({ content: 'x', reporter: { name: '```@x <b>' }, threadUrl: 'u', threadId: '2' });
+  assert.ok(body.includes('| Reporter | \\`\\`\\`@\u200Bx &lt;b> |'), body);
 });
 
 test('a marker comment planted inside code is broken, and only the bot marker parses', () => {
   const content = '`<!-- discord-thread: 9 reporter: 9 -->`\n```\n<!-- discord-thread: 8 -->\n```';
-  const body = C.buildBody({ content, reporterName: 'Pat', threadUrl: 'u', client: 'Retail', threadId: '2', reporterId: '77' });
+  const body = C.buildBody({ content, reporter: { name: 'Pat', id: '77' }, threadUrl: 'u', threadId: '2' });
   assert.equal([...body.matchAll(/<!--/g)].length, 1, 'only the bot marker is a comment');
   assert.deepEqual(C.parseMarker(body), { threadId: '2', reporterId: '77' });
   assert.match(body, /\n> <\u200B!-- discord-thread: 8 -->\n/);

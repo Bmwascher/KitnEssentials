@@ -188,9 +188,42 @@ export function neutralize(text) {
   return out.join('\n');
 }
 
-// A name sits inside a line of the bot's own, where no code block can form,
-// so all of it is text.
-const neutralizeInline = (text) => neutralizeProse(lf(text));
+// Control, bidirectional and line-separator characters, which could reorder
+// or break a line of the bot's own; a line break becomes a space.
+const CONTROLS = /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+const oneLine = (s) => String(s ?? '').replace(/\r\n?|[\n\u2028\u2029]/g, ' ').replace(CONTROLS, '');
+
+// A name inside a table cell of the bot's own: all text. Markdown marks,
+// pipes and brackets are backslashed, a # before a digit is broken so it
+// links no issue, a URL's :// and www. are broken so GitHub links nothing,
+// and <, @ and & go as in player text.
+const nameText = (s) => plain(oneLine(s).replace(/[\\`*_~|[\]]/g, '\\$&').replace(/#(?=\d)/g, `#${ZWSP}`)
+  .replace(/:\/\//g, `:${ZWSP}//`).replace(/\b(www)\./gi, `$1${ZWSP}.`));
+
+// A username as typed: a code span longer than any backtick run in it, and
+// \| for a pipe, which a table cell needs even inside code.
+function codeSpan(s) {
+  const t = oneLine(s).replace(/\|/g, '\\|');
+  const fence = '`'.repeat(longestRun([t]) + 1);
+  const pad = /^`|`$/.test(t) ? ' ' : '';
+  return `${fence}${pad}${t}${pad}${fence}`;
+}
+
+// A person as the issue shows them: the name linked to the Discord profile,
+// then the username. With no id (a webhook) there is no profile: the name
+// alone. Never a <@id> mention.
+function personCell(p) {
+  const { name, username, id } = p || {};
+  const text = nameText(name || username || 'unknown');
+  if (!/^\d+$/.test(String(id || ''))) return text;
+  const shown = `[${text}](https://discord.com/users/${id})`;
+  return username ? `${shown} (${codeSpan(username)})` : shown;
+}
+
+// The name a server shows: the nickname, else the display name, else the username.
+export function personName(user, member) {
+  return (member && member.nick) || (user && (user.global_name || user.username)) || 'unknown';
+}
 
 function quote(text) {
   const t = neutralize(text).trim() || '(no text, see the Discord post)';
@@ -210,15 +243,30 @@ export function parseMarker(body) {
   return { threadId: m[1], reporterId: m[2] && m[2] !== 'unknown' ? m[2] : null };
 }
 
-export function buildBody({ content, reporterName, threadUrl, client, attachments, threadId, reporterId, sentBy, templateLine }) {
-  const lines = ['## Report', '', quote(content), ''];
-  lines.push(`Reported by **${neutralizeInline(reporterName)}** in [the Discord post](${threadUrl}) · client ${client}`);
+// The id of the message the issue was filed from, or null for an issue filed
+// before the bot wrote it. Only the bot's footer counts: the line directly
+// before the thread marker that ends the body, since an older body may quote
+// such a line in its report.
+export function parseFiledMessage(body) {
+  const m = /(?:^|\n)<!-- discord-message: (\d+) -->\n<!-- discord-thread: \d+ reporter: (?:\d+|unknown) -->\s*$/.exec(lf(body));
+  return m ? m[1] : null;
+}
+
+// `reporter` and `sender` are { name, username, id }, any part missing.
+export function buildBody({ content, reporter, sender, threadUrl, attachments, threadId, messageId, templateLine }) {
+  const lines = [
+    `| Reporter | ${personCell(reporter)} |`, '| --- | --- |',
+    `| Filed by | ${personCell(sender)} |`,
+    `| Discord post | [Open the post](${threadUrl}) |`,
+    '', '## Report', '', quote(content),
+  ];
   if (attachments && attachments.length) {
     lines.push('', `${attachments.length} attachment(s) on the Discord post (open the post to see them; Discord image links expire).`);
   }
   if (templateLine) lines.push('', `Template check (advisory): ${templateLine}`);
-  if (sentBy) lines.push('', `_Sent from Discord by ${neutralizeInline(sentBy)}._`);
-  lines.push('', marker({ threadId, reporterId }));
+  lines.push('');
+  if (messageId) lines.push(`<!-- discord-message: ${messageId} -->`);
+  lines.push(marker({ threadId, reporterId: reporter && reporter.id }));
   return lines.join('\n');
 }
 

@@ -106,8 +106,10 @@ test('submitting files the issue, tags the post Triaged and tells the player', a
 
   assert.equal(created.title, '[ONE][Retail][Bags] Bags overlap after resize');
   assert.match(created.body, /> My bags overlap\n> after resize/);
-  assert.match(created.body, /\*\*Pat\*\* in \[the Discord post\]\(https:\/\/discord.com\/channels\/1\/700\)/);
-  assert.match(created.body, /<!-- discord-thread: 700 reporter: 42 -->/);
+  assert.match(created.body, /^\| Reporter \| \[Pat\]\(https:\/\/discord\.com\/users\/42\) \|\n/);
+  assert.match(created.body, /\n\| Filed by \| \[moddy\]\(https:\/\/discord\.com\/users\/5\) \(`moddy`\) \|\n/);
+  assert.match(created.body, /\n\| Discord post \| \[Open the post\]\(https:\/\/discord\.com\/channels\/1\/700\) \|\n/);
+  assert.match(created.body, /\n<!-- discord-message: 800 -->\n<!-- discord-thread: 700 reporter: 42 -->$/);
   assert.deepEqual(created.labels, ['from-discord', 'type: bug', 'client: retail']);
 
   assert.deepEqual(f.find('PATCH', /\/channels\/700$/)[0].body, { applied_tags: ['t-retail', 't-bug', 's-tri'] });
@@ -127,6 +129,31 @@ test('sending the same post twice points at the first issue', async () => {
   assert.deepEqual(await Promise.all(ctx.jobs), [{ duplicate: 17 }]);
   assert.equal(f.find('POST', /\/issues$/).length, 0);
   assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /Already tracked: ONE #17/);
+});
+
+test('the issue names the reporter and the moderator by server name, profile link and username', async () => {
+  const KIRA = { id: '42', username: 'kira_99', global_name: 'Kira Display' };
+  const NICKED = { ...MOD, nick: 'Bite', user: { id: '5', username: 'moddy', global_name: 'Mod Display' } };
+  for (const [why, message, member, reporterRow] of [
+    ['the member read gives the nickname', { author: KIRA }, () => ({ nick: 'Kira Nick', user: KIRA }), '| Reporter | [Kira Nick](https://discord.com/users/42) (`kira_99`) |'],
+    ['the member read is refused: the display name', { author: KIRA }, () => new Response('{"message":"Unknown Member"}', { status: 404 }), '| Reporter | [Kira Display](https://discord.com/users/42) (`kira_99`) |'],
+    ['a webhook author: the name alone, and no member read', { author: { id: '99', username: 'Hook' }, webhook_id: '99' }, () => ({ nick: 'never' }), '| Reporter | Hook |'],
+  ]) {
+    let created;
+    const f = fakeFetch(discordRoutes(githubRoutes([], [
+      ['GET', /\/channels\/700\/messages\/800$/, () => ({ id: '800', content: 'hi', attachments: [], ...message })],
+      ['GET', /\/guilds\/1\/members\/(42|99)$/, member],
+      ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, (b) => { created = b; return { number: 17, html_url: 'u' }; }],
+    ])));
+    const ctx = ctxFor();
+    await handle(await signed({ ...submit(), member: NICKED }), env, ctx, { fetch: f, installationToken: async () => 'inst' });
+    const [res] = await Promise.all(ctx.jobs);
+    assert.equal(res.created, 17, why);
+    const lines = created.body.split('\n');
+    assert.equal(lines[0], reporterRow, why);
+    assert.equal(lines[2], '| Filed by | [Bite](https://discord.com/users/5) (`moddy`) |', why);
+    assert.equal(f.find('GET', /\/guilds\/1\/members\/99$/).length, 0, why);
+  }
 });
 
 test('a GitHub failure is reported to the mod, not swallowed', async () => {
