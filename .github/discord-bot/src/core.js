@@ -194,10 +194,12 @@ const CONTROLS = /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u20
 const oneLine = (s) => String(s ?? '').replace(/\r\n?|[\n\u2028\u2029]/g, ' ').replace(CONTROLS, '');
 
 // A name inside a table cell of the bot's own: all text. Markdown marks,
-// pipes and brackets are backslashed, a # before a digit is broken so it
-// links no issue, a URL's :// and www. are broken so GitHub links nothing,
-// and <, @ and & go as in player text.
+// pipes and brackets are backslashed. A # or GH- before a digit is broken so
+// it links no issue, a run of hex digits every six so it links no commit,
+// and a URL's :// and www. so GitHub links nothing; <, @ and & go as in
+// player text.
 const nameText = (s) => plain(oneLine(s).replace(/[\\`*_~|[\]]/g, '\\$&').replace(/#(?=\d)/g, `#${ZWSP}`)
+  .replace(/\b(GH)-(?=\d)/gi, `$1-${ZWSP}`).replace(/[0-9a-f]{6}(?=[0-9a-f])/gi, `$&${ZWSP}`)
   .replace(/:\/\//g, `:${ZWSP}//`).replace(/\b(www)\./gi, `$1${ZWSP}.`));
 
 // A username as typed: a code span longer than any backtick run in it, and
@@ -404,11 +406,18 @@ export function parseCustomId(id) {
   return null;
 }
 
-// A post or person name inside a message of the bot's own: Discord's
-// Markdown marks are backslashed, so a name cannot format or mention.
-function discordText(s) {
-  return String(s ?? '').replace(/\s*\n\s*/g, ' ').replace(/[\\*_~|>`<[\]]/g, '\\$&');
+// A post or person name inside a message of the bot's own, as text: one
+// line with no control or direction marks, Discord's Markdown marks
+// backslashed so it cannot format or mention, and a URL's :// and the dot
+// after www or discord broken so it makes no link, invite or preview.
+export function discordText(s) {
+  return oneLine(s).replace(/[\\*_~|>`<[\]]/g, '\\$&').replace(/:\/\//g, `:${ZWSP}//`)
+    .replace(/\b(www|discord(?:app)?)\./gi, `$1${ZWSP}.`);
 }
+
+// The message flag that shows no link previews: a card stays text whatever a
+// name holds.
+const SUPPRESS_EMBEDS = 1 << 2;
 
 const openPost = (guildId, postId) => ({ type: 2, style: 5, label: 'Open post', url: `https://discord.com/channels/${guildId}/${postId}` });
 export const cardHead = (forumId, postName) => `**New post in <#${forumId}>:** ${discordText(postName)}`;
@@ -425,6 +434,7 @@ export function queueCard({ guildId, forumId, postId, postName, author, client, 
   return {
     content: lines.join('\n'),
     allowed_mentions: { parse: [] },
+    flags: SUPPRESS_EMBEDS,
     components: [{ type: 1, components: [
       ...(starterGone ? [] : [{ type: 2, style: 1, label: 'Send to GitHub', custom_id: `${SEND_BUTTON}:${postId}` }]),
       openPost(guildId, postId),
@@ -439,6 +449,7 @@ export function filedCard({ guildId, postId, head, key, number, by }) {
   return {
     content: `~~${head}~~\n**Filed as ${key} #${number}**${by ? ` by ${discordText(by)}` : ''}`,
     allowed_mentions: { parse: [] },
+    flags: SUPPRESS_EMBEDS,
     components: [{ type: 1, components: [openPost(guildId, postId)] }],
   };
 }

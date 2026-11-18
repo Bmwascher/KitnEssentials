@@ -62,6 +62,8 @@ test('a hostile name stays one row of text: no link, mention, cross-reference or
     ['#12', '#\u200B12'], ['@org/team', '@\u200Borg/team'], ['<!--', '&lt;!--'],
     ['a\u202Eb', 'ab'], ['two\nlines', 'two lines'], ['[x](https://e.example)', '\\[x\\](https:\u200B//e.example)'],
     ['https://evil.example', 'https:\u200B//evil.example'], ['www.evil.example', 'www\u200B.evil.example'],
+    // GitHub links GH-<n> to an issue, and seven or more hex digits to a commit.
+    ['GH-12', 'GH-\u200B12'], ['gh-12', 'gh-\u200B12'], ['a5c3785ed8d6', 'a5c378\u200B5ed8d6'],
   ]) {
     const body = C.buildBody({ content: 'x', reporter: { name, username: 'u', id: '42' }, threadUrl: 'u', threadId: '2' });
     assert.equal(row(body), `| Reporter | [${want}](https://discord.com/users/42) (\`u\`) |`, JSON.stringify(name));
@@ -301,14 +303,25 @@ test('button and form ids parse only when every id part is digits', () => {
   }
 });
 
-test('a queue card links the post and sends it; once filed it strikes its own first line', () => {
+test('a queue card links the post and shows names as text, with no preview; once filed it strikes its own first line', () => {
   const post = { guildId: '1', forumId: '900', postId: '700', postName: '**Bags** ||spoiler|| @everyone <@5>' };
   const card = C.queueCard({ ...post, author: { name: 'Kira_x', username: 'kira_99' }, client: 'Retail', type: 'Bug' });
   assert.equal(card.content, '**New post in <#900>:** \\*\\*Bags\\*\\* \\|\\|spoiler\\|\\| @everyone \\<@5\\>\nby Kira\\_x (`kira_99`) · Bug · Retail');
-  assert.deepEqual(card.allowed_mentions, { parse: [] });
+  assert.deepEqual([card.allowed_mentions, card.flags], [{ parse: [] }, 4], 'no ping and no link preview');
   assert.deepEqual(card.components[0].components.map((b) => [b.label, b.custom_id, b.url]), [
     ['Send to GitHub', 'send:700', undefined], ['Open post', undefined, 'https://discord.com/channels/1/700'],
   ]);
+  // A post or author name makes no link, invite or preview, and cannot reorder or break its line.
+  for (const [name, want] of [
+    ['free fix https://evil.example', 'free fix https:\u200B//evil.example'],
+    ['see www.evil.example', 'see www\u200B.evil.example'],
+    ['join discord.gg/abc', 'join discord\u200B.gg/abc'],
+    ['a\u202Eb\u2066c', 'abc'],
+    ['two\nlines', 'two lines'],
+  ]) {
+    const named = C.queueCard({ ...post, postName: name, author: { name } });
+    assert.equal(named.content, `**New post in <#900>:** ${want}\nby ${want}`, JSON.stringify(name));
+  }
   assert.equal(C.queueCard({ ...post, postName: 'x' }).content, '**New post in <#900>:** x', 'unknown parts are left out');
   // A post whose first message is gone cannot be filed from a button: the card says how to file it instead.
   const gone = C.queueCard({ ...post, postName: 'x', starterGone: true });
@@ -319,7 +332,7 @@ test('a queue card links the post and sends it; once filed it strikes its own fi
   for (const [by, line] of [['Bite', '**Filed as ONE #10** by Bite'], [undefined, '**Filed as ONE #10**']]) {
     const filed = C.filedCard({ guildId: '1', postId: '700', head, key: 'ONE', number: 10, by });
     assert.equal(filed.content, `~~**New post in <#900>:** a\\_b~~\n${line}`, line);
-    assert.deepEqual(filed.allowed_mentions, { parse: [] }, line);
+    assert.deepEqual([filed.allowed_mentions, filed.flags], [{ parse: [] }, 4], line);
     assert.deepEqual(filed.components[0].components.map((b) => [b.label, b.url]), [['Open post', 'https://discord.com/channels/1/700']], line);
   }
 });

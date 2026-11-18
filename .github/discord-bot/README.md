@@ -270,8 +270,10 @@ Accepted on purpose; each line says how you would notice it.
   on: before the greeting is out, it gets neither; after, it keeps its
   greeting and gets no card. The next daily alert names every post given up
   on that day, with its link, and moderators file it by right-click. On a
-  day with more than about 75 of them, the alert's last part goes to the
-  Worker's log instead of the moderator channel.
+  day with more than about 80 of them, the alert fills the daily check's
+  four messages, so that day's list of waiting posts goes to the Worker's
+  log instead of the moderator channel; past about 110, so does the alert's
+  last part.
 - If the bot's greeting went out but its id was not saved, the next scan looks
   for it among the post's last 100 messages; a post busier than that can get
   a second greeting. The same look finds the bot's "now tracked" reply, so a

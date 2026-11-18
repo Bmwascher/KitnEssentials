@@ -124,18 +124,19 @@ test('a busy run greets eight posts and leaves the rest for the next run', async
 });
 
 
-test('the daily check lists posts waiting too long with no status or Answered tag', async () => {
+test('the daily check lists posts waiting too long with no status or Answered tag, each name as text', async () => {
   const kv = started(T0, { last: T0 + 5 * 24 * HOUR - 60000 });
   const now = T0 + 5 * 24 * HOUR;
   let k = 0;
   const old = (tags) => ({ id: idAt(T0 + 1000 * ++k), parent_id: '900', name: 'post', applied_tags: tags });
-  const waiting = old(['t-retail']);
+  // A player names the post: it is listed as text, with no link or preview.
+  const waiting = { ...old(['t-retail']), name: '**Bags** https://evil.example' };
   const f = discord({ active: [waiting, old(['s-tri']), old(['s-ans']), { id: idAt(now - HOUR), parent_id: '900', applied_tags: [] }] });
   const r = await daily({ ...baseEnv(kv), MOD_CHANNEL_ID: '555' }, { fetch: f, now: () => now, log: () => {} });
   assert.equal(r.waiting, 1);
   const msg = f.find('POST', /\/channels\/555\/messages$/)[0].body.content;
   assert.match(msg, /1 post\(s\) older than 3 days/);
-  assert.match(msg, new RegExp(`discord.com/channels/1/${waiting.id}`));
+  assert.ok(msg.includes(`\n- \\*\\*Bags\\*\\* https:\u200B//evil.example: https://discord.com/channels/1/${waiting.id}`), msg);
   assert.doesNotMatch(msg, /scan has not run/);
 });
 
@@ -424,6 +425,26 @@ test('every post given up on in the last day is named in the daily alert, whatev
   const out = [];
   await daily(withQueue(kv), { fetch: f, now: () => T0 + 7 * 60000, log: (s) => out.push(s) });
   for (const id of posts) assert.match(out.join('\n'), new RegExp(`- queue card: https://discord\\.com/channels/1/${id}`), id);
+});
+
+test('a long daily alert goes out in whole lines under 1,900 characters, and what is past its posting share goes to the log', async () => {
+  const posts = Array.from({ length: 150 }, (_, i) => idAt(T0 + 1000 * (i + 1)));
+  const kv = started(T0, { gaveUp: posts.map((post) => ({ at: T0, post, what: 'queue card' })) });
+  const out = [];
+  const f = discord();
+  await daily({ ...baseEnv(kv), MOD_CHANNEL_ID: '555' }, { fetch: f, now: () => T0 + 7 * 60000, log: (s) => out.push(s) });
+  const posted = f.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content);
+  assert.equal(posted.length, 4, 'the daily posting share');
+  assert.match(posted[0], /^In the last day the post scan gave up on these/);
+  const entry = /^- queue card: https:\/\/discord\.com\/channels\/1\/\d+$/;
+  for (const [i, msg] of posted.entries()) {
+    assert.ok(msg.length <= 1900, `message ${i}: ${msg.length} characters`);
+    assert.ok(msg.split('\n').every((l, j) => (i === 0 && j === 0) || entry.test(l)), `message ${i} holds only whole lines`);
+  }
+  const logged = out.join('\n');
+  const all = [...posted, logged].join('\n');
+  for (const id of posts) assert.equal(all.split(`/channels/1/${id}`).length - 1, 1, `${id} is named once`);
+  assert.ok(posts.some((id) => logged.includes(`/channels/1/${id}`)), 'the rest is in the log');
 });
 
 

@@ -30,7 +30,7 @@
 //   issue:<id>   the Worker's record once the post is filed: {"repo",
 //                 "number", "key", "by"}
 // Each key has one writer: the scan writes thread:, the Worker issue:.
-import { parseForums, snowflakeMs, timedFetch, currentStatus, SEND_BUTTON, queueCard, personName, MESSAGES } from './core.js';
+import { parseForums, snowflakeMs, timedFetch, currentStatus, SEND_BUTTON, queueCard, personName, MESSAGES, discordText } from './core.js';
 import { discordClient } from './discord.js';
 
 export { SEND_BUTTON };
@@ -482,7 +482,7 @@ export async function daily(env, deps = {}) {
   if (cut) lines.push(`Only the most recently archived posts were checked (${DAILY_ARCHIVE_PAGES * 50} per forum, from the last ${DAILY_ARCHIVED_MS / 86400000} days); older ones may also be waiting.`);
   if (waiting.length) {
     lines.push(`${waiting.length} post(s) older than ${Math.round(staleMs / 86400000)} days with no status or "Answered" tag (archived posts from the last ${DAILY_ARCHIVED_MS / 86400000} days):`);
-    for (const t of waiting.slice(0, 20)) lines.push(`- ${t.name || t.id}: https://discord.com/channels/${env.GUILD_ID}/${t.id}`);
+    for (const t of waiting.slice(0, 20)) lines.push(`- ${t.name ? discordText(t.name) : t.id}: https://discord.com/channels/${env.GUILD_ID}/${t.id}`);
     if (waiting.length > 20) lines.push(`- and ${waiting.length - 20} more`);
   }
 
