@@ -59,14 +59,16 @@ export function normRepoKey(s, repos) {
 }
 
 // "[KE][Retail][Bags] Bank tab icons overlap" -- the shape already used by hand.
+// The form pre-fills the title from the post's name, which a player typed,
+// so control and direction marks go, as in names.
 export function buildTitle({ repoKey, client, module, title }) {
-  const mod = String(module || '').trim() || 'General';
-  return `[${repoKey}][${client}][${mod}] ${String(title).trim()}`;
+  const mod = oneLine(module).trim() || 'General';
+  return `[${repoKey}][${client}][${mod}] ${oneLine(title).trim()}`;
 }
 
 // Forum post name minus any [..] prefixes a player typed, for pre-filling the form.
 export function cleanPostTitle(name) {
-  return String(name || '').replace(/^(\s*\[[^\]]*\])+\s*/, '').trim().slice(0, 100);
+  return oneLine(name).replace(/^(\s*\[[^\]]*\])+\s*/, '').trim().slice(0, 100);
 }
 
 // Guess client and type from the forum post's existing tags (names, any case).
@@ -188,9 +190,12 @@ export function neutralize(text) {
   return out.join('\n');
 }
 
+// Direction marks, which could reorder a line of the bot's own or of a
+// quoted report.
+const BIDI = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
 // Control, bidirectional and line-separator characters, which could reorder
 // or break a line of the bot's own; a line break becomes a space.
-const CONTROLS = /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+const CONTROLS = new RegExp(`[\\u0000-\\u001f\\u007f-\\u009f]|${BIDI.source}`, 'g');
 const oneLine = (s) => String(s ?? '').replace(/\r\n?|[\n\u2028\u2029]/g, ' ').replace(CONTROLS, '');
 
 // A name inside a table cell of the bot's own: all text. Markdown marks,
@@ -228,7 +233,7 @@ export function personName(user, member) {
 }
 
 function quote(text) {
-  const t = neutralize(text).trim() || '(no text, see the Discord post)';
+  const t = neutralize(String(text || '').replace(BIDI, '')).trim() || '(no text, see the Discord post)';
   return t.split('\n').map((l) => `> ${l}`).join('\n');
 }
 
@@ -406,13 +411,15 @@ export function parseCustomId(id) {
   return null;
 }
 
+// A URL's :// and the dot after www or discord broken, so text makes no
+// link, invite or preview.
+const noLinks = (s) => s.replace(/:\/\//g, `:${ZWSP}//`).replace(/\b(www|discord(?:app)?)\./gi, `$1${ZWSP}.`);
+
 // A post or person name inside a message of the bot's own, as text: one
 // line with no control or direction marks, Discord's Markdown marks
-// backslashed so it cannot format or mention, and a URL's :// and the dot
-// after www or discord broken so it makes no link, invite or preview.
+// backslashed so it cannot format or mention, and no link.
 export function discordText(s) {
-  return oneLine(s).replace(/[\\*_~|>`<[\]]/g, '\\$&').replace(/:\/\//g, `:${ZWSP}//`)
-    .replace(/\b(www|discord(?:app)?)\./gi, `$1${ZWSP}.`);
+  return noLinks(oneLine(s).replace(/[\\*_~|>`<[\]]/g, '\\$&'));
 }
 
 // The message flag that shows no link previews: a card stays text whatever a
@@ -427,7 +434,7 @@ export const cardHead = (forumId, postName) => `**New post in <#${forumId}>:** $
 // left out. The form files the post's first message, so a post whose first
 // message is gone gets no send button, only the way to file it by hand.
 export function queueCard({ guildId, forumId, postId, postName, author, client, type, starterGone = false }) {
-  const by = author ? `by ${discordText(author.name)}${author.username ? ` (\`${String(author.username).replace(/`/g, '')}\`)` : ''}` : '';
+  const by = author ? `by ${discordText(author.name)}${author.username ? ` (\`${oneLine(author.username).replace(/`/g, '')}\`)` : ''}` : '';
   const second = [by, type, client].filter(Boolean).join(' · ');
   const lines = [cardHead(forumId, postName), second,
     starterGone ? 'Its first message was deleted: open the post and right-click a message › Apps › Send to GitHub.' : ''].filter(Boolean);
@@ -443,11 +450,13 @@ export function queueCard({ guildId, forumId, postId, postName, author, client, 
 }
 
 // The card once its post is filed. `head` is the card's first line as
-// Discord shows it (already escaped), or cardHead for the post; `by`, the
-// filer, is left out when unknown.
+// Discord shows it (already escaped, so never escaped again), or cardHead
+// for the post. A card an older version sent may still show a live link or
+// a direction mark there, so the head goes on one line with its links
+// broken. `by`, the filer, is left out when unknown.
 export function filedCard({ guildId, postId, head, key, number, by }) {
   return {
-    content: `~~${head}~~\n**Filed as ${key} #${number}**${by ? ` by ${discordText(by)}` : ''}`,
+    content: `~~${noLinks(oneLine(head))}~~\n**Filed as ${key} #${number}**${by ? ` by ${discordText(by)}` : ''}`,
     allowed_mentions: { parse: [] },
     flags: SUPPRESS_EMBEDS,
     components: [{ type: 1, components: [openPost(guildId, postId)] }],
@@ -478,9 +487,10 @@ export function parseTemplates(raw) {
 }
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-// Not an answer: a hint in ( ), a bare list number, or code-block marks (a
-// template pasted with its ``` lines).
-const isHint = (s) => /^\*?\s*\(.*\)\s*\*?$/.test(s) || /^\d+\.\s*$/.test(s) || /^`+\w*$/.test(s);
+// Not an answer: a hint in ( ), inside any * marks (a bold label's hint
+// copied as it is), a bare list number, or code-block marks (a template
+// pasted with its ``` lines).
+const isHint = (s) => /^\**\s*\(.*\)\s*\**$/.test(s) || /^\d+\.\s*$/.test(s) || /^`+\w*$/.test(s);
 
 // Advisory check of a post against its template: for each field, "present"
 // (labeled and answered), "missing" (labeled, left empty) or "unsure" (no

@@ -8,6 +8,8 @@ test('title follows [ONE][Client][Module] Title', () => {
   assert.equal(C.buildTitle({ repoKey: 'ONE', client: 'Retail', module: 'Bags', title: ' Icons overlap ' }),
     '[ONE][Retail][Bags] Icons overlap');
   assert.equal(C.buildTitle({ repoKey: 'TWO', client: 'All', module: '', title: 'x' }), '[TWO][All][General] x');
+  // The form pre-fills the title from the post's name: a direction mark there cannot reorder the issue's title.
+  assert.equal(C.buildTitle({ repoKey: 'ONE', client: 'Retail', module: 'Ba\u202Egs', title: 'free \u202Efix\u2066 now' }), '[ONE][Retail][Bags] free fix now');
 });
 
 test('form values normalize, junk is refused', () => {
@@ -29,6 +31,7 @@ test('existing forum tags pre-fill client and type', () => {
 
 test('post title loses typed [..] prefixes', () => {
   assert.equal(C.cleanPostTitle('[Bug][Retail] Bags broken'), 'Bags broken');
+  assert.equal(C.cleanPostTitle('[Bug] Bags \u202Ebroken'), 'Bags broken');
 });
 
 test('body: a table names both people, then the quoted report, with the hidden lines last', () => {
@@ -114,6 +117,9 @@ test('player text cannot plant a marker or mention anyone', () => {
   assert.doesNotMatch(body, /@maintainer|@mod/);
   // An older body with a stray marker before the real one still reads the last.
   assert.equal(C.parseMarker('<!-- discord-thread: 1 --> x <!-- discord-thread: 2 -->').threadId, '2');
+  // A direction mark in the report cannot reorder its lines in the issue.
+  const marked = C.buildBody({ content: 'see \u202Etxt.exe\u2066 now', reporter: { name: 'P', id: '77' }, threadUrl: 'u', threadId: '2' });
+  assert.match(marked, /\n> see txt\.exe now\n/);
 });
 
 test('only the listed choices pass, never inherited names', () => {
@@ -278,6 +284,8 @@ test('the template check: an answer may open with a short line and a colon, a hi
     ['What happened:\nGot this error:\n```lua\nattempt to index a nil value\n```\n\nScreenshots:\nnone', ['What happened', 'Screenshots'], 0, ['present', 'present']],
     ['What happened:\nNote: only in raids', ['What happened'], 0, ['present']],
     ['What happened:\n(what you were doing)', ['What happened'], 0, ['missing']],
+    // A bold label's hint left as it is, inside the bold marks, is no answer.
+    ['**AES Version: (Found in your addon management client)**', ['AES Version'], 0, ['missing']],
     ['Screenshots:\n', ['Screenshots'], 1, ['present']],
     ['it broke', ['Area'], 0, ['unsure']],
   ]) assert.deepEqual(states(content, fields, attachments), want, content);
@@ -335,6 +343,11 @@ test('a queue card links the post and shows names as text, with no preview; once
     assert.deepEqual([filed.allowed_mentions, filed.flags], [{ parse: [] }, 4], line);
     assert.deepEqual(filed.components[0].components.map((b) => [b.label, b.url]), [['Open post', 'https://discord.com/channels/1/700']], line);
   }
+  // A username shows in its code span on one line, with no direction mark.
+  assert.equal(C.queueCard({ ...post, postName: 'x', author: { name: 'k', username: 'ki\u202Era`' } }).content, '**New post in <#900>:** x\nby k (`kira`)');
+  // A card an older version sent may show a live link or a direction mark in its first line: struck, it shows neither.
+  const older = C.filedCard({ guildId: '1', postId: '700', head: '**New post in <#900>:** free https://evil.example \u202Ewww.evil.example', key: 'ONE', number: 10 });
+  assert.equal(older.content, '~~**New post in <#900>:** free https:\u200B//evil.example www\u200B.evil.example~~\n**Filed as ONE #10**');
 });
 
 // A help-post template as forums pin it: bold labels, italic hints, a list.
@@ -452,4 +465,3 @@ test('status writes read the post again first, never reopen a post already showi
   const f = fakeFetch([['GET', /\/channels\/700$/, () => post(['p', 't'])], ['GET', /\/channels\/900$/, () => forum]]);
   assert.equal(await discordClient('t', f).statusOf('700', 'Triaged'), 'Triaged', 'statusOf reads the wanted status wherever it sits');
 });
-
