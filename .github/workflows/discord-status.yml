@@ -4,7 +4,8 @@ name: Discord status
 # issue's state, the commit that closed it, the release tags, and its open PRs
 # decide the post's status tag (Triaged, In progress, Fixed, Shipped, Closed).
 # Only touches issues labeled `from-discord`. Does nothing until the
-# DISCORD_BOT_TOKEN secret is set.
+# DISCORD_BOT_TOKEN secret is set. An issue's opened run settles its post's
+# status tag; the script leaves an issue the bot did not file alone.
 # pull_request_target (not pull_request) so contributor PRs from forks still
 # update Discord; it runs this repo's own script and never checks out PR code.
 # Only a PR whose author has a role on the repo shows as In progress. An edit
@@ -14,7 +15,7 @@ on:
   pull_request_target:
     types: [opened, edited, reopened, ready_for_review, converted_to_draft, closed]
   issues:
-    types: [closed, reopened, labeled]
+    types: [opened, closed, reopened, labeled]
   push:
     # Test copy: KitnEssentials' own v* tags publish real releases, so the
     # "shipped" step is tried with throwaway discord-test-* tags instead.

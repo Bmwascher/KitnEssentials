@@ -35,6 +35,14 @@ GUILD_ID = ""
 APPROVED_ROLE_IDS = ""
 # Channel for the daily list of posts waiting with no status. Empty: logged only.
 MOD_CHANNEL_ID = ""
+# Staff channel for queue cards: one per new post, with the "Send to GitHub"
+# button. Empty: no cards, and moderators file by right-click.
+QUEUE_CHANNEL_ID = ""
+# The repo that holds every filing's lock label (discord-lock-<post id>),
+# whichever repo the post goes to. Required when REPOS names more than one
+# repo; with one, empty means that repo. Before changing it, see "Changing
+# the lock repo" in the README.
+LOCK_REPO = ""
 # How old a post with no status must be before the daily list names it.
 STALE_DAYS = "3"
 # Optional: the template fields each type of post should fill, checked as
