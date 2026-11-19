@@ -313,6 +313,12 @@ async function markCard(discord, cfg, log, { cardId, guildId, postId, head, key,
     .catch((e) => log(`queue card ${cardId} not updated: ${e.message.slice(0, 200)}`));
 }
 
+// A send ends within 30 s, and its lock label's description says when it
+// was taken, so a lock more than two minutes old has no send running. A
+// newer one may belong to a send between its last search and its create,
+// so the advice never frees it.
+const clearAdvice = (threadId, lockRepo) => `delete the label ${lockLabel(threadId)} in ${lockRepo}, but only if the time in its description is more than two minutes ago or it shows no time: a send ends within 30 seconds, so no send still holds that lock. Then send the post again.`;
+
 // A saved issue that answers 404 cannot be told from one the app can no
 // longer see (a transfer out of reach, lost access), so nothing goes ahead.
 // The way out clears only the post's filing association: its greeting and
@@ -512,15 +518,17 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     try {
       locked = await lockGh.claimThread(cfg.lockRepo, threadId);
     } catch (e) {
-      // The lock label may exist even though the answer was lost.
+      // The lock label may exist even though the answer was lost, and this
+      // send cannot tell whose it is, so it advises no deletion: a later
+      // send's busy reply gives the one safe advice.
       if (!unknownOutcome(e)) throw e;
-      await followup(`Nothing was created: GitHub did not confirm the lock (${e.message.slice(0, 200)}). If a later send says another send is running, delete the label ${lockLabel(threadId)} in ${cfg.lockRepo} and try again.`);
+      await followup(`Nothing was created: GitHub did not confirm the lock ${lockLabel(threadId)} in ${cfg.lockRepo} (${e.message.slice(0, 200)}). Wait a few minutes, then send the post again; if that says another send is running, follow its advice.`);
       return { error: e.message, uncertain: 'lock' };
     }
     if (!locked) {
       // The holder may be between its last search and its create, so no
-      // issue shows yet: the label is cleared only once any filing has ended.
-      await followup(`Nothing was created: another send of this post is running, or one stopped partway. Wait a few minutes, then send it again. If it still says this and no issue for this post appears in any repo the bot files into, delete the label ${lockLabel(threadId)} in ${cfg.lockRepo} and send it again.`);
+      // issue shows yet: only a lock older than any send may be deleted.
+      await followup(`Nothing was created: another send of this post is running, or one stopped partway. Wait a few minutes, then send it again. If it still says this and no issue for this post appears in any repo the bot files into, ${clearAdvice(threadId, cfg.lockRepo)}`);
       return { busy: true };
     }
     // The post's records, read under the lock, each waited on for at most
@@ -658,7 +666,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
         return { created: found.number, late: true };
       }
       keepLock = true;
-      await followup(`The issue may have been created: GitHub did not answer in time. If none appears in ${repo} within a few minutes, delete the label ${lockLabel(threadId)} in ${cfg.lockRepo} and send the post again.`);
+      await followup(`The issue may have been created: GitHub did not answer in time. If none appears in ${repo} within a few minutes, ${clearAdvice(threadId, cfg.lockRepo)}`);
       return { error: e.message, uncertain: true };
     }
     await followup(`Nothing was created: ${e.message.slice(0, 1500)}`);

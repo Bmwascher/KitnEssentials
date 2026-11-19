@@ -106,9 +106,12 @@ export function githubClient(token, fetchImpl = fetch) {
     },
     // A per-post lock: creating a label is atomic, so of two sends of the same
     // post at the same moment only one gets true. Released once the send ends.
-    async claimThread(repo, threadId) {
+    // Its description says when it was taken: a send ends within 30 s, so
+    // that time tells a lock left behind from one a send may still hold.
+    async claimThread(repo, threadId, at = Date.now()) {
+      const taken = new Date(at).toISOString().slice(0, 19).replace('T', ' ');
       const res = await fetchImpl(`${API}/repos/${repo}/labels`, {
-        method: 'POST', headers: headers(), body: JSON.stringify({ name: lockLabel(threadId), color: 'ededed', description: 'Send to GitHub in progress' }),
+        method: 'POST', headers: headers(), body: JSON.stringify({ name: lockLabel(threadId), color: 'ededed', description: `Send to GitHub since ${taken} UTC` }),
       });
       if (res.ok) return true;
       const text = await res.text().catch(() => '');
