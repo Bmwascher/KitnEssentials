@@ -54,12 +54,19 @@ const CARD_BUDGET = 3 * MAX_CARDS;
 const FORUM_BUDGET = 44;
 const POST_BUDGET = 4;
 const MAX_KV_READS = 60;
+// The reads older posts' card retries keep when any are owed: the new
+// posts' visits never use them, so a run of new posts cannot starve them.
+const OLDER_READS = 2 * MAX_CARDS;
 // A post whose pass fails this many runs in a row (not a refusal) is given
 // up on: about 30 minutes of errors at one scan a minute. Its greeting and
 // its card share the count; once the greeting is out, giving up skips only
 // the card. A post that waits for a share of this run's calls spends no try.
 // Each failed try is one KV write, so the cost stays small.
 const MAX_TRIES = 30;
+// A post whose record still cannot be read an hour after the post was made
+// is given up on and named, as 30 failed tries would be: a record that
+// cannot be read cannot count its tries, and is never written over.
+const UNREAD_GIVE_UP_MS = 60 * 60 * 1000;
 // KV takes one write a second to a key, so a second write to a post's
 // record in one pass waits this long after the first.
 const KV_GAP_MS = 1100;
@@ -371,6 +378,12 @@ export async function scan(env, deps = {}) {
         name(t.id, `damaged record ${err.damaged}`);
         return { greeted: true, finished: true };
       }
+      if (!rec && !(err instanceof BudgetSpent) && now - snowflakeMs(t.id) >= UNREAD_GIVE_UP_MS) {
+        log(`post ${t.id} skipped: its record could not be read: ${err.message}`);
+        errors.push(`post ${t.id} (its saved record thread:${t.id} could not be read)`);
+        name(t.id, `unreadable record thread:${t.id}`);
+        return { greeted: true, finished: true };
+      }
       if (err instanceof BudgetSpent || !rec) {
         if (!rec && !(err instanceof BudgetSpent)) {
           log(`post ${t.id} left for the next run: its record could not be read: ${err.message}`);
@@ -475,13 +488,17 @@ export async function scan(env, deps = {}) {
     // unread.
     const outcome = new Map();
     const owed = [];
+    const older = fresh.filter((x) => !isNew.has(x.id));
+    const newReads = MAX_KV_READS - (older.length ? OLDER_READS : 0);
     for (const t of fresh.filter((x) => isNew.has(x.id))) {
-      if (reads >= MAX_KV_READS) { left++; continue; }
+      // Once the greeting share is spent, a later new post could only wait:
+      // it waits unread.
+      if (reads >= newReads || tried >= MAX_GREET) { left++; continue; }
       const o = await greet(t);
       outcome.set(t.id, o);
       if (o.owes) owed.push(o.owes);
     }
-    for (const t of fresh.filter((x) => !isNew.has(x.id))) {
+    for (const t of older) {
       if (reads >= MAX_KV_READS || carded >= MAX_CARDS) { left++; continue; }
       const o = await greet(t);
       outcome.set(t.id, o.owes ? await card(o.owes) : o);

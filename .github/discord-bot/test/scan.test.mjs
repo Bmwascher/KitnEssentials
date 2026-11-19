@@ -645,6 +645,40 @@ test('a card retry finds the receipt before it reads the queue channel, so a ref
   assert.equal(stateOf(kv).gaveUp, undefined, 'not named as given up');
 });
 
+test('older posts\' card retries keep their KV reads however many new posts wait', async () => {
+  for (const [why, setup] of [
+    ['thirty new posts, eight of them greeted this run', async () => {}],
+    ['thirty new posts filed by right-click', async (kv, fresh) => {
+      for (const id of fresh) await kv.put(`issue:${id}`, JSON.stringify({ repo: 'me/one', number: 3, key: 'ONE', by: 'Bite' }));
+    }],
+  ]) {
+    const owed = idAt(T0 + 1000);
+    const kv = started(T0, { greeted: { 900: owed } });
+    await kv.put(`thread:${owed}`, JSON.stringify({ greeting: 'g', buttonless: true, tries: 1 }));
+    const fresh = Array.from({ length: 30 }, (_, i) => idAt(T0 + 100000 + 1000 * i));
+    await setup(kv, fresh);
+    const f = discord({ active: [owed, ...fresh].map((id) => ({ id, parent_id: '900', name: 'x' })) });
+    await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+    const carded = f.find('POST', /\/channels\/556\/messages$/).map((c) => c.body.components[0].components.at(-1).url.split('/').at(-1));
+    assert.equal(carded[0], owed, `${why}: the older post's card goes out first`);
+    assert.ok(f.calls.length <= 50, `${why}: within the call budget: ${f.calls.length} calls`);
+  }
+});
+
+test('a post whose record cannot be read waits, and an hour after it was made is given up on and named, holding back no later post', async () => {
+  const [a, b] = [idAt(T0 + 1000), idAt(T0 + 2000)];
+  for (const [why, at, given] of [['five minutes after the post', T0 + 5 * 60000, false], ['two hours after the post', T0 + 2 * HOUR, true]]) {
+    const kv = started(T0);
+    const get = kv.get;
+    kv.get = async (k) => { if (k === `thread:${a}`) throw new Error('KV GET failed: 500'); return get(k); };
+    const f = discord({ active: [{ id: a, parent_id: '900' }, { id: b, parent_id: '900' }] });
+    await scan(baseEnv(kv), { fetch: f, now: () => at, log: () => {} });
+    assert.deepEqual(sends(f), [b], `${why}: the later post is greeted`);
+    assert.equal(stateOf(kv).through['900'], given ? b : undefined, why);
+    assert.deepEqual((stateOf(kv).gaveUp || []).map((g) => [g.post, g.what]), given ? [[a, `unreadable record thread:${a}`]] : [], why);
+  }
+});
+
 
 
 test('posts already handled are not read from KV again', async () => {
