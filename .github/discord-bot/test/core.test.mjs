@@ -333,7 +333,7 @@ test('a queue card links the post and shows names as text, with no preview; once
   assert.equal(C.queueCard({ ...post, postName: 'x' }).content, '**New post in <#900>:** x', 'unknown parts are left out');
   // A post whose first message is gone cannot be filed from a button: the card says how to file it instead.
   const gone = C.queueCard({ ...post, postName: 'x', starterGone: true });
-  assert.equal(gone.content, '**New post in <#900>:** x\nIts first message was deleted: open the post and right-click a message › Apps › Send to GitHub.');
+  assert.equal(gone.content, '**New post in <#900>:** x\nIts first message was deleted: a moderator can open the post and right-click a message › Apps › Send to GitHub.');
   assert.deepEqual(gone.components[0].components.map((b) => [b.label, b.custom_id, b.url]), [['Open post', undefined, 'https://discord.com/channels/1/700']]);
   // The head is the card's first line as shown, already escaped: it is not escaped again.
   const head = C.cardHead('900', 'a_b');

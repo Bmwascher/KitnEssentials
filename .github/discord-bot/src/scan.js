@@ -40,9 +40,10 @@ import { discordClient } from './discord.js';
 export { SEND_BUTTON };
 // Workers' free plan allows 50 outgoing calls per run. A greeting costs two
 // (a look at the post's last messages, then the send) and a queue card three
-// (its own look, made just before it, the post as it is now, then the card;
+// (the post as it is now, its own look, made just before it, then the card;
 // a post busier than 100 messages takes one more, for its first message,
-// and waits when the card share is spent).
+// and one more again when that read answers 404, to tell a deleted post;
+// a card waits when the card share is spent).
 // Greetings, cards and the scan's own reads (the active posts, the bot's id,
 // the queue channel) each have their own client, so cards can never use up
 // what the greetings need. The daily check's forum reads keep their own share.
@@ -273,37 +274,32 @@ export async function scan(env, deps = {}) {
     // channel the bot was never let into) is reported, not just skipped.
     const atQueue = (p) => p.catch((err) => { throw Object.assign(err, { queue: true }); });
     const queueRead = () => (queued = queued || atQueue(discord.call('GET', `/channels/${queue}/messages?limit=100`)).then((m) => m || []));
-    // The post's queue card. Its own look at the post's last 100 messages
-    // comes first, made now even when the greeting looked earlier in this
-    // pass, since other posts' work runs between the two: the bot's "now
-    // tracked" reply there means the post was filed, so it gets no card,
-    // whatever the queue channel would answer, and the post's first message
-    // is found there, or read on its own in a busier post. Then the bot's own
-    // card already in the queue channel, else a new one. The post itself is
-    // read last, just before the card goes out, since the active list was
-    // read at the start of the run: one deleted since (a 404, a refusal),
-    // archived, locked or moved out of the configured forums gets no card.
-    // A post whose first message is gone gets a card with no send button,
-    // since the form files that message.
+    // The post's queue card. The active list was read at the start of the
+    // run, so the card reads again: the queue channel (once a run), the post
+    // as it is now, then its own look at the post's last 100 messages, made
+    // now even when the greeting looked earlier in this pass. The look comes
+    // last, so a first message deleted while the others were read is seen.
+    // The bot's "now tracked" reply there means the post was filed, so it
+    // gets no card, whatever the queue channel answered. A post deleted since
+    // (a 404, a refusal), archived, locked or moved out of the configured
+    // forums gets no card, and the bot's own card already in the queue
+    // channel is kept. A busier post's first message is read on its own, as
+    // the last read; a post whose first message is gone gets a card with no
+    // send button, since the form files that message.
     const cardFor = async (t) => {
+      const mine = await myId();
+      let queueErr = null;
+      const msgs = await queueRead().catch((err) => { queueErr = err; return []; });
+      const post = await carder.getChannel(t.id);
       const look = await lookIn(carder, t.id, myId);
       if (look.receipt) return { tracked: look.receipt };
-      const msgs = await queueRead();
-      const mine = msgs.length ? await myId() : null;
+      if (queueErr) throw queueErr;
       const had = msgs.find((m) => isCardFor(m, t.id, mine, env.GUILD_ID));
       if (had) return { card: had.id };
-      let starter = look.starter;
-      if (!starter && look.full) {
-        try {
-          starter = await carder.getMessage(t.id, t.id);
-        } catch (err) {
-          if (!/ -> 404 /.test(err.message)) throw err;
-        }
-      }
-      const post = await carder.getChannel(t.id);
       const meta = post.thread_metadata || {};
       if (meta.archived || meta.locked) return { cardSkipped: `the post was ${meta.archived ? 'archived' : 'locked'} before its card went out` };
       if (!forums[post.parent_id]) return { cardSkipped: 'the post is no longer in a configured forum' };
+      const starter = look.starter || (look.full ? await carder.readMessage(t.id, t.id) : null);
       const author = starter && starter.author;
       const info = forums[post.parent_id];
       return { card: (await atQueue(carder.call('POST', `/channels/${queue}/messages`, queueCard({

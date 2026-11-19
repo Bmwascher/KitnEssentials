@@ -433,6 +433,10 @@ const SUPPRESS_EMBEDS = 1 << 2;
 const openPost = (guildId, postId) => ({ type: 2, style: 5, label: 'Open post', url: `https://discord.com/channels/${guildId}/${postId}` });
 export const cardHead = (forumId, postName) => `**New post in <#${forumId}>:** ${discordText(postName)}`;
 
+// How to file a post whose message to file is gone. The right-click command
+// is for moderators only, so the advice says who can use it.
+export const BY_RIGHT_CLICK = 'a moderator can open the post and right-click a message › Apps › Send to GitHub.';
+
 // The queue channel's card for a post nobody has filed: its name, who posted
 // it and what kind it is, with the send button and a link. Unknown parts are
 // left out. The form files the post's first message, so a post whose first
@@ -441,7 +445,7 @@ export function queueCard({ guildId, forumId, postId, postName, author, client, 
   const by = author ? `by ${discordText(author.name)}${author.username ? ` (\`${oneLine(author.username).replace(/`/g, '')}\`)` : ''}` : '';
   const second = [by, type, client].filter(Boolean).join(' · ');
   const lines = [cardHead(forumId, postName), second,
-    starterGone ? 'Its first message was deleted: open the post and right-click a message › Apps › Send to GitHub.' : ''].filter(Boolean);
+    starterGone ? `Its first message was deleted: ${BY_RIGHT_CLICK}` : ''].filter(Boolean);
   return {
     content: lines.join('\n'),
     allowed_mentions: { parse: [] },

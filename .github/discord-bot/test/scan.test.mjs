@@ -415,20 +415,55 @@ test('a card still owed finds the receipt of a filing whose record is missing, a
   assert.equal(stateOf(kv).through['900'], a);
 });
 
-test('a post archived while the scan reads its messages gets no card: the post is read last, just before the card', async () => {
+test('a post archived while the scan reads the queue channel gets no card: the post is read after it', async () => {
   const a = idAt(T0 + 1000);
   const kv = started(T0, { greeted: { 900: a } });
   await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g1', buttonless: true }));
   const post = { id: a, parent_id: '900', name: 'x' };
   const base = discord({ active: [post], said: { [a]: [{ id: a, author: { id: '42', username: 'kira_99' } }] } });
-  // A moderator archives the post while the scan reads its messages or its first message.
+  // A moderator archives the post while the scan reads the queue channel.
   const fetch = (url, init = {}) => {
-    if ((init.method || 'GET') === 'GET' && url.includes(`/channels/${a}/messages`)) post.thread_metadata = { archived: true };
+    if ((init.method || 'GET') === 'GET' && url.includes('/channels/556/messages')) post.thread_metadata = { archived: true };
     return base(url, init);
   };
   await scan(withQueue(kv), { fetch, now: () => T0 + 5 * 60000, log: () => {} });
   assert.equal(base.find('POST', /\/channels\/556\/messages$/).length, 0);
   assert.match(JSON.parse(kv.m.get(`thread:${a}`)).cardSkipped, /archived/);
+});
+
+test('a card reads the first message last: one deleted while the queue channel or the post is read gets no send button', async () => {
+  const a = idAt(T0 + 1000);
+  const starter = { id: a, author: { id: '42', username: 'kira_99' } };
+  const hundred = Array.from({ length: 100 }, (_, i) => ({ id: `x${i}` }));
+  for (const [why, during, busy, button] of [
+    ['deleted while the queue channel is read', (url) => url.includes('/channels/556/messages?'), false, false],
+    ['deleted while the post is read', (url) => url.endsWith(`/channels/${a}`), false, false],
+    // A busy post deleted during its look: its first message's own read answers 404, and so does the post.
+    ['a busy post deleted while its messages are read', (url) => url.includes(`/channels/${a}/messages?`), true, null],
+  ]) {
+    const kv = started(T0, { greeted: { 900: a } });
+    await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g1', buttonless: true }));
+    const active = [{ id: a, parent_id: '900', name: 'x' }];
+    const said = { [a]: busy ? hundred : [starter] };
+    const base = discord({ active, said });
+    let done = false;
+    const fetch = (url, init = {}) => {
+      if (!done && (init.method || 'GET') === 'GET' && during(url)) {
+        done = true;
+        if (busy) active.length = 0;
+        else said[a] = [];
+      }
+      return base(url, init);
+    };
+    await scan(withQueue(kv), { fetch, now: () => T0 + 5 * 60000, log: () => {} });
+    const [card] = base.find('POST', /\/channels\/556\/messages$/);
+    if (button === null) {
+      assert.equal(card, undefined, `${why}: no card`);
+      assert.match(JSON.parse(kv.m.get(`thread:${a}`)).cardSkipped, /404/, why);
+      continue;
+    }
+    assert.equal(card.body.components[0].components.some((b) => b.custom_id === `send:${a}`), button, `${why}: the send button`);
+  }
 });
 
 test('a post whose receipt is already there (its filing record missing) gets no greeting and no card', async () => {
