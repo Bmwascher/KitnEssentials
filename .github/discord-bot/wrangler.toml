@@ -1,4 +1,5 @@
-# Cloudflare Worker for the Discord side. Free tier is plenty.
+# Cloudflare Worker for the Discord side. The free plan does, except for repos
+# with thousands of bot issues (README, Known limits).
 # Secrets (never in this file), set once with `npx wrangler@3 secret put <NAME>`:
 #   DISCORD_PUBLIC_KEY, DISCORD_BOT_TOKEN, GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY
 name = "discord-issue-bot"

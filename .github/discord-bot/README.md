@@ -20,8 +20,8 @@ The greeting and the card go out in the same scan: new posts are greeted
 first, then cards still owed by older posts go out, then the new posts'
 cards. A post filed before the scan reaches it (by right-click, say) gets
 neither, also when its filing record was not saved: the bot finds its own
-"now tracked" reply in the post, and it looks again before each card, so a
-post filed after its greeting gets no card either. If the card cannot go
+"now tracked" reply in the post, and it looks again just before each card,
+so a post filed after its greeting gets no card either. If the card cannot go
 out yet, the scan tries again each minute while the post is open, without
 sending the greeting again. A card goes out only to a post still open when
 it is sent. A post whose first message was deleted gets a card without the
@@ -121,7 +121,10 @@ Every day the Worker also lists posts older than `STALE_DAYS` that have no
 status tag and no `Answered` tag (open posts, and posts archived in the last
 30 days) in `MOD_CHANNEL_ID`, and warns there first if the post scan has
 stopped, or hit a problem with some post or forum in the last day. A post the bot may not message (locked, or no permission) is skipped; one
-that fails 30 runs in a row (about 30 minutes) is given up on.
+that fails 30 runs in a row (about 30 minutes) is given up on, and so is one
+whose saved record still cannot be read an hour after the post was made. The
+alert names each post given up on that no earlier alert named; one the
+moderator channel refused to show is named again the next day.
 
 Two halves, no always-on server:
 
@@ -152,7 +155,13 @@ bot cannot get, files nothing and names the repo to try again for. A saved issue
 nothing: GitHub answers the same for an issue the app can no longer see, so
 the bot names it and says how to clear the record (below). Two filings of one
 post at the same moment, into any repos, make one issue: each takes a lock
-label, `discord-lock-<post id>`, in `LOCK_REPO`.
+label, `discord-lock-<post id>`, in `LOCK_REPO`, whose description says when
+it was taken ("Send to GitHub since 2026-11-18 18:40:05 UTC"). A filing ends
+within 30 seconds, so delete a lock label only when that time is more than
+two minutes ago, or it shows none (an older version's label): a newer one may
+belong to a filing between its last search and its create, and deleting it
+can let a second filing make a second issue. Every reply that names a lock
+gives the same rule.
 
 ## Clearing a filing record
 
@@ -169,13 +178,33 @@ ids, so nothing is posted twice:
    back without that field, keeping every other field as it was:
    `npx wrangler@3 kv key put --binding=STATE "thread:<post id>" '<the record without "issue">'`
 
-A record the bot calls damaged (empty, not JSON, or not a record the bot
-writes, such as a filing record with no repo or issue number) holds nothing
-to keep: delete the key it names, `issue:<post id>` as in step 1 or
-`thread:<post id>` the same way. The post scan never writes over a damaged
+A record the bot calls damaged is empty, not JSON, or not a record the bot
+writes: a filing record whose repo is not `owner/name` or whose issue number
+is not a positive whole number, or a scan record with a field of the wrong
+kind (a `tries` written as text, a `tracked` that is not a message id). A
+damaged `issue:<post id>` holds nothing to keep: delete it as in step 1. A
+damaged `thread:<post id>` may still hold the greeting's and card's ids:
+read it (step 2), and if it is JSON, write it back (step 3) with only its
+`greeting`, `buttonless` and `card` fields, keeping each that looks right (a
+`greeting` or `card` is a message id, `buttonless` is `true`); otherwise
+delete it the same way as step 1. The post scan never writes over a damaged
 record: it gives that post no greeting and no card, and the next daily
-alert names it. Deleting `thread:<post id>` loses the card's id, so a later
-filing by right-click leaves that card live; press it once to mark it filed.
+alert names it; a scan record that still cannot be read an hour after its
+post was made is named the same way. Deleting `thread:<post id>` loses the
+card's id, so a later filing by right-click leaves that card live; press it
+once to mark it filed.
+
+The scan's own keys are checked too. If `scan:since`, the time the bot
+started, is damaged, the scan stops rather than start again from now, which
+would pass over every waiting post, and the daily alert says so. Put back a
+time in milliseconds since 1970 (`node -e "console.log(Date.now())"` prints
+the current one) with
+`npx wrangler@3 kv key put --binding=STATE "scan:since" "<time>"`: the
+current time skips every post made before it, and an earlier one lets the
+scan greet the open posts made since. A damaged `scan:state` is rebuilt by
+the next scan, and the daily alert says so: posts the scan gave up on
+before may be missing from it. A damaged `daily:named` makes the next daily
+alert say that some posts it names may have been named before.
 
 ## Changing the lock repo
 
@@ -289,7 +318,8 @@ Accepted on purpose; each line says how you would notice it.
   for it among the post's last 100 messages; a post busier than that can get
   a second greeting. The same look finds the bot's "now tracked" reply, so a
   post filed without a saved record gets no greeting after it, unless the
-  filing lands in the moment between that look and the greeting's send.
+  filing lands in the moment between that look and the greeting's send, or
+  the reply is further back than those 100 messages.
 - The sweep reads every bot issue ever filed, so it grows with the issue count;
   it fails loudly when it runs out of API calls.
 - The workflow reads each issue's closing event in two near-identical queries.
@@ -388,6 +418,21 @@ Accepted on purpose; each line says how you would notice it.
   record was not saved (or not yet seen) and whose reply is further back
   than that, can still get a card; pressing it answers "Already tracked" and
   marks it filed.
+- If the scan gives up on a post and then fails to save its own state, it
+  names that post again only when it next visits it. A post archived, locked
+  or deleted in that minute is not visited, so the daily alert misses it; an
+  archived one still reaches the daily list of waiting posts after
+  `STALE_DAYS`.
+- If the daily alert went out but saving which posts it named then fails,
+  the next daily alert names those posts again.
+- A post the scan keeps failing on holds back its progress for up to 30 runs
+  (an hour, for a record that cannot be read). Meanwhile the scan reads every
+  finished post after it again each run; with more than about 40 of them,
+  the newest posts wait for their greeting until it gives up.
+- GitHub cannot delete a label only if it is unchanged. If two people each
+  read the same old lock's time and both delete it, one after the other, the
+  second can delete a new lock a filing took in the seconds between, and two
+  filings can then make two issues.
 
 ## Tests
 
