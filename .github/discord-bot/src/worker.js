@@ -313,11 +313,11 @@ async function markCard(discord, cfg, log, { cardId, guildId, postId, head, key,
     .catch((e) => log(`queue card ${cardId} not updated: ${e.message.slice(0, 200)}`));
 }
 
-// A send ends within 30 s and GitHub ends a request it has worked on for
-// 10 s, so an hour after a lock was taken no send holds it and no create it
-// sent can still land, even one whose answer was lost. A newer lock may, so
-// the advice never frees it.
-const clearAdvice = (threadId, lockRepo) => `delete the label ${lockLabel(threadId)} in ${lockRepo}, but only if the time in its description is more than an hour ago or it shows no time: a send ends within 30 seconds and GitHub finishes each request within seconds, so by then no send holds that lock and no issue it asked for can still appear. Then send the post again.`;
+// A send ends within 30 s, and GitHub times out a request after 10 s. GitHub
+// does not say whether a create it timed out can still be applied later, so
+// the hour is a wide margin past both, not a proof. A newer lock may belong
+// to a running send, so the advice never frees it.
+const clearAdvice = (threadId, lockRepo) => `delete the label ${lockLabel(threadId)} in ${lockRepo}, but only if the time in its description is more than an hour ago or it shows no time. A send ends within 30 seconds and GitHub times out a request after 10 seconds, so the hour is a wide margin past both. Then send the post again.`;
 
 // A saved issue that answers 404 cannot be told from one the app can no
 // longer see (a transfer out of reach, lost access), so nothing goes ahead.
