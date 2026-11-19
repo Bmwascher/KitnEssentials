@@ -591,7 +591,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     // from a deleted message.
     const readFiled = async (client) => {
       try {
-        const found = await client.readMessage(threadId, messageId);
+        const { message: found } = await client.readMessage(threadId, messageId);
         if (found) return { message: found };
         await followup(`Nothing was created: the message to file was deleted; ${BY_RIGHT_CLICK}`);
         return { refused: 'message' };

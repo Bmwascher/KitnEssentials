@@ -466,6 +466,25 @@ test('a card reads the first message last: one deleted while the queue channel o
   }
 });
 
+test('a busy post archived or locked while its deleted first message is read gets no card: that read of the post decides', async () => {
+  const a = idAt(T0 + 1000);
+  const hundred = Array.from({ length: 100 }, (_, i) => ({ id: `x${i}` }));
+  for (const [why, meta] of [['archived', { archived: true }], ['locked', { locked: true }]]) {
+    const kv = started(T0, { greeted: { 900: a } });
+    await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g1', buttonless: true }));
+    const post = { id: a, parent_id: '900', name: 'x' };
+    const base = discord({ active: [post], said: { [a]: hundred } });
+    // A moderator archives or locks the post while the scan reads its first message, which was deleted.
+    const fetch = (url, init = {}) => {
+      if ((init.method || 'GET') === 'GET' && url.endsWith(`/channels/${a}/messages/${a}`)) post.thread_metadata = meta;
+      return base(url, init);
+    };
+    await scan(withQueue(kv), { fetch, now: () => T0 + 5 * 60000, log: () => {} });
+    assert.equal(base.find('POST', /\/channels\/556\/messages$/).length, 0, `${why}: no card`);
+    assert.match(JSON.parse(kv.m.get(`thread:${a}`)).cardSkipped, new RegExp(why), why);
+  }
+});
+
 test('a post whose receipt is already there (its filing record missing) gets no greeting and no card', async () => {
   const kv = started(T0);
   const a = idAt(T0 + 1000);

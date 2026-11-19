@@ -296,14 +296,23 @@ export async function scan(env, deps = {}) {
       if (queueErr) throw queueErr;
       const had = msgs.find((m) => isCardFor(m, t.id, mine, env.GUILD_ID));
       if (had) return { card: had.id };
-      const meta = post.thread_metadata || {};
+      // A busier post's first message is read on its own, last. When it was
+      // deleted, that read reads the post too, and the post as read then
+      // decides, not the read before the look.
+      let starter = look.starter;
+      let latest = post;
+      if (!starter && look.full) {
+        const read = await carder.readMessage(t.id, t.id);
+        starter = read.message;
+        latest = read.channel || post;
+      }
+      const meta = latest.thread_metadata || {};
       if (meta.archived || meta.locked) return { cardSkipped: `the post was ${meta.archived ? 'archived' : 'locked'} before its card went out` };
-      if (!forums[post.parent_id]) return { cardSkipped: 'the post is no longer in a configured forum' };
-      const starter = look.starter || (look.full ? await carder.readMessage(t.id, t.id) : null);
+      if (!forums[latest.parent_id]) return { cardSkipped: 'the post is no longer in a configured forum' };
       const author = starter && starter.author;
-      const info = forums[post.parent_id];
+      const info = forums[latest.parent_id];
       return { card: (await atQueue(carder.call('POST', `/channels/${queue}/messages`, queueCard({
-        guildId: env.GUILD_ID, forumId: post.parent_id, postId: t.id, postName: post.name || t.name,
+        guildId: env.GUILD_ID, forumId: latest.parent_id, postId: t.id, postName: latest.name || t.name,
         author: author ? { name: personName(author), username: author.username } : null, client: info.client, type: info.type,
         starterGone: !starter,
       })))).id };

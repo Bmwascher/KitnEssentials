@@ -38,16 +38,17 @@ export function discordClient(token, fetchImpl = fetch) {
     call,
     getChannel: (id) => call('GET', `/channels/${id}`),
     getMessage: (channelId, messageId) => call('GET', `/channels/${channelId}/messages/${messageId}`),
-    // A message, or null when it was deleted. A deleted channel's messages
-    // answer 404 too, so the channel is read then: its own 404 is thrown, and
-    // a deleted post is never taken for a deleted message.
+    // `{ message }`, or `{ message: null, channel }` when it was deleted. A
+    // deleted channel's messages answer 404 too, so the channel is read then:
+    // its own 404 is thrown, so a deleted post is never taken for a deleted
+    // message, and its answer is returned, so the caller decides from the
+    // post as it is now.
     async readMessage(channelId, messageId) {
       try {
-        return await call('GET', `/channels/${channelId}/messages/${messageId}`);
+        return { message: await call('GET', `/channels/${channelId}/messages/${messageId}`) };
       } catch (e) {
         if (!/ -> 404 /.test(e.message)) throw e;
-        await call('GET', `/channels/${channelId}`);
-        return null;
+        return { message: null, channel: await call('GET', `/channels/${channelId}`) };
       }
     },
     // The bot's own user: only its messages count as its greeting or card.
