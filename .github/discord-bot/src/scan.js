@@ -87,12 +87,6 @@ export function greetingMessage() {
   return { content: GREETING, allowed_mentions: { parse: [] } };
 }
 
-const readJson = async (kv, key) => {
-  const raw = await kv.get(key);
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
-};
-
 // What the bot writes: a record is an object; an issue (a filing record, or
 // an older record's "issue") names its repo as owner/name and a positive
 // whole number; each field of the scan's record has the type the scan gives
@@ -555,25 +549,34 @@ export async function daily(env, deps = {}) {
   const discord = budgetClient(env, deps, FORUM_BUDGET);
   const poster = budgetClient(env, deps, POST_BUDGET);
   let posted = false;
+  // True when the text reached the channel, or the log by design (no
+  // channel set, or past the run's posting share); false when the channel
+  // failed it, so what it names is named again another day.
   const post = async (text) => {
     text = text.slice(0, 1900);
-    if (!env.MOD_CHANNEL_ID) return log(text);
+    if (!env.MOD_CHANNEL_ID) { log(text); return true; }
     try {
       await poster.send(env.MOD_CHANNEL_ID, text);
       posted = true;
+      return true;
     } catch (err) {
       log(`could not post to the moderator channel: ${err.message}\n${text}`);
+      return err instanceof BudgetSpent;
     }
   };
   // Lines in as few messages as fit, each under 1,900 characters and cut
-  // only between lines. Past the run's posting share, the rest goes to the log.
+  // only between lines. Past the run's posting share, the rest goes to the
+  // log. Returns the lines `post` took.
   const postLines = async (lines) => {
-    let msg = '';
+    const took = [];
+    let msg = [];
+    const flush = async () => { if (await post(msg.join('\n'))) took.push(...msg); msg = []; };
     for (const line of lines) {
-      if (msg && msg.length + 1 + line.length > 1900) { await post(msg); msg = ''; }
-      msg = msg ? `${msg}\n${line}` : line;
+      if (msg.length && msg.join('\n').length + 1 + line.length > 1900) await flush();
+      msg.push(line);
     }
-    if (msg) await post(msg);
+    if (msg.length) await flush();
+    return took;
   };
 
   const kv = env.STATE;
@@ -597,17 +600,25 @@ export async function daily(env, deps = {}) {
       alert.push(`The post scan hit a problem at ${new Date(state.error.at).toISOString()}: ${state.error.text}. Check the bot's permissions in those channels.`);
     }
     // Every give-up no daily check has named yet: one the minute's scan
-    // saved just after the last check read the state is named by this one,
-    // and none twice.
+    // saved just after the last check read the state is named by this one.
+    // Only a line the channel took (or the log, by design) counts as named,
+    // so one the channel refused is named again by the next check. A
+    // damaged list of named posts is said so: some lines may be repeats.
     const all = state.gaveUp || [];
-    const shown = new Set([].concat((await readJson(kv, 'daily:named')) || []));
+    const prior = await readOwn(kv, 'daily:named', (v) => Array.isArray(v) && v.every(isText));
+    const shown = new Set(prior.value || []);
     const gaveUp = all.filter((g) => !shown.has(g.post));
+    const lineOf = (g) => `- ${g.what}: https://discord.com/channels/${env.GUILD_ID}/${g.post}`;
     if (gaveUp.length) {
-      alert.push(`In the last day the post scan gave up on these, after ${MAX_TRIES} tries, because the queue channel refused the bot, or because a saved record is damaged; a moderator can file each post by right-click:`);
-      for (const g of gaveUp) alert.push(`- ${g.what}: https://discord.com/channels/${env.GUILD_ID}/${g.post}`);
+      if (prior.damaged) alert.push('The list of give-ups already named (daily:named) was damaged, so some below may have been named before.');
+      alert.push(`The post scan gave up on these posts, after ${MAX_TRIES} tries, because the queue channel refused the bot, or because a saved record is damaged or could not be read. A moderator can file each by right-click; for one listed with a damaged or unreadable record, a bot admin first fixes or deletes that KV key (README, "Clearing a filing record").`);
+      for (const g of gaveUp) alert.push(lineOf(g));
     }
-    if (alert.length) { await postLines(alert); alerted = true; }
-    if (gaveUp.length) await kv.put('daily:named', JSON.stringify(all.map((g) => g.post)));
+    const took = new Set(alert.length ? await postLines(alert) : []);
+    if (alert.length) alerted = true;
+    if (gaveUp.some((g) => took.has(lineOf(g))) || prior.damaged) {
+      await kv.put('daily:named', JSON.stringify(all.filter((g) => shown.has(g.post) || took.has(lineOf(g))).map((g) => g.post)));
+    }
   }
 
   const tagsByForum = new Map();

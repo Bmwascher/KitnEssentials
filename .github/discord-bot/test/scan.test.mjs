@@ -467,7 +467,7 @@ test('a long daily alert goes out in whole lines under 1,900 characters, and wha
   await daily({ ...baseEnv(kv), MOD_CHANNEL_ID: '555' }, { fetch: f, now: () => T0 + 7 * 60000, log: (s) => out.push(s) });
   const posted = f.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content);
   assert.equal(posted.length, 4, 'the daily posting share');
-  assert.match(posted[0], /^In the last day the post scan gave up on these/);
+  assert.match(posted[0], /^The post scan gave up on these posts, after 30 tries/);
   const entry = /^- queue card: https:\/\/discord\.com\/channels\/1\/\d+$/;
   for (const [i, msg] of posted.entries()) {
     assert.ok(msg.length <= 1900, `message ${i}: ${msg.length} characters`);
@@ -677,6 +677,23 @@ test('a post whose record cannot be read waits, and an hour after it was made is
     assert.equal(stateOf(kv).through['900'], given ? b : undefined, why);
     assert.deepEqual((stateOf(kv).gaveUp || []).map((g) => [g.post, g.what]), given ? [[a, `unreadable record thread:${a}`]] : [], why);
   }
+});
+
+test('a daily alert the channel refused is named again by the next check, and a damaged list of named posts is said so', async () => {
+  const a = idAt(T0 + 1000);
+  const D = T0 + 24 * HOUR;
+  const kv = started(T0, { last: D, gaveUp: [{ at: D - HOUR, post: a, what: 'queue card' }] });
+  const mod = { ...baseEnv(kv), MOD_CHANNEL_ID: '555' };
+  await daily(mod, { fetch: discord({ postRefuse: { 555: 403 } }), now: () => D, log: () => {} });
+  const f = discord();
+  await daily(mod, { fetch: f, now: () => D + 60000, log: () => {} });
+  const posted = f.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content).join('\n');
+  assert.match(posted, new RegExp(`- queue card: https://discord\\.com/channels/1/${a}`), 'named once the channel takes it');
+  // A list the bot could not have written: the alert says some lines may be repeats.
+  await kv.put('daily:named', '{"x":1}');
+  const out = [];
+  await daily(baseEnv(kv), { fetch: discord(), now: () => D + 120000, log: (s) => out.push(s) });
+  assert.match(out.join('\n'), /\(daily:named\) was damaged, so some below may have been named before/);
 });
 
 
