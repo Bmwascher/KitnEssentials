@@ -1058,9 +1058,11 @@ test('the card lookup after the lock\'s release keeps to the release\'s end', as
 
 test('a card lookup after the release that fails is logged, and the record read under the lock is used', async () => {
   let gets = 0;
-  const kv = { get: async () => { if (++gets > 2) throw new Error('KV down'); return null; }, put: async () => {} };
+  // The record read under the lock names card 96; the lookup after the release fails.
+  const kv = { get: async (k) => { if (++gets > 2) throw new Error('KV down'); return k === 'thread:700' ? JSON.stringify({ card: '96' }) : null; }, put: async () => {} };
   const f = fakeFetch(discordRoutes(githubRoutes([], [
     ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
+    ['PATCH', /\/channels\/556\/messages\/96$/, () => ({})],
   ])));
   const ctx = ctxFor();
   const logged = [];
@@ -1068,6 +1070,7 @@ test('a card lookup after the release that fails is logged, and the record read 
   const [res] = await Promise.all(ctx.jobs);
   assert.equal(res.created, 17);
   assert.ok(logged.some((l) => /^card lookup failed, so the record read earlier is used: KV down$/.test(l)), logged.join('\n'));
+  assert.equal(f.find('PATCH', /\/channels\/556\/messages\/96$/).length, 1, 'the card the earlier read named is marked filed');
 });
 
 test('a message deleted before its filing files nothing and says how to file the post', async () => {
@@ -1078,8 +1081,46 @@ test('a message deleted before its filing files nothing and says how to file the
   await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst', log: () => {} });
   assert.deepEqual(await Promise.all(ctx.jobs), [{ refused: 'message' }]);
   assert.equal(f.find('POST', /\/issues$/).length, 0);
-  assert.equal(f.find('PATCH', /\/webhooks\//)[0].body.content, 'Nothing was created: the message to file was deleted. Open the post and right-click a message › Apps › Send to GitHub.');
+  assert.equal(f.find('PATCH', /\/webhooks\//)[0].body.content, 'Nothing was created: the message to file was deleted; a moderator can open the post and right-click a message › Apps › Send to GitHub.');
   assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 1, 'the lock is released');
+});
+
+test('a message deleted while the member or the template is read files nothing', async () => {
+  const PIN = { ...env, FORUM_CHANNEL_IDS: '', FORUMS: '{"900":{"client":"Retail","type":"Bug","template":"https://discord.com/channels/1/960/961"}}' };
+  for (const [why, during] of [
+    ['deleted while the reporter\'s member record is read', /\/guilds\/1\/members\/42$/],
+    ['deleted while the pinned template is read', /\/channels\/960\/messages\/961$/],
+  ]) {
+    let gone = false;
+    const f = fakeFetch(discordRoutes(githubRoutes([], [
+      ['GET', /\/channels\/700\/messages\/800$/, () => (gone
+        ? new Response('{"message":"Unknown Message"}', { status: 404 })
+        : { id: '800', content: 'My bags overlap', author: { id: '42', username: 'pat' }, attachments: [] })],
+      ['GET', during, () => { gone = true; return new Response('{"message":"x"}', { status: 404 }); }],
+      ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
+    ])));
+    const ctx = ctxFor();
+    await handle(await signed(submit()), PIN, ctx, { fetch: f, installationToken: async () => 'inst', log: () => {} });
+    assert.deepEqual(await Promise.all(ctx.jobs), [{ refused: 'message' }], why);
+    assert.equal(f.find('POST', /\/issues$/).length, 0, `${why}: nothing is created`);
+    assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /^Nothing was created: the message to file was deleted; a moderator can open the post/, why);
+    assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 1, `${why}: the lock is released`);
+  }
+});
+
+test('a filing whose post was deleted says the post was deleted, never the message', async () => {
+  let reads = 0;
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /\/channels\/700$/, () => (++reads === 1
+      ? { id: '700', parent_id: '900', name: 'x', applied_tags: [] }
+      : new Response('{"message":"Unknown Channel"}', { status: 404 }))],
+    ['GET', /\/channels\/700\/messages\/800$/, () => new Response('{"message":"Unknown Channel"}', { status: 404 })],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst', log: () => {} });
+  assert.deepEqual(await Promise.all(ctx.jobs), [{ refused: 'post' }]);
+  assert.equal(f.find('POST', /\/issues$/).length, 0);
+  assert.equal(f.find('PATCH', /\/webhooks\//)[0].body.content, 'Nothing was created: the post was deleted.');
 });
 
 test('a title of direction marks alone is empty, as the issue would get it', async () => {

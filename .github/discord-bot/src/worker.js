@@ -8,9 +8,9 @@ import {
   STATUS, MESSAGES, PERMS, buildTitle, buildBody, labelsFor, cleanPostTitle, personName, titleText,
   guessFromTags, normClient, normType, normRepoKey, parseRepos, timedFetch,
   parseForums, parseRoleIds, parseTemplates, templateCheck, templateGaps,
-  templateNote, parseCustomId, templateLabels, filedCard, cardHead,
+  templateNote, parseCustomId, templateLabels, filedCard, cardHead, BY_RIGHT_CLICK,
 } from './core.js';
-import { discordClient } from './discord.js';
+import { discordClient, postGone } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
 import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton } from './scan.js';
 
@@ -583,30 +583,46 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
       return await tracked(where, (key) => `Already tracked: ${key} #${where.number} ${existing.issue.html_url}${elsewhere}`, null);
     }
 
-    // The message may be gone since the form opened: a card cannot follow
-    // its post's first message, since the scan never edits a card.
-    let message;
-    try {
-      message = await discord.call('GET', `/channels/${threadId}/messages/${messageId}`);
-    } catch (e) {
-      if (!/ -> 404 /.test(e.message)) throw e;
-      await followup('Nothing was created: the message to file was deleted. Open the post and right-click a message › Apps › Send to GitHub.');
-      return { refused: 'message' };
-    }
-    const author = message.author || {};
+    // The filed message may be gone since the form opened: a card cannot
+    // follow its post's first message, since the scan never edits a card. It
+    // is read for its author, then read again directly before the create,
+    // whose body takes that last read, so a message deleted while the member
+    // and the template are read files nothing. A deleted post is told apart
+    // from a deleted message.
+    const readFiled = async (client) => {
+      try {
+        const found = await client.readMessage(threadId, messageId);
+        if (found) return { message: found };
+        await followup(`Nothing was created: the message to file was deleted; ${BY_RIGHT_CLICK}`);
+        return { refused: 'message' };
+      } catch (e) {
+        if (!postGone(e, threadId)) throw e;
+        await followup('Nothing was created: the post was deleted.');
+        return { refused: 'post' };
+      }
+    };
+    const first = await readFiled(discord);
+    if (first.refused) return { refused: first.refused };
+    const author = first.message.author || {};
     // A webhook's author id names no user: the issue shows its name alone.
-    const reporterId = message.webhook_id ? null : author.id;
+    const reporterId = first.message.webhook_id ? null : author.id;
+    // The create starts by `createBy`, a full call's time before the
+    // filing's deadline. The member and template reads end a lookup's time
+    // before it, so the last read of the message always fits between.
+    const createBy = t0 + budgetMs - callMs;
+    const lookupsBy = createBy - FORM_LOOKUP_MS;
     // The server nickname is a nicety: any failure files with the display
     // name. A 404 is a member who left; any other failure is logged.
     const member = reporterId
-      ? await discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, t0 + budgetMs - callMs))
+      ? await discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, lookupsBy))
         .call('GET', `/guilds/${interaction.guild_id}/members/${reporterId}`)
         .catch((e) => { if (!/ -> 404 /.test(e.message)) log(`member read failed: ${e.message.slice(0, 200)}`); return null; })
       : null;
     const by = interaction.member && interaction.member.user;
-    // The template read ends a full call's time before the filing's deadline,
-    // so the create can always start.
-    const template = await templateFields(cfg, thread.parent_id, type, env, deps, t0 + budgetMs - callMs, log);
+    const template = await templateFields(cfg, thread.parent_id, type, env, deps, lookupsBy, log);
+    const last = await readFiled(discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, createBy)));
+    if (last.refused) return { refused: last.refused };
+    const { message } = last;
     const check = template.fields.length ? templateCheck(message.content, template.fields, (message.attachments || []).length) : [];
     gaps = templateGaps(check, template.optional);
     tmplNote = template.note;
