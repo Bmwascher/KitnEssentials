@@ -166,10 +166,10 @@ label only when that time is more than an hour ago, or it shows none (an
 older version's label). A newer one may belong to a filing between its last
 search and its create, or to a create GitHub never confirmed and may still
 apply, and deleting it can let a second filing make a second issue. A filing
-ends within 30 seconds and GitHub finishes each request within seconds, so
-an hour leaves no doubt. Every reply that advises deleting a lock gives this
-rule; the reply to a lock GitHub never confirmed names the label and advises
-no deletion.
+ends within 30 seconds and GitHub times out a request after 10 seconds, so
+the hour is a wide margin past both, not a guarantee (see Known limits).
+Every reply that advises deleting a lock gives this rule; the reply to a lock
+GitHub never confirmed names the label and advises no deletion.
 
 ## Clearing a filing record
 
@@ -474,8 +474,13 @@ Accepted on purpose; each line says how you would notice it.
 - If a player deletes the message being filed in the moment its issue is
   created, the issue still quotes it; close or edit it by hand. If the first
   message is deleted in the moment its card is posted, the card still offers
-  **Send to GitHub**; pressing it files nothing and says the message was
-  deleted.
+  **Send to GitHub**. Pressing it still opens the form; sending the form
+  files nothing and says the message was deleted.
+- GitHub times out a request after 10 seconds, but its docs do not say
+  whether a create it timed out can still be applied later. The hour before
+  a lock may be deleted is a wide margin, not a guarantee: if GitHub applied
+  such a create more than an hour late, after the lock was deleted and the
+  post's next send had searched, the post would get two issues.
 
 ## Tests
 
