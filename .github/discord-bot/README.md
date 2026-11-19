@@ -23,10 +23,12 @@ neither, also when its filing record was not saved: the bot finds its own
 "now tracked" reply in the post, and it looks again just before each card,
 so a post filed after its greeting gets no card either. If the card cannot go
 out yet, the scan tries again each minute while the post is open, without
-sending the greeting again. A card goes out only to a post still open when
-it is sent. A post whose first message was deleted gets a card without the
-button, which says to open the post and right-click a message in it, since
-the form files the first message.
+sending the greeting again. A card goes out only to a post still open just
+before it is sent, and its last look at the post's messages comes directly
+before the card, so a first message deleted meanwhile is seen. A post whose
+first message was deleted gets a card without the button, which says a
+moderator can open the post and right-click a message in it: the form files
+the first message, and the right-click command is for moderators only.
 
 A card can still offer **Send to GitHub** after its post is filed (see Known
 limits). Pressing a card of a post already filed is safe: the bot first
@@ -34,8 +36,11 @@ checks whether the post is on GitHub (its saved filing record, else every
 repo in `REPOS`), answers you privately "Already tracked as KE #17" with the
 link, and marks that card filed; no form opens and no one is pinged. The form
 opens only after that check finished and found nothing. If the check cannot
-finish, you are asked to press again; if that keeps happening, right-click the
-post instead (the form's submission checks too).
+finish, you are asked to press again; if that keeps happening, a moderator
+can right-click the post instead (the form's submission checks too). The
+submission reads the message to file again just before it creates the
+issue: a message deleted meanwhile files nothing and says so, and so does a
+deleted post.
 
 After that the `Discord status` workflow keeps the post in step with its
 issue, working out the status from the issue each time rather than stepping
@@ -156,12 +161,15 @@ nothing: GitHub answers the same for an issue the app can no longer see, so
 the bot names it and says how to clear the record (below). Two filings of one
 post at the same moment, into any repos, make one issue: each takes a lock
 label, `discord-lock-<post id>`, in `LOCK_REPO`, whose description says when
-it was taken ("Send to GitHub since 2026-11-18 18:40:05 UTC"). A filing ends
-within 30 seconds, so delete a lock label only when that time is more than
-two minutes ago, or it shows none (an older version's label): a newer one may
-belong to a filing between its last search and its create, and deleting it
-can let a second filing make a second issue. Every reply that names a lock
-gives the same rule.
+it was taken ("Send to GitHub since 2026-11-18 18:40:05 UTC"). Delete a lock
+label only when that time is more than an hour ago, or it shows none (an
+older version's label). A newer one may belong to a filing between its last
+search and its create, or to a create GitHub never confirmed and may still
+apply, and deleting it can let a second filing make a second issue. A filing
+ends within 30 seconds and GitHub finishes each request within seconds, so
+an hour leaves no doubt. Every reply that advises deleting a lock gives this
+rule; the reply to a lock GitHub never confirmed names the label and advises
+no deletion.
 
 ## Clearing a filing record
 
@@ -227,10 +235,12 @@ when you deploy this version, or change `LOCK_REPO`:
    (the post id is the label's number).
    - If the issue exists, delete the label.
    - If it does not, and you know that filing failed, delete the label.
-   - If it does not, and you are not sure: when the label is already in the
-     new `LOCK_REPO`, leave it as it is; otherwise make a label of the same
-     name in the new `LOCK_REPO` (once, when old repos hold the same name),
-     then delete the old one.
+   - If it does not, and you are not sure, keep it in force with the
+     description `Send to GitHub since <the current UTC time> UTC`, so the
+     hour before it may be deleted counts from now: when the label is already
+     in the new `LOCK_REPO`, edit its description; otherwise make a label of
+     the same name with that description in the new `LOCK_REPO` (once, when
+     old repos hold the same name), then delete the old one.
 6. Tell everyone they can file again.
 
 ## Templates
@@ -286,17 +296,18 @@ Accepted on purpose; each line says how you would notice it.
 - A queue card can stay live on a filed post, or a post can get two cards:
   two overlapping scans, a card send whose answer was lost and that has since
   scrolled past the queue channel's last 100 messages, a card posted while
-  its post was being filed, a post archived in the moment between the scan's
-  last read of it and its card, or a failed card edit. Nothing lists such
+  its post was being filed, a post archived, locked or deleted in the moment
+  between the scan's read of it and its card, or a failed card edit. Nothing
+  lists such
   cards. Once the post is filed, pressing one answers "Already tracked" and
   marks that card filed, and a form it opened earlier files nothing. While
   the post is not yet filed, both cards offer the form; filing from one marks
   only that one, and the other is marked when someone presses it.
 - A queue card for a post that never needs an issue stays in the queue
   channel until someone deletes it.
-- If presses keep answering "press again" (GitHub slow or failing), right-click
-  the post instead: it opens the form with no check, and the form's submission
-  checks.
+- If presses keep answering "press again" (GitHub slow or failing), a
+  moderator can right-click the post instead: it opens the form with no
+  check, and the form's submission checks.
 - A post scanned while the queue channel refuses the bot (it was not let into
   the channel yet) gets no card, even after the permission is fixed. The next
   daily alert names each such post, and moderators file it by right-click.
@@ -305,7 +316,7 @@ Accepted on purpose; each line says how you would notice it.
   lists posts older than `STALE_DAYS` (3 by default) with no status or
   `Answered` tag, leaves out locked posts, reads archived posts from the last
   30 days only (up to 300 per forum), and names about 20 posts at most.
-  Right-click filing always works.
+  A moderator's right-click filing always works.
 - A post whose greeting and card keep failing for 30 tries in all is given up
   on: before the greeting is out, it gets neither; after, it keeps its
   greeting and gets no card. The next daily alert names every post given up
@@ -421,8 +432,8 @@ Accepted on purpose; each line says how you would notice it.
 - If the scan gives up on a post and then fails to save its own state, it
   names that post again only when it next visits it. A post archived, locked
   or deleted in that minute is not visited, so the daily alert misses it; an
-  archived one still reaches the daily list of waiting posts after
-  `STALE_DAYS`.
+  archived one can still reach the daily list of waiting posts after
+  `STALE_DAYS`, within that list's limits (above).
 - If the daily alert went out but saving which posts it named then fails,
   the next daily alert names those posts again.
 - A post the scan keeps failing on holds back its progress for up to 30 runs
@@ -433,6 +444,38 @@ Accepted on purpose; each line says how you would notice it.
   read the same old lock's time and both delete it, one after the other, the
   second can delete a new lock a filing took in the seconds between, and two
   filings can then make two issues.
+- Some saved values the bot could not have written still pass its checks: a
+  scan record's `greeting`, `card` or `tracked` that is text but no message
+  id (such a `tracked` counts the post as filed), a `daily:named` entry that
+  is text but no post id, a filing record's `by` that is not text (a card can
+  then read "by true"), a `scan:since` of `Infinity` (the scan then reads no
+  post while it keeps running), or a scan error time far in the future (the
+  daily check then stops before its alert). A damaged `daily:named` on a day
+  with no give-ups is replaced without a word. Writing back a damaged scan
+  record with only its `greeting`, `buttonless` and `card` (above) drops an
+  older record's `issue`, so a later filing finds that issue only by its
+  hidden line.
+- The daily alert's count of give-ups is not exact. A give-up saved just
+  after a daily check, whose first alert the moderator channel refuses, can
+  expire (after two days) before the check that would name it again. An
+  alert Discord took but whose answer was lost is sent again the next day. A
+  post whose greeting went out but whose record could not be saved on its
+  30th try, with a queue channel set, is named as a given-up queue card
+  though no card was tried. If `daily:named` cannot be read, that day's
+  alert, scan warning and list of waiting posts are not sent.
+- A new post's visit can use one of the record reads the scan keeps for older
+  posts' cards, so the eighth older card can wait a run. Cards already in the
+  queue channel whose record writes keep failing take the scan's card slots
+  every run until a write works, and newer posts' cards wait meanwhile.
+- A status tag staff rename to a name of their own while the bot reads the
+  post just before a status write is still read under its old name, so
+  writing Triaged can drop it. Like a tag added in the moment before a write
+  (above), the window is one request long.
+- If a player deletes the message being filed in the moment its issue is
+  created, the issue still quotes it; close or edit it by hand. If the first
+  message is deleted in the moment its card is posted, the card still offers
+  **Send to GitHub**; pressing it files nothing and says the message was
+  deleted.
 
 ## Tests
 
