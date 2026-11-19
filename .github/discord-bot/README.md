@@ -16,14 +16,17 @@ post's card is marked filed too. A greeting from an earlier version that still
 shows its own button keeps working; once the reply exists, the bot deletes it,
 or removes its button if it may not delete it.
 
-The greeting and the card go out in the same scan, new posts first. A post
-filed before the scan reaches it (by right-click, say) gets neither, also when
-its filing record was not saved: the bot finds its own "now tracked" reply in
-the post. If the card cannot go out yet, the scan tries again each minute
-while the post is open, without sending the greeting again. A card goes out
-only to a post still open when it is sent. A post whose first message was
-deleted gets a card without the button, which says to open the post and
-right-click a message in it, since the form files the first message.
+The greeting and the card go out in the same scan: new posts are greeted
+first, then cards still owed by older posts go out, then the new posts'
+cards. A post filed before the scan reaches it (by right-click, say) gets
+neither, also when its filing record was not saved: the bot finds its own
+"now tracked" reply in the post, and it looks again before each card, so a
+post filed after its greeting gets no card either. If the card cannot go
+out yet, the scan tries again each minute while the post is open, without
+sending the greeting again. A card goes out only to a post still open when
+it is sent. A post whose first message was deleted gets a card without the
+button, which says to open the post and right-click a message in it, since
+the form files the first message.
 
 A card can still offer **Send to GitHub** after its post is filed (see Known
 limits). Pressing a card of a post already filed is safe: the bot first
@@ -54,7 +57,11 @@ their notifications are set to only @mentions. An issue filed before this
 version replies to the post's first message, with a ping, only when that
 message is the reporter's; otherwise the message goes out with no reply and no
 ping. If Discord refuses the reply, the message goes out once as a plain
-message, and the run's log says so. A message whose note was written before
+message, with no ping, and the log says so: the workflow run's for a status
+message, the Worker's for "now tracked". If Discord refuses "now tracked"
+in any other way, the bot turns its greeting in the post into that note
+instead, and the moderator's reply says when the note was not sent, or may
+not have been. A message whose note was written before
 this version goes out in that note's own words. The issue's first workflow
 run, about a minute after filing, sets the status GitHub calls for when the
 bot could not.
@@ -118,7 +125,8 @@ that fails 30 runs in a row (about 30 minutes) is given up on.
 
 Two halves, no always-on server:
 
-- `src/` is a **Cloudflare Worker** (free tier): it answers the button, the
+- `src/` is a **Cloudflare Worker** (free plan, or Workers Paid for repos
+  with thousands of bot issues, see Known limits): it answers the button, the
   right-click command and the form, and runs the post scan and the daily check
   on cron triggers.
 - `status/status.mjs` runs in **GitHub Actions** (`.github/workflows/discord-status.yml`).
@@ -161,9 +169,12 @@ ids, so nothing is posted twice:
    back without that field, keeping every other field as it was:
    `npx wrangler@3 kv key put --binding=STATE "thread:<post id>" '<the record without "issue">'`
 
-A record the bot calls damaged (empty, or not JSON) holds nothing to keep:
-delete the key it names, `issue:<post id>` as in step 1 or `thread:<post id>`
-the same way. Deleting `thread:<post id>` loses the card's id, so a later
+A record the bot calls damaged (empty, not JSON, or not a record the bot
+writes, such as a filing record with no repo or issue number) holds nothing
+to keep: delete the key it names, `issue:<post id>` as in step 1 or
+`thread:<post id>` the same way. The post scan never writes over a damaged
+record: it gives that post no greeting and no card, and the next daily
+alert names it. Deleting `thread:<post id>` loses the card's id, so a later
 filing by right-click leaves that card live; press it once to mark it filed.
 
 ## Changing the lock repo
@@ -269,11 +280,11 @@ Accepted on purpose; each line says how you would notice it.
 - A post whose greeting and card keep failing for 30 tries in all is given up
   on: before the greeting is out, it gets neither; after, it keeps its
   greeting and gets no card. The next daily alert names every post given up
-  on that day, with its link, and moderators file it by right-click. On a
-  day with more than about 80 of them, the alert fills the daily check's
-  four messages, so that day's list of waiting posts goes to the Worker's
-  log instead of the moderator channel; past about 110, so does the alert's
-  last part.
+  on since the last one, with its link, and moderators file it by
+  right-click. With more than about 65 of them, the alert fills the daily
+  check's four messages, so that day's list of waiting posts goes to the
+  Worker's log instead of the moderator channel; past about 85, so does the
+  alert's last part.
 - If the bot's greeting went out but its id was not saved, the next scan looks
   for it among the post's last 100 messages; a post busier than that can get
   a second greeting. The same look finds the bot's "now tracked" reply, so a
@@ -356,13 +367,27 @@ Accepted on purpose; each line says how you would notice it.
 - A post can be filed a second time when its filing record was never saved
   (the moderator was told "post record not saved") or was deleted, and its
   issue was then moved to a repo outside `REPOS` or lost its `from-discord`
-  label: the bot's search sees neither.
+  label: the bot's search sees neither. For about a minute after a filing,
+  its saved record may not yet be seen everywhere, so the same holds when
+  the issue loses its `from-discord` label in that minute and the post is
+  sent again.
 - With no saved filing record, the bot searches every configured repo twice
   before filing. An issue moved between two configured repos while it
   searches can still be missed, and a second issue made. So can one in a repo
   with more than 100 issues labeled `from-discord`, when labels change during
   both searches and its place in GitHub's issue list shifts between two pages
   each time. Each search takes a second or two.
+- On Workers' free plan a run may make 50 outgoing calls. A filing whose
+  repos together hold more than about 2,000 `from-discord` issues updated
+  since the post was made can use them all before it answers the moderator
+  and releases its lock: the moderator may see no result, and until the
+  lock label is cleared the post's next send says another send is running.
+  Repos that large need Workers Paid.
+- A queue card still owed looks for the bot's "now tracked" reply among the
+  post's last 100 messages. A post filed after its greeting, whose filing
+  record was not saved (or not yet seen) and whose reply is further back
+  than that, can still get a card; pressing it answers "Already tracked" and
+  marks it filed.
 
 ## Tests
 
