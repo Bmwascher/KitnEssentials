@@ -585,6 +585,66 @@ test('a damaged scan state is rebuilt and said so, never read as no state', asyn
   }
 });
 
+test('a new post\'s card makes its own look just before it goes out, so a filing or a deleted first message since its greeting is seen', async () => {
+  const a = idAt(T0 + 1000);
+  const starter = { id: a, author: { id: '42', username: 'kira_99' } };
+  const receipt = { id: 'r1', author: { id: 'b', bot: true }, content: MESSAGES.tracked('ONE', 3) };
+  const hundred = Array.from({ length: 100 }, (_, i) => ({ id: `x${i}` }));
+  for (const [why, later, said, button] of [
+    ['filed by right-click after its greeting, in the same pass', [receipt, starter], {}, null],
+    ['its first message deleted after its greeting', [], {}, false],
+    ['a busy post whose first message was deleted', hundred, {}, false],
+    ['a busy post whose first message is further back', hundred, { [a]: [starter] }, true],
+  ]) {
+    const kv = started(T0);
+    const base = discord({ active: [{ id: a, parent_id: '900', name: 'x' }], said });
+    let looks = 0;
+    // The greeting's look sees the post as it was; the card's sees it now.
+    const fetch = (url, init = {}) => ((init.method || 'GET') === 'GET' && url.includes(`/channels/${a}/messages?`)
+      ? Promise.resolve(new Response(JSON.stringify(++looks === 1 ? [starter] : later)))
+      : base(url, init));
+    await scan(withQueue(kv), { fetch, now: () => T0 + 5 * 60000, log: () => {} });
+    const [card] = base.find('POST', /\/channels\/556\/messages$/);
+    if (button === null) {
+      assert.equal(card, undefined, `${why}: no card`);
+      assert.equal(JSON.parse(kv.m.get(`thread:${a}`)).tracked, 'r1', why);
+      continue;
+    }
+    assert.equal(card.body.components[0].components.some((b) => b.custom_id === `send:${a}`), button, `${why}: the send button`);
+  }
+});
+
+test('a card or a receipt whose record write fails is no give-up, even at the last try', async () => {
+  const a = idAt(T0 + 1000);
+  const receipt = { id: 'r1', author: { id: 'b', bot: true }, content: MESSAGES.tracked('ONE', 3) };
+  for (const [why, rec, said] of [
+    ['the card went out', { greeting: 'g1', buttonless: true, tries: 29 }, {}],
+    ['the receipt was found', { tries: 29 }, { [a]: [receipt] }],
+  ]) {
+    const kv = started(T0);
+    await kv.put(`thread:${a}`, JSON.stringify(rec));
+    const put = kv.put;
+    let fail = 1;
+    kv.put = async (k, v) => { if (k === `thread:${a}` && fail-- > 0) throw new Error('KV PUT failed: 500'); return put(k, v); };
+    const f = discord({ active: [{ id: a, parent_id: '900', name: 'x' }], said });
+    await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+    assert.equal(stateOf(kv).gaveUp, undefined, `${why}: not named as given up`);
+    const after = JSON.parse(kv.m.get(`thread:${a}`));
+    assert.deepEqual([after.skipped, after.cardSkipped, after.gaveUp], [undefined, undefined, undefined], why);
+  }
+});
+
+test('a card retry finds the receipt before it reads the queue channel, so a refusing queue channel costs a filed post nothing', async () => {
+  const a = idAt(T0 + 1000);
+  const kv = started(T0, { greeted: { 900: a } });
+  await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g1', buttonless: true, tries: 1 }));
+  const receipt = { id: 'r1', author: { id: 'b', bot: true }, content: MESSAGES.tracked('ONE', 3) };
+  const f = discord({ active: [{ id: a, parent_id: '900', name: 'x' }], said: { [a]: [receipt] }, refuse: { 556: 403 } });
+  await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+  assert.equal(JSON.parse(kv.m.get(`thread:${a}`)).tracked, 'r1');
+  assert.equal(stateOf(kv).gaveUp, undefined, 'not named as given up');
+});
+
 
 
 test('posts already handled are not read from KV again', async () => {

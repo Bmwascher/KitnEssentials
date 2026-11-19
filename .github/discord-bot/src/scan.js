@@ -40,9 +40,9 @@ import { discordClient } from './discord.js';
 export { SEND_BUTTON };
 // Workers' free plan allows 50 outgoing calls per run. A greeting costs two
 // (a look at the post's last messages, then the send) and a queue card three
-// (that look, unless the greeting made it in the same pass, the post as it
-// is now, then the card; a post busier than 100 messages takes one more,
-// for its first message, and waits when the card share is spent).
+// (its own look, made just before it, the post as it is now, then the card;
+// a post busier than 100 messages takes one more, for its first message,
+// and waits when the card share is spent).
 // Greetings, cards and the scan's own reads (the active posts, the bot's id,
 // the queue channel) each have their own client, so cards can never use up
 // what the greetings need. The daily check's forum reads keep their own share.
@@ -272,23 +272,25 @@ export async function scan(env, deps = {}) {
     // channel the bot was never let into) is reported, not just skipped.
     const atQueue = (p) => p.catch((err) => { throw Object.assign(err, { queue: true }); });
     const queueRead = () => (queued = queued || atQueue(discord.call('GET', `/channels/${queue}/messages?limit=100`)).then((m) => m || []));
-    // The post's queue card: the bot's own card already there, else a new
-    // one. The post's last 100 messages come first (the look its greeting
-    // made in this pass, else a new one): the bot's "now tracked" reply
-    // there means the post was filed, so it gets no card, and the post's
-    // first message is found there, or read on its own in a busier post.
-    // The post itself is read last, just before the card goes out, since the
-    // active list was read at the start of the run: one deleted since (a
-    // 404, a refusal), archived, locked or moved out of the configured
-    // forums gets no card. A post whose first message is gone gets a card
-    // with no send button, since the form files that message.
-    const cardFor = async (t, seen) => {
+    // The post's queue card. Its own look at the post's last 100 messages
+    // comes first, made now even when the greeting looked earlier in this
+    // pass, since other posts' work runs between the two: the bot's "now
+    // tracked" reply there means the post was filed, so it gets no card,
+    // whatever the queue channel would answer, and the post's first message
+    // is found there, or read on its own in a busier post. Then the bot's own
+    // card already in the queue channel, else a new one. The post itself is
+    // read last, just before the card goes out, since the active list was
+    // read at the start of the run: one deleted since (a 404, a refusal),
+    // archived, locked or moved out of the configured forums gets no card.
+    // A post whose first message is gone gets a card with no send button,
+    // since the form files that message.
+    const cardFor = async (t) => {
+      const look = await lookIn(carder, t.id, myId);
+      if (look.receipt) return { tracked: look.receipt };
       const msgs = await queueRead();
       const mine = msgs.length ? await myId() : null;
       const had = msgs.find((m) => isCardFor(m, t.id, mine, env.GUILD_ID));
       if (had) return { card: had.id };
-      const look = seen || await lookIn(carder, t.id, myId);
-      if (look.receipt) return { tracked: look.receipt };
       let starter = look.starter;
       if (!starter && look.full) {
         try {
@@ -378,6 +380,15 @@ export async function scan(env, deps = {}) {
         return { greeted: greetedNow, finished: false };
       }
       const what = greetedNow ? `queue card for post ${t.id}` : `post ${t.id}`;
+      // The work went out (a card, a receipt found, a greeting with no queue
+      // channel) and only its record's write failed: nothing was given up,
+      // no try is spent, and the next pass finds it again by its looks.
+      if (finished(rec, queue)) {
+        log(`${what}: its record was not saved: ${err.message}`);
+        errors.push(`the record of ${what}`);
+        left++;
+        return { greeted: true, finished: false };
+      }
       const tries = (rec.tries || 0) + 1;
       const giveUp = !!err.damaged || refused(err) || tries >= MAX_TRIES;
       // A refusal by the post itself (deleted, closed to the bot) is that
@@ -407,8 +418,7 @@ export async function scan(env, deps = {}) {
     };
     // One post's greeting step. It never throws, so one post's failure stays
     // with it. `greeted`: the greeting is settled; `finished`: nothing is
-    // left to do; `owes`: the card is still to try, with the look at the
-    // post its greeting made, if any.
+    // left to do; `owes`: the card is still to try.
     const greet = async (t) => {
       let rec = null;
       let seen = null;
@@ -441,18 +451,18 @@ export async function scan(env, deps = {}) {
           await putRecord(t.id, rec);
         }
         if (finished(rec, queue)) return { greeted: true, finished: true };
-        return { greeted: true, finished: false, owes: { t, rec, seen } };
+        return { greeted: true, finished: false, owes: { t, rec } };
       } catch (err) {
         return failed(t, rec, err);
       }
     };
     // A post's card, once its greeting is settled, within this run's card
     // share. It never throws either.
-    const card = async ({ t, rec, seen }) => {
+    const card = async ({ t, rec }) => {
       if (carded >= MAX_CARDS) { left++; return { greeted: true, finished: false }; }
       carded++;
       try {
-        rec = { ...rec, ...(await cardFor(t, seen)) };
+        rec = { ...rec, ...(await cardFor(t)) };
         await putRecord(t.id, rec);
         return { greeted: true, finished: true };
       } catch (err) {
