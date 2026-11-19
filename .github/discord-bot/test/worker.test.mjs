@@ -933,6 +933,7 @@ test('one post, one issue: the saved record, then every configured repo, is chec
     ['the filing record is JSON null', { 'issue:700': 'null' }, live, inst, list([]), { refused: 'record' }, /^Nothing was created: this post's saved record is damaged \(issue:700\)/, undefined],
     ['the filing record names no issue', { 'issue:700': '{}' }, live, inst, list([]), { refused: 'record' }, /^Nothing was created: this post's saved record is damaged \(issue:700\)/, undefined],
     ['the scan\'s record is not a record', { 'thread:700': '[]' }, live, inst, list([]), { refused: 'record' }, /^Nothing was created: this post's saved record is damaged \(thread:700\)/, undefined],
+    ['the filing record\'s repo is not owner/name', { 'issue:700': JSON.stringify({ repo: '/', number: 3 }) }, live, inst, list([]), { refused: 'record' }, /^Nothing was created: this post's saved record is damaged \(issue:700\)/, undefined],
     ['the same repo, deleted (410): the search runs and files', legacy('me/test-one', 17), status(410), inst, list([]), { created: 17, notes: [] }, /^Created ONE #17/, made],
     // Where the issue is now decides the advice, not where the record saw it.
     ['moved out of the chosen repo: the transfer advice', legacy('me/test-one', 17), moved, inst, list([]), { duplicate: 31, repo: 'me/test-three' },

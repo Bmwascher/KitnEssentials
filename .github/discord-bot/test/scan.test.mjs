@@ -485,6 +485,10 @@ test('a damaged record is never taken for no record or for a filing, nor written
     ['the scan\'s record is not a record', 'thread', '[]'],
     ['the filing record is JSON null', 'issue', 'null'],
     ['the filing record names no issue', 'issue', '{}'],
+    // Valid JSON whose fields the bot could not have written.
+    ['the scan\'s record marks a filing with no reply id', 'thread', '{"tracked":true}'],
+    ['the scan\'s record counts its tries in text', 'thread', '{"greeting":"g","tries":"5"}'],
+    ['the filing record\'s repo is not owner/name', 'issue', '{"repo":"/","number":3}'],
   ]) {
     const a = idAt(T0 + 1000);
     const kv = started(T0);
@@ -551,6 +555,34 @@ test('a give-up saved just after a daily check read the state is named by the ne
   assert.match(out.join('\n'), new RegExp(`/channels/1/${early}`));
   assert.match(next.join('\n'), new RegExp(`- queue card: https://discord\\.com/channels/1/${late}`), 'named by the next check');
   assert.doesNotMatch(next.join('\n'), new RegExp(`/channels/1/${early}`), 'named once');
+});
+
+test('a damaged start time is never a first run: nothing is reset, no post is passed over, and the daily check says why', async () => {
+  const kv = fakeKv({ 'scan:since': 'broken', 'scan:state': JSON.stringify({ last: T0 }) });
+  const a = idAt(T0 + 1000);
+  const f = discord({ active: [{ id: a, parent_id: '900' }] });
+  await scan(baseEnv(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} }).catch(() => {});
+  assert.equal(kv.m.get('scan:since'), 'broken', 'left for a bot admin');
+  assert.deepEqual(sends(f), []);
+  const out = [];
+  await daily(baseEnv(kv), { fetch: discord(), now: () => T0 + 6 * 60000, log: (s) => out.push(s) });
+  assert.match(out.join('\n'), /scan:since \(its saved value is damaged/);
+});
+
+test('a damaged scan state is rebuilt and said so, never read as no state', async () => {
+  for (const value of ['{"through"', '{"gaveUp":5}', '{"through":{"900":"abc"}}']) {
+    const kv = fakeKv({ 'scan:since': String(T0), 'scan:state': value });
+    const a = idAt(T0 + 1000);
+    const f = discord({ active: [{ id: a, parent_id: '900' }] });
+    await scan(baseEnv(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+    assert.deepEqual(sends(f), [a], `${value}: the scan still greets`);
+    assert.match(stateOf(kv).error.text, /scan:state \(its saved value was damaged and is rebuilt/, value);
+    await kv.put('scan:state', value);
+    const out = [];
+    await daily(baseEnv(kv), { fetch: discord(), now: () => T0 + 6 * 60000, log: (s) => out.push(s) });
+    assert.match(out.join('\n'), /saved state \(scan:state\) is damaged/, value);
+    assert.doesNotMatch(out.join('\n'), /has not run/, value);
+  }
 });
 
 
