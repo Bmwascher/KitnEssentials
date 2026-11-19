@@ -606,11 +606,10 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     const author = first.message.author || {};
     // A webhook's author id names no user: the issue shows its name alone.
     const reporterId = first.message.webhook_id ? null : author.id;
-    // The create starts by `createBy`, a full call's time before the
-    // filing's deadline. The member and template reads end a lookup's time
-    // before it, so the last read of the message always fits between.
-    const createBy = t0 + budgetMs - callMs;
-    const lookupsBy = createBy - FORM_LOOKUP_MS;
+    // The member and template reads are optional, so they end a full call's
+    // time before the filing's deadline. The last read of the message and
+    // the create must both run: they share what is left, in that order.
+    const lookupsBy = t0 + budgetMs - callMs;
     // The server nickname is a nicety: any failure files with the display
     // name. A 404 is a member who left; any other failure is logged.
     const member = reporterId
@@ -620,7 +619,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
       : null;
     const by = interaction.member && interaction.member.user;
     const template = await templateFields(cfg, thread.parent_id, type, env, deps, lookupsBy, log);
-    const last = await readFiled(discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, createBy)));
+    const last = await readFiled(discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, t0 + budgetMs)));
     if (last.refused) return { refused: last.refused };
     const { message } = last;
     const check = template.fields.length ? templateCheck(message.content, template.fields, (message.attachments || []).length) : [];

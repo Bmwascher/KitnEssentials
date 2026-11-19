@@ -857,15 +857,17 @@ test('the template check reads the forum\'s pinned template, and falls back to t
   }
 });
 
-test('a stalled pinned-template read near the deadline still leaves the create its full call time', async () => {
+test('a stalled pinned-template read ends a full call\'s time before the deadline, and the last read and the create still run', async () => {
   const PIN = { ...env, FORUM_CHANNEL_IDS: '', FORUMS: '{"900":{"client":"Retail","type":"Bug","template":"https://discord.com/channels/1/960/961"}}' };
   const base = fakeFetch(discordRoutes(githubRoutes([], [
     ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u' })],
   ])));
-  const hang = (url, init = {}) => (/\/channels\/960\/messages\/961$/.test(url) ? stall(init) : base(url, init));
+  let aborted = 0;
+  const hang = (url, init = {}) => (/\/channels\/960\/messages\/961$/.test(url) ? stall(init, () => { aborted++; }) : base(url, init));
   const ctx = ctxFor();
   await handle(await signed(submit()), PIN, ctx, { fetch: hang, installationToken: async () => 'inst', log: () => {}, callMs: 100, budgetMs: 300 });
   const [res] = await Promise.all(ctx.jobs);
+  assert.equal(aborted, 1, 'the template read started and was ended by its time limit');
   assert.equal(res.created, 17, JSON.stringify(res));
   assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /the template message could not be read just now, so the default fields were checked/);
 });
@@ -1121,6 +1123,28 @@ test('a filing whose post was deleted says the post was deleted, never the messa
   assert.deepEqual(await Promise.all(ctx.jobs), [{ refused: 'post' }]);
   assert.equal(f.find('POST', /\/issues$/).length, 0);
   assert.equal(f.find('PATCH', /\/webhooks\//)[0].body.content, 'Nothing was created: the post was deleted.');
+});
+
+test('a filing whose searches end late still reads its message last and creates the issue', async () => {
+  const clock = shiftClock();
+  try {
+    const base = fakeFetch(discordRoutes(githubRoutes([], [
+      ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
+    ])));
+    // The searches and the first read of the message end at second eight of fifteen.
+    let shifted = false;
+    const late = (url, init = {}) => {
+      const res = base(url, init);
+      if (!shifted && /\/channels\/700\/messages\/800$/.test(url)) { shifted = true; clock.at(8000); }
+      return res;
+    };
+    const ctx = ctxFor();
+    await handle(await signed(submit()), env, ctx, { fetch: late, installationToken: async () => 'inst', log: () => {} });
+    const [res] = await Promise.all(ctx.jobs);
+    assert.equal(res.created, 17, JSON.stringify(res));
+    assert.equal(base.find('GET', /\/channels\/700\/messages\/800$/).length, 2, 'the message is read again just before the create');
+    assert.equal(base.find('GET', /\/guilds\/1\/members\//).length, 0, 'the optional member read is skipped');
+  } finally { clock.restore(); }
 });
 
 test('a title of direction marks alone is empty, as the issue would get it', async () => {
