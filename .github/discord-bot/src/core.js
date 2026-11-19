@@ -63,8 +63,12 @@ export function normRepoKey(s, repos) {
 // so control and direction marks go, as in names.
 export function buildTitle({ repoKey, client, module, title }) {
   const mod = oneLine(module).trim() || 'General';
-  return `[${repoKey}][${client}][${mod}] ${oneLine(title).trim()}`;
+  return `[${repoKey}][${client}][${mod}] ${titleText(title)}`;
 }
+
+// The title as the issue gets it. The form's check uses it too, so a title
+// of direction marks alone is empty.
+export const titleText = (title) => oneLine(title).trim();
 
 // Forum post name minus any [..] prefixes a player typed, for pre-filling the form.
 export function cleanPostTitle(name) {

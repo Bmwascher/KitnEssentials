@@ -1049,10 +1049,42 @@ test('the card lookup after the lock\'s release keeps to the release\'s end', as
       ['DELETE', /api\.github\.com\/repos\/me\/test-one\/labels\/discord-lock-700$/, () => { clock.at(29500); return null; }],
     ])));
     const ctx = ctxFor();
-    const started = performance.now();
     await handle(await signed(submit()), { ...QUEUE, STATE: kv }, ctx, { fetch: f, installationToken: async () => 'inst', log: () => {} });
     const [res] = await Promise.all(ctx.jobs);
     assert.equal(res.created, 17);
-    assert.ok(performance.now() - started < 1000, 'no lookup starts past the release\'s end');
+    assert.equal(gets, 2, 'no lookup starts past the release\'s end');
   } finally { clock.restore(); }
+});
+
+test('a card lookup after the release that fails is logged, and the record read under the lock is used', async () => {
+  let gets = 0;
+  const kv = { get: async () => { if (++gets > 2) throw new Error('KV down'); return null; }, put: async () => {} };
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
+  ])));
+  const ctx = ctxFor();
+  const logged = [];
+  await handle(await signed(submit()), { ...QUEUE, STATE: kv }, ctx, { fetch: f, installationToken: async () => 'inst', log: (s) => logged.push(s) });
+  const [res] = await Promise.all(ctx.jobs);
+  assert.equal(res.created, 17);
+  assert.ok(logged.some((l) => /^card lookup failed, so the record read earlier is used: KV down$/.test(l)), logged.join('\n'));
+});
+
+test('a message deleted before its filing files nothing and says how to file the post', async () => {
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /\/channels\/700\/messages\/800$/, () => new Response('{"message":"Unknown Message"}', { status: 404 })],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst', log: () => {} });
+  assert.deepEqual(await Promise.all(ctx.jobs), [{ refused: 'message' }]);
+  assert.equal(f.find('POST', /\/issues$/).length, 0);
+  assert.equal(f.find('PATCH', /\/webhooks\//)[0].body.content, 'Nothing was created: the message to file was deleted. Open the post and right-click a message › Apps › Send to GitHub.');
+  assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 1, 'the lock is released');
+});
+
+test('a title of direction marks alone is empty, as the issue would get it', async () => {
+  const ctx = ctxFor();
+  const r = await handle(await signed(submit({ title: '\u200f\u202e' })), env, ctx, { fetch: fakeFetch([]) });
+  assert.match((await r.json()).data.content, /Title is empty\./);
+  assert.equal(ctx.jobs.length, 0);
 });

@@ -5,7 +5,7 @@
 // filed answers "Already tracked" instead of opening the form. Submitting the
 // form files the issue and replies to the filed message in the post.
 import {
-  STATUS, MESSAGES, PERMS, buildTitle, buildBody, labelsFor, cleanPostTitle, personName,
+  STATUS, MESSAGES, PERMS, buildTitle, buildBody, labelsFor, cleanPostTitle, personName, titleText,
   guessFromTags, normClient, normType, normRepoKey, parseRepos, timedFetch,
   parseForums, parseRoleIds, parseTemplates, templateCheck, templateGaps,
   templateNote, parseCustomId, templateLabels, filedCard, cardHead,
@@ -583,7 +583,16 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
       return await tracked(where, (key) => `Already tracked: ${key} #${where.number} ${existing.issue.html_url}${elsewhere}`, null);
     }
 
-    const message = await discord.call('GET', `/channels/${threadId}/messages/${messageId}`);
+    // The message may be gone since the form opened: a card cannot follow
+    // its post's first message, since the scan never edits a card.
+    let message;
+    try {
+      message = await discord.call('GET', `/channels/${threadId}/messages/${messageId}`);
+    } catch (e) {
+      if (!/ -> 404 /.test(e.message)) throw e;
+      await followup('Nothing was created: the message to file was deleted. Open the post and right-click a message › Apps › Send to GitHub.');
+      return { refused: 'message' };
+    }
     const author = message.author || {};
     // A webhook's author id names no user: the issue shows its name alone.
     const reporterId = message.webhook_id ? null : author.id;
@@ -681,7 +690,8 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     if (cardAfter && cfg.queue) {
       const kvLeft = Math.min(kvMs, t0 + RELEASE_BY_MS - Date.now());
       const latest = cardAfter.cardId ? null
-        : kvLeft > 0 ? await within(kvLeft, readStrict(env.STATE, `thread:${threadId}`)).catch(() => rec) : rec;
+        : kvLeft > 0 ? await within(kvLeft, readStrict(env.STATE, `thread:${threadId}`))
+          .catch((e) => { log(`card lookup failed, so the record read earlier is used: ${e.message.slice(0, 200)}`); return rec; }) : rec;
       await markCard(discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, TAIL_MS, t0 + RELEASE_BY_MS)), cfg, log, {
         ...cardAfter, cardId: cardAfter.cardId || cardOf(latest), guildId: interaction.guild_id, postId: threadId,
       });
@@ -739,7 +749,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     if (!normRepoKey(v.repo, cfg.repos)) problems.push(`Repo must be ${Object.keys(cfg.repos).join(' or ')}.`);
     if (!normClient(v.client)) problems.push('Client must be Retail, Forever or All.');
     if (!normType(v.type)) problems.push('Type must be Bug or Feature.');
-    if (!String(v.title || '').trim()) problems.push('Title is empty.');
+    if (!titleText(v.title)) problems.push('Title is empty.');
     if (problems.length) return reply(`Nothing was created. ${problems.join(' ')} Press the button or right-click the post to try again.`);
 
     ctx.waitUntil(fileIssue(interaction, env, deps, t0));
