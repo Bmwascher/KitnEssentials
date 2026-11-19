@@ -30,3 +30,9 @@ test('the marker search reads only issues updated since shortly before the post 
   // the list does not grow with every issue ever filed.
   assert.ok(since <= made && since > made - 24 * 60 * 60 * 1000, `since ${new Date(since).toISOString()}`);
 });
+
+test('a lock label says exactly when it was taken', async () => {
+  const f = fakeFetch([['POST', /\/labels$/, () => new Response('{}', { status: 201 })]]);
+  assert.equal(await githubClient('t', f).claimThread('me/r', '700', Date.UTC(2026, 10, 18, 18, 40, 5)), true);
+  assert.equal(f.calls[0].body.description, 'Send to GitHub since 2026-11-18 18:40:05 UTC');
+});

@@ -338,8 +338,8 @@ test('a create that got no answer is reported as maybe created, not as nothing',
   const told = base.find('PATCH', /\/webhooks\//)[0].body.content;
   assert.match(told, /may have been created/);
   assert.doesNotMatch(told, /Nothing was created/);
-  // The advice frees only a lock no send can still hold.
-  assert.match(told, /delete the label discord-lock-700 in me\/test-one, but only if the time in its description is more than two minutes ago or it shows no time: a send ends within 30 seconds, so no send still holds that lock\. Then send the post again\.$/);
+  // The lock stays, and the advice frees it only once no create it sent can still land.
+  assert.match(told, /The lock discord-lock-700 in me\/test-one stays, so this post cannot be filed twice meanwhile\. If no issue for this post appears in me\/test-one, delete the label discord-lock-700 in me\/test-one, but only if the time in its description is more than an hour ago or it shows no time: a send ends within 30 seconds and GitHub finishes each request within seconds, so by then no send holds that lock and no issue it asked for can still appear\. Then send the post again\.$/);
   assert.equal(base.find('DELETE', /labels\/discord-lock-700$/).length, 0, 'the lock stays until the outcome is known');
 });
 
@@ -997,10 +997,10 @@ test('one lock per post: a filing into the second repo takes its lock in LOCK_RE
     assert.match(f.find('POST', /test-one\/labels$/)[0].body.description, /^Send to GitHub since \d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC$/, `${why}: the lock says when it was taken`);
     assert.equal(f.find('DELETE', /test-one\/labels\/discord-lock-700$/).length, held ? 0 : 1, `${why}: released where it was taken`);
     assert.equal(f.find('POST', /\/issues$/).length, held ? 0 : 1, why);
-    // A filing that holds the lock may be between its last search and its create: the advice frees only a lock older than any send.
+    // A filing that holds the lock may be between its last search and its create, or GitHub may still apply its create: the advice frees only a lock an hour old.
     if (held) {
       assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content,
-        /another send of this post is running, or one stopped partway\. Wait a few minutes, then send it again\. If it still says this and no issue for this post appears in any repo the bot files into, delete the label discord-lock-700 in me\/test-one, but only if the time in its description is more than two minutes ago or it shows no time: a send ends within 30 seconds, so no send still holds that lock\. Then send the post again\.$/, why);
+        /another send of this post is running, or one stopped partway\. Wait a few minutes, then send it again\. If it still says this and no issue for this post appears in any repo the bot files into, delete the label discord-lock-700 in me\/test-one, but only if the time in its description is more than an hour ago or it shows no time: a send ends within 30 seconds and GitHub finishes each request within seconds, so by then no send holds that lock and no issue it asked for can still appear\. Then send the post again\.$/, why);
     }
   }
 });
