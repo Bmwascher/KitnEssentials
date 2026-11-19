@@ -63,9 +63,10 @@ export function discordClient(token, fetchImpl = fetch) {
     // archived or not. `from` is the status it showed. `beforeMove(from)`,
     // when given, runs once the post is known not to show the status, before
     // anything is written, even when nothing can be written.
-    // Discord takes only a whole tag list, so the post and its forum's tags
-    // are read again just before the write: a tag added, or a status tag
-    // renamed, meanwhile is seen, and a status another writer set meanwhile
+    // Discord takes only a whole tag list, so the forum's tags and then the
+    // post are read again just before the write, the post last so the write
+    // follows its read at once: a tag added, or a status tag renamed,
+    // meanwhile is seen, and a status another writer set meanwhile
     // stops the write (`raced`), so the caller decides again from what the
     // post shows. A move unarchives the post, as before. With `dropOther`
     // false, a post with no status and five other tags is left as it is
@@ -84,12 +85,15 @@ export function discordClient(token, fetchImpl = fetch) {
       };
       let p = plan(thread, forum.available_tags);
       if (p.skipped) return { from, skipped: p.skipped };
-      const fresh = await threadAndForum(threadId);
-      if (currentStatus(fresh.thread.applied_tags, fresh.forum.available_tags, statusName) !== from) return { from, raced: true };
-      p = plan(fresh.thread, fresh.forum.available_tags);
+      const freshForum = await call('GET', `/channels/${thread.parent_id}`);
+      const fresh = await call('GET', `/channels/${threadId}`);
+      // A post moved to another forum meanwhile is decided again from there.
+      if (fresh.parent_id !== thread.parent_id
+        || currentStatus(fresh.applied_tags, freshForum.available_tags, statusName) !== from) return { from, raced: true };
+      p = plan(fresh, freshForum.available_tags);
       if (p.skipped) return { from, skipped: p.skipped };
       const patch = { applied_tags: p.tags };
-      if (archivedOf(fresh.thread)) patch.archived = false;
+      if (archivedOf(fresh)) patch.archived = false;
       await call('PATCH', `/channels/${threadId}`, patch);
       return { from, tags: p.tags };
     },

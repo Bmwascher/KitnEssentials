@@ -479,3 +479,18 @@ test('a status tag renamed to a staff tag between the reads is read with the for
   assert.deepEqual(f.find('PATCH', /\/channels\/700$/), [], 'no staff tag is dropped');
   assert.equal(r.raced, true, 'the caller decides again from the post as it is now');
 });
+
+test('a tag staff add while the forum is read again is kept: the post is read last, just before the write', async () => {
+  const tags = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }, { id: 'd', name: 'D' }, { id: 'x', name: 'Staff note' }, { id: 't', name: 'Triaged' }];
+  const post = { id: '700', parent_id: '900', applied_tags: ['a', 'b', 'c', 'd'] };
+  let forumReads = 0;
+  const f = fakeFetch([
+    ['GET', /\/channels\/700$/, () => ({ ...post, applied_tags: [...post.applied_tags] })],
+    // Staff add a fifth tag of their own while the bot reads the forum the second time.
+    ['GET', /\/channels\/900$/, () => { if (++forumReads === 2) post.applied_tags.push('x'); return { id: '900', available_tags: tags }; }],
+    ['PATCH', /\/channels\/700$/, () => ({})],
+  ]);
+  const r = await discordClient('t', f).setStatus('700', 'Triaged', undefined, { dropOther: false });
+  assert.deepEqual(f.find('PATCH', /\/channels\/700$/), [], 'no staff tag is dropped');
+  assert.match(r.skipped, /no free tag slot/);
+});
