@@ -31,8 +31,13 @@ test('the marker search reads only issues updated since shortly before the post 
   assert.ok(since <= made && since > made - 24 * 60 * 60 * 1000, `since ${new Date(since).toISOString()}`);
 });
 
-test('a lock label says exactly when it was taken', async () => {
-  const f = fakeFetch([['POST', /\/labels$/, () => new Response('{}', { status: 201 })]]);
-  assert.equal(await githubClient('t', f).claimThread('me/r', '700', Date.UTC(2026, 10, 18, 18, 40, 5)), true);
-  assert.equal(f.calls[0].body.description, 'Send to GitHub since 2026-11-18 18:40:05 UTC');
+test('a lock label says exactly when it was taken, by the clock the Worker uses', async () => {
+  const real = Date.now;
+  Date.now = () => Date.UTC(2026, 10, 18, 18, 40, 5);
+  try {
+    const f = fakeFetch([['POST', /\/labels$/, () => new Response('{}', { status: 201 })]]);
+    // No time passed, as the Worker calls it.
+    assert.equal(await githubClient('t', f).claimThread('me/r', '700'), true);
+    assert.equal(f.calls[0].body.description, 'Send to GitHub since 2026-11-18 18:40:05 UTC');
+  } finally { Date.now = real; }
 });
