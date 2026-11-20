@@ -12,6 +12,7 @@ jobs:
   # is linted by the same engine as every push.
   luacheck:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v7
 
@@ -33,12 +34,15 @@ jobs:
           luarocks install luacheck 1.2.0-1
           luarocks install lanes 3.17.2-0
 
-      - run: luacheck -q .
+      - name: Run luacheck
+        timeout-minutes: 1
+        run: luacheck -q .
 
   # Mirrors test.yml's toolchain exactly (same cache key, same rock set) so
   # the two jobs share one cache and never serve each other stale trees.
   busted:
     runs-on: ubuntu-latest
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@v7
 
@@ -61,6 +65,7 @@ jobs:
           luarocks install luacov 0.17.0-1
 
       - name: Busted
+        timeout-minutes: 1
         run: busted
 
   release:
