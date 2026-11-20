@@ -8,14 +8,32 @@ on:
       - 'v*'
 
 jobs:
+  # Mirrors lint.yml's luacheck job (same rocks, same cache key), so a tag
+  # is linted by the same engine as every push.
   luacheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
-      - uses: BigWigsMods/luacheck@9545d4baa7c8d5c2d8dce6591788450680c2485b # main, 2026-06-20
+      - uses: leafo/gh-actions-lua@6919171ccf181b826f44b9bca76307b577217377 # v13.0.0
         with:
-          args: -q
+          luaVersion: "5.1.5"
+
+      - uses: actions/cache@v6
+        id: rocks
+        with:
+          path: .luarocks
+          key: ${{ runner.os }}-lua5.1.5-luarocks3.13.0-luacheck1.2.0-lanes3.17.2
+
+      - uses: leafo/gh-actions-luarocks@35d062def313a7699a0d513e996bcf4352f05389 # v6.1.0
+
+      - name: Install luacheck
+        if: steps.rocks.outputs.cache-hit != 'true'
+        run: |
+          luarocks install luacheck 1.2.0-1
+          luarocks install lanes 3.17.2-0
+
+      - run: luacheck -q .
 
   # Mirrors test.yml's toolchain exactly (same cache key, same rock set) so
   # the two jobs share one cache and never serve each other stale trees.
