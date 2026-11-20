@@ -153,8 +153,8 @@ Runs the comment and commit-message guards over the pushed range, then
 `luacheck` on the Lua files the push changes (the whole tree on a
 `.luacheckrc` change or when the changed set cannot be read), `busted` on
 a push to main only, and wowlua-ls, all blocking. A feature push lints the
-working tree; a push to main tests the pushed commit itself (in a
-temporary checkout when the working tree may differ from it). Also
+working tree; a push to main always tests the pushed commit itself, in a
+temporary checkout of it. Also
 prints a non-blocking note when `.luacheckrc` drifts from the local WoW API
 reference (see `dev/scripts/check-luacheckrc-drift.lua`), when a file the
 Forever client loads uses a Retail-only API or Blizzard global
