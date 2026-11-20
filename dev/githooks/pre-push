@@ -184,10 +184,10 @@ fi
 
 # A push to main tests the pushed commit itself and refuses a missing tool:
 # the admin role bypasses the ruleset's required checks, so that push lands
-# before CI runs. When the checkout may not be exactly that commit (another
-# commit checked out, uncommitted or untracked files, a sparse checkout),
-# luacheck and busted run in a full temporary checkout of it. Feature refs
-# lint the working tree, and CI checks their commits on push.
+# before CI runs. luacheck and busted always run in a full temporary
+# checkout of that commit, so no working-tree state (local edits, untracked
+# files, sparse or assume-unchanged entries) reaches them. Feature refs lint
+# the working tree, and CI checks their commits on push.
 main_sha=""
 for _line in "${pushed_refs[@]}"; do
     read -r _lref _lsha _rref _rsha <<< "$_line"
@@ -196,19 +196,18 @@ for _line in "${pushed_refs[@]}"; do
 done
 gate_dir="$repo_root"
 names_file=""
+# Removes only the checkout this hook made (a failed add may have left a
+# registration or files); the mktemp folder name finds its registration.
 cleanup() {
     [ -n "$names_file" ] && rm -f "$names_file"
     [ "$gate_dir" = "$repo_root" ] && return
     git -C "$repo_root" worktree remove --force "$gate_dir" >/dev/null 2>&1 || rm -rf "$gate_dir"
-    git -C "$repo_root" worktree prune >/dev/null 2>&1
-    if [ -e "$gate_dir" ]; then
-        echo "[pre-push] note: could not remove the temporary checkout $gate_dir; delete it, then run: git worktree prune" >&2
+    if [ -e "$gate_dir" ] || git -C "$repo_root" worktree list --porcelain | grep -qF "/$(basename "$gate_dir")"; then
+        echo "[pre-push] note: could not fully remove the temporary checkout $gate_dir; delete it, then check: git worktree list" >&2
     fi
 }
 trap cleanup EXIT
-if [ -n "$main_sha" ] && { [ "$(git rev-parse HEAD)" != "$main_sha" ] \
-        || [ -n "$(git status --porcelain)" ] \
-        || [ "$(git config --bool core.sparseCheckout 2>/dev/null)" = true ]; }; then
+if [ -n "$main_sha" ]; then
     gate_dir="$(mktemp -d)"
     if ! git -c core.sparseCheckout=false worktree add -q --detach "$gate_dir" "$main_sha"; then
         echo "[pre-push] BLOCKED: could not check out $main_sha to test it. Override with: git push --no-verify" >&2
@@ -225,6 +224,7 @@ fi
 # .luacheckrc change, a range git cannot read (no main to diff a new branch
 # against, a remote sha this clone lacks), a changed file the tree lacks, or
 # an over-long argument list lints that tree whole.
+bytelen() { local LC_ALL=C; _len=${#1}; }
 main_all=0; main_files=(); main_len=0
 other_all=0; other_files=(); other_len=0
 names_file="$(mktemp)"
@@ -250,17 +250,21 @@ for _line in "${pushed_refs[@]}"; do
                 [ "$_s" = D ] && continue
                 if [ ! -f "$_tree/$_f" ]; then
                     eval "${_bucket}_all=1"
-                elif [ "$_bucket" = main ]; then
-                    main_files+=("./$_f"); main_len=$((main_len + ${#_f} + 5))
                 else
-                    other_files+=("./$_f"); other_len=$((other_len + ${#_f} + 5))
+                    bytelen "$_f"
+                    if [ "$_bucket" = main ]; then
+                        main_files+=("./$_f"); main_len=$((main_len + _len + 5))
+                    else
+                        other_files+=("./$_f"); other_len=$((other_len + _len + 5))
+                    fi
                 fi
                 ;;
         esac
     done
 done
-# cmd.exe caps the luacheck.bat command line at 8191 characters; each path
-# costs its length plus "./", two quotes and a space.
+# cmd.exe caps the luacheck.bat command line at 8191 UTF-16 units; each path
+# costs its UTF-8 byte length (never fewer than its UTF-16 units) plus "./",
+# two quotes and a space.
 [ "$main_len" -gt 7000 ] && main_all=1
 [ "$other_len" -gt 7000 ] && other_all=1
 
