@@ -50,6 +50,7 @@ jobs:
     concurrency:
       group: discord-status-${{ github.event_name == 'push' && 'tags' || github.event.pull_request && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
     runs-on: ubuntu-latest
+    timeout-minutes: 2
     steps:
       - uses: actions/checkout@v7
         with:
