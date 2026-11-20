@@ -56,6 +56,8 @@ jobs:
           while IFS= read -r l; do
             [[ "$l" =~ ^(.+):([0-9]+):([0-9]+):\ (.*)$ ]] || continue
             f=${BASH_REMATCH[1]} m=${BASH_REMATCH[4]}
+            # A path split by a line feed matches no file; the summary keeps it.
+            [ -f "$f" ] || continue
             f=${f//%/%25}; f=${f//$'\r'/%0D}; f=${f//:/%3A}; f=${f//,/%2C}
             m=${m//%/%25}
             echo "::warning file=$f,line=${BASH_REMATCH[2]},col=${BASH_REMATCH[3]}::$m"
