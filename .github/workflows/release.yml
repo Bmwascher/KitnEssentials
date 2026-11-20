@@ -1,7 +1,8 @@
 name: Release
 
-# Packaging is gated on the same lint + test jobs that guard every push:
-# a v* tag on a red commit must not ship to CurseForge/Wago.
+# Packaging is gated on luacheck and busted, as every push is (busted runs
+# in file order here; pushes shuffle it): a v* tag on a red commit must not
+# ship to CurseForge/Wago.
 on:
   push:
     tags:
