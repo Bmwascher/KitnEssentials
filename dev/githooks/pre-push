@@ -179,14 +179,15 @@ if [ -f AGENTS.md ] && [ -d Modules ]; then
     fi
 fi
 
-# Each tool gates independently: a machine missing one tool still runs the
-# others (a missing busted used to skip lint too — fixed 2026-07-01).
+# Each tool gates independently: on a feature push a machine missing one
+# tool still runs the others. A push to main stops at the first missing tool.
 
 # A push to main tests the pushed commit itself and refuses a missing tool:
 # the admin role bypasses the ruleset's required checks, so that push lands
-# before CI runs. When the checkout is not exactly that commit (another
-# branch pushed to main, or uncommitted or untracked files), luacheck and
-# busted run in a temporary checkout of it. Other branches get CI on push.
+# before CI runs. When the checkout may not be exactly that commit (another
+# commit checked out, uncommitted or untracked files, a sparse checkout),
+# luacheck and busted run in a full temporary checkout of it. Feature refs
+# lint the working tree, and CI checks their commits on push.
 main_sha=""
 for _line in "${pushed_refs[@]}"; do
     read -r _lref _lsha _rref _rsha <<< "$_line"
@@ -194,59 +195,94 @@ for _line in "${pushed_refs[@]}"; do
     [ "$_rref" = "refs/heads/main" ] && main_sha="$_lsha"
 done
 gate_dir="$repo_root"
-if [ -n "$main_sha" ] && { [ "$(git rev-parse HEAD)" != "$main_sha" ] || [ -n "$(git status --porcelain)" ]; }; then
+names_file=""
+cleanup() {
+    [ -n "$names_file" ] && rm -f "$names_file"
+    [ "$gate_dir" = "$repo_root" ] && return
+    git -C "$repo_root" worktree remove --force "$gate_dir" >/dev/null 2>&1 || rm -rf "$gate_dir"
+    git -C "$repo_root" worktree prune >/dev/null 2>&1
+    if [ -e "$gate_dir" ]; then
+        echo "[pre-push] note: could not remove the temporary checkout $gate_dir; delete it, then run: git worktree prune" >&2
+    fi
+}
+trap cleanup EXIT
+if [ -n "$main_sha" ] && { [ "$(git rev-parse HEAD)" != "$main_sha" ] \
+        || [ -n "$(git status --porcelain)" ] \
+        || [ "$(git config --bool core.sparseCheckout 2>/dev/null)" = true ]; }; then
     gate_dir="$(mktemp -d)"
-    if ! git worktree add -q --detach "$gate_dir" "$main_sha"; then
+    if ! git -c core.sparseCheckout=false worktree add -q --detach "$gate_dir" "$main_sha"; then
         echo "[pre-push] BLOCKED: could not check out $main_sha to test it. Override with: git push --no-verify" >&2
         exit 1
     fi
-    trap 'git -C "$repo_root" worktree remove --force "$gate_dir" >/dev/null 2>&1' EXIT
     echo "[pre-push] testing the pushed main commit in a temporary checkout…"
 fi
 
 # Blocking since 2026-06-11: the luacheck warning baseline is zero.
 # luacheck ships as a luarocks .bat since 2026-07-03 (Smart App Control
 # blocks the standalone exe) — resolve both forms, same as busted below.
-# Lints only the Lua files the push changes; CI lints the whole tree. Any
+# Lints only the Lua files each ref changes, in that ref's tree (main: the
+# gate tree; other refs: the working tree); CI lints the whole tree. Any
 # .luacheckrc change, a range git cannot read (no main to diff a new branch
-# against, a remote sha this clone lacks), or a changed file the gate tree
-# lacks lints everything.
-lint_all=0
-lint_files=()
-lint_len=0
+# against, a remote sha this clone lacks), a changed file the tree lacks, or
+# an over-long argument list lints that tree whole.
+main_all=0; main_files=(); main_len=0
+other_all=0; other_files=(); other_len=0
 names_file="$(mktemp)"
 for _line in "${pushed_refs[@]}"; do
     read -r _lref _lsha _rref _rsha <<< "$_line"
     case "$_lsha" in *[!0]*) ;; *) continue ;; esac
+    if [ "$_rref" = "refs/heads/main" ]; then _tree="$gate_dir"; _bucket=main; else _tree="$repo_root"; _bucket=other; fi
     case "$_rsha" in
         *[!0]*) _base="$_rsha" ;;
         *) _base="$(git merge-base "$_lsha" refs/remotes/origin/main 2>/dev/null || true)" ;;
     esac
     if [ -z "$_base" ] || ! git diff --name-status --no-renames -z "$_base" "$_lsha" > "$names_file" 2>/dev/null; then
-        lint_all=1
-        break
+        eval "${_bucket}_all=1"
+        continue
     fi
     mapfile -d '' _fields < "$names_file"
     for ((_i = 0; _i + 1 < ${#_fields[@]}; _i += 2)); do
         _s="${_fields[_i]}"
         _f="${_fields[_i + 1]}"
         case "$_f" in
-            .luacheckrc) lint_all=1 ;;
+            .luacheckrc) eval "${_bucket}_all=1" ;;
             *.lua)
                 [ "$_s" = D ] && continue
-                if [ -f "$gate_dir/$_f" ]; then
-                    lint_files+=("./$_f")
-                    lint_len=$((lint_len + ${#_f} + 3))
+                if [ ! -f "$_tree/$_f" ]; then
+                    eval "${_bucket}_all=1"
+                elif [ "$_bucket" = main ]; then
+                    main_files+=("./$_f"); main_len=$((main_len + ${#_f} + 5))
                 else
-                    lint_all=1
+                    other_files+=("./$_f"); other_len=$((other_len + ${#_f} + 5))
                 fi
                 ;;
         esac
     done
 done
-rm -f "$names_file"
-# cmd.exe caps the luacheck.bat command line at 8191 characters.
-[ "$lint_len" -gt 7000 ] && lint_all=1
+# cmd.exe caps the luacheck.bat command line at 8191 characters; each path
+# costs its length plus "./", two quotes and a space.
+[ "$main_len" -gt 7000 ] && main_all=1
+[ "$other_len" -gt 7000 ] && other_all=1
+
+# lint_tree <dir> <whole-tree flag> <label> [files...]
+lint_tree() {
+    local dir="$1" all="$2" label="$3"
+    shift 3
+    local args=()
+    if [ "$all" -eq 1 ]; then
+        echo "[pre-push] luacheck ($label, whole tree)…"
+        args=(.)
+    elif [ "$#" -gt 0 ]; then
+        mapfile -d '' args < <(printf '%s\0' "$@" | LC_ALL=C sort -zu)
+        echo "[pre-push] luacheck ($label, ${#args[@]} changed files)…"
+    else
+        return 0
+    fi
+    if ! (cd "$dir" && "$luacheck_bin" -q "${args[@]}"); then
+        echo "[pre-push] BLOCKED: luacheck warnings. Fix them, or override with: git push --no-verify" >&2
+        exit 1
+    fi
+}
 
 luacheck_bin="$(command -v luacheck || command -v luacheck.bat || true)"
 if [ -z "$luacheck_bin" ]; then
@@ -255,18 +291,9 @@ if [ -z "$luacheck_bin" ]; then
         exit 1
     fi
     echo "[pre-push] luacheck not on PATH — skipping lint. (CI will still lint.)" >&2
-elif [ "$lint_all" -eq 1 ] || [ "${#lint_files[@]}" -gt 0 ]; then
-    if [ "$lint_all" -eq 1 ]; then
-        echo "[pre-push] luacheck (whole tree)…"
-        lint_args=(.)
-    else
-        mapfile -d '' lint_args < <(printf '%s\0' "${lint_files[@]}" | sort -zu)
-        echo "[pre-push] luacheck (${#lint_args[@]} changed files)…"
-    fi
-    if ! (cd "$gate_dir" && "$luacheck_bin" -q "${lint_args[@]}"); then
-        echo "[pre-push] BLOCKED: luacheck warnings. Fix them, or override with: git push --no-verify" >&2
-        exit 1
-    fi
+else
+    lint_tree "$gate_dir" "$main_all" "main" "${main_files[@]}"
+    lint_tree "$repo_root" "$other_all" "working tree" "${other_files[@]}"
 fi
 
 # Windows: luarocks generates only .bat launchers, which bash's plain
