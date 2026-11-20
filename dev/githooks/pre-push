@@ -7,7 +7,7 @@
 # Opt in once (per clone / per worktree):
 #     git config core.hooksPath dev/githooks
 #
-# Requires lua + luacheck on PATH. On Windows, ensure the luarocks
+# Requires lua + luacheck (+ busted for main pushes) on PATH. On Windows, ensure the luarocks
 # bin dir (e.g. %APPDATA%\luarocks\bin) is on PATH — see dev/README.md.
 # Override a single push with:  git push --no-verify
 set -uo pipefail
@@ -158,8 +158,7 @@ done
 
 # AGENTS.md drift check (non-blocking): warn when Modules/ on disk and the
 # AGENTS.md Structure block disagree, in either direction. AGENTS.md is
-# gitignored, so read it from the working tree. Runs before the busted
-# early-exit so the note always prints.
+# gitignored, so read it from the working tree.
 if [ -f AGENTS.md ] && [ -d Modules ]; then
     drift=0
     for d in Modules/*/; do
@@ -198,17 +197,21 @@ for _line in "${pushed_refs[@]}"; do
         *[!0]*) _base="$_rsha" ;;
         *) _base="$(git merge-base "$_lsha" refs/remotes/origin/main 2>/dev/null || true)" ;;
     esac
-    if [ -z "$_base" ] || ! _changed="$(git diff --name-only --diff-filter=ACMR "$_base" "$_lsha" 2>/dev/null)"; then
+    if [ -z "$_base" ] || ! _changed="$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR "$_base" "$_lsha" 2>/dev/null)"; then
         lint_all=1
         break
     fi
     while IFS= read -r _f; do
         case "$_f" in
             .luacheckrc) lint_all=1 ;;
-            *.lua) [ -f "$_f" ] && lint_files+=("$_f") ;;
+            # A file the push changes but this working tree lacks (another
+            # branch's ref) cannot be linted by path.
+            *.lua) if [ -f "$_f" ]; then lint_files+=("$_f"); else lint_all=1; fi ;;
         esac
     done <<< "$_changed"
 done
+# cmd.exe caps the luacheck.bat command line at 8191 characters.
+[ "${#lint_files[@]}" -gt 100 ] && lint_all=1
 
 luacheck_bin="$(command -v luacheck || command -v luacheck.bat || true)"
 if [ -z "$luacheck_bin" ]; then
@@ -227,8 +230,32 @@ elif [ "$lint_all" -eq 1 ] || [ "${#lint_files[@]}" -gt 0 ]; then
     fi
 fi
 
-# busted is not repeated here: the CI busted job runs it on every push and
-# its result blocks main.
+# busted runs only on a push to main: the admin role bypasses the ruleset's
+# required checks, so a direct or locally merged push lands before CI runs.
+# Every other branch gets the CI busted job on its push.
+push_to_main=0
+for _line in "${pushed_refs[@]}"; do
+    read -r _lref _lsha _rref _rsha <<< "$_line"
+    case "$_lsha" in *[!0]*) ;; *) continue ;; esac
+    [ "$_rref" = "refs/heads/main" ] && push_to_main=1
+done
+
+# Windows: luarocks generates only .bat launchers, which bash's plain
+# `command -v busted` cannot resolve — check both forms.
+busted_bin="$(command -v busted || command -v busted.bat || true)"
+
+if [ "$push_to_main" -eq 0 ]; then
+    :
+elif [ -n "$busted_bin" ]; then
+    echo "[pre-push] busted…"
+    if ! "$busted_bin"; then
+        echo "[pre-push] BLOCKED: tests failed. Fix them, or override with: git push --no-verify" >&2
+        exit 1
+    fi
+else
+    echo "[pre-push] busted not on PATH — skipping tests. See dev/README.md to set up." >&2
+    echo "[pre-push] (push allowed; CI will still run the suite.)" >&2
+fi
 
 # wowlua-ls type and secret-value diagnostics (blocking; the warning
 # baseline is zero). The binary is a local install in KitnDev/tools, so
