@@ -202,7 +202,9 @@ cleanup() {
     [ -n "$names_file" ] && rm -f "$names_file"
     [ "$gate_dir" = "$repo_root" ] && return
     git -C "$repo_root" worktree remove --force "$gate_dir" >/dev/null 2>&1 || rm -rf "$gate_dir"
-    if [ -e "$gate_dir" ] || git -C "$repo_root" worktree list --porcelain | grep -qF "/$(basename "$gate_dir")"; then
+    local listed
+    if [ -e "$gate_dir" ] || ! listed="$(git -C "$repo_root" worktree list --porcelain 2>/dev/null)" \
+            || [[ "$listed" == *"/$(basename "$gate_dir")"* ]]; then
         echo "[pre-push] note: could not fully remove the temporary checkout $gate_dir; delete it, then check: git worktree list" >&2
     fi
 }
