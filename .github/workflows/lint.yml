@@ -42,6 +42,7 @@ jobs:
           luarocks install lanes 3.17.2-0
 
       - name: Run luacheck
+        timeout-minutes: 1
         run: |
           set -o pipefail
           luacheck -q --formatter plain --codes . | tee "$RUNNER_TEMP/luacheck.txt"

@@ -11,8 +11,8 @@ name: Test
 # dev/scripts/setup-lua-toolchain.sh is no longer used here; it remains for
 # Claude Code cloud environments.
 #
-# Static analysis lives in lint.yml (BigWigsMods/luacheck, strict — the
-# warning baseline was cleared 2026-06-11).
+# Static analysis lives in lint.yml (luacheck, strict — the warning
+# baseline was cleared 2026-06-11).
 on:
   push:
     branches: ['**']
