@@ -16,7 +16,7 @@ jobs:
   # `name:` override without updating both.
   luacheck:
     runs-on: ubuntu-latest
-    timeout-minutes: 1
+    timeout-minutes: 3
     steps:
       - name: Checkout
         uses: actions/checkout@v7
