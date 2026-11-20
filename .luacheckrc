@@ -15,6 +15,7 @@ exclude_files = {
     "dev/docs/**",          -- gitignored local notes. Review artifacts land here
                             -- holding copies of upstream library files, which
                             -- blocked a main push the same way (2026-09-08).
+    ".luarocks/**",         -- CI installs luacheck's own rock tree in the checkout
 }
 
 -- Headless test harness (busted, not in-game). These files run under a desktop

@@ -20,17 +20,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Runs upstream luacheck (Lua 5.1, in Docker) against the repo using
-      # the checked-in .luacheckrc — same config as the local luacheck.exe.
-      # The wrapper is SHA-pinned, but the action pulls
-      # ghcr.io/bigwigsmods/luacheck:latest at run time, so the lint ENGINE
-      # tracks upstream luacheck regardless of this pin.
-      - name: Run luacheck
-        uses: BigWigsMods/luacheck@9545d4baa7c8d5c2d8dce6591788450680c2485b # main, 2026-06-20
+      # The same luacheck rock and Lua as the local toolchain, cached. The
+      # Docker image ran the same 1.2.0 three times slower on this tree.
+      - uses: leafo/gh-actions-lua@6919171ccf181b826f44b9bca76307b577217377 # v13.0.0
         with:
-          args: -q
-          annotate: warning
-          job_summary: true
+          luaVersion: "5.1.5"
+
+      - uses: actions/cache@v6
+        id: rocks
+        with:
+          path: .luarocks
+          key: ${{ runner.os }}-lua5.1.5-luarocks3.13.0-luacheck1.2.0
+
+      - uses: leafo/gh-actions-luarocks@35d062def313a7699a0d513e996bcf4352f05389 # v6.1.0
+
+      - name: Install luacheck
+        if: steps.rocks.outputs.cache-hit != 'true'
+        run: luarocks install luacheck 1.2.0-1
+
+      - name: Run luacheck
+        run: |
+          set -o pipefail
+          luacheck -q --formatter plain --codes . | tee "$RUNNER_TEMP/luacheck.txt"
+
+      - name: Annotate warnings
+        if: failure()
+        run: |
+          sed -nE 's/^([^:]+):([0-9]+):([0-9]+): (.*)$/::warning file=\1,line=\2,col=\3::\4/p' "$RUNNER_TEMP/luacheck.txt"
+          { echo '### luacheck'; echo '```'; cat "$RUNNER_TEMP/luacheck.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
   spelling:
     runs-on: ubuntu-latest
