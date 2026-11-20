@@ -28,6 +28,10 @@ jobs:
   # `name:` override without updating both.
   busted:
     runs-on: ubuntu-latest
+    # Each job's cap is about three times its slowest measured run, a cold
+    # cache included; the test step holds the 60 s test budget. A job that
+    # hits its cap has a defect to find; raising the cap hides it.
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@v7
 
@@ -59,6 +63,7 @@ jobs:
       # state an earlier one left behind fails; the seed reruns that order.
       # No coverage here: luacov's line hook makes the run six times slower.
       - name: Busted
+        timeout-minutes: 1
         run: |
           seed=$RANDOM
           echo "Rerun this order with: busted --shuffle --seed=$seed"
@@ -69,6 +74,7 @@ jobs:
   coverage:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
