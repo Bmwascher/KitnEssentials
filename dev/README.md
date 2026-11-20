@@ -150,16 +150,20 @@ git config core.hooksPath dev/githooks
 ```
 
 Runs the comment and commit-message guards over the pushed range, then
-`luacheck` + `busted`, all blocking, before every push — each tool
-gates independently, so a machine missing one still runs the other. Also
+`luacheck` on the Lua files the push changes (the whole tree on a
+`.luacheckrc` change or when the changed set cannot be read), `busted` on
+a push to main only, and wowlua-ls, all blocking. A feature push lints the
+working tree; a push to main always tests the pushed commit itself, in a
+temporary checkout of it. Also
 prints a non-blocking note when `.luacheckrc` drifts from the local WoW API
 reference (see `dev/scripts/check-luacheckrc-drift.lua`), when a file the
 Forever client loads uses a Retail-only API or Blizzard global
 (`dev/scripts/check-forever-api.lua`), and when `References/`
 breaks the folder rule (`dev/scripts/check-references-folders.lua`; the same
 check runs at Claude Code session start). Override a single
-push with `git push --no-verify`. If a tool isn't on PATH the hook skips it
-with a notice rather than blocking (CI still runs everything).
+push with `git push --no-verify`. On a feature push, a tool that isn't on
+PATH is skipped with a notice (CI still runs everything); a push to main
+blocks when luacheck or busted is missing, because it lands before CI runs.
 
 The `commit-msg` and `pre-commit` guards match against a word list kept in
 `dev/githooks/upstream-names.local.sh`, which is gitignored: this repo is
