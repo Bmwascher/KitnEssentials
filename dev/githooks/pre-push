@@ -7,7 +7,7 @@
 # Opt in once (per clone / per worktree):
 #     git config core.hooksPath dev/githooks
 #
-# Requires lua + busted + luacheck on PATH. On Windows, ensure the luarocks
+# Requires lua + luacheck on PATH. On Windows, ensure the luarocks
 # bin dir (e.g. %APPDATA%\luarocks\bin) is on PATH — see dev/README.md.
 # Override a single push with:  git push --no-verify
 set -uo pipefail
@@ -186,31 +186,49 @@ fi
 # Blocking since 2026-06-11: the luacheck warning baseline is zero.
 # luacheck ships as a luarocks .bat since 2026-07-03 (Smart App Control
 # blocks the standalone exe) — resolve both forms, same as busted below.
+# Lints only the Lua files the push changes; CI lints the whole tree. A
+# .luacheckrc change, or a range git cannot read (no main to diff a new
+# branch against, a remote sha this clone lacks), lints everything.
+lint_all=0
+lint_files=()
+for _line in "${pushed_refs[@]}"; do
+    read -r _lref _lsha _rref _rsha <<< "$_line"
+    case "$_lsha" in *[!0]*) ;; *) continue ;; esac
+    case "$_rsha" in
+        *[!0]*) _base="$_rsha" ;;
+        *) _base="$(git merge-base "$_lsha" refs/remotes/origin/main 2>/dev/null || true)" ;;
+    esac
+    if [ -z "$_base" ] || ! _changed="$(git diff --name-only --diff-filter=ACMR "$_base" "$_lsha" 2>/dev/null)"; then
+        lint_all=1
+        break
+    fi
+    while IFS= read -r _f; do
+        case "$_f" in
+            .luacheckrc) lint_all=1 ;;
+            *.lua) [ -f "$_f" ] && lint_files+=("$_f") ;;
+        esac
+    done <<< "$_changed"
+done
+
 luacheck_bin="$(command -v luacheck || command -v luacheck.bat || true)"
-echo "[pre-push] luacheck…"
-if [ -n "$luacheck_bin" ]; then
-    if ! "$luacheck_bin" . -q; then
+if [ -z "$luacheck_bin" ]; then
+    echo "[pre-push] luacheck not on PATH — skipping lint. (CI will still lint.)" >&2
+elif [ "$lint_all" -eq 1 ] || [ "${#lint_files[@]}" -gt 0 ]; then
+    if [ "$lint_all" -eq 1 ]; then
+        echo "[pre-push] luacheck (whole tree)…"
+        lint_args=(.)
+    else
+        mapfile -t lint_args < <(printf '%s\n' "${lint_files[@]}" | sort -u)
+        echo "[pre-push] luacheck (${#lint_args[@]} changed files)…"
+    fi
+    if ! "$luacheck_bin" -q "${lint_args[@]}"; then
         echo "[pre-push] BLOCKED: luacheck warnings. Fix them, or override with: git push --no-verify" >&2
         exit 1
     fi
-else
-    echo "[pre-push] luacheck not on PATH — skipping lint. (CI will still lint.)" >&2
 fi
 
-# Windows: luarocks generates only .bat launchers, which bash's plain
-# `command -v busted` cannot resolve — check both forms.
-busted_bin="$(command -v busted || command -v busted.bat || true)"
-
-if [ -n "$busted_bin" ]; then
-    echo "[pre-push] busted…"
-    if ! "$busted_bin"; then
-        echo "[pre-push] BLOCKED: tests failed. Fix them, or override with: git push --no-verify" >&2
-        exit 1
-    fi
-else
-    echo "[pre-push] busted not on PATH — skipping tests. See dev/README.md to set up." >&2
-    echo "[pre-push] (push allowed; CI will still run the suite.)" >&2
-fi
+# busted is not repeated here: the CI busted job runs it on every push and
+# its result blocks main.
 
 # wowlua-ls type and secret-value diagnostics (blocking; the warning
 # baseline is zero). The binary is a local install in KitnDev/tools, so
