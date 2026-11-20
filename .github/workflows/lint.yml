@@ -45,11 +45,13 @@ jobs:
         timeout-minutes: 1
         run: |
           set -o pipefail
-          luacheck -q --formatter plain --codes . | tee "$RUNNER_TEMP/luacheck.txt"
+          luacheck -q --formatter plain --codes . 2>&1 | tee "$RUNNER_TEMP/luacheck.txt"
 
+      # Runs after any earlier failure; with no log, luacheck never ran.
       - name: Annotate warnings
         if: failure()
         run: |
+          [ -f "$RUNNER_TEMP/luacheck.txt" ] || exit 0
           sed -nE 's/^([^:]+):([0-9]+):([0-9]+): (.*)$/::warning file=\1,line=\2,col=\3::\4/p' "$RUNNER_TEMP/luacheck.txt"
           { echo '### luacheck'; echo '```'; cat "$RUNNER_TEMP/luacheck.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
