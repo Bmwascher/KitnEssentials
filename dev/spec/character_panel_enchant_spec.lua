@@ -25,12 +25,14 @@ local function loadCP(overrides, seed)
     _G.CreateFrame = function() return nil end
     _G.InCombatLockdown = function() return false end
     _G.ENCHANTED_TOOLTIP_LINE = "Enchanted: %s"
+    -- Reset on every call: a stub an earlier test overrode (CursorHasItem
+    -- returning true) would otherwise refuse the next test's apply.
     for _, name in ipairs({
         "GetInventoryItemLink", "GetExpansionForLevel", "UnitLevel",
         "GetInventoryItemQuality", "issecretvalue",
         "CursorHasItem", "SpellIsTargeting", "PickupInventoryItem",
     }) do
-        _G[name] = _G[name] or function() return nil end
+        _G[name] = function() return nil end
     end
     _G.strsplit = function() return nil end
     -- INVSLOT_* are plain numbers in WoW; the module builds lookup tables keyed
