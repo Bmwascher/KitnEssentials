@@ -509,3 +509,371 @@ test('CH2: with the forum set, the checklist job makes no call for any event but
     assert.match(out.join('\n'), /not a checklist event/, why);
   }
 });
+
+// ---- Opening ----------------------------------------------------------------------
+
+test('CH2: the checklist job opens one thread for a filed issue, with its record and first message, and a second job opens nothing', async () => {
+  const w = world();
+  w.issue(17, { labels: ['from-discord', 'type: bug', 'client: retail'], title: '[KE][Retail][Bags] Bank *tab* icons' });
+  await job(w);
+  await job(w);
+  assert.equal(ckThreads(w).length, 1);
+  const t = ckThreads(w)[0];
+  assert.equal(t.name, '#17 [KE][Retail][Bags] Bank *tab* icons');
+  assert.deepEqual(ckName(w, t), ['Triaged']);
+  assert.equal(t.starter.content, [
+    '**\\[KE\\]\\[Retail\\]\\[Bags\\] Bank \\*tab\\* icons**',
+    'Issue: https://github.com/me/one/issues/17',
+    'Player post: https://discord.com/channels/800/717',
+    'type: bug · client: retail',
+    'The bot sets the status and Accepted tags from GitHub; every other tag is yours.',
+  ].join('\n'));
+  assert.deepEqual(t.starter.allowed_mentions, { parse: [] });
+  const rec = recordOf(w);
+  assert.deepEqual([rec.threadId, rec.guildId], [t.id, '800']);
+  assert.match(botComments(w, 17).find((c) => c.id === rec.id).body, new RegExp(`^Staff checklist thread: https://discord\\.com/channels/800/${t.id}\\n`));
+});
+
+test('CH2: only the checklist job opens a thread; the status job, a PR run and a release run update one that exists', async () => {
+  const w = world();
+  w.issue(17);
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  await go(w, 'issues', { action: 'opened', issue: { number: 17 } });
+  await pr(w, 5);
+  assert.equal(ckThreads(w).length, 0, 'the status job and a PR run open nothing');
+  await job(w);
+  const t = ckThreads(w)[0];
+  assert.deepEqual(ckName(w, t), ['In progress'], 'opened in step with GitHub as it is');
+  w.prs.get(5).state = 'MERGED';
+  w.close(17, 'completed', 'aaaaaaa1');
+  // A released issue with no record: the release opens nothing for it.
+  w.issue(18);
+  w.close(18, 'completed', 'bbbbbbb1');
+  w.tags = [{ name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
+  w.contains.set('aaaaaaa1...c-v5.0.1', 'ahead');
+  w.contains.set('bbbbbbb1...c-v5.0.1', 'ahead');
+  await tagPush(w, 'v5.0.1');
+  assert.deepEqual([ckName(w, t), t.archived], [['Shipped'], true], 'a release moves it to Shipped and archives it');
+  assert.deepEqual([recordOf(w, 18), ckThreads(w).length], [null, 1], 'and opens no thread for an issue with none');
+});
+
+test('CH2: with the forum unset, a non-bot issue, a missing status tag or a refused create, no thread is opened', async () => {
+  {
+    const w = world();
+    w.issue(17);
+    await job(w, 'opened', { over: { CHECKLIST_FORUM_ID: '' } });
+    assert.deepEqual(w.calls, [], 'unset');
+  }
+  {
+    const w = world();
+    w.issue(17, { labels: [] });
+    await job(w);
+    assert.deepEqual(w.calls.map((c) => `${c.method} ${c.url}`), ['GET https://api.github.com/repos/me/one/issues/17'], 'a non-bot issue is read no further');
+  }
+  {
+    const w = world();
+    w.issue(17);
+    w.ckForum.available_tags = w.ckForum.available_tags.filter((x) => x.name !== 'Triaged');
+    await assert.rejects(job(w), /checklist forum has no "Triaged" tag/);
+    assert.equal(ckThreads(w).length, 0, 'a missing status tag');
+  }
+  {
+    const w = world();
+    w.issue(17);
+    w.fail.push(['POST', /channels\/950\/threads$/, new Response('{"message":"x"}', { status: 400 }), 1]);
+    await assert.rejects(job(w), /-> 400/);
+    assert.equal(recordOf(w).state, 'pending', 'a refused create made nothing');
+    await job(w);
+    assert.equal(ckThreads(w).length, 1);
+    assert.equal(w.find('GET', /threads\/active$/).length, 0, 'the next job opens at once, with no search');
+  }
+});
+
+test('CH2: every checklist job settles the whole thread, whatever event started it', async () => {
+  {
+    const w = world();
+    const i = w.issue(17);
+    const t = seed(w, 17, { applied_tags: ['c-tri'] });
+    w.close(17, 'not_planned');
+    i.labels.add('accepted');
+    await job(w, 'labeled', label);
+    assert.deepEqual([ckName(w, t), t.archived], [["Won't fix"], true], 'a close whose job was dropped for a label\'s');
+  }
+  {
+    const w = world();
+    const i = w.issue(17);
+    w.close(17, 'not_planned');
+    const t = seed(w, 17, { applied_tags: ['c-wont'], archived: true }, `Won't fix:${closeId(w)}`);
+    Object.assign(i, { state: 'open', state_reason: 'reopened' });
+    i.labels.add('accepted');
+    await job(w, 'labeled', label);
+    assert.deepEqual([ckName(w, t), t.archived], [['Triaged', 'Accepted'], false], 'a reopen whose job was dropped for a label\'s');
+  }
+  {
+    const w = world();
+    const i = w.issue(17);
+    w.close(17, 'not_planned');
+    i.labels.add('accepted');
+    await job(w, 'labeled', label);
+    const t = ckThreads(w)[0];
+    assert.deepEqual([ckName(w, t), t.archived, recordOf(w).archived], [["Won't fix"], true, `Won't fix:${closeId(w)}`], 'a label job on a closed issue with no thread');
+  }
+  {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    w.tags = [{ name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
+    w.contains.set('aaaaaaa1...c-v5.0.1', 'ahead');
+    await job(w, 'closed');
+    assert.deepEqual(ckName(w, ckThreads(w)[0]), ['Shipped']);
+    assert.equal(w.issues.get(17).comments.filter((c) => /discord-shipped-in/.test(c.body)).length, 0, 'no ship record written');
+  }
+});
+
+// ---- A lost create answer -----------------------------------------------------------
+
+// The thread is made, and the record write that saves its id fails.
+const loseAnswer = (w) => failRecord(w, (b) => /<!-- discord-checklist: \d+ guild/.test(b));
+const failArchived = (w, times = 99) => w.fail.push(['GET', /threads\/archived\/public/, fail500(), times]);
+const staffStarter = (content = 'staff') => ({ starter: { author: { id: '5' }, content } });
+const hangUp = (w, times = 1) => w.fail.push(['POST', /channels\/950\/threads$/, new Error('socket hang up'), times]);
+
+test('CH3: a job that lost its create answer is followed by one that finds the thread by its first message', async () => {
+  for (const [why, between, refused] of [
+    ['active and unrenamed', () => {}],
+    ['renamed', (w, t) => { t.name = 'renamed by staff'; }],
+    ['archived', (w, t) => { t.archived = true; t.archivedAt = w.clock; }],
+    ['a day later', (w) => { w.clock += DAY; }],
+    ['the issue transferred since', (w) => { w.issues.get(17).html_url = 'https://github.com/me/two/issues/9'; }],
+    // The create went to forum 960, and the setting is 950 now: the thread is
+    // found in 960, and the tag write after it is refused there.
+    ['the forum setting changed since', (w, t) => {
+      t.parent_id = '960';
+      const c = botComments(w, 17).find((x) => parseChecklist(x));
+      c.body = c.body.replace('discord-checklist-forum: 950', 'discord-checklist-forum: 960');
+    }, /is in channel 960, not the checklist forum/],
+  ]) {
+    const w = world();
+    w.issue(17);
+    loseAnswer(w);
+    await assert.rejects(job(w), /checklist thread not updated for #17/, why);
+    assert.deepEqual([recordOf(w).state, recordOf(w).forumId], ['creating', '950'], why);
+    const t = ckThreads(w)[0];
+    between(w, t);
+    const next = job(w);
+    if (refused) await assert.rejects(next, refused, why);
+    else await next;
+    // Counted in every forum: the forum-change row moves the thread out of 950.
+    assert.equal(w.find('POST', /channels\/\d+\/threads$/).length, 1, `${why}: no second create`);
+    assert.equal(recordOf(w).threadId, t.id, why);
+  }
+});
+
+test('CH3: a create that lands with its answer lost is taken by the next job, and only one create is ever sent', async () => {
+  const w = world();
+  w.issue(17);
+  let landed = false;
+  w.hooks.push(['POST', /channels\/950\/threads$/, async (call) => {
+    if (landed) return;
+    landed = true;
+    w.ckThread(17, { name: call.body.name, applied_tags: [...call.body.applied_tags], starter: { author: { id: BOT_USER }, content: call.body.message.content } });
+    w.fail.push(['POST', /channels\/950\/threads$/, fail500(), 1]);
+  }]);
+  await assert.rejects(job(w), /-> 500/);
+  assert.equal(recordOf(w).state, 'creating', 'a 500 may have landed: the record is not set back');
+  await job(w);
+  assert.deepEqual([ours(w).length, recordOf(w).threadId, w.find('POST', /channels\/950\/threads$/).length], [1, ours(w)[0].id, 1]);
+});
+
+test('CH3: with no single bot thread to take, nothing is created and the record stays not confirmed, eight days on too', async () => {
+  for (const [why, first, between] of [
+    ['the archived read fails', loseAnswer, (w) => failArchived(w)],
+    ['21 threads made since the try', loseAnswer, (w) => { for (let k = 0; k < 21; k++) w.ckThread(99, staffStarter()); }],
+    ['an archived listing that goes on past the pages', loseAnswer, (w) => {
+      w.archivePage = 1;
+      for (let k = 0; k < 3; k++) w.ckThread(99, { archived: true, archivedAt: w.clock + k, ...staffStarter() });
+    }],
+    // The lost thread matches, then a later candidate's read fails: a partial
+    // read counts no match.
+    ['a candidate read failing after a match', loseAnswer, (w) => {
+      const s = w.ckThread(99, staffStarter());
+      w.fail.push(['GET', new RegExp(`channels/${s.id}/messages/${s.id}$`), fail500(), 99]);
+    }],
+    ['the create never reached Discord', hangUp, () => {}],
+    ['two bot threads name the issue', loseAnswer, (w) => { w.ckThread(17); }],
+    ['a staff thread cites the issue, and no bot thread does', hangUp, (w) => { w.ckThread(17, staffStarter('Issue: https://github.com/me/one/issues/17')); }],
+  ]) {
+    const w = world();
+    w.issue(17);
+    first(w);
+    await assert.rejects(job(w), /checklist/, why);
+    between(w);
+    const made = ckThreads(w).length;
+    for (const wait of [0, 8 * DAY]) {
+      w.clock += wait;
+      await assert.rejects(job(w), /staff checklist thread not confirmed \(.+\); see the sweep/, why);
+      assert.deepEqual([ckThreads(w).length, recordOf(w).state], [made, 'creating'], `${why}: nothing created`);
+    }
+  }
+});
+
+test('CH3: staff recovery: the one bot thread left is taken, and a deleted record opens a new thread', async () => {
+  {
+    const w = world();
+    w.issue(17);
+    loseAnswer(w);
+    await assert.rejects(job(w));
+    const first = ours(w)[0];
+    w.clock += 1000;
+    const second = w.ckThread(17);
+    await assert.rejects(job(w), /not confirmed/);
+    w.threads.delete(second.id);
+    await job(w);
+    assert.deepEqual([recordOf(w).threadId, ours(w).length], [first.id, 1], 'staff deleted the newer');
+  }
+  {
+    const w = world();
+    w.issue(17);
+    hangUp(w);
+    await assert.rejects(job(w));
+    await assert.rejects(job(w), /not confirmed/);
+    const comments = w.issues.get(17).comments;
+    comments.splice(comments.findIndex((c) => c.id === recordOf(w).id), 1);
+    await job(w);
+    assert.equal(ours(w).length, 1, 'staff deleted the record comment');
+    assert.equal(recordOf(w).threadId, ours(w)[0].id);
+  }
+});
+
+test('CH3: an issue that stops being the bot\'s during the search or the forum read gets no record write, and a first try opens at once in a busy forum', async () => {
+  {
+    const w = world();
+    w.issue(17);
+    loseAnswer(w);
+    await assert.rejects(job(w));
+    w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/\d+\/messages\/\d+$/, async () => { w.issues.get(17).labels.delete('from-discord'); }]);
+    const writes = w.find('PATCH', /issues\/comments\/\d+$/).length;
+    await job(w);
+    assert.deepEqual([recordOf(w).state, w.find('PATCH', /issues\/comments\/\d+$/).length], ['creating', writes], 'stopped qualifying during the search');
+  }
+  {
+    const w = world();
+    w.issue(17);
+    let once = false;
+    w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/950$/, async () => {
+      if (once) return;
+      once = true;
+      w.issues.get(17).labels.delete('from-discord');
+    }]);
+    await job(w);
+    assert.deepEqual([recordOf(w).state, ckThreads(w).length, w.find('PATCH', /issues\/comments\/\d+$/).length], ['pending', 0, 0], 'stopped qualifying during the forum read');
+  }
+  {
+    const w = world();
+    w.issue(17);
+    for (let k = 0; k < 21; k++) w.ckThread(99, staffStarter());
+    await job(w);
+    assert.equal(ours(w).length, 1, 'a busy forum');
+    assert.equal(w.find('GET', /threads\/active$/).length, 0, 'a first try does not search');
+  }
+});
+
+test('CH3: a thread id staff put in the record by hand is taken only when its first message is the bot\'s for this issue', async () => {
+  for (const [why, pick, ok] of [
+    ['the lost thread', (w) => ours(w)[0], true],
+    ['another thread in the forum', (w) => w.ckThread(99, staffStarter()), false],
+    ['a bot thread for this issue outside the forum the create went to', (w) => w.ckThread(17, { parent_id: '960' }), false],
+  ]) {
+    const w = world();
+    w.issue(17);
+    loseAnswer(w);
+    await assert.rejects(job(w));
+    const t = pick(w);
+    const c = botComments(w, 17).find((x) => parseChecklist(x));
+    c.body = c.body.replace('discord-checklist: creating', `discord-checklist: ${t.id}`);
+    const writes = w.find('PATCH', threadUrl(t.id)).length;
+    if (ok) {
+      await job(w);
+      const rec = botComments(w, 17).find((x) => parseChecklist(x));
+      assert.match(rec.body, new RegExp(`^Staff checklist thread: https://discord\\.com/channels/800/${t.id}\\n`), `${why}: the visible line links it`);
+    } else {
+      await assert.rejects(job(w), /is not the bot's thread for this issue/, why);
+      assert.equal(w.find('PATCH', threadUrl(t.id)).length, writes, `${why}: no write to it`);
+    }
+  }
+});
+
+test('CH3: a record whose marker no longer parses stops the job before any write, and no second thread is made', async () => {
+  const w = world();
+  w.issue(17);
+  loseAnswer(w);
+  await assert.rejects(job(w));
+  // Staff paste the thread's link in place of "creating".
+  const c = botComments(w, 17).find((x) => parseChecklist(x));
+  c.body = c.body.replace('discord-checklist: creating', 'discord-checklist: https://discord.com/channels/800/123');
+  const comments = w.issues.get(17).comments.length;
+  await assert.rejects(job(w), /the staff checklist record \(.+\) cannot be read/);
+  assert.deepEqual([w.issues.get(17).comments.length, w.find('POST', /channels\/\d+\/threads$/).length], [comments, 1], 'no new record, no second create');
+});
+
+test('CH3: a hand-entered id whose thread read fails for another reason is kept for a re-run', async () => {
+  const w = world();
+  w.issue(17);
+  loseAnswer(w);
+  await assert.rejects(job(w));
+  const t = ours(w)[0];
+  const c = botComments(w, 17).find((x) => parseChecklist(x));
+  c.body = c.body.replace('discord-checklist: creating', `discord-checklist: ${t.id}`);
+  w.fail.push(['GET', threadUrl(t.id), fail500(), 1]);
+  await assert.rejects(job(w), (e) => /-> 500/.test(e.message) && !/not the bot's thread/.test(e.message));
+  assert.deepEqual([recordOf(w).threadId, recordOf(w).linked], [t.id, false], 'the id is left for a re-run');
+  await job(w);
+  assert.equal(recordOf(w).linked, true, 'and the re-run takes it');
+});
+
+test('CH2: a closed issue whose close event is not readable yet gets no record, no thread and no adoption', async () => {
+  {
+    const w = world();
+    const i = w.issue(17);
+    w.close(17, 'not_planned');
+    i.events = [];
+    await assert.rejects(job(w, 'closed'), /the issue is closed but its close event is not readable yet/);
+    assert.deepEqual([recordOf(w), ckThreads(w).length], [null, 0], 'no record');
+  }
+  {
+    const w = world();
+    const i = w.issue(17);
+    loseAnswer(w);
+    await assert.rejects(job(w));
+    w.close(17, 'not_planned');
+    i.events = [];
+    await assert.rejects(job(w, 'closed'), /the issue is closed but its close event is not readable yet/);
+    assert.deepEqual([recordOf(w).state, w.find('GET', /threads\/active$/).length], ['creating', 0], 'a creating record: no search, no adoption');
+  }
+  {
+    // The issue closes during the create's forum read, its event not listed yet.
+    const w = world();
+    const i = w.issue(17);
+    let once = false;
+    w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/950$/, async () => {
+      if (once) return;
+      once = true;
+      w.close(17, 'not_planned');
+      i.events = [];
+    }]);
+    await assert.rejects(job(w), /the issue is closed but its close event is not readable yet/);
+    assert.deepEqual([recordOf(w).state, ckThreads(w).length], ['pending', 0], 'closed during the forum read');
+  }
+});
+
+test('CH3: a found thread is recorded and archived even when the forum lacks the status tag', async () => {
+  const w = world();
+  w.issue(17);
+  loseAnswer(w);
+  await assert.rejects(job(w));
+  const first = ours(w)[0];
+  w.close(17, 'not_planned');
+  w.ckForum.available_tags = w.ckForum.available_tags.filter((x) => x.name !== "Won't fix");
+  await assert.rejects(job(w, 'closed'), /checklist forum has no "Won't fix" tag/);
+  assert.deepEqual([recordOf(w).threadId, first.archived, recordOf(w).archived], [first.id, true, `Won't fix:${closeId(w)}`]);
+});

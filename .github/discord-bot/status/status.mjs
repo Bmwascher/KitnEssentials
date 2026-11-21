@@ -647,7 +647,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   }
 
   const checklist = env.CHECKLIST_FORUM_ID
-    ? checklistRunner({ gh, discord, repo, forumId: String(env.CHECKLIST_FORUM_ID), wanted, records: recordsOf, botIssue, log, settleTries: SETTLE_TRIES })
+    ? checklistRunner({ gh, discord, repo, forumId: String(env.CHECKLIST_FORUM_ID), wanted, records: recordsOf, botIssue, log, now, settleTries: SETTLE_TRIES })
     : null;
 
   // The checklist job: the issue's own events, and only its checklist
