@@ -366,8 +366,8 @@ thread in the forum is this issue's: one whose first message was deleted
 can be, and its name started "#<issue number> " unless someone renamed it.
 The issue's next event then opens a new thread. If you are not sure, leave
 the comment; the sweep keeps listing it.
-If the comment's hidden marker is edited so it no longer reads, the bot
-writes nothing for that issue, and the sweep says how to mend it.
+If the comment's hidden lines are edited so they no longer read, or deleted,
+the bot writes nothing for that issue, and the sweep says how to mend it.
 For a thread outside the checklist forum, set `CHECKLIST_FORUM_ID` back if
 it changed by mistake; if it changed on purpose, archive or delete the old
 thread, then delete that comment, and the next event opens a new thread.
@@ -587,8 +587,9 @@ Accepted on purpose; each line says how you would notice it.
 - Two bot runs that cross on one checklist thread, or a run after a record
   write that failed, can archive again a thread staff reopened; and a close
   run's late archive whose record write failed can leave an open issue's
-  thread archived. Nothing lists either. A staff reply reopens the thread for
-  good.
+  thread archived. Nothing lists either: you notice a thread you replied in
+  that is archived again, or an open issue's thread that is archived. A
+  staff reply reopens the thread for good.
 - If the bot's re-archive of a finished checklist thread fails after a tag
   change, and the record write after it fails too, or the job is stopped
   between the tag change and the re-archive, the thread may stay open and
@@ -605,14 +606,16 @@ Accepted on purpose; each line says how you would notice it.
   last read of its tags and its write can be lost, and one removed in that
   moment can come back, as on a post. That moment is one request long.
 - When GitHub drops a waiting checklist job for a newer one, the thread jumps
-  to the newest state, so staff may not see a step in between.
+  to the newest state: you see its status tag skip a step (Triaged straight
+  to Done, say). Nothing is lost.
 - A closed issue filed before this version gets no checklist thread and is
   not listed; a reopen or an `accepted` label change opens one.
-- A checklist thread whose create answer was lost stays "not confirmed",
-  with its job red, unless exactly one bot thread naming the issue is found:
-  when the search's reads fail, more than 20 threads were made since, or the
-  archived listing stops short. The bot never creates again for it; the
-  sweep's line says what staff do (see Staff checklist).
+- A checklist thread whose create answer was lost is taken only when the
+  bot's search finds exactly one bot thread naming the issue. It stays "not
+  confirmed", with its job red, when the search finds none or several, its
+  reads fail, more than 20 threads were made since, or the archived listing
+  stops short. The bot never creates again for it; the sweep lists it and
+  says what staff do (see Staff checklist).
 - If a second bot thread names the same issue and is reopened and archived
   again in the seconds the bot's search reads Discord's lists, the search
   can miss it and take the other; the missed thread is then listed nowhere.
