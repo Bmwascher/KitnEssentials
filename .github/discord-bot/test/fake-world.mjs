@@ -2,6 +2,7 @@
 // route reads and writes one shared state, so two runs against the same world
 // see each other's writes, the way they would on the real services.
 import { FORUM } from './fake-fetch.mjs';
+import { currentStatus } from '../src/core.js';
 
 const BOT = 'github-actions[bot]';
 const GUILD = '800';
@@ -90,10 +91,9 @@ export function world() {
     i.closed_at = new Date(w.clock).toISOString();
     i.events.push({ id: w.nextId++, event: 'closed', commit_id: commit, closer, duplicateOf, created_at: i.closed_at });
   };
-  w.tagOf = (threadId) => {
-    const id = w.threads.get(threadId).applied_tags.at(-1);
-    return FORUM.available_tags.find((t) => t.id === id).name;
-  };
+  // The status a post shows, read as the bot reads it: an Accepted tag can
+  // sit after the status tag.
+  w.tagOf = (threadId) => currentStatus(w.threads.get(threadId).applied_tags, FORUM.available_tags);
   w.said = (threadId) => w.threads.get(threadId).messages.map((m) => m.content);
 
   const view = (i) => ({

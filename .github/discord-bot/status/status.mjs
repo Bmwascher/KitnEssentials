@@ -330,6 +330,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   const CLOSE_SLACK_MS = 60 * 1000;
   // GitHub label names match in any letter case, as the workflow's `if` does.
   const acceptedLabel = (name) => String(name || '').toLowerCase() === LABELS.accepted;
+  // Accepted shows only while the issue is open; once closed, the status tag
+  // says what happened. The post and its checklist thread read the label alike.
+  const wantedAccepted = (issue) => issue.state === 'open' && (issue.labels || []).some((l) => acceptedLabel(l.name || l));
 
   // The issue's state as releasedState gives it, read only: a fix a release
   // already holds is taken as shipped, and no ship record is written. A
@@ -357,7 +360,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const closeKnown = st.issue.state !== 'closed' || !!(st.close && !st.close.undone && st.close.at >= closedAt - CLOSE_SLACK_MS);
     return {
       st, issue: st.issue, name, key: closeKnown ? checklistKey(name, st.close) : null, eligible: eligible(st.issue), closeKnown,
-      accepted: st.issue.state === 'open' && (st.issue.labels || []).some((l) => acceptedLabel(l.name || l)),
+      accepted: wantedAccepted(st.issue),
       postId: marker ? marker.threadId : null,
     };
   }
@@ -491,7 +494,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       try {
         // Triaged says only that the issue is filed: it never costs a staff
         // tag. A status with news still takes the fifth slot, as at filing.
-        r = await discord.setStatus(threadId, want, beforeMove, { dropOther: want !== STATUS.triaged });
+        r = await discord.setStatus(threadId, want, beforeMove, { dropOther: want !== STATUS.triaged, accepted: wantedAccepted(st.issue) });
       } catch (e) {
         // A deleted post can never be told; its issue still moves. Only the
         // post's own read or write answering 404 says it is gone.
@@ -503,6 +506,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       // Another writer moved the status just before this write: decide again
       // from what the post shows now.
       if (r.raced) continue;
+      if (r.noRoom) log(`#${n}: no free tag slot for Accepted on the post`);
+      if (r.noAccepted) log(`#${n}: the forum has no Accepted tag`);
       if (r.skipped) {
         // The forum has no such tag, or no free slot for Triaged: the post did
         // not move, and this move's

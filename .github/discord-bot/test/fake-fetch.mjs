@@ -36,7 +36,7 @@ export function fakeKv(init = {}) {
   return { m, get: async (k) => (m.has(k) ? m.get(k) : null), put: async (k, v) => { m.set(k, String(v)); } };
 }
 
-// A help forum with client and type tags, plus the bot's status tags.
+// A help forum with client and type tags, plus the bot's status and Accepted tags.
 export const FORUM = {
   id: '900',
   available_tags: [
@@ -44,6 +44,6 @@ export const FORUM = {
     { id: 't-bug', name: 'Bug' }, { id: 't-feedback', name: 'Feedback/Request' }, { id: 't-staff', name: 'Staff note' },
     { id: 's-tri', name: 'Triaged' }, { id: 's-prog', name: 'In progress' },
     { id: 's-fix', name: 'Fixed, next update' }, { id: 's-ship', name: 'Shipped' },
-    { id: 's-closed', name: 'Closed' },
+    { id: 's-closed', name: 'Closed' }, { id: 't-acc', name: 'Accepted' },
   ],
 };

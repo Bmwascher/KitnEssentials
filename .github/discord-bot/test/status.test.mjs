@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { run } from '../status/status.mjs';
 import { world, shippedIn } from './fake-world.mjs';
+import { FORUM } from './fake-fetch.mjs';
 
 const env = { GITHUB_TOKEN: 'gh', DISCORD_BOT_TOKEN: 'bot', RELEASE_TAG_PATTERN: '^v\\d' };
 const repository = { full_name: 'me/one', default_branch: 'dev' };
@@ -1453,4 +1454,63 @@ test('SS1: an opened event from a transfer is skipped by the status job and the 
   w.threads.get('717').applied_tags = ['t-retail'];
   await go(w, 'issues', { action: 'opened', issue: { number: 17 } });
   assert.equal(w.tagOf('717'), 'Triaged', 'an opened event with no transfer runs as before');
+});
+
+// ---- The Accepted tag on the player's post -----------------------------------------
+
+// Every tag name a post shows, in tag order.
+const tagNames = (w, id) => w.threads.get(id).applied_tags.map((t) => FORUM.available_tags.find((x) => x.id === t).name);
+const withLabel = (w, n) => w.issue(n, { labels: ['from-discord', 'accepted'] });
+const closeByHand = async (w, n = 17) => {
+  w.close(n, 'completed');
+  await closed(w, n);
+};
+const reopen = async (w, n = 17) => {
+  Object.assign(w.issues.get(n), { state: 'open', state_reason: 'reopened' });
+  await go(w, 'issues', { action: 'reopened', issue: { number: n } });
+};
+
+test('AT5: a status move places or removes Accepted in its own write, and Accepted says nothing', async () => {
+  {
+    const w = world();
+    withLabel(w, 17);
+    await closeByHand(w);
+    assert.deepEqual(tagNames(w, '717'), ['Retail', 'Bug', 'Closed'], 'a closed issue shows no Accepted');
+    const before = w.find('PATCH', /channels\/717$/).length;
+    await reopen(w);
+    assert.equal(w.find('PATCH', /channels\/717$/).length - before, 1, 'the reopen writes once');
+    assert.deepEqual(tagNames(w, '717'), ['Retail', 'Bug', 'Triaged', 'Accepted'], 'and places Accepted in that write');
+    assert.equal(w.tagOf('717'), 'Triaged', 'the status reader passes over Accepted');
+    assert.equal(w.said('717').length, 1, 'only the close spoke');
+  }
+  {
+    const w = world();
+    withLabel(w, 17);
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    await prEvent(w, 5);
+    assert.deepEqual(tagNames(w, '717'), ['Retail', 'Bug', 'In progress', 'Accepted']);
+    assert.deepEqual(w.said('717'), ["**In progress.** A fix for this is being worked on and tested. We'll post here when it's done."]);
+    w.prs.get(5).state = 'MERGED';
+    w.close(17, 'completed', 'aaaaaaa1');
+    await closed(w, 17);
+    assert.deepEqual(tagNames(w, '717'), ['Retail', 'Bug', 'Fixed, next update'], 'the close removes Accepted');
+    assert.equal(w.said('717').length, 2, 'the Fixed message once');
+  }
+  {
+    const w = world();
+    withLabel(w, 17);
+    await go(w, 'issues', { action: 'opened', issue: { number: 17 } });
+    assert.deepEqual(w.find('PATCH', /channels\/717$/), [], 'Triaged already shows: no write, so Accepted waits for the sweep');
+  }
+});
+
+test('AT6: an accepted label added or removed starts nothing', async () => {
+  for (const action of ['labeled', 'unlabeled']) {
+    const w = world();
+    withLabel(w, 17);
+    w.threads.get('717').archived = false;
+    await go(w, 'issues', { action, label: { name: 'accepted' }, issue: { number: 17 } });
+    assert.deepEqual(w.calls.filter((c) => /discord\.com/.test(c.url)), [], `${action}: no Discord call`);
+    assert.deepEqual(w.find('POST', /\/comments$/), [], `${action}: no comment`);
+  }
 });
