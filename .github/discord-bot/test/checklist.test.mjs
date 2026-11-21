@@ -593,6 +593,16 @@ test('CH2: with the forum unset, a non-bot issue, a missing status tag or a refu
     assert.equal(ckThreads(w).length, 1);
     assert.equal(w.find('GET', /threads\/active$/).length, 0, 'the next job opens at once, with no search');
   }
+  {
+    // A refused create whose set-back write fails too: the refusal's cause,
+    // which may name the permission to fix, is kept beside it.
+    const w = world();
+    w.issue(17);
+    w.fail.push(['POST', /channels\/950\/threads$/, new Response('{"message":"x"}', { status: 403 }), 1]);
+    failRecord(w, (b) => /discord-checklist: pending/.test(b));
+    await assert.rejects(job(w), /-> 403; setting the record back to pending failed too: /);
+    assert.equal(recordOf(w).state, 'creating');
+  }
 });
 
 test('CH2: a forum setting with spaces around its id is read as the id', async () => {
@@ -765,7 +775,7 @@ test('CH3: staff recovery: the one bot thread left is taken, and a deleted recor
   }
 });
 
-test('CH3: an issue that stops being the bot\'s during the search or the forum read gets no record write, and a first try opens at once in a busy forum', async () => {
+test('CH3: an issue that stops being the bot\'s during the search, the forum read or the creating save gets no thread, one that moves on is planned from the newest read, and a first try opens at once in a busy forum', async () => {
   {
     const w = world();
     w.issue(17);
@@ -787,6 +797,43 @@ test('CH3: an issue that stops being the bot\'s during the search or the forum r
     }]);
     await job(w);
     assert.deepEqual([recordOf(w).state, ckThreads(w).length, w.find('PATCH', /issues\/comments\/\d+$/).length], ['pending', 0, 0], 'stopped qualifying during the forum read');
+  }
+  // The `creating` save is a request of its own: GitHub is read again after
+  // it, and a stop there sets the record back, since no create went out.
+  for (const [why, change, fails] of [
+    ['stopped qualifying during the creating save', (w) => w.issues.get(17).labels.delete('from-discord'), null],
+    ['closed during the creating save, its event not listed yet', (w) => {
+      w.close(17, 'not_planned');
+      w.issues.get(17).events = [];
+    }, /the issue is closed but its close event is not readable yet/],
+  ]) {
+    const w = world();
+    w.issue(17);
+    let once = false;
+    w.hooks.push(['PATCH', /issues\/comments\/\d+$/, async (call) => {
+      if (once || !/discord-checklist: creating/.test(call.body.body)) return;
+      once = true;
+      change(w);
+    }]);
+    if (fails) await assert.rejects(job(w), fails, why);
+    else await job(w);
+    assert.deepEqual([recordOf(w).state, ckThreads(w).length], ['pending', 0], `${why}: no thread, and the record set back`);
+  }
+  {
+    // Closed as not planned during the forum read, its close readable, in a
+    // forum with no Won't fix tag: the thread is planned from the newer read,
+    // so none is made.
+    const w = world();
+    w.issue(17);
+    w.ckForum.available_tags = w.ckForum.available_tags.filter((x) => x.name !== "Won't fix");
+    let once = false;
+    w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/950$/, async () => {
+      if (once) return;
+      once = true;
+      w.close(17, 'not_planned');
+    }]);
+    await assert.rejects(job(w), /checklist forum has no "Won't fix" tag/);
+    assert.deepEqual([recordOf(w).state, ckThreads(w).length], ['pending', 0], 'moved on during the forum read');
   }
   {
     const w = world();

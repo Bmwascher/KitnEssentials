@@ -61,7 +61,7 @@ export function parseChecklist(c) {
 // the Actions log is public: an error leaving the runner keeps only each
 // request and its status.
 // The causes a writer keeps beside its first error, each named in the run's error.
-const ALSO = [['rearchiveError', 'the re-archive failed too'], ['keyError', 'clearing the archive key failed too']];
+const ALSO = [['rearchiveError', 'the re-archive failed too'], ['keyError', 'clearing the archive key failed too'], ['recordError', 'setting the record back to pending failed too']];
 const brief = (e) => {
   // A Discord error is told from its request's fields, with the bot's own
   // "not JSON" note, never from its message; any other error's message is
@@ -221,40 +221,67 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
   // Every opener write first reads GitHub again, after its Discord reads:
   // an issue that stopped being the bot's, or closed with its close event
   // not readable yet, gets no write, and its next event or the sweep
-  // settles it.
+  // settles it. It gives that read, or null.
   async function stillOpenable(n) {
     const again = await wanted(n);
     if (!again.eligible) {
-      log(`#${n}: no longer an issue the bot filed; its checklist thread is left as it is`);
-      return false;
+      log(notOurs(n));
+      return null;
     }
-    if (!again.closeKnown) throw new Error('the issue is closed but its close event is not readable yet');
-    return true;
+    if (!again.closeKnown) throw new Error(CLOSE_UNREAD);
+    return again;
   }
+
+  // A `creating` record whose create was never sent, or was refused, goes
+  // back to `pending`, so the next job opens at once. A failed set-back is
+  // kept beside the cause, which may name the permission to fix.
+  const setBack = (rec, e) => write(rec, { state: 'pending' }).catch((r) => {
+    Object.assign(e, { recordError: r });
+  });
 
   // For a `pending` record only: no create can have reached Discord yet.
   async function create(n, w, rec) {
     const forum = await discord.getChannel(forumId);
     const guildId = String(forum.guild_id);
-    const planned = plan(w)([], forum.available_tags || []);
-    if (planned.missing) throw new Error(`checklist forum has no "${w.name}" tag`);
-    if (!(await stillOpenable(n))) return null;
+    const tagsFor = (cur) => {
+      const p = plan(cur)([], forum.available_tags || []);
+      if (p.missing) throw new Error(noTag(cur.name));
+      return p.tags;
+    };
+    const ready = await stillOpenable(n);
+    if (!ready) return null;
+    tagsFor(ready);
     // Marked just before the create, with the forum it goes to, so a lost
     // answer is searched for there.
-    const trying = { ...rec, state: 'creating', guildId, forumId, since: now(), issueUrl: w.issue.html_url };
-    await write(trying, {});
+    const trying = { ...rec, state: 'creating', guildId, forumId, since: now(), issueUrl: ready.issue.html_url };
+    await write(rec, trying);
+    // The save is a request of its own, so GitHub is read once more and the
+    // thread is planned from that read. No create has gone out yet: a stop
+    // here sets the record back.
+    let cur;
+    let tags;
+    try {
+      cur = await stillOpenable(n);
+      if (cur) tags = tagsFor(cur);
+    } catch (e) {
+      await setBack(trying, e);
+      throw e;
+    }
+    if (!cur) {
+      await write(trying, { state: 'pending' });
+      return null;
+    }
     let made;
     try {
-      made = await discord.createThread(forumId, { name: threadName(n, w.issue.title), content: firstMessage(w, guildId), tagIds: planned.tags });
+      made = await discord.createThread(forumId, { name: threadName(n, cur.issue.title), content: firstMessage(cur, guildId), tagIds: tags });
     } catch (e) {
       // A refusal made nothing: the next job opens at once, with no search.
       const status = answeredStatus(e, 'POST', `/channels/${forumId}/threads`) || 0;
-      if (status >= 400 && status < 500) await write(trying, { state: 'pending' });
+      if (status >= 400 && status < 500) await setBack(trying, e);
       throw e;
     }
-    const opened = { ...trying, state: made.id, threadId: made.id };
-    await write(opened, {});
-    return opened;
+    await write(trying, { state: made.id });
+    return { ...trying, state: made.id, threadId: made.id, linked: true };
   }
 
   // Whether a thread's first message is the bot's and names the issue at one
