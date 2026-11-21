@@ -309,6 +309,8 @@ Accepted on purpose; each line says how you would notice it.
   only that one, and the other is marked when someone presses it.
 - A queue card for a post that never needs an issue stays in the queue
   channel until someone deletes it.
+- A card whose post was deleted shows "# unknown" in place of the post's
+  name, so the card no longer says which post it was.
 - If presses keep answering "press again" (GitHub slow or failing), a
   moderator can right-click the post instead: it opens the form with no
   check, and the form's submission checks.
