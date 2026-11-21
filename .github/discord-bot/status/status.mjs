@@ -647,7 +647,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   }
 
   const checklist = env.CHECKLIST_FORUM_ID
-    ? checklistRunner({ gh, discord, repo, forumId: String(env.CHECKLIST_FORUM_ID), wanted, records: recordsOf, botIssue, log, now, settleTries: SETTLE_TRIES })
+    ? checklistRunner({ gh, discord, repo, forumId: String(env.CHECKLIST_FORUM_ID), wanted, records: recordsOf, botIssue, log, now, settleTries: SETTLE_TRIES, owedMs: OWED_MS })
     : null;
 
   // The checklist job: the issue's own events, and only its checklist
@@ -764,14 +764,43 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     await each(issues.map((i) => i.number), async (n) => {
       let st = await stateOf(n);
       const parts = [];
+      // Every failure of this issue is kept and thrown together at its end,
+      // so a failed write here still leaves its checklist thread judged and
+      // repaired.
+      const errors = [];
+      // A player-side failure ends this issue's player repair, as it always
+      // has; with the checklist on it is kept instead of thrown, so the
+      // checklist lines and repair still run. With it off, it is thrown.
+      let playerStop = false;
+      const playerFailed = (e, what) => {
+        if (!checklist) throw e;
+        playerStop = true;
+        errors.push(`${what} (${e.message.slice(0, 200)})`);
+      };
+      // A failed note read alone ends the note judging: a failed ship record
+      // stops only the repair, so every note is still listed.
+      let noteStop = false;
+      const playerRead = (fn, what) => fn().catch((e) => {
+        playerFailed(e, what);
+        noteStop = true;
+        return null;
+      });
       // A fix with no ship record may already be in a release; a fix in none
       // costs one compare.
       if (st.fix && !st.shippedIn) {
-        const held = await releaseHolding(n, st.fix, fix);
+        const held = await releaseHolding(n, st.fix, false);
         if (held) {
           parts.push(`ship record missing (${held} holds the fix)`);
-          if (fix) st = await stateOf(n);
-          else st = { ...st, shippedIn: held };
+          let written = false;
+          if (fix) {
+            try {
+              await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body: shipRecord(held, st.fix) });
+              written = true;
+            } catch (e) {
+              playerFailed(e, 'ship record not written');
+            }
+          }
+          st = written ? await stateOf(n) : { ...st, shippedIn: held };
         }
       }
       const want = wantedLabels(st);
@@ -826,14 +855,16 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           continue;
         }
         if (t.state !== 'attempted' && t.state !== 'sending') continue;
-        const r = t.run ? await runInfo(t.run) : null;
+        const r = t.run ? await playerRead(() => runInfo(t.run), `run of ${t.url} not read`) : null;
+        if (noteStop) break;
         const done = r ? !r.active : now() - t.at > OWED_MS;
         // A note marked as sending may have gone out; nothing resends it.
         if (t.state === 'sending') {
           if (done) parts.push(`message "${t.text}" may not have reached the player (${t.url})`);
           continue;
         }
-        const m = t.status && shown !== undefined && status === t.status ? await messageFor(n, st, status) : null;
+        const m = t.status && shown !== undefined && status === t.status ? await playerRead(() => messageFor(n, st, status), `message of ${t.url} not read`) : null;
+        if (noteStop) break;
         const stillTrue = Boolean(m) && m.key === t.key;
         const dead = shown === undefined ? 'the Discord post is gone'
           : (t.status ? !stillTrue : t.key.startsWith('needs-info-') && !hasLabel(st.issue, LABELS.needsInfo)) ? 'no longer true'
@@ -852,16 +883,46 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           parts.push(`message "${t.text}" was not sent (${t.url})${how}`);
         }
       }
-      if (!parts.length) return;
+      // The checklist's lines are read in their own catch and kept apart, so
+      // a checklist line alone never moves the post, and a post or thread
+      // that cannot be read never stops the other's repair. Every failure is
+      // kept and thrown together at the end.
+      const postOwes = parts.length > 0;
+      let ck = { parts: [], repair: false, unread: null };
+      if (checklist) {
+        try {
+          ck = await checklist.lines(n, wantFrom(st, status));
+        } catch (e) {
+          ck = { parts: [`staff checklist not read: ${e.message.slice(0, 200)}`], repair: false, unread: e };
+        }
+      }
+      if (!postOwes && !ck.parts.length) {
+        if (errors.length) throw new Error(errors.join('; '));
+        return;
+      }
       wrong++;
-      const line = `#${n}: ${parts.join('; ')}`;
+      const line = `#${n}: ${[...parts, ...ck.parts].join('; ')}`;
       log(line);
       report.push(line);
-      if (unread) throw new Error(`#${n}: Discord post not read (${unread.message.slice(0, 200)})`);
-      if (!fix) return;
-      for (const s of stale) await dropNote(s.note, s.reason);
-      if (owed.length) await settleLabels(n);
-      else await sync(n, false);
+      if (unread) errors.unshift(`#${n}: Discord post not read (${unread.message.slice(0, 200)})`);
+      if (fix && postOwes && !unread && !playerStop) {
+        try {
+          for (const s of stale) await dropNote(s.note, s.reason);
+          if (owed.length) await settleLabels(n);
+          else await sync(n, false);
+        } catch (e) {
+          errors.push(e.message);
+        }
+      }
+      if (fix && ck.repair) {
+        try {
+          await checklist.mirror(n);
+        } catch (e) {
+          errors.push(`staff checklist: ${e.message}`);
+        }
+      }
+      if (ck.unread) errors.push(`staff checklist thread not read (${ck.unread.message.slice(0, 200)})`);
+      if (errors.length) throw new Error(errors.join('; '));
     });
     const head = `sweep (${fix ? 'fix' : 'report'} mode): ${wrong} of ${issues.length} issue(s) out of step`;
     log(head);

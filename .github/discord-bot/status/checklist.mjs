@@ -1,6 +1,6 @@
 // The staff checklist forum: one thread per bot issue in a staff-only forum,
 // mirroring the issue. The thread's record is one bot comment on the issue.
-import { CHECKLIST_NAMES, planTags, sameTags, threadName, discordText } from '../src/core.js';
+import { CHECKLIST_NAMES, ACCEPTED, planTags, sameTags, threadName, discordText } from '../src/core.js';
 import { postGone, answeredStatus } from '../src/discord.js';
 
 // The search for a thread a lost create answer made: it reads threads made
@@ -12,6 +12,8 @@ const MAX_CANDIDATES = 20;
 // GitHub caps a title at 256 characters; with at most ten labels named, the
 // first message stays far inside Discord's 2000.
 const MAX_LABELS = 10;
+// The bot's own tag names on a checklist thread, in any letter case.
+const OWN = new Set([...CHECKLIST_NAMES, ACCEPTED].map((s) => s.toLowerCase()));
 
 const link = (guildId, threadId) => `https://discord.com/channels/${guildId}/${threadId}`;
 const norm = (c) => String((c && c.body) || '').replace(/\r\n?/g, '\n');
@@ -76,7 +78,7 @@ const scrubbed = (fn) => async (...args) => {
 // bot still files the issue, and the issue's records; `proof` is a release
 // run's own `{ fix, tag }` when the tag list may not show that tag yet.
 // `records(n)` gives the records alone.
-export function checklistRunner({ gh, discord, repo, forumId, wanted, records, botIssue, log, now, settleTries }) {
+export function checklistRunner({ gh, discord, repo, forumId, wanted, records, botIssue, log, now, settleTries, owedMs }) {
   const plan = (w) => (applied, available) => planTags(applied, available, w.name, { names: CHECKLIST_NAMES, accepted: w.accepted, dropOther: false });
   const commentPath = (rec) => `/repos/${repo}/issues/comments/${rec.id}`;
   const write = (rec, over) => gh.call('PATCH', commentPath(rec), { body: checklistBody({ ...rec, ...over }) });
@@ -312,5 +314,95 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     return found;
   }
 
-  return { open: scrubbed(open), mirror: scrubbed(mirror) };
+  // The sweep's checklist lines for one issue, each saying what staff
+  // should check; `w` is what `wanted` gives, from the sweep's own read.
+  // The lines GitHub alone gives come first and stay whatever the thread's
+  // read does. The thread is judged with the writer's own plan, so the two
+  // never disagree. `repair`: a key or tag line, which fix mode repairs
+  // with `mirror`; `unread`: the thread read's error.
+  async function lines(n, w) {
+    const parts = [];
+    let repair = false;
+    const rec = w.st.records.checklist;
+    const at = now();
+    const here = rec && rec.threadId ? link(rec.guildId, rec.threadId) : null;
+    // No checklist write is made until the close is readable, so nothing
+    // else is judged; listed with or without a record, as a first open can
+    // have failed on it.
+    if (!w.closeKnown) {
+      parts.push(`the issue is closed but its close event is not readable yet: the checklist ${here ? `thread (${here})` : rec ? `record (${rec.url})` : 'thread'} is checked at the next sweep`);
+      return { parts, repair: false, unread: null };
+    }
+    if (!rec) {
+      if (w.st.records.checklistDamaged) parts.push(damagedLine(w.st.records.checklistDamaged));
+      else if (w.issue.state === 'open') parts.push("no staff checklist thread (the issue's next event, a close, a reopen, or the accepted label added or removed, opens one)");
+      return { parts, repair, unread: null };
+    }
+    if (!rec.threadId && at - rec.since > owedMs) {
+      if (rec.state === 'creating') {
+        // Built from the record alone: the bot never creates again for it,
+        // so this line is the whole recovery, in the forum the create went to.
+        const urls = [...new Set([rec.issueUrl, w.issue.html_url].filter(Boolean))].join(' or ');
+        parts.push(`staff checklist thread not confirmed (${rec.url}): the issue's next event, or a re-run of its failed checklist job, looks for it. `
+          + `If this stays, look in the checklist forum ${link(rec.guildId, rec.forumId || forumId)} for the bot's threads whose first message names ${urls}. `
+          + 'With more than one, keep the oldest and delete the rest, and the next event takes it. '
+          + 'If the job still fails (too many threads made since, or the listing stops short), put the thread\'s id in place of "creating" in that comment, and the next event checks it and takes it. '
+          + `If there is none, delete that comment only once you are sure no thread there is this issue's: a thread whose first message was deleted can be, and its name started "#${n} " unless someone renamed it. `
+          + 'Then the next event opens a new thread. If you are not sure, leave the comment, and this line stays');
+      } else {
+        parts.push(`staff checklist thread not opened (${rec.url}): the issue's next event opens it`);
+      }
+    }
+    if (!rec.threadId) return { parts, repair, unread: null };
+    if (!rec.linked) {
+      parts.push(`staff checklist thread ${here} was put in its record by hand (${rec.url}): the issue's next event checks that it is the bot's thread for this issue and takes it`);
+      return { parts, repair: false, unread: null };
+    }
+    // The key against GitHub's, whatever Discord's archived flag says. It is
+    // listed once the thread read shows a repair can reach the thread.
+    let keyPart = null;
+    if (w.key && rec.archived !== w.key) {
+      keyPart = `checklist archive owed (${here}): the issue is ${w.name}; a fix-mode sweep or the issue's next run archives it. If staff want it open, reply in it after that`;
+    } else if (!w.key && rec.archived) {
+      keyPart = `checklist archived for a close that no longer holds (${here}): the issue is ${w.name} now; a fix-mode sweep or the issue's next run opens it again`;
+    }
+    let shown;
+    try {
+      shown = await discord.threadState(rec.threadId);
+    } catch (e) {
+      if (postGone(e, rec.threadId)) {
+        parts.push(`staff checklist thread is gone (${rec.url}): if it was deleted by mistake, delete that record comment and the issue's next event opens a new one`);
+        return { parts, repair: false, unread: null };
+      }
+      if (keyPart) parts.push(keyPart);
+      parts.push(`staff checklist thread not read (${here}): ${brief(e)}`);
+      return { parts, repair: !!keyPart, unread: new Error(brief(e)) };
+    }
+    if (shown.parentId !== forumId) {
+      parts.push(`staff checklist thread ${here} is not in the checklist forum: if CHECKLIST_FORUM_ID changed by mistake, set it back. `
+        + `If it changed on purpose, archive or delete that thread as staff prefer, then delete that record comment (${rec.url}), and the issue's next event opens a new thread in the forum set now`);
+      return { parts, repair: false, unread: null };
+    }
+    if (keyPart) {
+      parts.push(keyPart);
+      repair = true;
+    }
+    const p = plan(w)(shown.applied, shown.available);
+    // Staff tag names stay out of the public log and job summary: only the
+    // bot's own tags are named, and staff tags are counted.
+    const nameOf = (id) => (shown.available.find((t) => t.id === id) || { name: '' }).name;
+    const botTags = (ids) => ids.filter((id) => OWN.has(nameOf(id).toLowerCase()));
+    const listed = (ids) => botTags(ids).map(nameOf).join(', ') || '(none)';
+    if (p.missing) parts.push(`checklist forum has no "${w.name}" tag (${here}): add it, spelled as the README lists it`);
+    else if (!sameTags(p.tags, shown.applied)) {
+      parts.push(`checklist tags ${listed(shown.applied)} -> ${listed(p.tags)}, keeping ${p.tags.length - botTags(p.tags).length} staff tag(s) (${here})`);
+      repair = true;
+    }
+    if (p.full) parts.push(`no free tag slot for "${w.name}" on the checklist thread (${here})`);
+    if (p.noRoom) parts.push(`no free tag slot for Accepted on the checklist thread (${here})`);
+    if (w.accepted && p.noAccepted) parts.push(`checklist forum has no Accepted tag (${here})`);
+    return { parts, repair, unread: null };
+  }
+
+  return { open: scrubbed(open), mirror: scrubbed(mirror), lines: scrubbed(lines) };
 }

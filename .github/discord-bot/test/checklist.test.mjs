@@ -877,3 +877,253 @@ test('CH3: a found thread is recorded and archived even when the forum lacks the
   await assert.rejects(job(w, 'closed'), /checklist forum has no "Won't fix" tag/);
   assert.deepEqual([recordOf(w).threadId, first.archived, recordOf(w).archived], [first.id, true, `Won't fix:${closeId(w)}`]);
 });
+
+// ---- The sweep --------------------------------------------------------------------
+
+const sweep = (w, mode, out = []) => run({
+  eventName: 'schedule', payload: {}, env: { ...env, SWEEP_MODE: mode, GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: (s) => out.push(s), now: () => w.clock,
+});
+const lineOf = (out, n) => out.find((l) => l.startsWith(`#${n}: `)) || '';
+const discordLink = (id) => `https://discord\\.com/channels/800/${id}`;
+
+test('CH8: report mode lists each checklist problem with its link and what staff should check', async () => {
+  const w = world();
+  const url = (n) => `https://github.com/me/one/issues/${n}`;
+  const body = (n, state, over = {}) => checklistBody({ state, guildId: '800', since: w.clock, issueUrl: url(n), ...over });
+  w.issue(17);
+  w.issue(18);
+  w.record(18, body(18, 'pending'));
+  // A lost create answer, the issue transferred since.
+  w.issue(19);
+  w.record(19, body(19, 'creating', { forumId: '950' }));
+  w.issues.get(19).html_url = 'https://github.com/me/two/issues/9';
+  w.issue(23);
+  w.close(23, 'not_planned');
+  const t23 = seed(w, 23, { applied_tags: ['c-wont'], archived: true });
+  w.issue(24);
+  w.close(24, 'not_planned');
+  const t24 = seed(w, 24, { applied_tags: ['c-wont'] });
+  w.issue(25);
+  w.close(25, 'not_planned');
+  const key25 = `Won't fix:${closeId(w, 25)}`;
+  Object.assign(w.issues.get(25), { state: 'open', state_reason: 'reopened' });
+  const t25 = seed(w, 25, { applied_tags: ['c-tri'], archived: true }, key25);
+  // Gone, on a finished issue whose archive is owed: no repair is promised.
+  w.issue(26);
+  w.close(26, 'not_planned');
+  const t26 = seed(w, 26, { applied_tags: ['c-wont'] });
+  w.threads.delete(t26.id);
+  w.issue(27).labels.add('accepted');
+  const t27 = seed(w, 27, { applied_tags: ['c-wont'] });
+  w.issue(28).labels.add('accepted');
+  const t28 = seed(w, 28, { applied_tags: ['c-staff', 'c-s2', 'c-s3', 'c-s4', 'c-tri'] });
+  w.issue(29);
+  w.close(29, 'not_planned');
+  // Archived for an earlier close; the issue closed again after a reopen whose job was dropped.
+  w.issue(30);
+  w.close(30, 'not_planned');
+  const old30 = `Won't fix:${closeId(w, 30)}`;
+  w.close(30, 'not_planned');
+  const t30 = seed(w, 30, { applied_tags: ['c-wont'], archived: true }, old30);
+  // The wanted status beside a stale one, with Accepted due: the writer's plan has room.
+  w.issue(31).labels.add('accepted');
+  const t31 = seed(w, 31, { applied_tags: ['c-tri', 'c-wont', 'c-staff', 'c-s2', 'c-s3'] });
+  // Five staff tags and no status.
+  w.issue(32);
+  const t32 = seed(w, 32, { applied_tags: ['c-staff', 'c-s2', 'c-s3', 'c-s4', 'c-s5'] });
+  // Closed, with the close event not readable yet.
+  w.issue(33);
+  w.close(33, 'not_planned');
+  const t33 = seed(w, 33, { applied_tags: ['c-wont'], archived: true }, `Won't fix:${closeId(w, 33)}`);
+  w.issues.get(33).events = [];
+  // The same with no record: a first open failed on it.
+  w.issue(34);
+  w.close(34, 'not_planned');
+  w.issues.get(34).events = [];
+  // A record whose marker no longer parses.
+  w.issue(35);
+  w.record(35, 'Staff checklist thread: opening\n\n<!-- discord-checklist: oops guild: 800 -->');
+  w.clock += 11 * 60 * 1000;
+  const out = [];
+  await sweep(w, 'report', out);
+  for (const [n, re] of [
+    [17, /no staff checklist thread \(the issue's next event, a close, a reopen, or the accepted label added or removed, opens one\)/],
+    [18, /staff checklist thread not opened \(https:\/\/github\.com\/me\/one\/issues\/18#issuecomment-\d+\): the issue's next event opens it/],
+    [19, new RegExp('staff checklist thread not confirmed \\(https://github\\.com/me/one/issues/19#issuecomment-\\d+\\): the issue\'s next event, or a re-run of its failed checklist job, looks for it\\. '
+      + `If this stays, look in the checklist forum ${discordLink('950')} for the bot's threads whose first message names https://github\\.com/me/one/issues/19 or https://github\\.com/me/two/issues/9\\. `
+      + 'With more than one, keep the oldest and delete the rest, and the next event takes it\\. '
+      + 'If the job still fails \\(too many threads made since, or the listing stops short\\), put the thread\'s id in place of "creating" in that comment, and the next event checks it and takes it\\. '
+      + 'If there is none, delete that comment only once you are sure no thread there is this issue\'s: a thread whose first message was deleted can be, and its name started "#19 " unless someone renamed it\\. '
+      + 'Then the next event opens a new thread\\. If you are not sure, leave the comment, and this line stays')],
+    [23, new RegExp(`checklist archive owed \\(${discordLink(t23.id)}\\): the issue is Won't fix; a fix-mode sweep or the issue's next run archives it\\. If staff want it open, reply in it after that`)],
+    [24, new RegExp(`checklist archive owed \\(${discordLink(t24.id)}\\)`)],
+    [25, new RegExp(`checklist archived for a close that no longer holds \\(${discordLink(t25.id)}\\): the issue is Triaged now`)],
+    [26, /staff checklist thread is gone \(https:\/\/github\.com\/me\/one\/issues\/26#issuecomment-\d+\): if it was deleted by mistake, delete that record comment and the issue's next event opens a new one/],
+    [27, new RegExp(`checklist tags Won't fix -> Triaged, Accepted, keeping 0 staff tag\\(s\\) \\(${discordLink(t27.id)}\\)`)],
+    [28, new RegExp(`no free tag slot for Accepted on the checklist thread \\(${discordLink(t28.id)}\\)`)],
+    [30, new RegExp(`checklist archive owed \\(${discordLink(t30.id)}\\)`)],
+    [31, new RegExp(`checklist tags Triaged, Won't fix -> Triaged, Accepted, keeping 3 staff tag\\(s\\) \\(${discordLink(t31.id)}\\)`)],
+    [32, new RegExp(`no free tag slot for "Triaged" on the checklist thread \\(${discordLink(t32.id)}\\)`)],
+    [33, new RegExp(`the issue is closed but its close event is not readable yet: the checklist thread \\(${discordLink(t33.id)}\\) is checked at the next sweep`)],
+    [34, /the issue is closed but its close event is not readable yet: the checklist thread is checked at the next sweep/],
+    [35, /the staff checklist record \(https:\/\/github\.com\/me\/one\/issues\/35#issuecomment-\d+\) cannot be read: mend its hidden marker line/],
+  ]) assert.match(lineOf(out, n), re, `#${n}`);
+  assert.doesNotMatch(lineOf(out, 26), /archive owed/, 'a gone thread gets its recovery, not a repair promise');
+  assert.doesNotMatch(lineOf(out, 33), /no longer holds/, 'an unreadable close is never taken as a reopen');
+  assert.doesNotMatch(out.join('\n'), /Needs QA|\bS[2-5]\b/, 'no staff tag name reaches the log');
+  assert.doesNotMatch(lineOf(out, 29), /checklist/, 'a closed issue with no record is not listed');
+
+  const v = world();
+  v.ckForum.available_tags = v.ckForum.available_tags.filter((x) => x.name !== 'Accepted' && x.name !== "Won't fix");
+  v.issue(17).labels.add('accepted');
+  const u17 = seed(v, 17, { applied_tags: ['c-tri'] });
+  v.issue(18);
+  v.close(18, 'not_planned');
+  const u18 = seed(v, 18, { applied_tags: ['c-tri'], archived: true }, `Won't fix:${closeId(v, 18)}`);
+  v.issue(19);
+  const u19 = seed(v, 19, { parent_id: '900', applied_tags: ['s-tri'] });
+  // A thread id staff put in a `creating` record by hand.
+  v.issue(20);
+  const u20 = v.ckThread(20, { applied_tags: ['c-wont'] });
+  v.record(20, checklistBody({ state: 'creating', guildId: '800', forumId: '950', since: v.clock, issueUrl: 'https://github.com/me/one/issues/20' })
+    .replace('discord-checklist: creating', `discord-checklist: ${u20.id}`));
+  const vout = [];
+  await sweep(v, 'report', vout);
+  for (const [n, re] of [
+    [17, new RegExp(`checklist forum has no Accepted tag \\(${discordLink(u17.id)}\\)`)],
+    [18, new RegExp(`checklist forum has no "Won't fix" tag \\(${discordLink(u18.id)}\\): add it, spelled as the README lists it`)],
+    [19, new RegExp(`staff checklist thread ${discordLink(u19.id)} is not in the checklist forum: if CHECKLIST_FORUM_ID changed by mistake, set it back\\. `
+      + 'If it changed on purpose, archive or delete that thread as staff prefer, then delete that record comment \\(https://github\\.com/me/one/issues/19#issuecomment-\\d+\\), and the issue\'s next event opens a new thread in the forum set now')],
+    [20, new RegExp(`staff checklist thread ${discordLink(u20.id)} was put in its record by hand \\(https://github\\.com/me/one/issues/20#issuecomment-\\d+\\): the issue's next event checks that it is the bot's thread for this issue and takes it`)],
+  ]) assert.match(lineOf(vout, n), re, `#${n}`);
+
+  // Fix mode leaves a hand-entered thread to the issue's next checklist job.
+  const u = world();
+  u.issue(20);
+  const h20 = u.ckThread(20, { applied_tags: ['c-wont'] });
+  u.record(20, checklistBody({ state: 'creating', guildId: '800', forumId: '950', since: u.clock, issueUrl: 'https://github.com/me/one/issues/20' })
+    .replace('discord-checklist: creating', `discord-checklist: ${h20.id}`));
+  await sweep(u, 'fix');
+  assert.deepEqual(u.find('PATCH', threadUrl(h20.id)), [], 'fix mode writes nothing to a hand-entered thread');
+});
+
+test('CH8: fix mode repairs tags and the archive, opens no thread, and posts no record or note', async () => {
+  const w = world();
+  w.issue(17);
+  w.threads.get('717').applied_tags = ['t-retail'];
+  w.issue(23);
+  w.close(23, 'not_planned');
+  seed(w, 23, { applied_tags: ['c-wont'], archived: true });
+  w.issue(27).labels.add('accepted');
+  const t27 = seed(w, 27, { applied_tags: ['c-wont'] });
+  w.issue(30);
+  w.close(30, 'not_planned');
+  const old30 = `Won't fix:${closeId(w, 30)}`;
+  w.close(30, 'not_planned');
+  const t30 = seed(w, 30, { applied_tags: ['c-wont'] }, old30);
+  const out = [];
+  await sweep(w, 'fix', out);
+  assert.equal(w.tagOf('717'), 'Triaged', 'the post is repaired');
+  assert.match(lineOf(out, 17), /no staff checklist thread/, 'and the missing thread listed');
+  assert.equal(ckThreads(w).length, 3, 'no thread is opened');
+  assert.equal(w.find('POST', /issues\/\d+\/comments$/).length, 0, 'no record or note is posted');
+  assert.equal(recordOf(w, 23).archived, `Won't fix:${closeId(w, 23)}`, 'the archive key is saved');
+  assert.deepEqual([ckName(w, t27), t27.archived], [['Triaged', 'Accepted'], false], 'the tags are repaired');
+  assert.deepEqual([t30.archived, recordOf(w, 30).archived], [true, `Won't fix:${closeId(w, 30)}`], 'a later close is archived and keyed');
+});
+
+test('CH8: the post and the thread are swept apart, and every failure is kept', async () => {
+  for (const [why, postFails, threadFails] of [['the thread read fails', false, true], ['the post read fails', true, false], ['both reads fail', true, true]]) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'not_planned');
+    const t = seed(w, 17, { applied_tags: ['c-tri'] });
+    if (postFails) w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717$/, new Response('{"message":"x"}', { status: 403 }), 1]);
+    // The error body names a staff tag; only the request and status are logged.
+    if (threadFails) w.fail.push(['GET', threadUrl(t.id), new Response('{"message":"Missing Access","tag":"Needs QA"}', { status: 403 }), 1]);
+    const out = [];
+    await assert.rejects(sweep(w, 'fix', out), /could not update issue\(s\) #17; see above/, why);
+    assert.doesNotMatch(out.join('\n'), /Needs QA/, `${why}: no staff tag name in the log`);
+    const line = lineOf(out, 17);
+    assert.match(line, new RegExp(`checklist archive owed \\(${discordLink(t.id)}\\)`), `${why}: a GitHub-based line is kept`);
+    if (threadFails) assert.match(line, new RegExp(`staff checklist thread not read \\(${discordLink(t.id)}\\): Discord GET /channels/${t.id} -> 403`), `${why}: the line holds its cause`);
+    const failure = out.filter((l) => l.startsWith('#17: ')).at(-1);
+    if (postFails) assert.match(failure, /Discord post not read/, `${why}: the failure names the post`);
+    if (threadFails) assert.match(failure, /staff checklist thread not read/, `${why}: and the thread`);
+    assert.equal(w.tagOf('717'), postFails ? 'Triaged' : 'Closed', `${why}: the post is repaired unless unread`);
+    assert.deepEqual([ckName(w, t), t.archived], [["Won't fix"], true], `${why}: the thread is repaired`);
+  }
+});
+
+test('CH8: a failed player-side step in fix mode stops the post\'s repair, never the thread\'s, and with the checklist off ends the issue as before', async () => {
+  // The ship record write fails.
+  for (const over of [{}, { CHECKLIST_FORUM_ID: '' }]) {
+    const on = !('CHECKLIST_FORUM_ID' in over);
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    const t = seed(w, 17, { applied_tags: ['c-fix'] });
+    w.tags = [{ name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
+    w.contains.set('aaaaaaa1...c-v5.0.1', 'ahead');
+    w.fail.push(['POST', /issues\/17\/comments$/, fail500(), 1]);
+    // A note with a run: the failed ship record stops the repair, not the note judging.
+    w.record(17, 'Notification attempted: x\n\n<!-- discord-told: shipped-a -->\n<!-- discord-told-status: Shipped -->\n<!-- discord-told-run: 4242 -->');
+    const out = [];
+    await assert.rejects(run({
+      eventName: 'schedule', payload: {}, env: { ...env, ...over, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: (s) => out.push(s), now: () => w.clock,
+    }), /could not update issue\(s\) #17; see above/);
+    // The player-side mutations: label writes, the post's tags and messages,
+    // and comments other than the failed ship record and the checklist
+    // record. GraphQL reads (a POST) are not writes.
+    const playerWrites = w.calls.filter((c) => c.method !== 'GET' && (/\/issues\/17\/labels/.test(c.url)
+      || /discord\.com\/api\/v10\/channels\/717(\/messages)?$/.test(c.url)
+      || (/\/issues\/17\/comments$/.test(c.url) && !/discord-shipped-in/.test(c.body.body))
+      || (/\/issues\/comments\/\d+$/.test(c.url) && !/discord-checklist/.test(c.body.body))));
+    assert.deepEqual(playerWrites, [], `${on ? 'on' : 'off'}: no label, post or note write after the failure`);
+    assert.equal(w.find('POST', /\/issues\/17\/comments$/).length, 1, 'the ship record was tried once');
+    if (on) {
+      assert.match(lineOf(out, 17), new RegExp(`checklist archive owed \\(${discordLink(t.id)}\\)`));
+      assert.match(out.filter((l) => l.startsWith('#17: ')).at(-1), /ship record not written/);
+      assert.deepEqual([ckName(w, t), t.archived], [['Shipped'], true], 'the thread is still repaired');
+      assert.match(lineOf(out, 17), /owed message "x" is no longer true/, 'the notes are still judged');
+    }
+  }
+  // A note's run cannot be read.
+  {
+    const w = world();
+    w.issue(17);
+    const t = seed(w, 17, { applied_tags: ['c-tri', 'c-acc'] });
+    w.record(17, 'Notification attempted: x\n\n<!-- discord-told: fixed-a -->\n<!-- discord-told-status: Fixed, next update -->\n<!-- discord-told-run: 4242 -->');
+    w.fail.push(['GET', /actions\/runs\/4242$/, fail500(), 99]);
+    const out = [];
+    await assert.rejects(sweep(w, 'fix', out), /could not update issue\(s\) #17; see above/);
+    assert.match(out.filter((l) => l.startsWith('#17: ')).at(-1), /run of .+ not read/);
+    assert.deepEqual(ckName(w, t), ['Triaged'], 'the thread is still repaired');
+  }
+  // A note's message cannot be worked out: the In progress message reads the issue's events.
+  {
+    const w = world();
+    w.issue(17);
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    const t = seed(w, 17, { applied_tags: ['c-tri', 'c-acc'] });
+    w.record(17, 'Notification attempted: x\n\n<!-- discord-told: progress-a -->\n<!-- discord-told-status: In progress -->');
+    w.fail.push(['GET', /issues\/17\/events/, fail500(), 99]);
+    const out = [];
+    await assert.rejects(sweep(w, 'fix', out), /could not update issue\(s\) #17; see above/);
+    assert.match(out.filter((l) => l.startsWith('#17: ')).at(-1), /message of .+ not read/);
+    assert.deepEqual(ckName(w, t), ['In progress'], 'the thread is still repaired');
+  }
+});
+
+test('CH8: a checklist line alone never moves the post', async () => {
+  const w = world();
+  w.issue(17);
+  // A stale Accepted tag: the issue has no `accepted` label.
+  const t = seed(w, 17, { applied_tags: ['c-tri', 'c-acc'] });
+  // A PR makes the post's status due after the sweep read the post.
+  w.hooks.push(['GET', threadUrl(t.id), async () => { w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] }); }]);
+  const out = [];
+  await sweep(w, 'fix', out);
+  assert.match(lineOf(out, 17), new RegExp(`checklist tags Triaged, Accepted -> Triaged, keeping 0 staff tag\\(s\\) \\(${discordLink(t.id)}\\)`));
+  assert.equal(w.tagOf('717'), 'Triaged');
+});
