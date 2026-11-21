@@ -754,20 +754,25 @@ test('CH3: a job that lost its create answer is followed by one that finds the t
   }
 });
 
-test('CH3: a create that lands with its answer lost is taken by the next job, and only one create is ever sent', async () => {
-  const w = world();
-  w.issue(17);
-  let landed = false;
-  w.hooks.push(['POST', /channels\/950\/threads$/, async (call) => {
-    if (landed) return;
-    landed = true;
-    w.ckThread(17, { name: call.body.name, applied_tags: [...call.body.applied_tags], starter: { author: { id: BOT_USER }, content: call.body.message.content } });
-    w.fail.push(['POST', /channels\/950\/threads$/, fail500(), 1]);
-  }]);
-  await assert.rejects(job(w), /-> 500/);
-  assert.equal(recordOf(w).state, 'creating', 'a 500 may have landed: the record is not set back');
-  await job(w);
-  assert.deepEqual([ours(w).length, recordOf(w).threadId, w.find('POST', /channels\/950\/threads$/).length], [1, ours(w)[0].id, 1]);
+test('CH3: a create that lands with its answer lost, or answered with no thread id, is taken by the next job, and only one create is ever sent', async () => {
+  for (const [why, answer, fails] of [
+    ['a 500', fail500, /-> 500/],
+    ['an answer with no thread id', () => new Response('{}', { status: 200 }), /the create was answered with no thread id/],
+  ]) {
+    const w = world();
+    w.issue(17);
+    let landed = false;
+    w.hooks.push(['POST', /channels\/950\/threads$/, async (call) => {
+      if (landed) return;
+      landed = true;
+      w.ckThread(17, { name: call.body.name, applied_tags: [...call.body.applied_tags], starter: { author: { id: BOT_USER }, content: call.body.message.content } });
+      w.fail.push(['POST', /channels\/950\/threads$/, answer(), 1]);
+    }]);
+    await assert.rejects(job(w), fails, why);
+    assert.equal(recordOf(w).state, 'creating', `${why}: the create may have landed, so the record is not set back`);
+    await job(w);
+    assert.deepEqual([ours(w).length, recordOf(w).threadId, w.find('POST', /channels\/950\/threads$/).length], [1, ours(w)[0].id, 1], why);
+  }
 });
 
 test('CH3: with no single bot thread to take, nothing is created and the record stays not confirmed, eight days on too', async () => {
@@ -898,6 +903,34 @@ test('CH3: an issue that stops being the bot\'s during the search, the forum rea
     }]);
     await assert.rejects(job(w), /checklist forum has no "Won't fix" tag/);
     assert.deepEqual([recordOf(w).state, ckThreads(w).length], ['pending', 0], 'moved on during the forum read');
+  }
+  {
+    // Triaged renamed to a staff name during the `creating` save: the forum
+    // is read again just before the create, so no thread gets that tag.
+    const w = world();
+    w.issue(17);
+    let once = false;
+    w.hooks.push(['PATCH', /issues\/comments\/\d+$/, async (call) => {
+      if (once || !/discord-checklist: creating/.test(call.body.body)) return;
+      once = true;
+      w.ckForum.available_tags.find((x) => x.name === 'Triaged').name = 'Needs triage';
+    }]);
+    await assert.rejects(job(w), /checklist forum has no "Triaged" tag/);
+    assert.deepEqual([recordOf(w).state, ckThreads(w).length], ['pending', 0], 'renamed during the creating save');
+  }
+  {
+    // A member's PR opened during the `creating` save: the create is planned
+    // from the read after the save, not the one before it.
+    const w = world();
+    w.issue(17);
+    let once = false;
+    w.hooks.push(['PATCH', /issues\/comments\/\d+$/, async (call) => {
+      if (once || !/discord-checklist: creating/.test(call.body.body)) return;
+      once = true;
+      w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    }]);
+    await job(w);
+    assert.deepEqual(w.find('POST', /channels\/950\/threads$/).map((c) => c.body.applied_tags), [['c-prog']], 'moved on during the creating save');
   }
   {
     const w = world();

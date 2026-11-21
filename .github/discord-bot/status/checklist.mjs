@@ -215,7 +215,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       const c = await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body });
       rec = { id: c.id, url: c.html_url || '', state: 'pending', threadId: null, guildId: '', forumId: '', since: at, issueUrl: w.issue.html_url, archived: null };
     }
-    if (!rec.threadId) rec = rec.state === 'creating' ? await adopt(n, w, rec) : await create(n, w, rec);
+    if (!rec.threadId) rec = rec.state === 'creating' ? await adopt(n, w, rec) : await create(n, rec);
     if (rec) await mirrorTags(n, rec);
   }
 
@@ -260,29 +260,30 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
   });
 
   // For a `pending` record only: no create can have reached Discord yet.
-  async function create(n, w, rec) {
+  async function create(n, rec) {
     const forum = await discord.getChannel(forumId);
     const guildId = String(forum.guild_id);
-    const tagsFor = (cur) => {
-      const p = plan(cur)([], forum.available_tags || []);
+    const tagsFor = (cur, f) => {
+      const p = plan(cur)([], f.available_tags || []);
       if (p.missing) throw new Error(noTag(cur.name));
       return p.tags;
     };
     const ready = await stillOpenable(n);
     if (!ready) return null;
-    tagsFor(ready);
+    tagsFor(ready, forum);
     // Marked just before the create, with the forum it goes to, so a lost
     // answer is searched for there.
     const trying = { ...rec, state: 'creating', guildId, forumId, since: now(), issueUrl: ready.issue.html_url };
     await write(rec, trying);
-    // The save is a request of its own, so GitHub is read once more and the
-    // thread is planned from that read. No create has gone out yet: a stop
-    // here sets the record back.
+    // The save is a request of its own, so GitHub is read once more, then
+    // the forum, last, so a status tag renamed meanwhile is seen; the thread
+    // is planned from both. No create has gone out yet: a stop here sets the
+    // record back.
     let cur;
     let tags;
     try {
       cur = await stillOpenable(n);
-      if (cur) tags = tagsFor(cur);
+      if (cur) tags = tagsFor(cur, await discord.getChannel(forumId));
     } catch (e) {
       await setBack(trying, e);
       throw e;
@@ -300,6 +301,9 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       if (status >= 400 && status < 500) await setBack(trying, e);
       throw e;
     }
+    // An answer with no thread id says nothing of what was made: the record
+    // stays `creating`, so the next job looks for the thread.
+    if (!made || !/^\d+$/.test(String(made.id))) throw new Error('the create was answered with no thread id; the issue\'s next event looks for the thread');
     await write(trying, { state: made.id });
     return { ...trying, state: made.id, threadId: made.id, linked: true };
   }
