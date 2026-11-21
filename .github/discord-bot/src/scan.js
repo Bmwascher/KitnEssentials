@@ -167,24 +167,6 @@ function budgetClient(env, deps, budget) {
 
 const refused = (err) => / -> (403|404) /.test(String(err && err.message));
 
-// One forum's archived posts, newest first, back to those archived at `since`
-// (epoch ms), up to a few pages. `cut` is the archive time it stopped at when
-// the page limit came first.
-async function archivedPosts(discord, forumId, since, pages) {
-  const out = [];
-  let before = '';
-  for (let page = 0; page < pages; page++) {
-    const arch = await discord.call('GET', `/channels/${forumId}/threads/archived/public?limit=50${before}`);
-    const threads = arch.threads || [];
-    out.push(...threads);
-    const oldest = threads.at(-1);
-    const stamp = oldest && oldest.thread_metadata && oldest.thread_metadata.archive_timestamp;
-    if (!arch.has_more || !stamp || Date.parse(stamp) < since) return { threads: out, cut: null };
-    before = `&before=${encodeURIComponent(stamp)}`;
-  }
-  return { threads: out, cut: out.at(-1).thread_metadata.archive_timestamp };
-}
-
 const buttons = (m) => (m.components || []).flatMap((row) => row.components || []);
 // An old button greeting, or a queue card, holding the post's send button.
 export const hasButton = (m, postId) => buttons(m).some((c) => c.custom_id === `${SEND_BUTTON}:${postId}`);
@@ -643,7 +625,7 @@ export async function daily(env, deps = {}) {
   let cut = false;
   for (const id of tagsByForum.keys()) {
     try {
-      const arch = await archivedPosts(discord, id, now - DAILY_ARCHIVED_MS, DAILY_ARCHIVE_PAGES);
+      const arch = await discord.archivedThreads(id, now - DAILY_ARCHIVED_MS, DAILY_ARCHIVE_PAGES);
       for (const t of arch.threads) threads.set(t.id, t);
       cut = cut || !!arch.cut;
     } catch (err) {

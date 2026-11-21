@@ -1,5 +1,5 @@
 // Minimal Discord REST client. `fetchImpl` is injectable so tests never hit the network.
-import { nextAppliedTags, currentStatus, otherTags } from './core.js';
+import { nextAppliedTags, currentStatus, otherTags, sameTags, snowflakeMs } from './core.js';
 
 const API = 'https://discord.com/api/v10';
 
@@ -8,6 +8,14 @@ const API = 'https://discord.com/api/v10';
 // about the post.
 export const postGone = (err, threadId) => new RegExp(`^Discord (?:GET|PATCH) /channels/${threadId} -> 404 `)
   .test(String((err && err.message) || ''));
+
+// The HTTP status a Discord request answered with, when `err` is the error
+// of that request (`method` and `path`), else null. Only the prefix is read:
+// the response body after it can hold any text.
+export function answeredStatus(err, method, path) {
+  const m = /^Discord (\S+) (\S+) -> (\d{3}) /.exec(String((err && err.message) || ''));
+  return m && m[1] === method && m[2] === path ? Number(m[3]) : null;
+}
 
 export function discordClient(token, fetchImpl = fetch) {
   async function call(method, path, body) {
@@ -24,7 +32,12 @@ export function discordClient(token, fetchImpl = fetch) {
       const text = await res.text().catch(() => '');
       throw new Error(`Discord ${method} ${path} -> ${res.status} ${text.slice(0, 300)}`);
     }
-    return res.status === 204 ? null : res.json();
+    if (res.status === 204) return null;
+    // The parser's own message can quote the body, which may hold a staff
+    // tag's name; the request and its status say enough.
+    return res.json().catch(() => {
+      throw new Error(`Discord ${method} ${path} -> ${res.status} (the answer was not JSON)`);
+    });
   }
 
   async function threadAndForum(threadId) {
@@ -33,6 +46,33 @@ export function discordClient(token, fetchImpl = fetch) {
     return { thread, forum };
   }
   const archivedOf = (t) => !!(t.thread_metadata && t.thread_metadata.archived);
+
+  // One forum's archived threads, newest first, back to those archived at
+  // `since` (epoch ms), up to a few pages. `cut` is the archive time it
+  // stopped at when the page limit came first. Discord's `before` is
+  // exclusive, so a thread archived at the same time as a page's last one
+  // can be skipped; the daily check accepts that for its count of posts.
+  // With `ties`, for the search, which needs every thread more than many,
+  // each next page starts a millisecond later, repeats are dropped by id,
+  // and a page that brings nothing new ends the listing as cut short.
+  async function archivedThreads(forumId, since, pages, { ties = false } = {}) {
+    const out = [];
+    const seen = new Set();
+    let before = '';
+    for (let page = 0; page < pages; page++) {
+      const arch = await call('GET', `/channels/${forumId}/threads/archived/public?limit=50${before}`);
+      const threads = arch.threads || [];
+      const fresh = ties ? threads.filter((t) => !seen.has(t.id)) : threads;
+      for (const t of fresh) seen.add(t.id);
+      out.push(...fresh);
+      const oldest = threads.at(-1);
+      const stamp = oldest && oldest.thread_metadata && oldest.thread_metadata.archive_timestamp;
+      if (!arch.has_more || !stamp || Date.parse(stamp) < since) return { threads: out, cut: null };
+      if (ties && !fresh.length) break;
+      before = `&before=${encodeURIComponent(ties ? new Date(Date.parse(stamp) + 1).toISOString() : stamp)}`;
+    }
+    return { threads: out, cut: out.at(-1).thread_metadata.archive_timestamp };
+  }
 
   return {
     call,
@@ -120,6 +160,76 @@ export function discordClient(token, fetchImpl = fetch) {
       if (thread.thread_metadata && thread.thread_metadata.archived) {
         await call('PATCH', `/channels/${threadId}`, { archived: false });
       }
+    },
+    archive: (threadId) => call('PATCH', `/channels/${threadId}`, { archived: true }),
+    archivedThreads,
+    // The checklist's only tag writer. Discord takes only a whole tag list,
+    // so the forum and then the thread are read just before the write, the
+    // thread last, and nothing runs between that read and the write: a tag
+    // added meanwhile is kept. A thread outside `forumId` is never written,
+    // and a plan whose status tag the forum lacks writes no tags. An
+    // archived thread must be opened to change its tags; it is archived
+    // again in the next request unless `open` asks to leave it open (a
+    // reopen overtook the close it was archived for). A refused first write
+    // changed nothing. Any other failure may have opened the thread before
+    // its answer was lost, so the re-archive is still sent; when it cannot
+    // be made, the error is thrown marked `rearchive`.
+    async setTags(threadId, forumId, plan, { open = false } = {}) {
+      const path = `/channels/${threadId}`;
+      const forum = await call('GET', `/channels/${forumId}`);
+      const thread = await call('GET', path);
+      if (String(thread.parent_id) !== String(forumId)) {
+        throw new Error(`staff checklist thread is in channel ${thread.parent_id}, not the checklist forum`);
+      }
+      const applied = thread.applied_tags || [];
+      const p = plan(applied, forum.available_tags || []);
+      const archived = archivedOf(thread);
+      const retag = !p.missing && !sameTags(p.tags, applied);
+      if (!retag && !(open && archived)) return { ...p, wrote: false, archived };
+      const keep = archived && !open;
+      const rearchive = () => call('PATCH', path, { archived: true });
+      try {
+        await call('PATCH', path, { ...(retag ? { applied_tags: p.tags } : {}), ...(archived ? { archived: false } : {}) });
+      } catch (e) {
+        const status = answeredStatus(e, 'PATCH', path) || 0;
+        if (!keep || (status >= 400 && status < 500)) throw e;
+        // Both causes are kept: the re-archive's may name the permission to fix.
+        const again = await rearchive().then(() => null, (r) => r);
+        throw again ? Object.assign(e, { rearchive: true, rearchiveError: again }) : e;
+      }
+      if (keep) {
+        try {
+          await rearchive();
+        } catch (e) {
+          throw Object.assign(e, { rearchive: true });
+        }
+      }
+      return { ...p, wrote: true, archived };
+    },
+    // A thread's parent, its tags, its own forum's tags and its archive state.
+    async threadState(threadId) {
+      const { thread, forum } = await threadAndForum(threadId);
+      return { parentId: String(thread.parent_id), applied: thread.applied_tags || [], available: forum.available_tags || [], archived: archivedOf(thread) };
+    },
+    createThread: (forumId, { name, content, tagIds }) => call('POST', `/channels/${forumId}/threads`, {
+      name, applied_tags: tagIds, message: { content, allowed_mentions: { parse: [] } },
+    }),
+    // A forum's threads made at or after `sinceMs`: the active list, the
+    // archived list back to that time, then the active list again, merged. A
+    // thread that moves once between the lists while they are read is in one
+    // of them; one that moves twice can be missed. A thread archived before
+    // `sinceMs` was made before it too. `complete` is false when the
+    // archived pages ran out first.
+    async threadsSince(guildId, forumId, sinceMs, pages) {
+      const byId = new Map();
+      const take = (list) => {
+        for (const t of list || []) if (t.parent_id === forumId && snowflakeMs(t.id) >= sinceMs) byId.set(t.id, t);
+      };
+      take((await call('GET', `/guilds/${guildId}/threads/active`)).threads);
+      const arch = await archivedThreads(forumId, sinceMs, pages, { ties: true });
+      take(arch.threads);
+      take((await call('GET', `/guilds/${guildId}/threads/active`)).threads);
+      return { threads: [...byId.values()], complete: !arch.cut };
     },
   };
 }
