@@ -6,6 +6,20 @@ import { FORUM } from './fake-fetch.mjs';
 const BOT = 'github-actions[bot]';
 const GUILD = '800';
 const MARK = (thread) => `<!-- discord-thread: ${thread} reporter: 42 -->`;
+export const BOT_USER = '999';
+// The staff checklist forum: the bot's eight tags and five of staff's own.
+const CHECKLIST_FORUM = {
+  id: '950',
+  guild_id: GUILD,
+  available_tags: [
+    { id: 'c-tri', name: 'Triaged' }, { id: 'c-prog', name: 'In progress' }, { id: 'c-fix', name: 'Fixed' },
+    { id: 'c-ship', name: 'Shipped' }, { id: 'c-done', name: 'Done' }, { id: 'c-wont', name: "Won't fix" },
+    { id: 'c-dup', name: 'Duplicate' }, { id: 'c-acc', name: 'Accepted' },
+    { id: 'c-staff', name: 'Needs QA' }, { id: 'c-s2', name: 'S2' }, { id: 'c-s3', name: 'S3' }, { id: 'c-s4', name: 'S4' }, { id: 'c-s5', name: 'S5' },
+  ],
+};
+// A Discord id made at `ms`, so a thread's creation time reads from its id.
+const snowAt = (ms, seq) => String((BigInt(ms - 1420070400000) << 22n) + BigInt(seq));
 
 export function world() {
   const w = {
@@ -22,6 +36,8 @@ export function world() {
     hooks: [], // [method, RegExp, fn(call)] run before a matching call is served
     fail: [], // [method, RegExp, Response | Error, times]
     runs: new Map(), // workflow run id -> { status, run_attempt, created_at }
+    ckForum: structuredClone(CHECKLIST_FORUM), // a test may take a tag away
+    archivePage: 50, // archived threads a listing page holds
   };
   w.start = w.clock;
 
@@ -29,6 +45,7 @@ export function world() {
     const thread = over.thread || String(700 + n);
     const i = {
       number: n, state: 'open', state_reason: null, labels: new Set(['from-discord']), updated_at: new Date(w.clock).toISOString(),
+      title: `Issue ${n}`, html_url: `https://github.com/me/one/issues/${n}`,
       body: `## Report\n\n> hi\n\n${MARK(thread)}`, comments: [], events: [], ...over,
     };
     if (over.labels) i.labels = new Set(over.labels);
@@ -41,6 +58,16 @@ export function world() {
     // A post with the forum's or the server's id would answer as the forum, or hide a link built from the wrong id.
     if (id === FORUM.id || id === GUILD) throw new Error(`fake world: post ${id} is the forum's or the server's id; give it another`);
     const t = { id, parent_id: FORUM.id, applied_tags: ['t-retail', 't-bug', 's-tri'], archived: true, messages: [], ...over };
+    w.threads.set(id, t);
+    return t;
+  };
+  // A checklist thread the bot opened for issue `n`, made now.
+  w.ckThread = (n, over = {}) => {
+    const id = snowAt(w.clock, w.nextId++);
+    const t = {
+      id, parent_id: CHECKLIST_FORUM.id, applied_tags: [], archived: false, archivedAt: null, messages: [],
+      starter: { author: { id: BOT_USER }, content: `**Issue ${n}**\nIssue: https://github.com/me/one/issues/${n}` }, ...over,
+    };
     w.threads.set(id, t);
     return t;
   };
@@ -58,7 +85,9 @@ export function world() {
     const i = w.issues.get(n);
     i.state = 'closed';
     i.state_reason = reason;
-    i.events.push({ id: w.nextId++, event: 'closed', commit_id: commit, closer, duplicateOf });
+    // GitHub stamps the close on the issue and on its event alike.
+    i.closed_at = new Date(w.clock).toISOString();
+    i.events.push({ id: w.nextId++, event: 'closed', commit_id: commit, closer, duplicateOf, created_at: i.closed_at });
   };
   w.tagOf = (threadId) => {
     const id = w.threads.get(threadId).applied_tags.at(-1);
@@ -67,7 +96,7 @@ export function world() {
   w.said = (threadId) => w.threads.get(threadId).messages.map((m) => m.content);
 
   const view = (i) => ({
-    number: i.number, state: i.state, state_reason: i.state_reason, body: i.body,
+    number: i.number, state: i.state, state_reason: i.state_reason, body: i.body, title: i.title, html_url: i.html_url, closed_at: i.closed_at || null,
     labels: [...i.labels].map((name) => ({ name })),
   });
   const json = (obj, status = 200) => new Response(obj === null ? null : JSON.stringify(obj), { status: obj === null ? 204 : status });
@@ -80,6 +109,11 @@ export function world() {
     const nodes = all.slice(from, from + w.pageSize);
     return { nodes, pageInfo: { hasNextPage: from + w.pageSize < all.length, endCursor: String(from + w.pageSize) } };
   };
+  // A thread as Discord's channel and listing routes show it.
+  const chan = (t) => ({
+    id: t.id, guild_id: GUILD, parent_id: t.parent_id, applied_tags: [...t.applied_tags],
+    thread_metadata: { archived: t.archived, archive_timestamp: new Date(t.archivedAt || w.start).toISOString() },
+  });
 
   const routes = [
     ['GET', /\/repos\/me\/one\/issues\/(\d+)$/, (m) => {
@@ -98,7 +132,7 @@ export function world() {
     ['GET', /\/repos\/me\/one\/issues\/(\d+)\/comments/, (m, url) => json(slice(w.issues.get(Number(m[1])).comments, url))],
     ['POST', /\/repos\/me\/one\/issues\/(\d+)\/comments$/, (m, url, body) => {
       const c = w.record(Number(m[1]), body.body);
-      return json({ id: c.id });
+      return json({ id: c.id, html_url: c.html_url, created_at: c.created_at });
     }],
     ['GET', /\/repos\/me\/one\/issues\/(\d+)\/events/, (m, url) => json(slice(w.issues.get(Number(m[1])).events, url))],
     ['POST', /\/repos\/me\/one\/issues\/(\d+)\/labels$/, (m, url, body) => {
@@ -171,16 +205,21 @@ export function world() {
     }],
     ['GET', /discord\.com\/api\/v10\/channels\/(\d+)$/, (m) => {
       if (m[1] === FORUM.id) return json(FORUM);
+      if (m[1] === w.ckForum.id) return json(w.ckForum);
       const t = w.threads.get(m[1]);
       if (!t) return json({ message: 'Unknown Channel' }, 404);
       // The server id differs from the forum id (900), so a link built from the wrong one fails.
-      return json({ id: t.id, guild_id: GUILD, parent_id: t.parent_id, applied_tags: [...t.applied_tags], thread_metadata: { archived: t.archived } });
+      return json(chan(t));
     }],
     ['PATCH', /discord\.com\/api\/v10\/channels\/(\d+)$/, (m, url, body) => {
       const t = w.threads.get(m[1]);
       if (!t) return json({ message: 'Unknown Channel' }, 404);
       if (body.applied_tags) t.applied_tags = body.applied_tags;
       if (body.archived === false) t.archived = false;
+      if (body.archived === true) {
+        t.archived = true;
+        t.archivedAt = w.clock;
+      }
       return json({});
     }],
     // One message: the post's starter (`starter` on the thread, its id the
@@ -196,6 +235,26 @@ export function world() {
       t.messages.push(body);
       return json({ id: String(t.messages.length) });
     }],
+    // A thread made in a forum, with its first message, by the bot.
+    ['POST', /discord\.com\/api\/v10\/channels\/(\d+)\/threads$/, (m, url, body) => {
+      const id = snowAt(w.clock, w.nextId++);
+      const t = {
+        id, parent_id: m[1], name: body.name, applied_tags: [...(body.applied_tags || [])], archived: false, archivedAt: null, messages: [],
+        starter: { author: { id: BOT_USER }, content: body.message.content, allowed_mentions: body.message.allowed_mentions },
+      };
+      w.threads.set(id, t);
+      return json(chan(t));
+    }],
+    ['GET', /discord\.com\/api\/v10\/guilds\/(\d+)\/threads\/active$/, () => json({ threads: [...w.threads.values()].filter((t) => !t.archived).map(chan) })],
+    // A forum's archived threads, newest archive first, `w.archivePage` to a page.
+    ['GET', /discord\.com\/api\/v10\/channels\/(\d+)\/threads\/archived\/public/, (m, url) => {
+      const before = decodeURIComponent((/[?&]before=([^&]+)/.exec(url) || [0, ''])[1]);
+      const all = [...w.threads.values()].filter((t) => t.archived && t.parent_id === m[1]).map(chan)
+        .sort((a, b) => Date.parse(b.thread_metadata.archive_timestamp) - Date.parse(a.thread_metadata.archive_timestamp))
+        .filter((t) => !before || t.thread_metadata.archive_timestamp < before);
+      return json({ threads: all.slice(0, w.archivePage), has_more: all.length > w.archivePage });
+    }],
+    ['GET', /discord\.com\/api\/v10\/users\/@me$/, () => json({ id: BOT_USER })],
   ];
 
   w.fetch = async (url, init = {}) => {

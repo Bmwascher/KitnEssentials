@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { checklistBody, parseChecklist } from '../status/checklist.mjs';
+import { run } from '../status/status.mjs';
+import { world, BOT_USER } from './fake-world.mjs';
 
 const comment = (body, id = 5) => ({ id, body, html_url: `https://github.com/me/one/issues/17#issuecomment-${id}`, created_at: '2026-11-20T00:00:00Z' });
 
@@ -26,4 +28,484 @@ test('CH1: a checklist record reads back as written', () => {
   assert.match(checklistBody({ state: '123', guildId: '800', since: 1, issueUrl: url }), /^Staff checklist thread: https:\/\/discord\.com\/channels\/800\/123\n/);
   assert.match(checklistBody({ state: 'pending', guildId: '', since: 1, issueUrl: url }), /^Staff checklist thread: opening\n/);
   assert.equal(parseChecklist(comment('Notification attempted: x\n\n<!-- discord-told: fixed-a -->')), null, 'a message note is no record');
+});
+
+// ---- The thread follows GitHub ----------------------------------------------------
+
+const DAY = 24 * 60 * 60 * 1000;
+const env = { GITHUB_TOKEN: 'gh', DISCORD_BOT_TOKEN: 'bot', RELEASE_TAG_PATTERN: '^v\\d', CHECKLIST_FORUM_ID: '950' };
+const repository = { full_name: 'me/one', default_branch: 'dev' };
+const go = (w, eventName, payload, over = {}, out = []) => run({
+  eventName, payload: { repository, ...payload }, env: { ...env, ...over }, fetchImpl: w.fetch, log: (s) => out.push(s), now: () => w.clock,
+});
+// The checklist job for an issue event.
+const job = (w, action = 'opened', { n = 17, extra = {}, out = [], over = {} } = {}) => go(w, 'issues', { action, issue: { number: n }, ...extra }, { CHECKLIST_ONLY: '1', ...over }, out);
+const label = { extra: { label: { name: 'accepted' } } };
+const pr = (w, number, action = 'opened') => go(w, 'pull_request_target', { action, pull_request: { number } });
+const tagPush = (w, name, over = {}, out = []) => go(w, 'push', { ref: `refs/tags/${name}`, created: true, after: `obj-${name}`, head_commit: { id: `c-${name}` } }, over, out);
+const ckThreads = (w) => [...w.threads.values()].filter((t) => t.parent_id === '950');
+const ours = (w) => ckThreads(w).filter((t) => t.starter && t.starter.author.id === BOT_USER);
+const ckName = (w, t) => t.applied_tags.map((id) => (w.ckForum.available_tags.find((x) => x.id === id) || {}).name).filter(Boolean);
+const botComments = (w, n) => w.issues.get(n).comments.filter((c) => c.user.login === 'github-actions[bot]');
+const recordOf = (w, n = 17) => botComments(w, n).map(parseChecklist).find(Boolean) || null;
+const closeId = (w, n = 17) => w.issues.get(n).events.filter((e) => e.event === 'closed').at(-1).id;
+const threadUrl = (id) => new RegExp(`discord\\.com/api/v10/channels/${id}$`);
+// A checklist thread the bot opened for #n, with its record on the issue.
+function seed(w, n = 17, over = {}, key = null) {
+  const t = w.ckThread(n, over);
+  w.record(n, checklistBody({ state: t.id, guildId: '800', since: w.clock, issueUrl: `https://github.com/me/one/issues/${n}`, archived: key }));
+  return t;
+}
+const fail500 = () => new Response('{"message":"x"}', { status: 500 });
+// The next PATCH of the thread whose body `when` picks answers `status` and changes nothing, once.
+function failPatch(w, id, when, status = 500) {
+  let done = false;
+  w.hooks.push(['PATCH', threadUrl(id), async (call) => {
+    if (done || !when(call.body)) return;
+    done = true;
+    w.fail.push(['PATCH', threadUrl(id), new Response('{"message":"x"}', { status }), 1]);
+  }]);
+}
+// The next PATCH of the thread whose body `when` picks lands, and its answer is lost (500), once.
+function landThenFail(w, id, when) {
+  let done = false;
+  w.hooks.push(['PATCH', threadUrl(id), async (call) => {
+    if (done || !when(call.body)) return;
+    done = true;
+    const t = w.threads.get(id);
+    if (call.body.applied_tags) t.applied_tags = call.body.applied_tags;
+    if (call.body.archived === false) t.archived = false;
+    if (call.body.archived === true) {
+      t.archived = true;
+      t.archivedAt = w.clock;
+    }
+    w.fail.push(['PATCH', threadUrl(id), fail500(), 1]);
+  }]);
+}
+// The next comment edit whose body `when` picks answers 500, once.
+function failRecord(w, when) {
+  let done = false;
+  const re = /api\.github\.com\/repos\/me\/one\/issues\/comments\/\d+$/;
+  w.hooks.push(['PATCH', re, async (call) => {
+    if (done || !when(call.body.body)) return;
+    done = true;
+    w.fail.push(['PATCH', re, fail500(), 1]);
+  }]);
+}
+// No call sits between a checklist thread's last read and its tag write.
+function readThenWrite(w) {
+  w.calls.forEach((c, i) => {
+    const m = c.method === 'PATCH' && c.body && c.body.applied_tags && /discord\.com\/api\/v10\/channels\/(\d+)$/.exec(c.url);
+    if (!m || !w.threads.has(m[1]) || w.threads.get(m[1]).parent_id !== '950') return;
+    const prev = w.calls[i - 1];
+    assert.equal(`${prev.method} ${prev.url}`, `GET https://discord.com/api/v10/channels/${m[1]}`, 'the thread read comes just before its tag write');
+  });
+}
+
+test('CH4: the thread follows GitHub through a PR, its merge, a release, each close and a reopen, and keeps a staff tag', async () => {
+  const w = world();
+  w.issue(17);
+  const t = seed(w, 17, { applied_tags: ['c-tri', 'c-staff'] });
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  await pr(w, 5);
+  assert.deepEqual(ckName(w, t), ['Needs QA', 'In progress'], 'a PR');
+  w.prs.get(5).state = 'MERGED';
+  w.close(17, 'completed', 'aaaaaaa1');
+  await job(w, 'closed');
+  assert.deepEqual([ckName(w, t), t.archived], [['Needs QA', 'Fixed'], false], 'a merge');
+  w.tags = [{ name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
+  w.contains.set('aaaaaaa1...c-v5.0.1', 'ahead');
+  await tagPush(w, 'v5.0.1');
+  assert.deepEqual([ckName(w, t), t.archived], [['Needs QA', 'Shipped'], true], 'a release');
+  for (const [reason, want] of [['completed', 'Done'], ['not_planned', "Won't fix"], ['duplicate', 'Duplicate']]) {
+    Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
+    await job(w, 'reopened');
+    assert.deepEqual([ckName(w, t), t.archived], [['Needs QA', 'Triaged'], false], `a reopen before ${reason}`);
+    w.close(17, reason);
+    await job(w, 'closed');
+    assert.deepEqual([ckName(w, t), t.archived], [['Needs QA', want], true], reason);
+  }
+  readThenWrite(w);
+});
+
+test('CH4: Accepted follows the label on an open issue, only into a free slot, and a full thread keeps every staff tag', async () => {
+  const w = world();
+  const i = w.issue(17);
+  const t = seed(w, 17, { applied_tags: ['c-tri'] });
+  i.labels.add('accepted');
+  await job(w, 'labeled', label);
+  assert.deepEqual(ckName(w, t), ['Triaged', 'Accepted'], 'labeled');
+  i.labels.delete('accepted');
+  await job(w, 'unlabeled', label);
+  assert.deepEqual(ckName(w, t), ['Triaged'], 'unlabeled');
+  i.labels.add('accepted');
+  await job(w, 'labeled', label);
+  w.close(17, 'not_planned');
+  await job(w, 'closed');
+  assert.deepEqual(ckName(w, t), ["Won't fix"], 'closed while labeled');
+  readThenWrite(w);
+  {
+    // GitHub label names match in any case, as the workflow's `if` does.
+    const u = world();
+    u.issue(17).labels.add('Accepted');
+    const s = seed(u, 17, { applied_tags: ['c-tri'] });
+    await job(u, 'labeled', { extra: { label: { name: 'Accepted' } } });
+    assert.deepEqual(ckName(u, s), ['Triaged', 'Accepted'], 'the label in another letter case');
+  }
+
+  for (const [why, applied, labeled, forumLacks, line] of [
+    ['no free slot for Accepted', ['c-staff', 'c-s2', 'c-s3', 'c-s4', 'c-tri'], true, null, /#17: no free tag slot for Accepted on the checklist thread/],
+    ['five staff tags and no status', ['c-staff', 'c-s2', 'c-s3', 'c-s4', 'c-s5'], false, null, /#17: no free tag slot for "Triaged" on the checklist thread/],
+    ['a forum with no Accepted tag', ['c-tri'], true, 'Accepted', /#17: the checklist forum has no Accepted tag/],
+  ]) {
+    const v = world();
+    if (labeled) v.issue(17).labels.add('accepted');
+    else v.issue(17);
+    if (forumLacks) v.ckForum.available_tags = v.ckForum.available_tags.filter((x) => x.name !== forumLacks);
+    const u = seed(v, 17, { applied_tags: [...applied] });
+    const out = [];
+    await job(v, labeled ? 'labeled' : 'reopened', { ...(labeled ? label : {}), out });
+    assert.deepEqual(u.applied_tags, applied, `${why}: no tag dropped`);
+    assert.match(out.join('\n'), line, why);
+  }
+});
+
+test('CH4: a tag staff add while the bot reads the forum is kept, and a record in another account\'s comment is not the bot\'s', async () => {
+  const w = world();
+  w.issue(17);
+  const t = seed(w, 17, { applied_tags: ['c-tri'] });
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  let added = false;
+  w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/950$/, async () => {
+    if (added) return;
+    added = true;
+    t.applied_tags.push('c-staff');
+  }]);
+  await pr(w, 5);
+  assert.deepEqual(ckName(w, t), ['Needs QA', 'In progress']);
+  readThenWrite(w);
+
+  // The status tag is taken from the forum between the write and the read-back.
+  const x = world();
+  x.issue(17);
+  const s = seed(x, 17, { applied_tags: ['c-tri'] });
+  x.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  let taken = false;
+  x.hooks.push(['PATCH', threadUrl(s.id), async () => {
+    if (taken) return;
+    taken = true;
+    x.ckForum.available_tags = x.ckForum.available_tags.filter((tag) => tag.name !== 'In progress');
+  }]);
+  const out = [];
+  await assert.rejects(go(x, 'pull_request_target', { action: 'opened', pull_request: { number: 5 } }, {}, out), /checklist thread\(s\) not updated for #17/);
+  assert.match(out.join('\n'), /#17: staff checklist: checklist forum has no "In progress" tag/, 'the read-back sees the tag gone');
+  readThenWrite(x);
+
+  const v = world();
+  v.issue(17);
+  const u = v.ckThread(17, { applied_tags: ['c-tri'] });
+  v.record(17, checklistBody({ state: u.id, guildId: '800', since: v.clock, issueUrl: 'https://github.com/me/one/issues/17' }), 'someone');
+  v.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  await pr(v, 5);
+  assert.deepEqual(ckName(v, u), ['Triaged'], 'a copied marker is not the bot\'s record');
+
+  // Staff put another thread's id in the marker while a run is under way:
+  // the run writes nothing, and the new id is never saved as linked.
+  const y = world();
+  y.issue(17);
+  y.close(17, 'not_planned');
+  const a = seed(y, 17, { applied_tags: ['c-tri'] });
+  const b = y.ckThread(99);
+  let swapped = false;
+  y.hooks.push(['GET', /api\.github\.com\/repos\/me\/one\/issues\/comments\/\d+$/, async () => {
+    if (swapped) return;
+    swapped = true;
+    const c = botComments(y, 17).find((x) => parseChecklist(x));
+    c.body = c.body.replace(`discord-checklist: ${a.id}`, `discord-checklist: ${b.id}`);
+  }]);
+  await assert.rejects(job(y, 'closed'), /the staff checklist record changed during this run/);
+  const after = recordOf(y);
+  assert.deepEqual([after.threadId, after.linked, y.find('PATCH', threadUrl(a.id)).length, y.find('PATCH', threadUrl(b.id)).length], [b.id, false, 0, 0]);
+});
+
+// ---- Archiving ----------------------------------------------------------------------
+
+test('CH5: a failed archive, or a failed key save after it, is put right by the next job', async () => {
+  for (const [why, fail, afterFirst] of [
+    ['the archive write fails', (w, t) => failPatch(w, t.id, (b) => b.archived === true), [false, null]],
+    ['the key save fails', (w) => failRecord(w, (b) => /discord-checklist-archived/.test(b)), [true, null]],
+  ]) {
+    const w = world();
+    w.issue(17);
+    const t = seed(w, 17, { applied_tags: ['c-tri'] });
+    w.close(17, 'not_planned');
+    fail(w, t);
+    await assert.rejects(job(w, 'closed'), /checklist thread not updated for #17/, why);
+    assert.deepEqual([t.archived, recordOf(w).archived], afterFirst, why);
+    const writes = w.find('PATCH', threadUrl(t.id)).length;
+    await job(w, 'closed');
+    assert.deepEqual([t.archived, recordOf(w).archived], [true, `Won't fix:${closeId(w)}`], `${why}: the next job puts it right`);
+    if (why === 'the key save fails') assert.equal(w.find('PATCH', threadUrl(t.id)).length, writes, `${why}: no second archive write`);
+    readThenWrite(w);
+  }
+});
+
+test('CH5: a staff reopen stays open until the issue closes again, and an archive for a close a reopen overtook is undone', async () => {
+  const w = world();
+  const i = w.issue(17);
+  const t = seed(w, 17, { applied_tags: ['c-tri'] });
+  w.close(17, 'not_planned');
+  await job(w, 'closed');
+  assert.equal(t.archived, true);
+  // A staff reply opens the thread; a stale Accepted tag gives a repair to make.
+  t.archived = false;
+  t.applied_tags = ['c-wont', 'c-acc'];
+  await job(w, 'labeled', label);
+  assert.deepEqual([ckName(w, t), t.archived], [["Won't fix"], false], 'a job with no new close, and a tag repair, leave it open');
+  Object.assign(i, { state: 'open', state_reason: 'reopened' });
+  await job(w, 'reopened');
+  w.close(17, 'not_planned');
+  await job(w, 'closed');
+  assert.equal(t.archived, true, 'closed again for the same reason: archived again');
+  // The issue reopens; a release run then archives the thread for the old close.
+  Object.assign(i, { state: 'open', state_reason: 'reopened' });
+  await job(w, 'reopened');
+  const rec = botComments(w, 17).find((c) => parseChecklist(c));
+  rec.body = checklistBody({ ...parseChecklist(rec), archived: `Won't fix:${closeId(w)}` });
+  t.archived = true;
+  await job(w, 'labeled', label);
+  assert.deepEqual([ckName(w, t), t.archived, recordOf(w).archived], [['Triaged'], false, null], 'the late archive is undone');
+  readThenWrite(w);
+});
+
+test('CH5: a bot tag change keeps the archive state, and a write that may have left a finished thread open leaves its archive owed', async () => {
+  // An open issue's thread archived for inactivity stays archived through a PR's retag and a label's.
+  {
+    const w = world();
+    const i = w.issue(17);
+    const t = seed(w, 17, { applied_tags: ['c-tri'], archived: true });
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    await pr(w, 5);
+    assert.deepEqual([ckName(w, t), t.archived], [['In progress'], true], 'a PR');
+    i.labels.add('accepted');
+    await job(w, 'labeled', label);
+    assert.deepEqual([ckName(w, t), t.archived], [['In progress', 'Accepted'], true], 'a label');
+    readThenWrite(w);
+  }
+  // The same, with the retag landing and its answer lost: the re-archive still goes out.
+  {
+    const w = world();
+    w.issue(17);
+    const t = seed(w, 17, { applied_tags: ['c-tri'], archived: true });
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    landThenFail(w, t.id, (b) => b.archived === false);
+    await assert.rejects(pr(w, 5), /checklist thread\(s\) not updated for #17/);
+    assert.deepEqual([ckName(w, t), t.archived], [['In progress'], true], 'an inactive thread is archived again');
+    readThenWrite(w);
+  }
+  // A finished, archived thread whose Accepted tag is stale stays archived.
+  {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'not_planned');
+    const t = seed(w, 17, { applied_tags: ['c-wont', 'c-acc'], archived: true }, `Won't fix:${closeId(w)}`);
+    await job(w, 'closed');
+    assert.deepEqual(w.find('PATCH', threadUrl(t.id)).map((c) => c.body), [{ applied_tags: ['c-wont'], archived: false }, { archived: true }]);
+    assert.equal(t.archived, true);
+    readThenWrite(w);
+  }
+  // A failed write to a finished, archived thread: the run fails; the key is
+  // cleared only when the thread may be left open, so a refusal, or a
+  // re-archive that landed, never lets a later staff reply be archived over;
+  // the next job settles it.
+  for (const [why, fail, keyKept] of [
+    ['the re-archive fails', (w, t) => failPatch(w, t.id, (b) => b.archived === true), false],
+    ['the re-archive lands, its answer lost: the read after it shows it archived', (w, t) => landThenFail(w, t.id, (b) => b.archived === true), true],
+    ['the re-archive fails, and so does the read after it', (w, t) => {
+      failPatch(w, t.id, (b) => b.archived === true);
+      let once = false;
+      w.hooks.push(['PATCH', threadUrl(t.id), async (call) => {
+        if (once || call.body.archived !== true) return;
+        once = true;
+        w.fail.push(['GET', threadUrl(t.id), fail500(), 1]);
+      }]);
+    }, false],
+    ['the tag write lands, its answer lost: the re-archive still goes out', (w, t) => landThenFail(w, t.id, (b) => b.archived === false), true],
+    ['the tag write lands, its answer lost, and the re-archive fails', (w, t) => {
+      landThenFail(w, t.id, (b) => b.archived === false);
+      failPatch(w, t.id, (b) => b.archived === true);
+    }, false],
+    ['Discord refuses the tag write', (w, t) => failPatch(w, t.id, (b) => b.archived === false, 403), true],
+  ]) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'not_planned');
+    const key = `Won't fix:${closeId(w)}`;
+    const t = seed(w, 17, { applied_tags: ['c-wont', 'c-acc'], archived: true }, key);
+    fail(w, t);
+    await assert.rejects(job(w, 'closed'), /checklist thread not updated for #17/, why);
+    assert.deepEqual([t.archived, recordOf(w).archived], keyKept ? [true, key] : [false, null], why);
+    await job(w, 'closed');
+    assert.deepEqual([ckName(w, t), t.archived, recordOf(w).archived], [["Won't fix"], true, key], `${why}: the next job settles it`);
+    readThenWrite(w);
+  }
+  // A closed issue whose close event the read does not show yet: no write, and the archive stays.
+  {
+    const w = world();
+    const i = w.issue(17);
+    w.close(17, 'not_planned');
+    const key = `Won't fix:${closeId(w)}`;
+    const t = seed(w, 17, { applied_tags: ['c-wont'], archived: true }, key);
+    i.events = [];
+    await assert.rejects(job(w, 'closed'), /the issue is closed but its close event is not readable yet/);
+    assert.deepEqual([w.find('PATCH', threadUrl(t.id)), t.archived, recordOf(w).archived], [[], true, key]);
+  }
+  // Closed again after a reopen, while the event list lags: the earlier
+  // close is older than the issue's close time, so it is not taken for the
+  // current one, and a thread staff reopened after its archive is left as it is.
+  for (const [why, lagging] of [['the new close is not listed yet', 1], ['the reopen and the new close are not listed yet', 2]]) {
+    const w = world();
+    const i = w.issue(17);
+    w.close(17, 'not_planned');
+    const key = `Won't fix:${closeId(w)}`;
+    const t = seed(w, 17, { applied_tags: ['c-wont'] }, key);
+    w.clock += 5 * 60 * 1000;
+    i.events.push({ id: 990001, event: 'reopened', created_at: new Date(w.clock).toISOString() });
+    w.close(17, 'not_planned');
+    i.events.splice(-lagging);
+    await assert.rejects(job(w, 'closed'), /the issue is closed but its close event is not readable yet/, why);
+    assert.deepEqual([w.find('PATCH', threadUrl(t.id)), t.archived, recordOf(w).archived], [[], false, key], why);
+  }
+  // The forum lacks the needed status tag: no tag write, and the archive still follows GitHub.
+  {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'not_planned');
+    w.ckForum.available_tags = w.ckForum.available_tags.filter((x) => x.name !== "Won't fix");
+    const t = seed(w, 17, { applied_tags: ['c-tri', 'c-acc'], archived: true });
+    await assert.rejects(job(w, 'closed'), /checklist forum has no "Won't fix" tag/);
+    assert.deepEqual(w.find('PATCH', threadUrl(t.id)), [], 'no write to the thread');
+    assert.deepEqual([t.applied_tags, t.archived, recordOf(w).archived], [['c-tri', 'c-acc'], true, `Won't fix:${closeId(w)}`]);
+  }
+});
+
+// ---- Never in the way ---------------------------------------------------------------
+
+test('CH7: a checklist failure never stops the player\'s message, and fails the run at its end', async () => {
+  for (const [why, setup, line] of [
+    // The error body names a staff tag: only the request and its status reach the log.
+    ['no access to the forum', (w) => w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/950$/, new Response('{"message":"Missing Access","tag":"Needs QA"}', { status: 403 }), 99]), /-> 403/],
+    // An answer that is not JSON keeps the bot's note on it, and never its body.
+    ['the forum answers with no JSON', (w) => w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/950$/, new Response('<html>Needs QA</html>', { status: 200 }), 99]), /-> 200 \(the answer was not JSON\)/],
+    ['the forum lacks the Shipped tag', (w) => { w.ckForum.available_tags = w.ckForum.available_tags.filter((x) => x.name !== 'Shipped'); }, /checklist forum has no "Shipped" tag/],
+    ['the thread was deleted', (w, t) => w.threads.delete(t.id), /staff checklist thread is gone/],
+  ]) {
+    const w = world();
+    w.issue(17, { labels: ['from-discord', 'pending-release'] });
+    w.close(17, 'completed', 'aaaaaaa1');
+    const t = seed(w, 17, { applied_tags: ['c-fix'] });
+    setup(w, t);
+    w.tags = [{ name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
+    w.contains.set('aaaaaaa1...c-v5.0.1', 'ahead');
+    const out = [];
+    await assert.rejects(tagPush(w, 'v5.0.1', { GITHUB_RUN_ID: '555' }, out), /checklist thread\(s\) not updated for #17/, why);
+    assert.match(out.join('\n'), line, why);
+    assert.doesNotMatch(out.join('\n'), /Needs QA/, `${why}: no staff tag name in the log`);
+    const outNow = () => w.said('717').filter((m) => /Out now in/.test(m)).length;
+    assert.equal(outNow(), 1, `${why}: the player is told`);
+    assert.ok(w.issues.get(17).comments.some((c) => /^Delivery confirmed: \*\*Out now/.test(c.body)), `${why}: and the note confirms it`);
+    await assert.rejects(tagPush(w, 'v5.0.1', { GITHUB_RUN_ID: '555', GITHUB_RUN_ATTEMPT: '2' }), /checklist/, why);
+    assert.equal(outNow(), 1, `${why}: a re-run sends nothing twice`);
+  }
+});
+
+test('CH7: a release run settles the thread when its ship record fails, and names both failure lists when both fail', async () => {
+  for (const [why, setup, want, settled] of [
+    ['the ship record write fails', (w) => w.fail.push(['POST', /issues\/17\/comments$/, fail500(), 1]),
+      /^could not update issue\(s\) #17; see above$/, true],
+    // The run's own compare proves the tag holds the fix; its proof stands in.
+    ['the ship record write fails while the tag list does not show the tag yet', (w) => {
+      w.tags = [];
+      w.fail.push(['POST', /issues\/17\/comments$/, fail500(), 1]);
+    }, /^could not update issue\(s\) #17; see above$/, true],
+    // The release lookup (the run's first GraphQL call) fails after the
+    // compare: the proof saved at the compare still shows Shipped.
+    ['the release lookup fails', (w) => w.fail.push(['POST', /graphql$/, fail500(), 1]),
+      /^could not update issue\(s\) #17; see above$/, true],
+    ['the post and the checklist both fail', (w) => {
+      w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717$/, fail500(), 99]);
+      w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/950$/, new Response('{"message":"Missing Access"}', { status: 403 }), 99]);
+    }, /^could not update issue\(s\) #17; see above; checklist thread\(s\) not updated for #17; see above$/, false],
+  ]) {
+    const w = world();
+    w.issue(17, { labels: ['from-discord', 'pending-release'] });
+    w.close(17, 'completed', 'aaaaaaa1');
+    const t = seed(w, 17, { applied_tags: ['c-fix'] });
+    w.tags = [{ name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
+    w.contains.set('aaaaaaa1...c-v5.0.1', 'ahead');
+    setup(w);
+    await assert.rejects(tagPush(w, 'v5.0.1'), (e) => want.test(e.message), why);
+    if (settled) assert.deepEqual([ckName(w, t), t.archived], [['Shipped'], true], `${why}: the thread is still settled`);
+  }
+});
+
+test('CH7: a failed first issue read on a PR run, or a failed owed-note scan on a re-run, still leaves the thread settled', async () => {
+  {
+    const w = world();
+    w.issue(17);
+    const t = seed(w, 17, { applied_tags: ['c-tri'] });
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    w.fail.push(['GET', /api\.github\.com\/repos\/me\/one\/issues\/17$/, fail500(), 1]);
+    await assert.rejects(pr(w, 5), /could not update issue\(s\) #17; see above/);
+    assert.deepEqual(ckName(w, t), ['In progress'], 'the PR run\'s first read failed');
+  }
+  {
+    // The PR's linked issue is already closed: the player side leaves it, the checklist does not.
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    const t = seed(w, 17, { applied_tags: ['c-tri'] });
+    w.prs.set(5, { author_association: 'MEMBER', state: 'MERGED', closes: [17] });
+    await pr(w, 5, 'closed');
+    assert.deepEqual(ckName(w, t), ['Fixed'], 'a closed linked issue');
+  }
+  {
+    const w = world();
+    w.issue(17, { labels: ['from-discord', 'pending-release'] });
+    w.close(17, 'completed', 'aaaaaaa1');
+    const t = seed(w, 17, { applied_tags: ['c-fix'] });
+    w.tags = [{ name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
+    w.contains.set('aaaaaaa1...c-v5.0.1', 'ahead');
+    // The re-run's scan is the run's only read of every from-discord issue.
+    w.fail.push(['GET', /issues\?state=all&.*labels=from-discord/, fail500(), 1]);
+    await assert.rejects(tagPush(w, 'v5.0.1', { GITHUB_RUN_ID: '555', GITHUB_RUN_ATTEMPT: '2' }), /the re-run's owed-note scan failed/);
+    assert.deepEqual([ckName(w, t), t.archived], [['Shipped'], true], 'the re-run\'s scan failed');
+  }
+});
+
+test('CH2: a re-run of the checklist job sends nothing, though its run owes a player message on another issue', async () => {
+  const w = world();
+  w.issue(17);
+  seed(w, 17, { applied_tags: ['c-tri'] });
+  w.issue(18);
+  w.close(18, 'completed', 'aaaaaaa1');
+  w.record(18, 'Notification attempted: **Fixed!** x\n\n<!-- discord-told: fixed-aaaaaaa1 -->\n<!-- discord-told-status: Fixed, next update -->\n<!-- discord-told-run: 555 -->');
+  await job(w, 'reopened', { over: { GITHUB_RUN_ID: '555', GITHUB_RUN_ATTEMPT: '2' } });
+  assert.deepEqual(w.said('718'), []);
+});
+
+test('CH2: with the forum set, the checklist job makes no call for any event but its own', async () => {
+  for (const [why, eventName, payload] of [
+    ['a PR event', 'pull_request_target', { action: 'opened', pull_request: { number: 5 } }],
+    ['another label', 'issues', { action: 'labeled', issue: { number: 17 }, label: { name: 'needs-info' } }],
+    ['an unlabeled event with no label', 'issues', { action: 'unlabeled', issue: { number: 17 } }],
+    ['an edited issue', 'issues', { action: 'edited', issue: { number: 17 } }],
+  ]) {
+    const w = world();
+    w.issue(17);
+    const out = [];
+    await go(w, eventName, payload, { CHECKLIST_ONLY: '1' }, out);
+    assert.deepEqual(w.calls, [], why);
+    assert.match(out.join('\n'), /not a checklist event/, why);
+  }
 });
