@@ -61,12 +61,13 @@ export function world() {
     w.threads.set(id, t);
     return t;
   };
-  // A checklist thread the bot opened for issue `n`, made now.
+  // A checklist thread the bot opened for issue `n`, made now. Its first
+  // message names the issue and the post as `w.issue(n)` makes them.
   w.ckThread = (n, over = {}) => {
     const id = snowAt(w.clock, w.nextId++);
     const t = {
       id, parent_id: CHECKLIST_FORUM.id, applied_tags: [], archived: false, archivedAt: null, messages: [],
-      starter: { author: { id: BOT_USER }, content: `**Issue ${n}**\nIssue: https://github.com/me/one/issues/${n}` }, ...over,
+      starter: { author: { id: BOT_USER }, content: `**Issue ${n}**\nIssue: https://github.com/me/one/issues/${n}\nPlayer post: https://discord.com/channels/${GUILD}/${700 + n}` }, ...over,
     };
     w.threads.set(id, t);
     return t;

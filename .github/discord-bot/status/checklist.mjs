@@ -19,6 +19,8 @@ const OWN = new Set([...CHECKLIST_NAMES, ACCEPTED].map((s) => s.toLowerCase()));
 const CLOSE_UNREAD = 'the issue is closed but its close event is not readable yet';
 const noTag = (name) => `checklist forum has no "${name}" tag`;
 const notOurs = (n) => `#${n}: no longer an issue the bot filed; its checklist thread is left as it is`;
+// The first message's player post line, as `firstMessage` writes it.
+const POST_LINE = /^Player post: https:\/\/discord\.com\/channels\/\d+\/(\d+)$/;
 
 const link = (guildId, threadId) => `https://discord.com/channels/${guildId}/${threadId}`;
 // A link needs the server's id; a record with none yet (an id put in a
@@ -45,10 +47,10 @@ export function checklistBody({ id, state, guildId, forumId = '', since, issueUr
     ...(thread ? [`<!-- discord-checklist-linked: ${state} comment: ${id} -->`] : []),
     ...(forumId ? [`<!-- discord-checklist-forum: ${forumId} -->`] : []),
     `<!-- discord-checklist-since: ${since} -->`,
-    // Bound to this comment like `linked`: a record copied from another
-    // issue names that issue's address, which is not this issue's. A record
-    // with no saved address has no line.
-    ...(issueUrl ? [`<!-- discord-checklist-issue: ${issueUrl}${id ? ` comment: ${id}` : ''} -->`] : []),
+    // A record with no saved address has no line. A record copied from
+    // another issue names that issue's address, so a thread is taken only
+    // when its first message also names this issue's player post.
+    ...(issueUrl ? [`<!-- discord-checklist-issue: ${issueUrl} -->`] : []),
     ...(archived ? [`<!-- discord-checklist-archived: ${archived} -->`] : []),
   ].join('\n');
 }
@@ -59,13 +61,12 @@ export function parseChecklist(c) {
   if (!m) return null;
   const threadId = /^\d+$/.test(m[1]) ? m[1] : null;
   const guildId = m[2] === 'none' ? '' : m[2];
-  const issue = /^(\S+) comment: (\d+)$/.exec(field(body, 'issue') || '');
   return {
     id: c.id, url: c.html_url || '', state: m[1], threadId, guildId,
     // False for a thread id staff put in the marker by hand, or a record
     // copied from another comment.
     linked: !!threadId && field(body, 'linked') === `${threadId} comment: ${c.id}`,
-    forumId: field(body, 'forum') || '', since: Number(field(body, 'since')) || 0, issueUrl: issue && issue[2] === String(c.id) ? issue[1] : null, archived: field(body, 'archived'),
+    forumId: field(body, 'forum') || '', since: Number(field(body, 'since')) || 0, issueUrl: field(body, 'issue'), archived: field(body, 'archived'),
   };
 }
 
@@ -315,17 +316,23 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     return { ...trying, state: made.id, threadId: made.id, linked: true };
   }
 
-  // Whether a thread's first message is the bot's and names the issue at one
-  // of `urls`. A thread whose first message is gone names nothing.
-  async function namesIssue(threadId, me, urls) {
+  // Whether a thread's first message is the bot's and names this issue: one
+  // of its addresses (`issue.urls`) and the player post it was filed from.
+  // The post comes from the issue's own body, so a transfer keeps it and a
+  // record copied from another issue cannot change it. A thread whose first
+  // message is gone names nothing.
+  async function namesIssue(threadId, me, issue) {
     const first = await discord.getMessage(threadId, threadId).catch((e) => {
       if (answeredStatus(e, 'GET', `/channels/${threadId}/messages/${threadId}`) === 404) return null;
       throw e;
     });
-    return !!first && !!first.author && first.author.id === me.id
-      && String(first.content || '').split('\n').some((l) => l.startsWith('Issue: ') && urls.has(l.slice('Issue: '.length)));
+    if (!first || !first.author || first.author.id !== me.id) return false;
+    const said = String(first.content || '').split('\n');
+    return said.some((l) => l.startsWith('Issue: ') && issue.urls.has(l.slice('Issue: '.length)))
+      && said.some((l) => (POST_LINE.exec(l) || [])[1] === issue.postId);
   }
-  const issueUrls = (w, rec) => new Set([w.issue.html_url, rec.issueUrl].filter(Boolean));
+  // The issue's address now and the one its record saved at the try, and its post.
+  const issueOf = (w, rec) => ({ urls: new Set([w.issue.html_url, rec.issueUrl].filter(Boolean)), postId: w.postId });
   // A record read with no saved address (a first `pending` post, or one staff
   // mended) takes the issue's address now, so a later transfer still finds
   // its thread.
@@ -335,14 +342,14 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
   // the bot's own first message naming the issue, never by name, which staff
   // can change. Every listed thread is read, or no match counts: an unread
   // one may be the match.
-  async function search(rec, urls) {
+  async function search(rec, issue) {
     try {
       const list = await discord.threadsSince(rec.guildId, rec.forumId || forumId, rec.since - SEARCH_BACK_MS, SEARCH_PAGES);
       if (!list.complete) return { why: 'the archived listing stops short' };
       if (list.threads.length > MAX_CANDIDATES) return { why: `more than ${MAX_CANDIDATES} threads were made since` };
       const me = await discord.me();
       const matches = [];
-      for (const t of list.threads) if (await namesIssue(t.id, me, urls)) matches.push(t.id);
+      for (const t of list.threads) if (await namesIssue(t.id, me, issue)) matches.push(t.id);
       if (matches.length > 1) return { why: `${matches.length} bot threads name the issue` };
       return matches.length ? { id: matches[0] } : { why: 'no bot thread names the issue' };
     } catch (e) {
@@ -362,7 +369,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       throw e;
     });
     const inForum = !!ch && String(ch.parent_id) === String(rec.forumId || forumId);
-    if (!inForum || !(await namesIssue(rec.threadId, await discord.me(), issueUrls(w, rec)))) {
+    if (!inForum || !(await namesIssue(rec.threadId, await discord.me(), issueOf(w, rec)))) {
       throw new Error(`the staff checklist record (${rec.url}) names thread ${rec.threadId}, which is not the bot's thread for this issue in the forum its create went to: put back the right id, or "creating"`);
     }
     if (!(await stillOpenable(n))) return null;
@@ -376,7 +383,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
   // taken, so the bot never makes a second thread for a record, and anything
   // else is left for staff through the sweep.
   async function adopt(n, w, rec) {
-    const s = await search(rec, issueUrls(w, rec));
+    const s = await search(rec, issueOf(w, rec));
     if (!s.id) throw new Error(`staff checklist thread not confirmed (${s.why}); see the sweep`);
     if (!(await stillOpenable(n))) return null;
     await write(rec, (seen) => ({ state: s.id, ...address(seen, w) }));
@@ -416,7 +423,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
         // transfer changes.
         const named = (/\/issues\/(\d+)$/.exec(rec.issueUrl || '') || [])[1] || n;
         parts.push(`staff checklist thread not confirmed (${rec.url}): the issue's next event, or a re-run of its failed checklist job, looks for it. `
-          + `If this stays, look in the checklist forum ${place(rec.guildId, rec.forumId || forumId)} for the bot's threads whose first message names ${urls}. `
+          + `If this stays, look in the checklist forum ${place(rec.guildId, rec.forumId || forumId)} for the bot's threads whose first message names ${urls} and the player post ${place(rec.guildId, w.postId)}. `
           + 'With more than one, keep the oldest and delete the rest, and the next event takes it. '
           + 'If the job still fails (too many threads made since, or the listing stops short), put the thread\'s id in place of "creating" in that comment, and the next event checks it and takes it. '
           + `If there is none, delete that comment only once you are sure no thread there is this issue's: a thread whose first message was deleted can be, and its name started "#${named} " unless someone renamed it. `

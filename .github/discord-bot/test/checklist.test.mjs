@@ -737,6 +737,16 @@ test('CH3: a job that lost its create answer is followed by one that finds the t
     ['archived', (w, t) => { t.archived = true; t.archivedAt = w.clock; }],
     ['a day later', (w) => { w.clock += DAY; }],
     ['the issue transferred since', (w) => { w.issues.get(17).html_url = 'https://github.com/me/two/issues/9'; }],
+    // A transfer may give the record comment a new id: the saved address is
+    // kept, and the player post still matches.
+    ['the issue transferred since, with its comments given new ids', (w) => {
+      const i = w.issues.get(17);
+      i.html_url = 'https://github.com/me/two/issues/9';
+      for (const c of i.comments) {
+        c.id = w.nextId++;
+        c.html_url = `${i.html_url}#issuecomment-${c.id}`;
+      }
+    }],
     // The create went to forum 960, and the setting is 950 now: the thread is
     // found in 960, and the tag write after it is refused there.
     ['the forum setting changed since', (w, t) => {
@@ -1058,6 +1068,31 @@ test('CH3: a record staff mend to "creating" with no address line is taken, with
   assert.doesNotMatch(c.body, /discord-checklist-issue: null/);
 });
 
+test('CH3: a checked thread whose record comment a transfer gave a new id is checked again and kept', async () => {
+  const w = world();
+  const i = w.issue(17);
+  const t = seed(w, 17, { applied_tags: ['c-tri'] });
+  i.html_url = 'https://github.com/me/two/issues/9';
+  for (const c of i.comments) {
+    c.id = w.nextId++;
+    c.html_url = `${i.html_url}#issuecomment-${c.id}`;
+  }
+  assert.equal(recordOf(w).linked, false, 'the new id is checked again');
+  await job(w, 'reopened');
+  assert.deepEqual([recordOf(w).linked, recordOf(w).threadId, ckThreads(w).length], [true, t.id, 1]);
+});
+
+test('CH3: a lost create\'s record copied into another issue never takes the first issue\'s thread', async () => {
+  const w = world();
+  w.issue(17);
+  loseAnswer(w);
+  await assert.rejects(job(w));
+  w.issue(18);
+  w.record(18, botComments(w, 17).find((x) => parseChecklist(x)).body);
+  await assert.rejects(job(w, 'opened', { n: 18 }), /staff checklist thread not confirmed \(no bot thread names the issue\)/);
+  assert.deepEqual([recordOf(w, 18).state, w.find('POST', /channels\/950\/threads$/).length], ['creating', 1], 'nothing taken, nothing created');
+});
+
 test('CH2: a closed issue whose close event is not readable yet gets no record, no thread and no adoption', async () => {
   {
     const w = world();
@@ -1116,7 +1151,7 @@ const discordLink = (id) => `https://discord\\.com/channels/800/${id}`;
 test('CH8: report mode lists each checklist problem with its link and what staff should check', async () => {
   const w = world();
   const url = (n) => `https://github.com/me/one/issues/${n}`;
-  // A bot record on #n, bound to its own comment as the bot writes it.
+  // A bot record on #n, as the bot writes it.
   const botRecord = (n, state, over = {}) => {
     const c = w.record(n, '');
     c.body = checklistBody({ id: c.id, state, guildId: '800', since: w.clock, issueUrl: url(n), ...over });
@@ -1181,7 +1216,7 @@ test('CH8: report mode lists each checklist problem with its link and what staff
     [17, /no staff checklist thread \(the issue's next event, a close, a reopen, or the accepted label added or removed, opens one\)/],
     [18, /staff checklist thread not opened \(https:\/\/github\.com\/me\/one\/issues\/18#issuecomment-\d+\): the issue's next event opens it/],
     [9, new RegExp('staff checklist thread not confirmed \\(https://github\\.com/me/one/issues/9#issuecomment-\\d+\\): the issue\'s next event, or a re-run of its failed checklist job, looks for it\\. '
-      + `If this stays, look in the checklist forum ${discordLink('950')} for the bot's threads whose first message names https://github\\.com/me/old/issues/19 or https://github\\.com/me/one/issues/9\\. `
+      + `If this stays, look in the checklist forum ${discordLink('950')} for the bot's threads whose first message names https://github\\.com/me/old/issues/19 or https://github\\.com/me/one/issues/9 and the player post ${discordLink('709')}\\. `
       + 'With more than one, keep the oldest and delete the rest, and the next event takes it\\. '
       + 'If the job still fails \\(too many threads made since, or the listing stops short\\), put the thread\'s id in place of "creating" in that comment, and the next event checks it and takes it\\. '
       + 'If there is none, delete that comment only once you are sure no thread there is this issue\'s: a thread whose first message was deleted can be, and its name started "#19 " unless someone renamed it\\. '
