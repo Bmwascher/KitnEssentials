@@ -14,7 +14,7 @@ test('CH1: a checklist record reads back as written', () => {
     ['a thread, no key', { state: '123', guildId: '800', forumId: '950', since: 3000, issueUrl: url }],
     ['a thread archived for a close', { state: '123', guildId: '800', forumId: '950', since: 3000, issueUrl: url, archived: "Won't fix:77" }],
   ]) {
-    const body = checklistBody(rec);
+    const body = checklistBody({ id: 5, ...rec });
     for (const b of [body, body.replace(/\n/g, '\r\n')]) {
       const r = parseChecklist(comment(b));
       assert.deepEqual({ state: r.state, guildId: r.guildId, forumId: r.forumId, since: r.since, issueUrl: r.issueUrl, archived: r.archived },
@@ -53,7 +53,8 @@ const threadUrl = (id) => new RegExp(`discord\\.com/api/v10/channels/${id}$`);
 // A checklist thread the bot opened for #n, with its record on the issue.
 function seed(w, n = 17, over = {}, key = null) {
   const t = w.ckThread(n, over);
-  w.record(n, checklistBody({ state: t.id, guildId: '800', since: w.clock, issueUrl: `https://github.com/me/one/issues/${n}`, archived: key }));
+  const c = w.record(n, '');
+  c.body = checklistBody({ id: c.id, state: t.id, guildId: '800', since: w.clock, issueUrl: `https://github.com/me/one/issues/${n}`, archived: key });
   return t;
 }
 const fail500 = () => new Response('{"message":"x"}', { status: 500 });
@@ -171,7 +172,7 @@ test('CH4: Accepted follows the label on an open issue, only into a free slot, a
   }
 });
 
-test('CH4: a tag staff add while the bot reads the forum is kept, and a record in another account\'s comment is not the bot\'s', async () => {
+test('CH4: a tag staff add while the bot reads the forum is kept, and a record in another account\'s comment, or copied from another issue, is not the bot\'s', async () => {
   const w = world();
   w.issue(17);
   const t = seed(w, 17, { applied_tags: ['c-tri'] });
@@ -209,6 +210,17 @@ test('CH4: a tag staff add while the bot reads the forum is kept, and a record i
   v.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
   await pr(v, 5);
   assert.deepEqual(ckName(v, u), ['Triaged'], 'a copied marker is not the bot\'s record');
+
+  // Staff restore issue 17's checked record into issue 18's record comment:
+  // the record is bound to its own comment, so 18's runs never write 17's thread.
+  const cp = world();
+  cp.issue(17);
+  const own = seed(cp, 17, { applied_tags: ['c-tri'] });
+  cp.issue(18);
+  cp.record(18, botComments(cp, 17).find((x) => parseChecklist(x)).body);
+  cp.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [18] });
+  await pr(cp, 5);
+  assert.equal(cp.find('PATCH', threadUrl(own.id)).length, 0, 'a checked record copied from another issue is not checked here');
 
   // Staff put another thread's id in the marker while a run is under way:
   // the run writes nothing, and the new id is never saved as linked.
@@ -942,6 +954,23 @@ test('CH3: a record whose marker no longer parses stops the job before any write
     await assert.rejects(job(w), /the staff checklist record \(.+\) cannot be read/, why);
     assert.deepEqual([w.issues.get(17).comments.length, w.find('POST', /channels\/\d+\/threads$/).length], [comments, 1], `${why}: no new record, no second create`);
   }
+});
+
+test('CH3: a record write keeps what staff changed in the record before the write read it', async () => {
+  const w = world();
+  w.issue(17);
+  loseAnswer(w);
+  await assert.rejects(job(w));
+  // Staff correct the attempt's forum line while the search reads first messages.
+  let once = false;
+  w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/\d+\/messages\/\d+$/, async () => {
+    if (once) return;
+    once = true;
+    const c = botComments(w, 17).find((x) => parseChecklist(x));
+    c.body = c.body.replace('discord-checklist-forum: 950', 'discord-checklist-forum: 951');
+  }]);
+  await job(w);
+  assert.deepEqual([recordOf(w).threadId, recordOf(w).forumId], [ours(w)[0].id, '951']);
 });
 
 test('CH3: a hand-entered id whose thread read fails for another reason is kept for a re-run', async () => {
