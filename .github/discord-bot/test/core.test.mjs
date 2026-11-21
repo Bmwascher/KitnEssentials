@@ -667,3 +667,72 @@ test('AT4: only status tags that are Triaged and nothing else count as Triaged a
     [['Triaged'], true], [['Triaged', 'Closed'], false], [['Closed', 'Triaged'], false], [['In progress'], false], [[], false],
   ]) assert.equal(C.triagedAlone(statuses), want, statuses.join(', ') || '(none)');
 });
+
+test('AT2: a status move with `accepted` places or removes Accepted in its one write, in a free slot only; the Worker\'s move plans as before', async () => {
+  const forum = { id: '900', available_tags: [{ id: 'r', name: 'Retail' }, { id: 'x', name: 'Staff note' }, { id: 'a', name: 'A' },
+    { id: 'b2', name: 'B' }, { id: 't', name: 'Triaged' }, { id: 'p', name: 'In progress' }, { id: 'acc', name: 'Accepted' }] };
+  const noAccepted = { ...forum, available_tags: forum.available_tags.filter((t) => t.id !== 'acc') };
+  const post = (tags, archived = false) => ({ id: '700', parent_id: '900', applied_tags: tags, thread_metadata: { archived } });
+  const move = (status, accepted) => (d) => d.setStatus('700', status, undefined, { accepted });
+  for (const [why, reads, write, patches, out, forumNow = forum] of [
+    ['a move places Accepted', [post(['r', 't'])], move('In progress', true), [{ applied_tags: ['r', 'p', 'acc'] }], { noRoom: false }],
+    ['an archived post\'s move reopens it with Accepted in that write', [post(['r', 't'], true)], move('In progress', true),
+      [{ applied_tags: ['r', 'p', 'acc'], archived: false }], {}],
+    ['a move removes Accepted', [post(['acc', 'r', 't'])], move('In progress', false), [{ applied_tags: ['r', 'p'] }], {}],
+    ['no free slot: the status moves, Accepted waits, nothing is dropped', [post(['r', 'x', 'a', 'b2', 't'])], move('In progress', true),
+      [{ applied_tags: ['r', 'x', 'a', 'b2', 'p'] }], { noRoom: true }],
+    ['the status already shows, Accepted off: no write', [post(['r', 't'])], move('Triaged', true), [], {}],
+    ['the same on an archived post', [post(['r', 't'], true)], move('Triaged', true), [], {}],
+    ['a tag added between the reads is kept beside Accepted', [post(['r', 't']), post(['r', 'x', 't'])], move('In progress', true),
+      [{ applied_tags: ['r', 'x', 'p', 'acc'] }], {}],
+    ['the forum lacks the status tag: no write', [post(['r', 't'])], move('Shipped', true), [], { skipped: true }],
+    ['no Accepted tag in the forum, Accepted wanted: the status moves and noAccepted is reported', [post(['r', 't'])], move('In progress', true),
+      [{ applied_tags: ['r', 'p'] }], { noAccepted: true }, noAccepted],
+    ['no Accepted tag in the forum, Accepted not wanted: the status moves and nothing is reported', [post(['r', 't'])], move('In progress', false),
+      [{ applied_tags: ['r', 'p'] }], { noAccepted: false }, noAccepted],
+    ['the Worker\'s move (no `accepted`): Accepted is one more tag, and the status goes last', [post(['acc', 'r'])],
+      (d) => d.setStatus('700', 'Triaged'), [{ applied_tags: ['acc', 'r', 't'] }], {}],
+  ]) {
+    const queue = [...reads];
+    const f = fakeFetch([
+      ['GET', /\/channels\/700$/, () => (queue.length > 1 ? queue.shift() : queue[0])],
+      ['GET', /\/channels\/900$/, () => forumNow],
+      ['PATCH', /\/channels\/700$/, () => ({})],
+    ]);
+    const r = await write(discordClient('t', f));
+    assert.deepEqual(f.find('PATCH', /\/channels\/700$/).map((c) => c.body), patches, why);
+    for (const [k, v] of Object.entries(out)) assert.equal(!!r[k], v, `${why}: ${k}`);
+  }
+});
+
+test('AT3: the Accepted-only write changes only Accepted, and only on an active post showing Triaged alone at both reads', async () => {
+  const forum = { id: '900', available_tags: [{ id: 'r', name: 'Retail' }, { id: 'x', name: 'Staff note' }, { id: 'a', name: 'A' },
+    { id: 'b2', name: 'B' }, { id: 't', name: 'Triaged' }, { id: 'p', name: 'In progress' }, { id: 'z', name: 'Closed' }, { id: 'acc', name: 'Accepted' }] };
+  const noAccepted = { ...forum, available_tags: forum.available_tags.filter((t) => t.id !== 'acc') };
+  const post = (tags, archived = false) => ({ id: '700', parent_id: '900', applied_tags: tags, thread_metadata: { archived } });
+  for (const [why, reads, want, patches, out, forumNow = forum] of [
+    ['Triaged alone: Accepted added, nothing else changed', [post(['r', 't'])], true, [{ applied_tags: ['r', 't', 'acc'] }], { wrote: true }],
+    ['not wanted: Accepted removed', [post(['r', 'acc', 't'])], false, [{ applied_tags: ['r', 't'] }], { wrote: true }],
+    ['a tag added between the reads is kept', [post(['r', 't']), post(['r', 'x', 't'])], true, [{ applied_tags: ['r', 'x', 't', 'acc'] }], { wrote: true }],
+    ['In progress: refused', [post(['r', 'p'])], true, [], { refused: true }],
+    ['Triaged beside Closed: refused', [post(['r', 't', 'z'])], true, [], { refused: true }],
+    ['Closed beside Triaged: refused', [post(['z', 'r', 't'])], true, [], { refused: true }],
+    ['no status tag: refused', [post(['r'])], true, [], { refused: true }],
+    ['Triaged at the first read, In progress at the fresh read: no write', [post(['r', 't']), post(['r', 'p'])], true, [], { raced: true }],
+    ['Triaged alone at the first read, Triaged beside Closed at the fresh read: no write', [post(['r', 't']), post(['r', 't', 'z'])], true, [], { raced: true }],
+    ['archived at the first read', [post(['r', 't'], true)], true, [], { archived: true }],
+    ['archived at the fresh read', [post(['r', 't']), post(['r', 't'], true)], true, [], { archived: true }],
+    ['five tags: no room', [post(['r', 'x', 'a', 'b2', 't'])], true, [], { noRoom: true, wrote: false }],
+    ['no Accepted tag in the forum', [post(['r', 't'])], true, [], { noAccepted: true, wrote: false }, noAccepted],
+  ]) {
+    const queue = [...reads];
+    const f = fakeFetch([
+      ['GET', /\/channels\/700$/, () => (queue.length > 1 ? queue.shift() : queue[0])],
+      ['GET', /\/channels\/900$/, () => forumNow],
+      ['PATCH', /\/channels\/700$/, () => ({})],
+    ]);
+    const r = await discordClient('t', f).fixAccepted('700', want);
+    assert.deepEqual(f.find('PATCH', /\/channels\/700$/).map((c) => c.body), patches, why);
+    for (const [k, v] of Object.entries(out)) assert.equal(r[k], v, `${why}: ${k}`);
+  }
+});

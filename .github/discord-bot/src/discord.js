@@ -1,5 +1,5 @@
 // Minimal Discord REST client. `fetchImpl` is injectable so tests never hit the network.
-import { nextAppliedTags, currentStatus, otherTags, sameTags, snowflakeMs } from './core.js';
+import { nextAppliedTags, currentStatus, otherTags, sameTags, snowflakeMs, planTags, withAccepted, shownStatuses, triagedAlone } from './core.js';
 
 const API = 'https://discord.com/api/v10';
 
@@ -129,13 +129,21 @@ export function discordClient(token, fetchImpl = fetch) {
     // post shows. A move unarchives the post, as before. With `dropOther`
     // false, a post with no status and five other tags is left as it is
     // rather than lose one of them.
-    async setStatus(threadId, statusName, beforeMove, { dropOther = true } = {}) {
+    async setStatus(threadId, statusName, beforeMove, { dropOther = true, accepted = null } = {}) {
       const { thread, forum } = await threadAndForum(threadId);
       const from = currentStatus(thread.applied_tags, forum.available_tags, statusName);
       if (from === statusName) return { from, tags: thread.applied_tags || [] };
       if (beforeMove) await beforeMove(from);
       const plan = (t, avail) => {
         const applied = t.applied_tags || [];
+        // With `accepted` true or false the move also adds the Accepted tag,
+        // in a free slot only, or removes it; null (the Worker) plans as before.
+        if (accepted !== null) {
+          const p = planTags(applied, avail, statusName, { accepted, dropOther });
+          if (p.missing) return { skipped: `forum has no "${statusName}" tag` };
+          if (p.full) return { skipped: `no free tag slot for "${statusName}"` };
+          return { tags: p.tags, noRoom: p.noRoom, noAccepted: accepted && p.noAccepted };
+        }
         const tags = nextAppliedTags(applied, avail, statusName);
         if (!tags) return { skipped: `forum has no "${statusName}" tag` };
         if (!dropOther && otherTags(applied, avail).length >= 5) return { skipped: `no free tag slot for "${statusName}"` };
@@ -153,12 +161,35 @@ export function discordClient(token, fetchImpl = fetch) {
       const patch = { applied_tags: p.tags };
       if (archivedOf(fresh)) patch.archived = false;
       await call('PATCH', `/channels/${threadId}`, patch);
-      return { from, tags: p.tags };
+      return { from, tags: p.tags, noRoom: !!p.noRoom, noAccepted: !!p.noAccepted };
     },
     // With `prefer`, a post carrying that status tag shows it, wherever it sits.
     async statusOf(threadId, prefer = null) {
       const { thread, forum } = await threadAndForum(threadId);
       return currentStatus(thread.applied_tags, forum.available_tags, prefer);
+    },
+    // The sweep's Accepted-only write. It writes only on an active post that
+    // shows Triaged and no other status tag, at its first read and again just
+    // before the write, and changes only the Accepted tag, so a status move
+    // that lands inside its last request is put back to Triaged alone, under
+    // the tag names last read. It never sends `archived`.
+    async fixAccepted(threadId, want) {
+      const out = (r) => ({ wrote: false, noRoom: false, noAccepted: false, archived: false, refused: false, raced: false, ...r });
+      const alone = (t, avail) => triagedAlone(shownStatuses(t.applied_tags, avail));
+      const { thread, forum } = await threadAndForum(threadId);
+      if (archivedOf(thread)) return out({ archived: true });
+      if (!alone(thread, forum.available_tags)) return out({ refused: true });
+      let p = withAccepted(thread.applied_tags || [], forum.available_tags, want);
+      if (sameTags(p.tags, thread.applied_tags || [])) return out({ noRoom: p.noRoom, noAccepted: p.noAccepted });
+      const freshForum = await call('GET', `/channels/${thread.parent_id}`);
+      const fresh = await call('GET', `/channels/${threadId}`);
+      if (fresh.parent_id !== thread.parent_id) return out({ raced: true });
+      if (archivedOf(fresh)) return out({ archived: true });
+      if (!alone(fresh, freshForum.available_tags)) return out({ raced: true });
+      p = withAccepted(fresh.applied_tags || [], freshForum.available_tags, want);
+      if (sameTags(p.tags, fresh.applied_tags || [])) return out({ noRoom: p.noRoom, noAccepted: p.noAccepted });
+      await call('PATCH', `/channels/${threadId}`, { applied_tags: p.tags });
+      return out({ wrote: true });
     },
     async unarchive(threadId) {
       const thread = await call('GET', `/channels/${threadId}`);
