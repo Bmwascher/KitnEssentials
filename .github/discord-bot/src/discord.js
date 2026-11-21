@@ -52,7 +52,9 @@ export function discordClient(token, fetchImpl = fetch) {
 
   // One forum's archived threads, newest first, back to those archived at
   // `since` (epoch ms), up to a few pages. `cut` is the archive time it
-  // stopped at when the page limit came first. Discord's `before` is
+  // stopped at when the page limit came first, or, with `ties`, true when
+  // a page said more follow but gave no time to go on from. Discord's
+  // `before` is
   // exclusive, so a thread archived at the same time as a page's last one
   // can be skipped; the daily check accepts that for its count of posts.
   // With `ties`, for the search, which needs every thread more than many,
@@ -70,6 +72,7 @@ export function discordClient(token, fetchImpl = fetch) {
       out.push(...fresh);
       const oldest = threads.at(-1);
       const stamp = oldest && oldest.thread_metadata && oldest.thread_metadata.archive_timestamp;
+      if (ties && arch.has_more && !stamp) return { threads: out, cut: true };
       if (!arch.has_more || !stamp || Date.parse(stamp) < since) return { threads: out, cut: null };
       if (ties && !fresh.length) break;
       before = `&before=${encodeURIComponent(ties ? new Date(Date.parse(stamp) + 1).toISOString() : stamp)}`;

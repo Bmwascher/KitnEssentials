@@ -391,6 +391,7 @@ test('CH5: a bot tag change keeps the archive state, and a write that may have l
     failRecord(w, (b) => !/discord-checklist-archived/.test(b));
     await assert.rejects(job(w, 'closed'), /-> 500; clearing the archive key failed too: /);
     assert.deepEqual([t.archived, recordOf(w).archived], [false, key]);
+    readThenWrite(w);
   }
   // A closed issue whose close event the read does not show yet: no write, and the archive stays.
   {
@@ -512,9 +513,9 @@ test('CH7: a release run sends every player message before its first checklist r
   w.tags = [{ name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
   await tagPush(w, 'v5.0.1');
   const ck = new Set(['950', ...ckThreads(w).map((t) => t.id)]);
-  const lastSend = w.calls.map((c) => c.method === 'POST' && /channels\/71[78]\/messages$/.test(c.url)).lastIndexOf(true);
+  const sends = ['717', '718'].map((post) => w.calls.findIndex((c) => c.method === 'POST' && c.url.endsWith(`/channels/${post}/messages`)));
   const firstCk = w.calls.findIndex((c) => ck.has((/discord\.com\/api\/v10\/channels\/(\d+)$/.exec(c.url) || [])[1]));
-  assert.deepEqual([lastSend > -1, firstCk > lastSend], [true, true], 'both messages go out before any checklist request');
+  assert.deepEqual(sends.map((i) => i > -1 && i < firstCk), [true, true], 'each message goes out before any checklist request');
 });
 
 test('CH7: a failed first issue read on a PR run, or a failed owed-note scan on a re-run, still leaves the thread settled', async () => {
@@ -1156,7 +1157,7 @@ test('CH8: report mode lists each checklist problem with its link and what staff
     [32, new RegExp(`no free tag slot for "Triaged" on the checklist thread \\(${discordLink(t32.id)}\\)`)],
     [33, new RegExp(`the issue is closed but its close event is not readable yet: the checklist thread \\(${discordLink(t33.id)}\\) is checked at the next sweep`)],
     [34, /the issue is closed but its close event is not readable yet: the checklist thread is checked at the next sweep/],
-    [35, new RegExp('the staff checklist record \\(https://github\\.com/me/one/issues/35#issuecomment-\\d+\\) cannot be read: mend it so its hidden marker line reads "<!-- discord-checklist: THREAD-ID guild: SERVER-ID -->", with the thread\'s id and its server\'s id\\. '
+    [35, new RegExp('the staff checklist record \\(https://github\\.com/me/one/issues/35#issuecomment-\\d+\\) cannot be read: mend it so its hidden marker line reads `<!-- discord-checklist: THREAD-ID guild: SERVER-ID -->`, with the thread\'s id and its server\'s id\\. '
       + 'If you are not sure a thread was made for it, put "creating" in place of THREAD-ID, and the issue\'s next event looks for one\\. '
       + 'Put "pending" there, or delete the comment, only once you are sure no thread was made for it; the issue\'s next event then opens one')],
   ]) assert.match(lineOf(out, n), re, `#${n}`);

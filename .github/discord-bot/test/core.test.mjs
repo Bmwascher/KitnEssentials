@@ -617,6 +617,11 @@ test('CT6: the search lists the forum\'s threads made since a time, from the act
     ['GET', /\/channels\/950\/threads\/archived\/public/, () => ({ threads: [moved], has_more: true })],
   ]);
   assert.equal((await discordClient('t', g).threadsSince('800', '950', T0, 1)).complete, false, 'the archived pages ran out first');
+  const k = fakeFetch([
+    ['GET', /\/guilds\/800\/threads\/active$/, () => ({ threads: [] })],
+    ['GET', /\/channels\/950\/threads\/archived\/public/, () => ({ threads: [], has_more: true })],
+  ]);
+  assert.equal((await discordClient('t', k).threadsSince('800', '950', T0, 2)).complete, false, 'a page that says more follow but gives no time to go on from');
   // Two threads archived at the same time fall either side of a page boundary.
   const arc = (ms, stampMs) => ({ id: at(ms), parent_id: '950', thread_metadata: { archived: true, archive_timestamp: new Date(stampMs).toISOString() } });
   const tied = [arc(T0 + 1000, T0 + 9000), arc(T0 + 2000, T0 + 8000), arc(T0 + 3000, T0 + 8000)];

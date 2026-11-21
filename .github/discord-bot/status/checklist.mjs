@@ -234,7 +234,9 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
   // `pending` makes the next job create at once, so it is offered only for
   // a record staff are sure has no thread; `creating` sends the job to look
   // for one first.
-  const damagedLine = (url) => `the staff checklist record (${url}) cannot be read: mend it so its hidden marker line reads "<!-- discord-checklist: THREAD-ID guild: SERVER-ID -->", with the thread's id and its server's id. `
+  // The marker is quoted as inline code: the job summary is Markdown, which
+  // would hide it as an HTML comment.
+  const damagedLine = (url) => `the staff checklist record (${url}) cannot be read: mend it so its hidden marker line reads \`<!-- discord-checklist: THREAD-ID guild: SERVER-ID -->\`, with the thread's id and its server's id. `
     + 'If you are not sure a thread was made for it, put "creating" in place of THREAD-ID, and the issue\'s next event looks for one. '
     + 'Put "pending" there, or delete the comment, only once you are sure no thread was made for it; the issue\'s next event then opens one';
 
