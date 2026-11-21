@@ -986,10 +986,10 @@ test('CH8: report mode lists each checklist problem with its link and what staff
   w.issue(17);
   w.issue(18);
   w.record(18, body(18, 'pending'));
-  // A lost create answer, the issue transferred since.
-  w.issue(19);
-  w.record(19, body(19, 'creating', { forumId: '950' }));
-  w.issues.get(19).html_url = 'https://github.com/me/two/issues/9';
+  // A lost create answer for an issue that was #19 in another repository
+  // when its create went out, and is #9 here since its transfer.
+  w.issue(9);
+  w.record(9, body(19, 'creating', { forumId: '950', issueUrl: 'https://github.com/me/old/issues/19' }));
   w.issue(23);
   w.close(23, 'not_planned');
   const t23 = seed(w, 23, { applied_tags: ['c-wont'], archived: true });
@@ -1042,8 +1042,8 @@ test('CH8: report mode lists each checklist problem with its link and what staff
   for (const [n, re] of [
     [17, /no staff checklist thread \(the issue's next event, a close, a reopen, or the accepted label added or removed, opens one\)/],
     [18, /staff checklist thread not opened \(https:\/\/github\.com\/me\/one\/issues\/18#issuecomment-\d+\): the issue's next event opens it/],
-    [19, new RegExp('staff checklist thread not confirmed \\(https://github\\.com/me/one/issues/19#issuecomment-\\d+\\): the issue\'s next event, or a re-run of its failed checklist job, looks for it\\. '
-      + `If this stays, look in the checklist forum ${discordLink('950')} for the bot's threads whose first message names https://github\\.com/me/one/issues/19 or https://github\\.com/me/two/issues/9\\. `
+    [9, new RegExp('staff checklist thread not confirmed \\(https://github\\.com/me/one/issues/9#issuecomment-\\d+\\): the issue\'s next event, or a re-run of its failed checklist job, looks for it\\. '
+      + `If this stays, look in the checklist forum ${discordLink('950')} for the bot's threads whose first message names https://github\\.com/me/old/issues/19 or https://github\\.com/me/one/issues/9\\. `
       + 'With more than one, keep the oldest and delete the rest, and the next event takes it\\. '
       + 'If the job still fails \\(too many threads made since, or the listing stops short\\), put the thread\'s id in place of "creating" in that comment, and the next event checks it and takes it\\. '
       + 'If there is none, delete that comment only once you are sure no thread there is this issue\'s: a thread whose first message was deleted can be, and its name started "#19 " unless someone renamed it\\. '
@@ -1082,6 +1082,11 @@ test('CH8: report mode lists each checklist problem with its link and what staff
   const u20 = v.ckThread(20, { applied_tags: ['c-wont'] });
   v.record(20, checklistBody({ state: 'creating', guildId: '800', forumId: '950', since: v.clock, issueUrl: 'https://github.com/me/one/issues/20' })
     .replace('discord-checklist: creating', `discord-checklist: ${u20.id}`));
+  // The same in a `pending` record, which names no server yet.
+  v.issue(21);
+  const u21 = v.ckThread(21, { applied_tags: ['c-tri'] });
+  v.record(21, checklistBody({ state: 'pending', guildId: '', since: v.clock, issueUrl: 'https://github.com/me/one/issues/21' })
+    .replace('discord-checklist: pending', `discord-checklist: ${u21.id}`));
   const vout = [];
   await sweep(v, 'report', vout);
   for (const [n, re] of [
@@ -1090,6 +1095,7 @@ test('CH8: report mode lists each checklist problem with its link and what staff
     [19, new RegExp(`staff checklist thread ${discordLink(u19.id)} is not in the checklist forum: if CHECKLIST_FORUM_ID changed by mistake, set it back\\. `
       + 'If it changed on purpose, archive or delete that thread as staff prefer, then delete that record comment \\(https://github\\.com/me/one/issues/19#issuecomment-\\d+\\), and the issue\'s next event opens a new thread in the forum set now')],
     [20, new RegExp(`staff checklist thread ${discordLink(u20.id)} was put in its record by hand \\(https://github\\.com/me/one/issues/20#issuecomment-\\d+\\): the issue's next event checks that it is the bot's thread for this issue and takes it`)],
+    [21, new RegExp(`staff checklist thread ${u21.id} was put in its record by hand \\(https://github\\.com/me/one/issues/21#issuecomment-\\d+\\)`)],
   ]) assert.match(lineOf(vout, n), re, `#${n}`);
 
   // Fix mode leaves a hand-entered thread to the issue's next checklist job.

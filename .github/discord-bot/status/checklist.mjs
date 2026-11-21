@@ -21,6 +21,9 @@ const noTag = (name) => `checklist forum has no "${name}" tag`;
 const notOurs = (n) => `#${n}: no longer an issue the bot filed; its checklist thread is left as it is`;
 
 const link = (guildId, threadId) => `https://discord.com/channels/${guildId}/${threadId}`;
+// A link needs the server's id; a record with none yet (an id put in a
+// `pending` record by hand) is named by the bare id.
+const place = (guildId, id) => (guildId ? link(guildId, id) : id);
 const norm = (c) => String((c && c.body) || '').replace(/\r\n?/g, '\n');
 const field = (body, name) => (new RegExp(`<!--\\s*discord-checklist-${name}:\\s*(.+?)\\s*-->`).exec(body) || [])[1] || null;
 
@@ -373,7 +376,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     let repair = false;
     const rec = w.st.records.checklist;
     const at = now();
-    const here = rec && rec.threadId ? link(rec.guildId, rec.threadId) : null;
+    const here = rec && rec.threadId ? place(rec.guildId, rec.threadId) : null;
     // No checklist write is made until the close is readable, so nothing
     // else is judged; listed with or without a record, as a first open can
     // have failed on it.
@@ -391,11 +394,14 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
         // Built from the record alone: the bot never creates again for it,
         // so this line is the whole recovery, in the forum the create went to.
         const urls = [...new Set([rec.issueUrl, w.issue.html_url].filter(Boolean))].join(' or ');
+        // The thread was named for the issue's number at the try, which a
+        // transfer changes.
+        const named = (/\/issues\/(\d+)$/.exec(rec.issueUrl || '') || [])[1] || n;
         parts.push(`staff checklist thread not confirmed (${rec.url}): the issue's next event, or a re-run of its failed checklist job, looks for it. `
-          + `If this stays, look in the checklist forum ${link(rec.guildId, rec.forumId || forumId)} for the bot's threads whose first message names ${urls}. `
+          + `If this stays, look in the checklist forum ${place(rec.guildId, rec.forumId || forumId)} for the bot's threads whose first message names ${urls}. `
           + 'With more than one, keep the oldest and delete the rest, and the next event takes it. '
           + 'If the job still fails (too many threads made since, or the listing stops short), put the thread\'s id in place of "creating" in that comment, and the next event checks it and takes it. '
-          + `If there is none, delete that comment only once you are sure no thread there is this issue's: a thread whose first message was deleted can be, and its name started "#${n} " unless someone renamed it. `
+          + `If there is none, delete that comment only once you are sure no thread there is this issue's: a thread whose first message was deleted can be, and its name started "#${named} " unless someone renamed it. `
           + 'Then the next event opens a new thread. If you are not sure, leave the comment, and this line stays');
       } else {
         parts.push(`staff checklist thread not opened (${rec.url}): the issue's next event opens it`);
