@@ -634,10 +634,10 @@ Accepted on purpose; each line says how you would notice it.
   sweep or a PR run) is opening its checklist thread for the reopen, the
   finished thread can stay open with nothing listing it: you see a finished
   issue whose thread is open, and one click archives it.
-- If GitHub has not yet listed an issue's newest close when the bot reads
-  it (a reopen and a new close within a minute, or a close whose reason
-  changed), the thread can be keyed on the wrong close: it stays open until
-  the sweep lists "checklist archive owed", or a staff reply made after the
+- If an issue is reopened and closed again within a minute before GitHub
+  lists either event, or closed again for another reason while the bot reads
+  it, the thread can be keyed on the wrong close: it stays open until the
+  sweep lists "checklist archive owed", or a staff reply made after the
   bot's archive is archived over once; reply again to reopen it for good.
 - If `from-discord` is taken off an issue in the seconds its checklist thread
   is being made, the thread can still be made and nothing lists it, as the
@@ -646,7 +646,11 @@ Accepted on purpose; each line says how you would notice it.
 - If the "Staff checklist thread" comment is deleted or replaced in the
   seconds the bot is making the thread, the thread is made but not recorded,
   the job is red, and the issue's next event can make a second one: you see
-  two threads for one issue; delete the newer.
+  two threads for one issue; keep the one that comment links and delete the
+  other.
+- If an issue closes as the bot reads the checklist forum just before making
+  its thread, and GitHub does not show the close yet, the thread is made open
+  and the job is red; the issue's next event or a fix-mode sweep archives it.
 - An edit to the "Staff checklist thread" comment saved in the moment the bot
   rewrites it can be lost: you see your edit gone; make it again.
 
