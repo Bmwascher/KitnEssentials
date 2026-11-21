@@ -175,6 +175,11 @@ the hour is a wide margin past both, not a guarantee (see Known limits).
 Every reply that advises deleting a lock gives this rule; the reply to a lock
 GitHub never confirmed names the label and advises no deletion.
 
+An issue moved in from another repo arrives as a new issue: its `opened`
+event does nothing (no message, no tag change, no checklist thread). Its
+post is settled by its next status event (a close, a reopen, a PR or a
+release) or the sweep, and its checklist thread by its next checklist event.
+
 ## Clearing a filing record
 
 When the bot refuses a filing because the issue the post's saved record names
@@ -285,6 +290,93 @@ value is not a message link (a post's link, say), the moderator's reply says
 so in a plain sentence (the message was not found, the bot may not read it, or
 it could not be read just now; the Worker log keeps Discord's error) and the
 check falls back to 2 or 3; the filing goes ahead.
+
+## Staff checklist
+
+With the repository variable `CHECKLIST_FORUM_ID` set, every issue the bot
+filed gets one thread in a staff-only Discord forum, a mirror of the issue.
+Its first message names the issue, the player's post, and the issue's type
+and client labels.
+
+Setup:
+
+1. Make a staff-only forum in the same server as the player forums, with the
+   tags `Triaged`, `In progress`, `Fixed`, `Shipped`, `Done`, `Won't fix`,
+   `Duplicate` and `Accepted`. The bot treats any tag with one of these
+   names, in any letter case, as its own, so give staff tags other names.
+   "Require people to select tags when posting" may be on.
+2. Give the bot View Channel, Send Messages, Send Messages in Threads, Manage
+   Threads and Read Message History there.
+3. Keep the forum out of `FORUMS`, and set `CHECKLIST_FORUM_ID` in
+   `wrangler.toml` to its id, so the Worker never treats it as a player forum
+   even if `FORUMS` lists it.
+4. Make the `accepted` label:
+   `GITHUB_TOKEN=<a token with repo access> npm run labels <owner>/<repo>`
+5. Set the repository variable `CHECKLIST_FORUM_ID` to the forum's id. Until
+   then nothing here runs.
+
+**Tags.** The bot owns those eight tags; every other tag is staff's. The
+status tag follows the issue: Triaged, In progress (a member's PR will close
+it), Fixed (closed by a commit or a merged PR), Shipped (a release holds the
+fix), Done (closed by hand), Won't fix (closed as not planned) and Duplicate.
+An open issue with the `accepted` label also shows Accepted; a label change
+tells no one. A thread keeps at most five tags, and the bot never drops a
+staff tag: a status or Accepted tag with no free slot waits, the run logs it,
+and the sweep lists it. If the forum lacks the status tag an issue needs,
+the bot changes no tag on its thread and the run fails naming the tag; if it
+lacks only the Accepted tag, the status still moves, and the run logs it and
+the sweep lists it. The sweep names only the bot's tags in the Actions log,
+and counts staff tags.
+
+**Who opens.** Only the issue's own events open its thread: opened, closed,
+reopened, and the `accepted` label added or removed. The workflow's
+`checklist` job runs them, one at a time per issue, and each job brings the
+whole thread in step with GitHub. PR and release runs and the daily sweep
+update a thread that exists, but never open one. An issue filed before this
+version, or one whose open failed, gets its thread at its next such event, or
+when its failed checklist job is re-run. If Discord made a thread but its
+answer was lost, the next job looks for it in the forum the create went to,
+by the bot's own first message naming the issue, and takes it when exactly
+one bot thread matches. The bot never makes a second thread for the issue's
+"Staff checklist thread" comment; anything else leaves it "not confirmed"
+for staff (see the sweep).
+
+**Archiving.** A thread is archived when its issue is finished (Shipped,
+Done, Won't fix, Duplicate), once per close: the issue's "Staff checklist
+thread" comment notes which close it was archived for. A staff reply reopens
+an archived thread, and the bot leaves it open until the issue closes again.
+A reopened issue's thread is opened again. A tag change by the bot keeps a
+thread's archive state, so a thread Discord archived for inactivity stays
+archived.
+
+**The sweep** lists each checklist problem with the thread's link and what to
+do: an open issue with no thread, a thread not opened or not confirmed, an
+archive owed or one made for a close that no longer holds, a deleted thread,
+a thread outside the checklist forum, a missing tag in the forum, and tags
+out of step. With `SWEEP_MODE=fix` it repairs tags and archive state; it
+never opens a thread. For a thread not confirmed after a lost create answer,
+the sweep links the forum the create went to and the issue's addresses.
+With more than one bot thread whose first message names the issue, keep the
+oldest and delete the rest, and the next event takes it. If the job still
+fails, put the thread's id in place of "creating" in the issue's "Staff
+checklist thread" comment; the next event takes it only when the thread is
+in the forum the create went to and its first message is the bot's for
+that issue. If there is none, delete that comment only once you are sure no
+thread in the forum is this issue's: one whose first message was deleted
+can be, and its name started "#<issue number> " unless someone renamed it.
+The issue's next event then opens a new thread. If you are not sure, leave
+the comment; the sweep keeps listing it.
+If the comment's hidden lines are edited so they no longer read, or deleted,
+the bot writes nothing for that issue, and the sweep says how to mend it.
+For a thread outside the checklist forum, set `CHECKLIST_FORUM_ID` back if
+it changed by mistake; if it changed on purpose, archive or delete the old
+thread, then delete that comment, and the next event opens a new thread.
+
+A checklist problem never stops a player message: the checklist job is
+separate, and a PR or release run updates threads after all its messages and
+fails at its end. A later run for the same PR, or for the next release tag,
+may wait while one finishes its checklist work; other runs, and the
+checklist job, run alongside.
 
 ## Known limits
 
@@ -487,6 +579,85 @@ Accepted on purpose; each line says how you would notice it.
   a lock may be deleted is a wide margin, not a guarantee: if GitHub applied
   such a create more than an hour late, after the lock was deleted and the
   post's next send had searched, the post would get two issues.
+- A failed write right after a Discord write, or two bot runs writing one
+  checklist thread at once, can leave that thread's tags or archive state
+  wrong; the daily sweep names the thread and what to check. Player
+  messages, public tags, queue cards and staff tags are never affected;
+  anything else is a bug to report.
+- Two bot runs that cross on one checklist thread, or a run after a record
+  write that failed, can archive again a thread staff reopened; and a close
+  run's late archive whose record write failed can leave an open issue's
+  thread archived. Nothing lists either: you notice a thread you replied in
+  that is archived again, or an open issue's thread that is archived. A
+  staff reply reopens the thread for good.
+- If the bot's re-archive of a finished checklist thread fails after a tag
+  change, and the record write after it fails too, or the job is stopped
+  between the tag change and the re-archive, or Discord applies a timed-out
+  tag change after the re-archive, the thread may stay open and nothing
+  lists it; the run is red in Actions. One click archives it.
+- If the bot's re-archive fails after it changed the tags of an open issue's
+  thread that Discord had archived for inactivity, the thread stays open and
+  nothing lists it; the run is red in Actions, and Discord archives it again
+  after the forum's inactivity time.
+- A staff reply in the moment between the bot's last read of an archived
+  checklist thread and its tag write, or between that write and the
+  re-archive, can be archived over, as a tag can be lost in that moment. The
+  moment is one request long; another reply reopens the thread for good.
+- A tag someone adds to a checklist thread in the moment between the bot's
+  last read of its tags and its write can be lost, and one removed in that
+  moment can come back, as on a post. That moment is one request long.
+- When GitHub drops a waiting checklist job for a newer one, the thread jumps
+  to the newest state: you see its status tag skip a step (Triaged straight
+  to Done, say). Nothing is lost.
+- A closed issue filed before this version gets no checklist thread and is
+  not listed; a reopen or an `accepted` label change opens one.
+- A checklist thread whose create answer was lost is taken only when the
+  bot's search finds exactly one bot thread naming the issue. It stays "not
+  confirmed", with its job red, when the search finds none or several, its
+  reads fail, more than 20 threads were made since, or the archived listing
+  stops short. The bot never creates again for it; the sweep lists it and
+  says what staff do (see Staff checklist).
+- If a second bot thread names the same issue and is reopened and archived
+  again in the seconds the bot's search reads Discord's lists, the search
+  can miss it and take the other; the missed thread is then listed nowhere.
+  Delete it by hand.
+- A second bot thread naming the same issue that was made more than a
+  minute before the lost create is outside the search, so the search can
+  take the newer one alone, and the older is listed nowhere. Only a
+  "Staff checklist thread" comment deleted while its thread still existed
+  leaves one. Delete it by hand.
+- A staff reply in the moment between the bot's re-archive landing, with
+  its answer lost, and the bot's read of the thread just after can be
+  archived over by the next run. The moment is one request long; another
+  reply reopens the thread for good.
+- If an issue is reopened and closed again while another bot run (a fix-mode
+  sweep or a PR run) is opening its checklist thread for the reopen, the
+  finished thread can stay open with nothing listing it: you see a finished
+  issue whose thread is open, and one click archives it.
+- If an issue is reopened and closed again within a minute before GitHub
+  lists either event, or closed again for another reason while the bot reads
+  it, the thread can be keyed on the wrong close: it stays open until the
+  sweep lists "checklist archive owed", or a staff reply made after the
+  bot's archive is archived over once; reply again to reopen it for good.
+- If `from-discord` is taken off an issue in the seconds its checklist thread
+  is being made, the thread can still be made and nothing lists it, as the
+  sweep skips that issue: you see a thread for an issue the bot no longer
+  files; keep or delete it.
+- If the "Staff checklist thread" comment is deleted or replaced in the
+  seconds the bot is making the thread, the thread is made but not recorded,
+  the job is red, and the issue's next event can make a second one: you see
+  two threads for one issue; keep the one that comment links and delete the
+  other.
+- If an issue closes as the bot reads the checklist forum just before making
+  its thread, and GitHub does not show the close yet, the thread is made open
+  and the job is red; the issue's next event or a fix-mode sweep archives it.
+- An edit to the "Staff checklist thread" comment saved in the moment the bot
+  rewrites it can be lost: you see your edit gone; make it again.
+- Two issues filed from one post (only after its filing record was cleared
+  and the post sent again) share that post, so if one issue's "Staff
+  checklist thread" comment is copied into the other, the bot can take the
+  first issue's thread for the second. Never copy that comment between
+  issues; delete the copy, and the issue's next event opens its own thread.
 
 ## Tests
 

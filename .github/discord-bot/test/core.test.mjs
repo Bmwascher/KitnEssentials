@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from '../src/core.js';
-import { discordClient } from '../src/discord.js';
+import { discordClient, answeredStatus } from '../src/discord.js';
 import { stall, fakeFetch } from './fake-fetch.mjs';
 
 test('title follows [ONE][Client][Module] Title', () => {
@@ -497,4 +497,153 @@ test('a tag staff add while the forum is read again is kept: the post is read la
   const r = await discordClient('t', f).setStatus('700', 'Triaged', undefined, { dropOther: false });
   assert.deepEqual(f.find('PATCH', /\/channels\/700$/), [], 'no staff tag is dropped');
   assert.match(r.skipped, /no free tag slot/);
+});
+
+test('CT1: tag planning: the status takes its slot, Accepted only a free one, and a staff tag is dropped only when asked', () => {
+  const avail = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }, { id: 'd', name: 'D' }, { id: 'e', name: 'E' },
+    { id: 'tri', name: 'Triaged' }, { id: 'wf', name: "Won't fix" }, { id: 'acc', name: 'Accepted' }];
+  const names = C.CHECKLIST_NAMES;
+  const keep = { names, accepted: false, dropOther: false };
+  for (const [why, current, status, opts, want] of [
+    ['the status replaces the old one and keeps other tags', ['a', 'wf'], 'Triaged', keep, { tags: ['a', 'tri'] }],
+    ['the forum lacks the status tag: the tags stay as they are', ['a', 'acc'], 'Done', keep, { tags: ['a', 'acc'], missing: true }],
+    ['five other tags and no status: nothing is dropped', ['a', 'b', 'c', 'd', 'e'], 'Triaged', keep, { tags: ['a', 'b', 'c', 'd', 'e'], full: true }],
+    ['five other tags with dropOther: the fifth makes room, as today', ['a', 'b', 'c', 'd', 'e'], 'Triaged', { names, accepted: false }, { tags: ['a', 'b', 'c', 'd', 'tri'] }],
+    ['Accepted goes into a free slot', ['a', 'tri'], 'Triaged', { ...keep, accepted: true }, { tags: ['a', 'tri', 'acc'] }],
+    ['no free slot for Accepted: nothing is dropped', ['a', 'b', 'c', 'd', 'tri'], 'Triaged', { ...keep, accepted: true }, { tags: ['a', 'b', 'c', 'd', 'tri'], noRoom: true }],
+    ['Accepted and four other tags with a status to place: the four stay, Accepted waits', ['acc', 'a', 'b', 'c', 'd'], 'Triaged', { ...keep, accepted: true }, { tags: ['a', 'b', 'c', 'd', 'tri'], noRoom: true }],
+    ['Accepted is taken off when not wanted', ['a', 'acc', 'tri'], 'Triaged', keep, { tags: ['a', 'tri'] }],
+  ]) {
+    const r = C.planTags(current, avail, status, opts);
+    assert.deepEqual(r.tags, want.tags, why);
+    for (const k of ['missing', 'full', 'noRoom']) assert.equal(r[k], !!want[k], `${why}: ${k}`);
+  }
+  const noAccepted = avail.filter((t) => t.id !== 'acc');
+  assert.equal(C.planTags(['a'], noAccepted, 'Triaged', { ...keep, accepted: true }).noAccepted, true, 'a forum with no Accepted tag');
+  // A second tag named Accepted in another letter case is the bot's too.
+  const twice = [...avail, { id: 'acc2', name: 'ACCEPTED' }];
+  assert.deepEqual(C.planTags(['a', 'acc2', 'tri'], twice, 'Triaged', keep).tags, ['a', 'tri'], 'every Accepted tag is taken off');
+  assert.deepEqual(C.planTags(['a', 'acc2', 'tri'], twice, 'Triaged', { ...keep, accepted: true }).tags, ['a', 'tri', 'acc'], 'and one is set');
+});
+
+test('CT2: a public status and close reason map to a checklist status, and only a finished one with a close has an archive key', () => {
+  for (const [status, reason, want] of [
+    ['Triaged', null, 'Triaged'], ['In progress', null, 'In progress'], ['Fixed, next update', 'completed', 'Fixed'],
+    ['Shipped', 'completed', 'Shipped'], ['Closed', 'completed', 'Done'], ['Closed', 'not_planned', "Won't fix"], ['Closed', 'duplicate', 'Duplicate'],
+  ]) assert.equal(C.checklistStatus(status, reason), want, `${status}, ${reason}`);
+  const close = { id: 77 };
+  for (const [name, c, want] of [
+    ['Shipped', close, 'Shipped:77'], ["Won't fix", close, "Won't fix:77"], ['Duplicate', close, 'Duplicate:77'],
+    ['Fixed', close, null], ['Triaged', null, null], ['Done', null, null],
+  ]) assert.equal(C.checklistKey(name, c), want, name);
+});
+
+test('CT3: a checklist thread name is cut to 100 characters, never between the halves of a surrogate pair', () => {
+  for (const [why, title, want] of [
+    ['short', 'Bank tab icons overlap', '#12 Bank tab icons overlap'],
+    ['long', 'x'.repeat(120), `#12 ${'x'.repeat(96)}`],
+    ['a surrogate pair across the cut', `${'x'.repeat(95)}\u{1F600}y`, `#12 ${'x'.repeat(95)}`],
+    ['control characters and a line break', 'a\u0007b\nc', '#12 ab c'],
+  ]) assert.equal(C.threadName(12, title), want, why);
+});
+
+test('CT4: the staff checklist forum is never a player forum, even when FORUMS lists it', () => {
+  assert.deepEqual(Object.keys(C.parseForums({ FORUMS: JSON.stringify({ 900: {}, 950: {} }), CHECKLIST_FORUM_ID: '950' })), ['900']);
+  assert.deepEqual(Object.keys(C.parseForums({ FORUM_CHANNEL_IDS: '900, 950', CHECKLIST_FORUM_ID: '950' })), ['900']);
+});
+
+test('CT5: a checklist tag write reads the forum, then the thread, keeps the archive state unless told to open, and marks a write that may have left an archived thread open', async () => {
+  const forum = { id: '950', available_tags: [{ id: 'tri', name: 'Triaged' }, { id: 'prog', name: 'In progress' }, { id: 'acc', name: 'Accepted' }] };
+  const thread = (tags, archived, parent = '950') => ({ id: '960', parent_id: parent, applied_tags: tags, thread_metadata: { archived } });
+  const plan = (status, accepted) => (applied, available) => C.planTags(applied, available, status, { names: C.CHECKLIST_NAMES, accepted, dropOther: false });
+  const both = [{ applied_tags: ['prog'], archived: false }, { archived: true }];
+  for (const [why, t, p, open, patches, fails = {}, outcome = null] of [
+    ['an open thread: one write', thread(['tri'], false), plan('In progress', false), false, [{ applied_tags: ['prog'] }]],
+    ['an archived thread: opened in the write, archived again next', thread(['tri'], true), plan('In progress', true), false,
+      [{ applied_tags: ['prog', 'acc'], archived: false }, { archived: true }]],
+    ['tags already right: no write', thread(['tri'], true), plan('Triaged', false), false, []],
+    ['the forum lacks the status tag: no write, even for Accepted', thread(['tri'], true), plan('Done', true), false, []],
+    ['told to open: the write opens it and leaves it open', thread(['tri'], true), plan('In progress', false), true, [{ applied_tags: ['prog'], archived: false }]],
+    ['told to open, tags right: it is only opened', thread(['tri'], true), plan('Triaged', false), true, [{ archived: false }]],
+    ['told to open, the status tag missing: opened, no tags written', thread(['tri'], true), plan('Done', false), true, [{ archived: false }]],
+    ['the re-archive fails: thrown, marked', thread(['tri'], true), plan('In progress', false), false, both, { 2: 500 }, 'marked'],
+    ['the opening write fails with no answer: the re-archive still goes out, thrown unmarked', thread(['tri'], true), plan('In progress', false), false, both, { 1: 500 }, 'plain'],
+    ['the opening write and the re-archive both fail: thrown, marked, with both causes', thread(['tri'], true), plan('In progress', false), false, both, { 1: 500, 2: 403 }, 'both'],
+    ['the opening write is refused: nothing changed, nothing more sent, thrown unmarked', thread(['tri'], true), plan('In progress', false), false,
+      [{ applied_tags: ['prog'], archived: false }], { 1: 403 }, 'plain'],
+    ['a thread in another forum: no write', thread(['tri'], false, '900'), plan('In progress', false), false, [], {}, 'forum'],
+  ]) {
+    let patchNo = 0;
+    const f = fakeFetch([
+      ['GET', /\/channels\/950$/, () => forum],
+      ['GET', /\/channels\/960$/, () => t],
+      ['PATCH', /\/channels\/960$/, () => {
+        const status = fails[++patchNo];
+        return status ? new Response('{"message":"x"}', { status }) : {};
+      }],
+    ]);
+    const write = discordClient('t', f).setTags('960', '950', p, { open });
+    if (outcome === 'forum') await assert.rejects(write, /not the checklist forum/, why);
+    else if (outcome) {
+      await assert.rejects(write, (e) => (e.rearchive === true) === (outcome !== 'plain')
+        && (outcome !== 'both' || (/-> 500/.test(e.message) && /-> 403/.test(e.rearchiveError.message))), why);
+    }
+    else await write;
+    assert.deepEqual(f.calls.slice(0, 2).map((c) => `${c.method} ${c.url.replace(/^.*\/channels\//, '')}`), ['GET 950', 'GET 960'], `${why}: the thread is read last`);
+    assert.deepEqual(f.find('PATCH', /\/channels\/960$/).map((c) => c.body), patches, why);
+  }
+});
+
+test('CT6: the search lists the forum\'s threads made since a time, from the active list, the archived list and the active list again', async () => {
+  const at = (ms) => String(BigInt(ms - 1420070400000) << 22n);
+  const T0 = Date.parse('2026-11-20T00:00:00Z');
+  const old = { id: at(T0 - 60000), parent_id: '950' };
+  const fresh = { id: at(T0 + 2000), parent_id: '950' };
+  const other = { id: at(T0 + 3000), parent_id: '900' };
+  // Unarchived between the first active read and the archived read.
+  const moved = { id: at(T0 + 1000), parent_id: '950', thread_metadata: { archived: true, archive_timestamp: new Date(T0 + 5000).toISOString() } };
+  let reads = 0;
+  const f = fakeFetch([
+    ['GET', /\/guilds\/800\/threads\/active$/, () => ({ threads: ++reads === 1 ? [old, fresh, other] : [fresh, moved, other] })],
+    ['GET', /\/channels\/950\/threads\/archived\/public/, () => ({ threads: [], has_more: false })],
+  ]);
+  const r = await discordClient('t', f).threadsSince('800', '950', T0, 2);
+  assert.deepEqual(r.threads.map((t) => t.id).sort(), [fresh.id, moved.id].sort());
+  assert.equal(r.complete, true);
+  const g = fakeFetch([
+    ['GET', /\/guilds\/800\/threads\/active$/, () => ({ threads: [] })],
+    ['GET', /\/channels\/950\/threads\/archived\/public/, () => ({ threads: [moved], has_more: true })],
+  ]);
+  assert.equal((await discordClient('t', g).threadsSince('800', '950', T0, 1)).complete, false, 'the archived pages ran out first');
+  const k = fakeFetch([
+    ['GET', /\/guilds\/800\/threads\/active$/, () => ({ threads: [] })],
+    ['GET', /\/channels\/950\/threads\/archived\/public/, () => ({ threads: [], has_more: true })],
+  ]);
+  assert.equal((await discordClient('t', k).threadsSince('800', '950', T0, 2)).complete, false, 'a page that says more follow but gives no time to go on from');
+  // Two threads archived at the same time fall either side of a page boundary.
+  const arc = (ms, stampMs) => ({ id: at(ms), parent_id: '950', thread_metadata: { archived: true, archive_timestamp: new Date(stampMs).toISOString() } });
+  const tied = [arc(T0 + 1000, T0 + 9000), arc(T0 + 2000, T0 + 8000), arc(T0 + 3000, T0 + 8000)];
+  const h = fakeFetch([
+    ['GET', /\/channels\/950\/threads\/archived\/public/, (b, url) => {
+      const before = /before=([^&]+)/.exec(url);
+      const rest = before ? tied.filter((t) => t.thread_metadata.archive_timestamp < decodeURIComponent(before[1])) : tied;
+      return { threads: rest.slice(0, 2), has_more: rest.length > 2 };
+    }],
+  ]);
+  const listed = await discordClient('t', h).archivedThreads('950', T0, 3, { ties: true });
+  assert.deepEqual(listed.threads.map((t) => t.id), tied.map((t) => t.id), 'with ties, a tie across the page boundary is not skipped, and nothing is listed twice');
+});
+
+test('CT7: a Discord error\'s status is read only from its own request\'s prefix, never from the body after it', () => {
+  for (const [why, msg, want] of [
+    ['its own refusal', 'Discord POST /channels/950/threads -> 400 {"message":"x"}', 400],
+    ['a server error whose body holds " -> 404 "', 'Discord POST /channels/950/threads -> 500 upstream said -> 404 x', 500],
+    ['another request', 'Discord GET /channels/950 -> 403 {"message":"x"}', null],
+    ['no answer at all', 'socket hang up', null],
+  ]) assert.equal(answeredStatus(new Error(msg), 'POST', '/channels/950/threads'), want, why);
+});
+
+test('CT8: a Discord answer that is not JSON is reported by its request and status only, never its text', async () => {
+  const f = fakeFetch([['GET', /\/channels\/950$/, () => new Response('<html>Needs QA</html>', { status: 200 })]]);
+  await assert.rejects(discordClient('t', f).call('GET', '/channels/950'), (e) => e.message === 'Discord GET /channels/950 -> 200 (the answer was not JSON)');
 });

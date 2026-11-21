@@ -8,12 +8,45 @@ export const STATUS = {
   shipped: 'Shipped',
   closed: 'Closed',
 };
+export const STATUS_NAMES = Object.values(STATUS);
+
+// The staff checklist forum's status tags: finer close reasons than a
+// player's post.
+export const CHECKLIST = {
+  triaged: 'Triaged',
+  inProgress: 'In progress',
+  fixed: 'Fixed',
+  shipped: 'Shipped',
+  done: 'Done',
+  wontFix: "Won't fix",
+  duplicate: 'Duplicate',
+};
+export const CHECKLIST_NAMES = Object.values(CHECKLIST);
+const CHECKLIST_FINISHED = new Set([CHECKLIST.shipped, CHECKLIST.done, CHECKLIST.wontFix, CHECKLIST.duplicate]);
+// The tag an `accepted` label sets on an open issue's thread.
+export const ACCEPTED = 'Accepted';
+
+// A public status and the issue's close reason, as a checklist status.
+export function checklistStatus(status, stateReason) {
+  if (status === STATUS.fixed) return CHECKLIST.fixed;
+  if (status !== STATUS.closed) return status;
+  if (stateReason === 'not_planned') return CHECKLIST.wontFix;
+  if (stateReason === 'duplicate') return CHECKLIST.duplicate;
+  return CHECKLIST.done;
+}
+
+// A finished checklist status's archive key, one per close, so a reopen and
+// a new close are told apart. Null while nothing is finished.
+export function checklistKey(name, close) {
+  return CHECKLIST_FINISHED.has(name) && close ? `${name}:${close.id}` : null;
+}
 
 export const LABELS = {
   fromDiscord: 'from-discord',
   pendingRelease: 'pending-release',
   shipped: 'shipped',
   needsInfo: 'needs-info',
+  accepted: 'accepted',
 };
 
 // Every label the bot or the status workflow sets: [name, color, description].
@@ -27,6 +60,7 @@ export const LABEL_DEFS = [
   [LABELS.needsInfo, 'fbca04', 'Waiting on the reporter for details'],
   [LABELS.pendingRelease, 'f9a03f', 'Fixed in dev, ships with the next release tag'],
   [LABELS.shipped, '0e8a16', 'Released'],
+  [LABELS.accepted, '1d76db', 'Staff plan to do this (sets the Accepted tag)'],
 ];
 
 export const PERMS = { administrator: 1n << 3n, manageThreads: 1n << 34n };
@@ -288,9 +322,10 @@ export function labelsFor({ type, client }) {
   return out;
 }
 
-// A post's tags other than the bot's status tags: staff and player tags.
-export function otherTags(current, available) {
-  const statusNames = new Set(Object.values(STATUS).map((s) => s.toLowerCase()));
+// A post's tags other than the bot's status tags (`names`, the forum's
+// status names): staff and player tags.
+export function otherTags(current, available, names = STATUS_NAMES) {
+  const statusNames = new Set(names.map((s) => s.toLowerCase()));
   const byId = new Map((available || []).map((t) => [t.id, t]));
   return (current || []).filter((id) => {
     const t = byId.get(id);
@@ -300,8 +335,8 @@ export function otherTags(current, available) {
 
 // New applied_tags for a forum post: keep every non-status tag, swap the status.
 // Discord allows at most 5 applied tags; the status tag always wins a slot.
-export function nextAppliedTags(current, available, statusName) {
-  const keep = otherTags(current, available);
+export function nextAppliedTags(current, available, statusName, names = STATUS_NAMES) {
+  const keep = otherTags(current, available, names);
   const target = (available || []).find((t) => t.name.toLowerCase() === statusName.toLowerCase());
   if (!target) return null; // forum has no such tag: caller leaves tags alone
   return [...keep.slice(0, 4), target.id];
@@ -316,6 +351,51 @@ export function currentStatus(applied, available, prefer = null) {
   const shown = (applied || []).map((id) => byId.get(id)).filter((t) => t && byLower.has(t.name.toLowerCase()))
     .map((t) => byLower.get(t.name.toLowerCase()));
   return prefer && shown.includes(prefer) ? prefer : (shown[0] || null);
+}
+
+const tagNamed = (available, name) => (available || []).find((t) => t.name.toLowerCase() === name.toLowerCase());
+// Every tag id the forum names Accepted, in any letter case: all are the bot's.
+const acceptedIds = (available) => new Set((available || []).filter((t) => t.name.toLowerCase() === ACCEPTED.toLowerCase()).map((t) => t.id));
+
+export const sameTags = (a, b) => a.length === b.length && a.every((id) => b.includes(id));
+
+// The Accepted tag added to `tags` when wanted and a slot is free, or taken
+// off. Nobody's tag is removed to make room for it.
+export function withAccepted(tags, available, want) {
+  const t = tagNamed(available, ACCEPTED);
+  const ids = acceptedIds(available);
+  const rest = (tags || []).filter((id) => !ids.has(id));
+  if (!t) return { tags: rest, noRoom: false, noAccepted: true };
+  if (!want) return { tags: rest, noRoom: false, noAccepted: false };
+  if (rest.length >= 5) return { tags: rest, noRoom: true, noAccepted: false };
+  return { tags: [...rest, t.id], noRoom: false, noAccepted: false };
+}
+
+// A post's whole tag list: its status, from the forum's status `names`, and
+// with `accepted` true or false the Accepted tag. An Accepted tag already
+// there is set aside first, so it never costs another tag its slot; the
+// status is placed, then Accepted takes a free slot or waits (`noRoom`).
+// `missing`: the forum has no such status tag, so the list stays as it is.
+// `full`: with `dropOther` false, five other tags leave the status no slot,
+// and none is dropped.
+export function planTags(current, available, statusName, { names = STATUS_NAMES, accepted = false, dropOther = true } = {}) {
+  const acc = tagNamed(available, ACCEPTED);
+  if (!tagNamed(available, statusName)) return { tags: [...(current || [])], missing: true, full: false, noRoom: false, noAccepted: !acc };
+  const accIds = acceptedIds(available);
+  const base = (current || []).filter((id) => !accIds.has(id));
+  const full = !dropOther && otherTags(base, available, names).length >= 5;
+  const placed = full ? base : nextAppliedTags(base, available, statusName, names);
+  const a = withAccepted(placed, available, accepted);
+  return { tags: a.tags, missing: false, full, noRoom: a.noRoom, noAccepted: a.noAccepted };
+}
+
+// A checklist thread's name, `#<n> <title>`, cut to Discord's 100
+// characters, never between the two halves of a surrogate pair.
+export function threadName(n, title) {
+  const s = `#${n} ${titleText(title)}`;
+  if (s.length <= 100) return s;
+  const high = s.charCodeAt(99) >= 0xd800 && s.charCodeAt(99) <= 0xdbff;
+  return s.slice(0, high ? 99 : 100);
 }
 
 // "owner/SomeAddon" + "v5.0.120" -> "SomeAddon v5.0.120"; a tag that does not
@@ -373,7 +453,7 @@ function messageLink(raw) {
 // of {} means "guess from the post's tags". The older FORUM_CHANNEL_IDS (a
 // comma list) still works and guesses for every forum. Broken JSON gives no
 // forums, so the bot works nowhere rather than everywhere.
-export function parseForums(env) {
+function forumsOf(env) {
   const out = {};
   if (env.FORUMS && String(env.FORUMS).trim()) {
     let raw;
@@ -393,6 +473,14 @@ export function parseForums(env) {
   for (const id of String(env.FORUM_CHANNEL_IDS || '').split(',').map((s) => s.trim()).filter(Boolean)) {
     out[id] = { client: null, type: null, template: null, badTemplate: false };
   }
+  return out;
+}
+
+// The staff checklist forum is never a player forum, even when FORUMS lists
+// it by mistake: its threads get no greeting, card or filing.
+export function parseForums(env) {
+  const out = forumsOf(env);
+  if (env.CHECKLIST_FORUM_ID) delete out[String(env.CHECKLIST_FORUM_ID).trim()];
   return out;
 }
 

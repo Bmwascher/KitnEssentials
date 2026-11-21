@@ -1434,3 +1434,23 @@ test('an opened run that starts after a fix PR opened tells In progress itself, 
   assert.equal(w.tagOf('717'), 'In progress');
   assert.deepEqual([told(), notes()], [1, 1], 'the PR\'s run adds neither');
 });
+
+// ---- Transfers -------------------------------------------------------------------
+
+test('SS1: an opened event from a transfer is skipped by the status job and the checklist job', async () => {
+  const changes = { old_issue: { html_url: 'https://github.com/me/two/issues/3' }, old_repository: { full_name: 'me/two' } };
+  for (const over of [{}, { CHECKLIST_ONLY: '1', CHECKLIST_FORUM_ID: '950' }]) {
+    const w = world();
+    w.issue(17, { state: 'closed', state_reason: 'completed' });
+    w.threads.get('717').applied_tags = ['t-retail'];
+    const out = [];
+    await run({ eventName: 'issues', payload: { repository, action: 'opened', issue: { number: 17 }, changes }, env: { ...env, ...over }, fetchImpl: w.fetch, log: (s) => out.push(s) });
+    assert.deepEqual(w.calls, [], JSON.stringify(over));
+    assert.match(out.join('\n'), /#17: opened by a transfer from https:\/\/github\.com\/me\/two\/issues\/3; nothing to do/, JSON.stringify(over));
+  }
+  const w = world();
+  w.issue(17);
+  w.threads.get('717').applied_tags = ['t-retail'];
+  await go(w, 'issues', { action: 'opened', issue: { number: 17 } });
+  assert.equal(w.tagOf('717'), 'Triaged', 'an opened event with no transfer runs as before');
+});

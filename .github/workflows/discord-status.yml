@@ -5,7 +5,10 @@ name: Discord status
 # decide the post's status tag (Triaged, In progress, Fixed, Shipped, Closed).
 # Only touches issues labeled `from-discord`. Does nothing until the
 # DISCORD_BOT_TOKEN secret is set. An issue's opened run settles its post's
-# status tag; the script leaves an issue the bot did not file alone.
+# status tag; the script leaves an issue the bot did not file alone. With the
+# CHECKLIST_FORUM_ID repository variable set, the checklist job opens one
+# staff checklist thread per issue at the issue's own events, and PR and
+# release runs and the sweep keep its tags and archive in step.
 # pull_request_target (not pull_request) so contributor PRs from forks still
 # update Discord; it runs this repo's own script and never checks out PR code.
 # Only a PR whose author has a role on the repo shows as In progress. An edit
@@ -15,7 +18,7 @@ on:
   pull_request_target:
     types: [opened, edited, reopened, ready_for_review, converted_to_draft, closed]
   issues:
-    types: [opened, closed, reopened, labeled]
+    types: [opened, closed, reopened, labeled, unlabeled]
   push:
     # Test copy: KitnEssentials' own v* tags publish real releases, so the
     # "shipped" step is tried with throwaway discord-test-* tags instead.
@@ -40,7 +43,7 @@ jobs:
     # deletions or moves (only a newly created tag is a release), and PR
     # edits of the title alone.
     if: >-
-      (github.event_name != 'issues' || github.event.action != 'labeled' || github.event.label.name == 'needs-info') &&
+      (github.event_name != 'issues' || (github.event.action != 'unlabeled' && (github.event.action != 'labeled' || github.event.label.name == 'needs-info'))) &&
       (github.event_name != 'push' || (github.event.created && !github.event.deleted)) &&
       (github.event.action != 'edited' || github.event.changes.body || github.event.changes.base)
     # Release tags run one at a time; one PR's events run in order; everything
@@ -51,7 +54,8 @@ jobs:
     concurrency:
       group: discord-status-${{ github.event_name == 'push' && 'tags' || github.event.pull_request && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    # Room for the staff checklist threads after every message.
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
@@ -69,3 +73,41 @@ jobs:
           # whether the sweep only reports (default) or also repairs (fix).
           RELEASE_TAG_PATTERN: ${{ vars.RELEASE_TAG_PATTERN || '^discord-test-' }}
           SWEEP_MODE: ${{ vars.SWEEP_MODE || 'report' }}
+          CHECKLIST_FORUM_ID: ${{ vars.CHECKLIST_FORUM_ID }}
+
+  checklist:
+    # The staff checklist thread: opened, and kept in step, only at the
+    # issue's own events, one job per issue at a time. GitHub keeps one
+    # waiting job per group and drops the older one, so each job settles the
+    # whole thread from GitHub as it is, and a transfer's opened event is
+    # kept out so it never takes the place of a waiting real one. A missing
+    # label (an unlabeled event may carry none) never equals 'accepted'.
+    if: >-
+      vars.CHECKLIST_FORUM_ID != '' && github.event_name == 'issues' &&
+      (github.event.action != 'opened' || !github.event.changes.old_issue) &&
+      (contains(fromJSON('["opened","closed","reopened"]'), github.event.action) ||
+      ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name == 'accepted'))
+    concurrency:
+      group: discord-checklist-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/discord-bot
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Show the event
+        run: |
+          jq -c '{action, label: .label.name, transferred: (.changes.old_issue != null), labels: [.issue.labels[].name]}' "$GITHUB_EVENT_PATH"
+      - name: Update the staff checklist thread
+        run: node .github/discord-bot/status/status.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          RELEASE_TAG_PATTERN: ${{ vars.RELEASE_TAG_PATTERN || '^discord-test-' }}
+          CHECKLIST_FORUM_ID: ${{ vars.CHECKLIST_FORUM_ID }}
+          CHECKLIST_ONLY: '1'
