@@ -78,9 +78,22 @@ test('each new post gets the buttonless greeting and one queue card, once', asyn
   assert.match(greeting.url, new RegExp(`/channels/${post}/messages$`));
   assert.deepEqual(greeting.body, { content: GREETING, allowed_mentions: { parse: [] } });
   assert.match(card.url, /\/channels\/556\/messages$/);
-  assert.equal(card.body.content, '**New post in <#900>:** Bag sort ignores reagent bag\nby Kira (`kira_99`) · Bug · Retail');
+  // The post and its poster are Discord mentions: the scan passes the post's id and the poster's user id.
+  assert.equal(card.body.content, `**New post in <#900>:** <#${post}>\nby <@42> (\`kira_99\`) · Bug · Retail`);
   assert.deepEqual(card.body.components[0].components.map((b) => b.custom_id || b.url), [`send:${post}`, `https://discord.com/channels/1/${post}`]);
   assert.deepEqual(JSON.parse(kv.m.get(`thread:${post}`)), { greeting: 'm1', buttonless: true, card: 'm2' });
+});
+
+test('a queue card names a webhook poster as text, never as a mention', async () => {
+  const kv = started(T0);
+  const post = idAt(T0 + 60000);
+  // A webhook's author id names no user.
+  const starter = { id: post, webhook_id: '77', author: { id: '77', username: 'Bridge' } };
+  const f = discord({ active: [{ id: post, parent_id: '900', name: 'Bags' }], said: { [post]: [starter] } });
+  await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+  const [card, ...more] = f.find('POST', /\/channels\/556\/messages$/);
+  assert.deepEqual(more, [], 'one card');
+  assert.equal(card.body.content, `**New post in <#900>:** <#${post}>\nby Bridge (\`Bridge\`) · Bug · Retail`);
 });
 
 test('with no queue channel a new post gets the greeting only', async () => {

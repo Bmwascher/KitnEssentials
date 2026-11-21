@@ -311,43 +311,47 @@ test('button and form ids parse only when every id part is digits', () => {
   }
 });
 
-test('a queue card links the post and shows names as text, with no preview; once filed it strikes its own first line', () => {
-  const post = { guildId: '1', forumId: '900', postId: '700', postName: '**Bags** ||spoiler|| @everyone <@5>' };
-  const card = C.queueCard({ ...post, author: { name: 'Kira_x', username: 'kira_99' }, client: 'Retail', type: 'Bug' });
-  assert.equal(card.content, '**New post in <#900>:** \\*\\*Bags\\*\\* \\|\\|spoiler\\|\\| @everyone \\<@5\\>\nby Kira\\_x (`kira_99`) · Bug · Retail');
+test('a queue card names the post and its poster by Discord mention, pinging no one and showing no preview; once filed it strikes its own first line', () => {
+  const post = { guildId: '1', forumId: '900', postId: '700' };
+  // The post is Discord's own mention of it, so no text a player chose is in the first line; the poster's mention opens their profile.
+  const card = C.queueCard({ ...post, author: { name: 'Kira_x', username: 'kira_99', id: '42' }, client: 'Retail', type: 'Bug' });
+  assert.equal(card.content, '**New post in <#900>:** <#700>\nby <@42> (`kira_99`) · Bug · Retail');
   assert.deepEqual([card.allowed_mentions, card.flags], [{ parse: [] }, 4], 'no ping and no link preview');
   assert.deepEqual(card.components[0].components.map((b) => [b.label, b.custom_id, b.url]), [
     ['Send to GitHub', 'send:700', undefined], ['Open post', undefined, 'https://discord.com/channels/1/700'],
   ]);
-  // A post or author name makes no link, invite or preview, and cannot reorder or break its line.
+  // A poster with no user id (a webhook) is named as text: it cannot format, mention, link, invite, preview, or reorder or break its line.
   for (const [name, want] of [
+    ['**Bags** ||spoiler|| @everyone <@5>', '\\*\\*Bags\\*\\* \\|\\|spoiler\\|\\| @everyone \\<@5\\>'],
     ['free fix https://evil.example', 'free fix https:\u200B//evil.example'],
     ['see www.evil.example', 'see www\u200B.evil.example'],
     ['join discord.gg/abc', 'join discord\u200B.gg/abc'],
     ['a\u202Eb\u2066c', 'abc'],
     ['two\nlines', 'two lines'],
   ]) {
-    const named = C.queueCard({ ...post, postName: name, author: { name } });
-    assert.equal(named.content, `**New post in <#900>:** ${want}\nby ${want}`, JSON.stringify(name));
+    const named = C.queueCard({ ...post, author: { name } });
+    assert.equal(named.content, `**New post in <#900>:** <#700>\nby ${want}`, JSON.stringify(name));
   }
-  assert.equal(C.queueCard({ ...post, postName: 'x' }).content, '**New post in <#900>:** x', 'unknown parts are left out');
+  // An id that is not digits names no user: never a mention.
+  assert.equal(C.queueCard({ ...post, author: { name: 'k', username: 'kira', id: '<@&1>' } }).content, '**New post in <#900>:** <#700>\nby k (`kira`)');
+  assert.equal(C.queueCard(post).content, '**New post in <#900>:** <#700>', 'unknown parts are left out');
   // A post whose first message is gone cannot be filed from a button: the card says how to file it instead.
-  const gone = C.queueCard({ ...post, postName: 'x', starterGone: true });
-  assert.equal(gone.content, '**New post in <#900>:** x\nIts first message was deleted: a moderator can open the post and right-click a message › Apps › Send to GitHub.');
+  const gone = C.queueCard({ ...post, starterGone: true });
+  assert.equal(gone.content, '**New post in <#900>:** <#700>\nIts first message was deleted: a moderator can open the post and right-click a message › Apps › Send to GitHub.');
   assert.deepEqual(gone.components[0].components.map((b) => [b.label, b.custom_id, b.url]), [['Open post', undefined, 'https://discord.com/channels/1/700']]);
-  // The head is the card's first line as shown, already escaped: it is not escaped again.
-  const head = C.cardHead('900', 'a_b');
+  // Filed, the card strikes its first line with the post's mention still in it.
+  const head = C.cardHead('900', '700');
   for (const [by, line] of [['Bite', '**Filed as ONE #10** by Bite'], [undefined, '**Filed as ONE #10**']]) {
     const filed = C.filedCard({ guildId: '1', postId: '700', head, key: 'ONE', number: 10, by });
-    assert.equal(filed.content, `~~**New post in <#900>:** a\\_b~~\n${line}`, line);
+    assert.equal(filed.content, `~~**New post in <#900>:** <#700>~~\n${line}`, line);
     assert.deepEqual([filed.allowed_mentions, filed.flags], [{ parse: [] }, 4], line);
     assert.deepEqual(filed.components[0].components.map((b) => [b.label, b.url]), [['Open post', 'https://discord.com/channels/1/700']], line);
   }
   // A username shows in its code span on one line, with no direction mark.
-  assert.equal(C.queueCard({ ...post, postName: 'x', author: { name: 'k', username: 'ki\u202Era`' } }).content, '**New post in <#900>:** x\nby k (`kira`)');
-  // A card an older version sent may show a live link or a direction mark in its first line: struck, it shows neither.
-  const older = C.filedCard({ guildId: '1', postId: '700', head: '**New post in <#900>:** free https://evil.example \u202Ewww.evil.example', key: 'ONE', number: 10 });
-  assert.equal(older.content, '~~**New post in <#900>:** free https:\u200B//evil.example www\u200B.evil.example~~\n**Filed as ONE #10**');
+  assert.equal(C.queueCard({ ...post, author: { name: 'k', username: 'ki\u202Era`', id: '42' } }).content, '**New post in <#900>:** <#700>\nby <@42> (`kira`)');
+  // An older card names the post as escaped text and may show a live link or a direction mark: struck, it is not escaped again and shows neither.
+  const older = C.filedCard({ guildId: '1', postId: '700', head: '**New post in <#900>:** a\\_b free https://evil.example \u202Ewww.evil.example', key: 'ONE', number: 10 });
+  assert.equal(older.content, '~~**New post in <#900>:** a\\_b free https:\u200B//evil.example www\u200B.evil.example~~\n**Filed as ONE #10**');
 });
 
 // A help-post template as forums pin it: bold labels, italic hints, a list.

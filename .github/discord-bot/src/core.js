@@ -431,20 +431,27 @@ export function discordText(s) {
 const SUPPRESS_EMBEDS = 1 << 2;
 
 const openPost = (guildId, postId) => ({ type: 2, style: 5, label: 'Open post', url: `https://discord.com/channels/${guildId}/${postId}` });
-export const cardHead = (forumId, postName) => `**New post in <#${forumId}>:** ${discordText(postName)}`;
+// The card's first line: the forum and the post as Discord's own mentions, so
+// Discord shows the post's current name as a link to it, and no text a player
+// chose is in the line.
+export const cardHead = (forumId, postId) => `**New post in <#${forumId}>:** <#${postId}>`;
 
 // How to file a post whose message to file is gone. The right-click command
 // is for moderators only, so the advice says who can use it.
 export const BY_RIGHT_CLICK = 'a moderator can open the post and right-click a message › Apps › Send to GitHub.';
 
-// The queue channel's card for a post nobody has filed: its name, who posted
-// it and what kind it is, with the send button and a link. Unknown parts are
-// left out. The form files the post's first message, so a post whose first
-// message is gone gets no send button, only the way to file it by hand.
-export function queueCard({ guildId, forumId, postId, postName, author, client, type, starterGone = false }) {
-  const by = author ? `by ${discordText(author.name)}${author.username ? ` (\`${oneLine(author.username).replace(/`/g, '')}\`)` : ''}` : '';
+// The queue channel's card for a post nobody has filed: the post, who posted
+// it and what kind it is, with the send button and a link. The poster is a
+// mention, which opens their profile and pings no one (allowed_mentions),
+// beside their username; a poster with no user id (a webhook) is named as
+// text. Unknown parts are left out. The form files the post's first message,
+// so a post whose first message is gone gets no send button, only the way to
+// file it by hand.
+export function queueCard({ guildId, forumId, postId, author, client, type, starterGone = false }) {
+  const who = author && (/^\d+$/.test(String(author.id ?? '')) ? `<@${author.id}>` : discordText(author.name));
+  const by = author ? `by ${who}${author.username ? ` (\`${oneLine(author.username).replace(/`/g, '')}\`)` : ''}` : '';
   const second = [by, type, client].filter(Boolean).join(' · ');
-  const lines = [cardHead(forumId, postName), second,
+  const lines = [cardHead(forumId, postId), second,
     starterGone ? `Its first message was deleted: ${BY_RIGHT_CLICK}` : ''].filter(Boolean);
   return {
     content: lines.join('\n'),
@@ -457,11 +464,12 @@ export function queueCard({ guildId, forumId, postId, postName, author, client, 
   };
 }
 
-// The card once its post is filed. `head` is the card's first line as
-// Discord shows it (already escaped, so never escaped again), or cardHead
-// for the post. A card an older version sent may still show a live link or
-// a direction mark there, so the head goes on one line with its links
-// broken. `by`, the filer, is left out when unknown.
+// The card once its post is filed. `head` is the pressed card's own first
+// line as its content holds it (already escaped, so never escaped again; an
+// older card names the post as text there), or cardHead for the post. A card
+// an older version sent may still show a live link or a direction mark
+// there, so the head goes on one line with its links broken. `by`, the
+// filer, is left out when unknown.
 export function filedCard({ guildId, postId, head, key, number, by }) {
   return {
     content: `~~${noLinks(oneLine(head))}~~\n**Filed as ${key} #${number}**${by ? ` by ${discordText(by)}` : ''}`,

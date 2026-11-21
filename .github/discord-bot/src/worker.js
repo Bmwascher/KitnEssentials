@@ -497,7 +497,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     // list is consistent at once, unlike search; a list that fails, in any
     // repo, stops the filing. The saved issue was checked before this.
     const already = () => searchRepos([repo, ...Object.values(cfg.repos).filter((x) => x !== repo)], threadId, tokenFor, f);
-    const head = cardHead(thread.parent_id, thread.name);
+    const head = cardHead(thread.parent_id, threadId);
     // Already tracked: the record learns where the issue is now, an old
     // greeting only loses its button (no new reply replaces it), the
     // moderator is told, and then, after the lock's release, the card says
@@ -686,7 +686,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
           threadId, messageId, text: MESSAGES.tracked(repoKey, found.number), old: oldGreeting, greeting: greetingId || (rec && rec.greeting),
         }));
         await followup(`Created ${repoKey} #${found.number}: ${found.html_url} (GitHub answered late; the post's status tag comes from the issue's first workflow run${late.length ? `; ${late.join('; ')}` : ''})${gapText()}`);
-        cardAfter = { cardId, head: thread ? cardHead(thread.parent_id, thread.name) : '', key: repoKey, number: found.number, by: modName };
+        cardAfter = { cardId, head: thread ? cardHead(thread.parent_id, threadId) : '', key: repoKey, number: found.number, by: modName };
         return { created: found.number, late: true };
       }
       keepLock = true;

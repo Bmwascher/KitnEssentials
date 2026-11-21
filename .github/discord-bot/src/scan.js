@@ -311,10 +311,11 @@ export async function scan(env, deps = {}) {
       if (!forums[latest.parent_id]) return { cardSkipped: 'the post is no longer in a configured forum' };
       const author = starter && starter.author;
       const info = forums[latest.parent_id];
+      // A webhook's author id names no user, so it is never a mention.
       return { card: (await atQueue(carder.call('POST', `/channels/${queue}/messages`, queueCard({
-        guildId: env.GUILD_ID, forumId: latest.parent_id, postId: t.id, postName: latest.name || t.name,
-        author: author ? { name: personName(author), username: author.username } : null, client: info.client, type: info.type,
-        starterGone: !starter,
+        guildId: env.GUILD_ID, forumId: latest.parent_id, postId: t.id,
+        author: author ? { name: personName(author), username: author.username, id: starter.webhook_id ? null : author.id } : null,
+        client: info.client, type: info.type, starterGone: !starter,
       })))).id };
     };
     let active;

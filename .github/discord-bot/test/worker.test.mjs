@@ -365,7 +365,7 @@ test('a create that answered late is found again: the player gets the reply, the
   assert.deepEqual(more, [], 'one receipt');
   assert.equal(receipt.body.content, MESSAGES.tracked('ONE', 17), 'the player is told');
   assert.deepEqual(receipt.body.message_reference, { message_id: '800', fail_if_not_exists: false });
-  assert.match(base.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, /\n\*\*Filed as ONE #17\*\* by moddy$/, 'the card loses its button');
+  assert.equal(base.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, '~~**New post in <#900>:** <#700>~~\n**Filed as ONE #17** by moddy', 'the card is marked filed, its first line the post\'s mention');
   const pos = (method, re) => at(base, method, re);
   const marked = pos('PATCH', /\/channels\/556\/messages\/96$/);
   assert.ok(pos('PATCH', /\/webhooks\//) < marked && pos('POST', /\/channels\/700\/messages$/) < marked, 'the card last');
@@ -529,7 +529,8 @@ const buttonSubmit = (member = HELPER) => ({ ...submit(), member, data: { ...sub
 // ---- The queue card, the press check and the tracked reply ------------------------
 
 const QUEUE = { ...P3, QUEUE_CHANNEL_ID: '556' };
-// A press on the post's card in the queue channel, outside the post.
+// A press on the post's card in the queue channel, outside the post. It is an
+// older card, the post's name as text: a press strikes its own first line as it is.
 const CARD = { id: '96', content: '**New post in <#900>:** Bags\nby Kira (`kira_99`) · Bug · Retail' };
 const cardPress = (member) => ({ ...press(member), guild_id: '1', channel_id: '556', message: CARD });
 const STARTER = ['GET', /\/channels\/700\/messages\/700$/, () => ({ id: '700', content: 'first', author: { id: '42', username: 'op' }, attachments: [] })];
@@ -665,7 +666,8 @@ test('filing replies to the filed message with a ping, leaves the greeting alone
     assert.deepEqual(sent.body.allowed_mentions, { parse: [], users: [], replied_user: true }, why);
     assert.equal(f.calls.filter((c) => /\/messages\/951$/.test(c.url)).length, 0, `${why}: the greeting is left alone`);
     const card = f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body;
-    assert.match(card.content, new RegExp(`^~~.*~~\\n\\*\\*Filed as ONE #17\\*\\* by ${by}$`), why);
+    // The struck first line is the post's mention, never its name.
+    assert.equal(card.content, `~~**New post in <#900>:** <#700>~~\n**Filed as ONE #17** by ${by}`, why);
     const marked = at(f, 'PATCH', /\/channels\/556\/messages\/96$/);
     assert.ok(at(f, 'POST', /\/channels\/700\/messages$/) < marked, `${why}: the player's reply first`);
     assert.ok(at(f, 'PATCH', /\/webhooks\//) < marked, `${why}: the moderator's result first`);
@@ -723,7 +725,7 @@ test('already tracked on submit: no reply, an old button greeting only loses its
     assert.equal(f.find('POST', /\/channels\/700\/messages$/).length, 0, `${why}: no reply`);
     assert.equal(f.find('DELETE', /\/messages\/950$/).length, 0, `${why}: never deleted`);
     assert.deepEqual(f.find('PATCH', /\/messages\/950$/).map((c) => c.body), stripped, why);
-    assert.match(f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, /\n\*\*Filed as ONE #17\*\*$/, why);
+    assert.equal(f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, '~~**New post in <#900>:** <#700>~~\n**Filed as ONE #17**', why);
     assert.ok(at(f, 'PATCH', /\/webhooks\//) < at(f, 'PATCH', /\/channels\/556\/messages\/96$/), `${why}: the moderator hears first`);
     assert.deepEqual(JSON.parse(kv.m.get('issue:700')), { repo: 'me/test-one', number: 17, key: 'ONE', by: null }, `${why}: found by the search and saved`);
     assert.equal(f.find('PATCH', /\/webhooks\//)[0].body.content, 'Already tracked: ONE #17 u/17', why);

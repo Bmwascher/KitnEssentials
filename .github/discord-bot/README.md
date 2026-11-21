@@ -4,8 +4,12 @@ Every new, open post in the configured forums gets a short greeting from the
 bot, "Thanks for posting! A moderator will take a look soon, and we'll post
 updates here." (a post closed before the bot saw it gets none). With
 `QUEUE_CHANNEL_ID` set, the bot also puts a card for the post in that staff
-channel: the post's name, who posted it and what kind it is, with a **Send to
-GitHub** button and an **Open post** link. Someone with an approved role (or a
+channel: Discord's own link to the post (it shows the post's current name),
+the poster's name tag (it opens their profile) with their username beside it,
+and what kind of post it is, with a **Send to GitHub** button and an **Open
+post** link. The card pings no one. A poster with no user id (a webhook) is
+named as plain text, and a poster who has left the server shows as
+"@unknown-user" beside their username. Someone with an approved role (or a
 moderator) presses the button, checks a short form, and the bot files the
 issue in the repo the form names. The bot then replies to the filed message
 with "tracked as KE #17", which pings its author, tags the post **Triaged**
