@@ -39,6 +39,9 @@ MOD_CHANNEL_ID = ""
 # Staff channel for queue cards: one per new post, with the "Send to GitHub"
 # button. Empty: no cards, and moderators file by right-click.
 QUEUE_CHANNEL_ID = ""
+# The staff checklist forum: the same id as the repository variable of that
+# name, so the bot never treats it as a player forum, even if FORUMS lists it.
+CHECKLIST_FORUM_ID = ""
 # The repo that holds every filing's lock label (discord-lock-<post id>),
 # whichever repo the post goes to. Required when REPOS names more than one
 # repo; with one, empty means that repo. Before changing it, see "Changing
