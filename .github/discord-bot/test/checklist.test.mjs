@@ -1255,8 +1255,10 @@ test('CH8: fix mode repairs tags and the archive, opens no thread, and posts no 
   assert.deepEqual([t30.archived, recordOf(w, 30).archived], [true, `Won't fix:${closeId(w, 30)}`], 'a later close is archived and keyed');
 });
 
-test('CH8: the sweep\'s checklist work stops at its time limit, names the issues left, and later posts are still repaired', async () => {
+test('CH8: the sweep\'s checklist work stops at its time limit, a repair included, names the issues left, and later posts are still repaired', async () => {
   const w = world();
+  // Day 20778 is a multiple of 3, so with three issues this sweep starts at #17.
+  w.clock = Date.parse('2026-11-21T12:00:00Z');
   w.issue(17);
   const t17 = seed(w, 17, { applied_tags: ['c-tri', 'c-acc'] });
   w.issue(18);
@@ -1273,10 +1275,27 @@ test('CH8: the sweep\'s checklist work stops at its time limit, names the issues
   }]);
   const out = [];
   await sweep(w, 'fix', out);
-  assert.ok(out.includes("staff checklist not checked for #18, #19: this sweep's checklist work reached its 2 minutes, and the next sweep checks them"), 'the issues left are named');
+  assert.ok(out.includes("staff checklist not checked or not repaired for #17, #18, #19: this sweep's checklist work reached its 2 minutes, and a later sweep reaches them"), 'the issues left are named');
   assert.deepEqual([w.find('GET', threadUrl(t18.id)).length, w.find('GET', threadUrl(t19.id)).length], [0, 0], 'the issues left get no checklist call');
   assert.equal(w.tagOf('719'), 'Triaged', 'a later post is still repaired');
-  assert.deepEqual(ckName(w, t17), ['Triaged'], 'the issue reached first is still repaired');
+  assert.deepEqual(ckName(w, t17), ['Triaged', 'Accepted'], 'a repair does not start once the time is spent');
+});
+
+test('CH8: issues the sweep\'s checklist time leaves are reached on later days', async () => {
+  const w = world();
+  const noon = Date.parse('2026-11-21T12:00:00Z');
+  w.clock = noon;
+  const ts = [17, 18, 19].map((n) => {
+    w.issue(n);
+    return seed(w, n, { applied_tags: ['c-tri', 'c-acc'] });
+  });
+  // Every thread read takes the whole of the sweep's checklist time.
+  for (const t of ts) w.hooks.push(['GET', threadUrl(t.id), async () => { w.clock += 2 * 60 * 1000; }]);
+  for (let day = 0; day < 3; day++) {
+    w.clock = noon + day * DAY;
+    await sweep(w, 'report');
+  }
+  assert.deepEqual(ts.map((t) => w.find('GET', threadUrl(t.id)).length > 0), [true, true, true], 'each thread is read on one of three days');
 });
 
 test('CH8: the post and the thread are swept apart, and every failure is kept', async () => {
