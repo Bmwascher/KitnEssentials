@@ -63,8 +63,8 @@ export function parseChecklist(c) {
   const guildId = m[2] === 'none' ? '' : m[2];
   return {
     id: c.id, url: c.html_url || '', state: m[1], threadId, guildId,
-    // False for a thread id staff put in the marker by hand, or a record
-    // copied from another comment.
+    // False for a thread id staff put in the marker by hand, a record
+    // copied from another comment, or a comment a transfer renumbered.
     linked: !!threadId && field(body, 'linked') === `${threadId} comment: ${c.id}`,
     forumId: field(body, 'forum') || '', since: Number(field(body, 'since')) || 0, issueUrl: field(body, 'issue'), archived: field(body, 'archived'),
   };
@@ -434,7 +434,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     }
     if (!rec.threadId) return { parts, repair, unread: null };
     if (!rec.linked) {
-      parts.push(`staff checklist thread ${here} was put in its record by hand (${rec.url}): the issue's next event checks that it is the bot's thread for this issue and takes it`);
+      parts.push(`staff checklist thread ${here} is not confirmed yet (${rec.url}): its id was put in by hand, or the record was copied or renumbered. The issue's next event checks that it is the bot's thread for this issue and takes it`);
       return { parts, repair: false, unread: null };
     }
     // The key against GitHub's, whatever Discord's archived flag says. It is

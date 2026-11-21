@@ -54,9 +54,8 @@ export function discordClient(token, fetchImpl = fetch) {
   // `since` (epoch ms), up to a few pages. `cut` is the archive time it
   // stopped at when the page limit came first, or, with `ties`, true when
   // a page said more follow but gave no time to go on from. Discord's
-  // `before` is
-  // exclusive, so a thread archived at the same time as a page's last one
-  // can be skipped; the daily check accepts that for its count of posts.
+  // `before` is exclusive, so a thread archived at the same time as a
+  // page's last one can be skipped; the daily check accepts that for its count of posts.
   // With `ties`, for the search, which needs every thread more than many,
   // each next page starts a millisecond later, repeats are dropped by id,
   // and a page that brings nothing new ends the listing as cut short.

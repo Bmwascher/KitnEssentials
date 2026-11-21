@@ -1267,8 +1267,8 @@ test('CH8: report mode lists each checklist problem with its link and what staff
     [18, new RegExp(`checklist forum has no "Won't fix" tag \\(${discordLink(u18.id)}\\): add it, spelled as the README lists it`)],
     [19, new RegExp(`staff checklist thread ${discordLink(u19.id)} is not in the checklist forum: if CHECKLIST_FORUM_ID changed by mistake, set it back\\. `
       + 'If it changed on purpose, archive or delete that thread as staff prefer, then delete that record comment \\(https://github\\.com/me/one/issues/19#issuecomment-\\d+\\), and the issue\'s next event opens a new thread in the forum set now')],
-    [20, new RegExp(`staff checklist thread ${discordLink(u20.id)} was put in its record by hand \\(https://github\\.com/me/one/issues/20#issuecomment-\\d+\\): the issue's next event checks that it is the bot's thread for this issue and takes it`)],
-    [21, new RegExp(`staff checklist thread ${u21.id} was put in its record by hand \\(https://github\\.com/me/one/issues/21#issuecomment-\\d+\\)`)],
+    [20, new RegExp(`staff checklist thread ${discordLink(u20.id)} is not confirmed yet \\(https://github\\.com/me/one/issues/20#issuecomment-\\d+\\): its id was put in by hand, or the record was copied or renumbered\\. The issue's next event checks that it is the bot's thread for this issue and takes it`)],
+    [21, new RegExp(`staff checklist thread ${u21.id} is not confirmed yet \\(https://github\\.com/me/one/issues/21#issuecomment-\\d+\\)`)],
   ]) assert.match(lineOf(vout, n), re, `#${n}`);
 
   // Fix mode leaves a hand-entered thread to the issue's next checklist job.

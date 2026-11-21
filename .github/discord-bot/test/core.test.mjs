@@ -1,9 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from '../src/core.js';
-import { discordClient } from '../src/discord.js';
-// A namespace import, so the file loads before a new export exists.
-import * as D from '../src/discord.js';
+import { discordClient, answeredStatus } from '../src/discord.js';
 import { stall, fakeFetch } from './fake-fetch.mjs';
 
 test('title follows [ONE][Client][Module] Title', () => {
@@ -642,7 +640,7 @@ test('CT7: a Discord error\'s status is read only from its own request\'s prefix
     ['a server error whose body holds " -> 404 "', 'Discord POST /channels/950/threads -> 500 upstream said -> 404 x', 500],
     ['another request', 'Discord GET /channels/950 -> 403 {"message":"x"}', null],
     ['no answer at all', 'socket hang up', null],
-  ]) assert.equal(D.answeredStatus(new Error(msg), 'POST', '/channels/950/threads'), want, why);
+  ]) assert.equal(answeredStatus(new Error(msg), 'POST', '/channels/950/threads'), want, why);
 });
 
 test('CT8: a Discord answer that is not JSON is reported by its request and status only, never its text', async () => {
