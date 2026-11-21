@@ -653,6 +653,11 @@ Accepted on purpose; each line says how you would notice it.
   and the job is red; the issue's next event or a fix-mode sweep archives it.
 - An edit to the "Staff checklist thread" comment saved in the moment the bot
   rewrites it can be lost: you see your edit gone; make it again.
+- Two issues filed from one post (only after its filing record was cleared
+  and the post sent again) share that post, so if one issue's "Staff
+  checklist thread" comment is copied into the other, the bot can take the
+  first issue's thread for the second. Never copy that comment between
+  issues; delete the copy, and the issue's next event opens its own thread.
 
 ## Tests
 
