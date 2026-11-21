@@ -498,3 +498,56 @@ test('a tag staff add while the forum is read again is kept: the post is read la
   assert.deepEqual(f.find('PATCH', /\/channels\/700$/), [], 'no staff tag is dropped');
   assert.match(r.skipped, /no free tag slot/);
 });
+
+test('CT1: tag planning: the status takes its slot, Accepted only a free one, and a staff tag is dropped only when asked', () => {
+  const avail = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }, { id: 'd', name: 'D' }, { id: 'e', name: 'E' },
+    { id: 'tri', name: 'Triaged' }, { id: 'wf', name: "Won't fix" }, { id: 'acc', name: 'Accepted' }];
+  const names = C.CHECKLIST_NAMES;
+  const keep = { names, accepted: false, dropOther: false };
+  for (const [why, current, status, opts, want] of [
+    ['the status replaces the old one and keeps other tags', ['a', 'wf'], 'Triaged', keep, { tags: ['a', 'tri'] }],
+    ['the forum lacks the status tag: the tags stay as they are', ['a', 'acc'], 'Done', keep, { tags: ['a', 'acc'], missing: true }],
+    ['five other tags and no status: nothing is dropped', ['a', 'b', 'c', 'd', 'e'], 'Triaged', keep, { tags: ['a', 'b', 'c', 'd', 'e'], full: true }],
+    ['five other tags with dropOther: the fifth makes room, as today', ['a', 'b', 'c', 'd', 'e'], 'Triaged', { names, accepted: false }, { tags: ['a', 'b', 'c', 'd', 'tri'] }],
+    ['Accepted goes into a free slot', ['a', 'tri'], 'Triaged', { ...keep, accepted: true }, { tags: ['a', 'tri', 'acc'] }],
+    ['no free slot for Accepted: nothing is dropped', ['a', 'b', 'c', 'd', 'tri'], 'Triaged', { ...keep, accepted: true }, { tags: ['a', 'b', 'c', 'd', 'tri'], noRoom: true }],
+    ['Accepted and four other tags with a status to place: the four stay, Accepted waits', ['acc', 'a', 'b', 'c', 'd'], 'Triaged', { ...keep, accepted: true }, { tags: ['a', 'b', 'c', 'd', 'tri'], noRoom: true }],
+    ['Accepted is taken off when not wanted', ['a', 'acc', 'tri'], 'Triaged', keep, { tags: ['a', 'tri'] }],
+  ]) {
+    const r = C.planTags(current, avail, status, opts);
+    assert.deepEqual(r.tags, want.tags, why);
+    for (const k of ['missing', 'full', 'noRoom']) assert.equal(r[k], !!want[k], `${why}: ${k}`);
+  }
+  const noAccepted = avail.filter((t) => t.id !== 'acc');
+  assert.equal(C.planTags(['a'], noAccepted, 'Triaged', { ...keep, accepted: true }).noAccepted, true, 'a forum with no Accepted tag');
+  // A second tag named Accepted in another letter case is the bot's too.
+  const twice = [...avail, { id: 'acc2', name: 'ACCEPTED' }];
+  assert.deepEqual(C.planTags(['a', 'acc2', 'tri'], twice, 'Triaged', keep).tags, ['a', 'tri'], 'every Accepted tag is taken off');
+  assert.deepEqual(C.planTags(['a', 'acc2', 'tri'], twice, 'Triaged', { ...keep, accepted: true }).tags, ['a', 'tri', 'acc'], 'and one is set');
+});
+
+test('CT2: a public status and close reason map to a checklist status, and only a finished one with a close has an archive key', () => {
+  for (const [status, reason, want] of [
+    ['Triaged', null, 'Triaged'], ['In progress', null, 'In progress'], ['Fixed, next update', 'completed', 'Fixed'],
+    ['Shipped', 'completed', 'Shipped'], ['Closed', 'completed', 'Done'], ['Closed', 'not_planned', "Won't fix"], ['Closed', 'duplicate', 'Duplicate'],
+  ]) assert.equal(C.checklistStatus(status, reason), want, `${status}, ${reason}`);
+  const close = { id: 77 };
+  for (const [name, c, want] of [
+    ['Shipped', close, 'Shipped:77'], ["Won't fix", close, "Won't fix:77"], ['Duplicate', close, 'Duplicate:77'],
+    ['Fixed', close, null], ['Triaged', null, null], ['Done', null, null],
+  ]) assert.equal(C.checklistKey(name, c), want, name);
+});
+
+test('CT3: a checklist thread name is cut to 100 characters, never between the halves of a surrogate pair', () => {
+  for (const [why, title, want] of [
+    ['short', 'Bank tab icons overlap', '#12 Bank tab icons overlap'],
+    ['long', 'x'.repeat(120), `#12 ${'x'.repeat(96)}`],
+    ['a surrogate pair across the cut', `${'x'.repeat(95)}\u{1F600}y`, `#12 ${'x'.repeat(95)}`],
+    ['control characters and a line break', 'a\u0007b\nc', '#12 ab c'],
+  ]) assert.equal(C.threadName(12, title), want, why);
+});
+
+test('CT4: the staff checklist forum is never a player forum, even when FORUMS lists it', () => {
+  assert.deepEqual(Object.keys(C.parseForums({ FORUMS: JSON.stringify({ 900: {}, 950: {} }), CHECKLIST_FORUM_ID: '950' })), ['900']);
+  assert.deepEqual(Object.keys(C.parseForums({ FORUM_CHANNEL_IDS: '900, 950', CHECKLIST_FORUM_ID: '950' })), ['900']);
+});
