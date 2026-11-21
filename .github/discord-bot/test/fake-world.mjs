@@ -4,6 +4,7 @@
 import { FORUM } from './fake-fetch.mjs';
 
 const BOT = 'github-actions[bot]';
+const GUILD = '800';
 const MARK = (thread) => `<!-- discord-thread: ${thread} reporter: 42 -->`;
 
 export function world() {
@@ -37,6 +38,8 @@ export function world() {
     return i;
   };
   w.thread = (id, over = {}) => {
+    // A post with the forum's or the server's id would answer as the forum, or hide a link built from the wrong id.
+    if (id === FORUM.id || id === GUILD) throw new Error(`fake world: post ${id} is the forum's or the server's id; give it another`);
     const t = { id, parent_id: FORUM.id, applied_tags: ['t-retail', 't-bug', 's-tri'], archived: true, messages: [], ...over };
     w.threads.set(id, t);
     return t;
@@ -171,7 +174,7 @@ export function world() {
       const t = w.threads.get(m[1]);
       if (!t) return json({ message: 'Unknown Channel' }, 404);
       // The server id differs from the forum id (900), so a link built from the wrong one fails.
-      return json({ id: t.id, guild_id: '800', parent_id: t.parent_id, applied_tags: [...t.applied_tags], thread_metadata: { archived: t.archived } });
+      return json({ id: t.id, guild_id: GUILD, parent_id: t.parent_id, applied_tags: [...t.applied_tags], thread_metadata: { archived: t.archived } });
     }],
     ['PATCH', /discord\.com\/api\/v10\/channels\/(\d+)$/, (m, url, body) => {
       const t = w.threads.get(m[1]);
@@ -179,6 +182,13 @@ export function world() {
       if (body.applied_tags) t.applied_tags = body.applied_tags;
       if (body.archived === false) t.archived = false;
       return json({});
+    }],
+    // One message: the post's starter (`starter` on the thread, its id the
+    // thread's), or a message the bot sent there (ids count from 1).
+    ['GET', /discord\.com\/api\/v10\/channels\/(\d+)\/messages\/(\d+)$/, (m) => {
+      const t = w.threads.get(m[1]);
+      const msg = t && (m[2] === t.id ? t.starter : t.messages[Number(m[2]) - 1]);
+      return msg ? json({ id: m[2], ...msg }) : json({ message: 'Unknown Message' }, 404);
     }],
     ['POST', /discord\.com\/api\/v10\/channels\/(\d+)\/messages$/, (m, url, body) => {
       const t = w.threads.get(m[1]);

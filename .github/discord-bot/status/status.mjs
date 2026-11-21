@@ -13,8 +13,8 @@
 // everything both wrote. The daily sweep repairs what a failed call left.
 import { readFileSync, appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { STATUS, LABELS, MESSAGES, parseMarker, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN } from '../src/core.js';
-import { discordClient } from '../src/discord.js';
+import { STATUS, LABELS, MESSAGES, parseMarker, parseFiledMessage, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN } from '../src/core.js';
+import { discordClient, postGone } from '../src/discord.js';
 import { githubClient } from '../src/github.js';
 
 const hasLabel = (issue, name) => (issue.labels || []).some((l) => (l.name || l) === name);
@@ -355,7 +355,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // sending first: a run never takes over a note so marked, so a send that
   // went out before its sent mark failed is never sent again. A failed send
   // marks it unconfirmed, for the sweep, and fails the run.
-  async function deliver(n, threadId, note, text, status, ping = []) {
+  async function deliver(n, threadId, note, text, status, ping = [], reply = {}) {
     const body = await unmarked(note);
     if (body === null) {
       log(`#${n}: the note for "${text.slice(0, 60)}" was marked meanwhile; not sent`);
@@ -364,7 +364,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     note.body = `${body}\n<!-- discord-sending -->`;
     await gh.call('PATCH', `/repos/${repo}/issues/comments/${note.id}`, { body: note.body });
     try {
-      await discord.send(threadId, text, ping);
+      const sent = await discord.send(threadId, text, ping, reply);
+      if (sent && sent.replyRefused) log(`#${n}: Discord refused the reply; the message went out plain, with no ping`);
     } catch (e) {
       if (/-> 404 /.test(e.message)) {
         log(`#${n}: Discord post is gone; message dropped`);
@@ -397,20 +398,28 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         const note = m && (await claim(n, m.key, m.text, want, true));
         // A later settle can adopt this run's own note from an earlier one:
         // keep each note once, so it is sent once.
-        if (note && !notes.some((c) => c.note.id === note.id)) notes.push({ note, key: m.key, text: m.text, status: want });
+        // An adopted note keeps its own words, so what is sent is what the note says.
+        if (note && !notes.some((c) => c.note.id === note.id)) notes.push({ note, key: m.key, text: note.text || m.text, status: want });
       } : undefined;
       let r;
       try {
-        r = await discord.setStatus(threadId, want, beforeMove);
+        // Triaged says only that the issue is filed: it never costs a staff
+        // tag. A status with news still takes the fifth slot, as at filing.
+        r = await discord.setStatus(threadId, want, beforeMove, { dropOther: want !== STATUS.triaged });
       } catch (e) {
-        // A deleted post can never be told; its issue still moves.
-        if (!/-> 404 /.test(e.message)) throw e;
+        // A deleted post can never be told; its issue still moves. Only the
+        // post's own read or write answering 404 says it is gone.
+        if (!postGone(e, threadId)) throw e;
         log(`#${n}: Discord post is gone (${e.message.slice(0, 120)})`);
         for (const c of notes) await dropNote(c.note, 'the Discord post is gone');
         return null;
       }
+      // Another writer moved the status just before this write: decide again
+      // from what the post shows now.
+      if (r.raced) continue;
       if (r.skipped) {
-        // The forum has no such tag: the post did not move, and this move's
+        // The forum has no such tag, or no free slot for Triaged: the post did
+        // not move, and this move's
         // message stays owed until a re-run once the tag exists.
         log(`#${n}: ${r.skipped}`);
         return { n, threadId, st, notes: notes.filter((c) => c.status !== want) };
@@ -422,7 +431,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         const m = await messageFor(n, st, want);
         const own = m && owningNote((await recordsOf(n)).told, m.key);
         if (own && own.run === runId && own.state === 'attempted' && !notes.some((c) => c.note.id === own.id)) {
-          notes.push({ note: own, key: m.key, text: m.text, status: want });
+          notes.push({ note: own, key: m.key, text: own.text || m.text, status: want });
         }
       }
       const after = await releasedState(n);
@@ -432,9 +441,30 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     throw new Error(`#${n}: post status did not settle after ${SETTLE_TRIES} tries`);
   }
 
+  // What a status message replies to: the filed message, pinged. An issue
+  // filed before that id was saved replies to the post's first message only
+  // when its author is the saved reporter, since a right-click filing may
+  // name someone else; otherwise, or when it cannot be read, it goes plain.
+  async function replyTarget(issue, threadId) {
+    const filed = parseFiledMessage(issue.body);
+    if (filed) return { replyTo: filed };
+    // A body edited during the run may have lost its marker.
+    const { reporterId } = parseMarker(issue.body) || {};
+    if (!reporterId) return {};
+    try {
+      const first = await discord.getMessage(threadId, threadId);
+      return first && first.author && first.author.id === reporterId ? { replyTo: threadId } : {};
+    } catch {
+      return {};
+    }
+  }
+
   // Send a claimed message when the fact it tells still holds. Another run
-  // may have moved the issue on since; that run tells its own news.
+  // may have moved the issue on since; that run tells its own news. The reply
+  // target is read first, so no slow read sits between the last check and
+  // the send.
   async function tellNote(moved, c) {
+    const reply = await replyTarget(moved.st.issue, moved.threadId);
     const st = await releasedState(moved.n);
     const nowStatus = wantedStatus(st, st.issue.state === 'open' ? await prsFor(moved.n) : []);
     const still = nowStatus === c.status && (await messageFor(moved.n, st, c.status));
@@ -442,7 +472,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       await dropNote(c.note, 'no longer true');
       return;
     }
-    await deliver(moved.n, moved.threadId, c.note, c.text, c.status);
+    await deliver(moved.n, moved.threadId, c.note, c.text, c.status, [], reply);
   }
 
   // Labels, then the post, then the messages claimed on the way. The sweep
@@ -613,7 +643,13 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           else await deliver(n, m.threadId, note, text, null, m.reporterId ? [m.reporterId] : []);
         }
       }
-    } else if (['closed', 'reopened'].includes(payload.action)) {
+    } else if (['opened', 'closed', 'reopened'].includes(payload.action)) {
+      // At `opened` the Worker has tagged a post with no status Triaged and
+      // said "now tracked" itself, or tagged nothing when GitHub answered it
+      // late: this run puts the post's status in step with GitHub. Triaged
+      // has no message; when GitHub already calls for one that has (a fix PR
+      // opened, a close, before this run started), this run tells it, and
+      // the note rules let only one run send it.
       await each([n], async () => {
         if (!(await botIssue(n))) return;
         await sync(n);
@@ -643,11 +679,20 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       const status = wantedStatus(st, st.issue.state === 'open' ? await prsFor(n) : []);
       const threadId = parseMarker(st.issue.body).threadId;
       let shown;
+      // A post read that fails for any reason but a 404 leaves the post
+      // neither judged nor repaired, and its notes unjudged: it is not gone.
+      let unread = null;
       try {
-        shown = await discord.statusOf(threadId);
+        // A post carrying the wanted status tag shows it, wherever it sits.
+        shown = await discord.statusOf(threadId, status);
       } catch (e) {
-        if (!/-> 404 /.test(e.message)) throw e;
-        shown = undefined; // the post is gone
+        // The issue's failure line at the end of the sweep logs the error.
+        // Only the post's own read answering 404 says it is gone.
+        if (!postGone(e, threadId)) {
+          unread = e;
+          parts.push('Discord post not read (see the log)');
+        }
+        shown = undefined; // the post is gone, or was not read
       }
       if (!(want.length === has.length && want.every((l) => has.includes(l)))) {
         parts.push(`labels ${has.join(', ') || '(none)'} -> ${want.join(', ') || '(none)'}`);
@@ -669,7 +714,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       const owed = [];
       const stale = [];
       const seen = new Set();
-      for (const t of st.records.told) {
+      for (const t of unread ? [] : st.records.told) {
         if (t.released || seen.has(t.key)) continue;
         seen.add(t.key);
         if (t.state === 'unconfirmed') {
@@ -712,6 +757,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       const line = `#${n}: ${parts.join('; ')}`;
       log(line);
       report.push(line);
+      if (unread) throw new Error(`#${n}: Discord post not read (${unread.message.slice(0, 200)})`);
       if (!fix) return;
       for (const s of stale) await dropNote(s.note, s.reason);
       if (owed.length) await settleLabels(n);

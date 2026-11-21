@@ -59,14 +59,20 @@ export function normRepoKey(s, repos) {
 }
 
 // "[KE][Retail][Bags] Bank tab icons overlap" -- the shape already used by hand.
+// The form pre-fills the title from the post's name, which a player typed,
+// so control and direction marks go, as in names.
 export function buildTitle({ repoKey, client, module, title }) {
-  const mod = String(module || '').trim() || 'General';
-  return `[${repoKey}][${client}][${mod}] ${String(title).trim()}`;
+  const mod = oneLine(module).trim() || 'General';
+  return `[${repoKey}][${client}][${mod}] ${titleText(title)}`;
 }
+
+// The title as the issue gets it. The form's check uses it too, so a title
+// of direction marks alone is empty.
+export const titleText = (title) => oneLine(title).trim();
 
 // Forum post name minus any [..] prefixes a player typed, for pre-filling the form.
 export function cleanPostTitle(name) {
-  return String(name || '').replace(/^(\s*\[[^\]]*\])+\s*/, '').trim().slice(0, 100);
+  return oneLine(name).replace(/^(\s*\[[^\]]*\])+\s*/, '').trim().slice(0, 100);
 }
 
 // Guess client and type from the forum post's existing tags (names, any case).
@@ -188,12 +194,50 @@ export function neutralize(text) {
   return out.join('\n');
 }
 
-// A name sits inside a line of the bot's own, where no code block can form,
-// so all of it is text.
-const neutralizeInline = (text) => neutralizeProse(lf(text));
+// Direction marks, which could reorder a line of the bot's own or of a
+// quoted report.
+const BIDI = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+// Control, bidirectional and line-separator characters, which could reorder
+// or break a line of the bot's own; a line break becomes a space.
+const CONTROLS = new RegExp(`[\\u0000-\\u001f\\u007f-\\u009f]|${BIDI.source}`, 'g');
+const oneLine = (s) => String(s ?? '').replace(/\r\n?|[\n\u2028\u2029]/g, ' ').replace(CONTROLS, '');
+
+// A name inside a table cell of the bot's own: all text. Markdown marks,
+// pipes and brackets are backslashed. A # or GH- before a digit is broken so
+// it links no issue, a run of hex digits every six so it links no commit,
+// and a URL's :// and www. so GitHub links nothing; <, @ and & go as in
+// player text.
+const nameText = (s) => plain(oneLine(s).replace(/[\\`*_~|[\]]/g, '\\$&').replace(/#(?=\d)/g, `#${ZWSP}`)
+  .replace(/\b(GH)-(?=\d)/gi, `$1-${ZWSP}`).replace(/[0-9a-f]{6}(?=[0-9a-f])/gi, `$&${ZWSP}`)
+  .replace(/:\/\//g, `:${ZWSP}//`).replace(/\b(www)\./gi, `$1${ZWSP}.`));
+
+// A username as typed: a code span longer than any backtick run in it, and
+// \| for a pipe, which a table cell needs even inside code.
+function codeSpan(s) {
+  const t = oneLine(s).replace(/\|/g, '\\|');
+  const fence = '`'.repeat(longestRun([t]) + 1);
+  const pad = /^`|`$/.test(t) ? ' ' : '';
+  return `${fence}${pad}${t}${pad}${fence}`;
+}
+
+// A person as the issue shows them: the name linked to the Discord profile,
+// then the username. With no id (a webhook) there is no profile: the name
+// alone. Never a <@id> mention.
+function personCell(p) {
+  const { name, username, id } = p || {};
+  const text = nameText(name || username || 'unknown');
+  if (!/^\d+$/.test(String(id || ''))) return text;
+  const shown = `[${text}](https://discord.com/users/${id})`;
+  return username ? `${shown} (${codeSpan(username)})` : shown;
+}
+
+// The name a server shows: the nickname, else the display name, else the username.
+export function personName(user, member) {
+  return (member && member.nick) || (user && (user.global_name || user.username)) || 'unknown';
+}
 
 function quote(text) {
-  const t = neutralize(text).trim() || '(no text, see the Discord post)';
+  const t = neutralize(String(text || '').replace(BIDI, '')).trim() || '(no text, see the Discord post)';
   return t.split('\n').map((l) => `> ${l}`).join('\n');
 }
 
@@ -210,15 +254,30 @@ export function parseMarker(body) {
   return { threadId: m[1], reporterId: m[2] && m[2] !== 'unknown' ? m[2] : null };
 }
 
-export function buildBody({ content, reporterName, threadUrl, client, attachments, threadId, reporterId, sentBy, templateLine }) {
-  const lines = ['## Report', '', quote(content), ''];
-  lines.push(`Reported by **${neutralizeInline(reporterName)}** in [the Discord post](${threadUrl}) · client ${client}`);
+// The id of the message the issue was filed from, or null for an issue filed
+// before the bot wrote it. Only the bot's footer counts: the line directly
+// before the thread marker that ends the body, since an older body may quote
+// such a line in its report.
+export function parseFiledMessage(body) {
+  const m = /(?:^|\n)<!-- discord-message: (\d+) -->\n<!-- discord-thread: \d+ reporter: (?:\d+|unknown) -->\s*$/.exec(lf(body));
+  return m ? m[1] : null;
+}
+
+// `reporter` and `sender` are { name, username, id }, any part missing.
+export function buildBody({ content, reporter, sender, threadUrl, attachments, threadId, messageId, templateLine }) {
+  const lines = [
+    `| Reporter | ${personCell(reporter)} |`, '| --- | --- |',
+    `| Filed by | ${personCell(sender)} |`,
+    `| Discord post | [Open the post](${threadUrl}) |`,
+    '', '## Report', '', quote(content),
+  ];
   if (attachments && attachments.length) {
     lines.push('', `${attachments.length} attachment(s) on the Discord post (open the post to see them; Discord image links expire).`);
   }
   if (templateLine) lines.push('', `Template check (advisory): ${templateLine}`);
-  if (sentBy) lines.push('', `_Sent from Discord by ${neutralizeInline(sentBy)}._`);
-  lines.push('', marker({ threadId, reporterId }));
+  lines.push('');
+  if (messageId) lines.push(`<!-- discord-message: ${messageId} -->`);
+  lines.push(marker({ threadId, reporterId: reporter && reporter.id }));
   return lines.join('\n');
 }
 
@@ -229,29 +288,34 @@ export function labelsFor({ type, client }) {
   return out;
 }
 
-// New applied_tags for a forum post: keep every non-status tag, swap the status.
-// Discord allows at most 5 applied tags; the status tag always wins a slot.
-export function nextAppliedTags(current, available, statusName) {
+// A post's tags other than the bot's status tags: staff and player tags.
+export function otherTags(current, available) {
   const statusNames = new Set(Object.values(STATUS).map((s) => s.toLowerCase()));
   const byId = new Map((available || []).map((t) => [t.id, t]));
-  const keep = (current || []).filter((id) => {
+  return (current || []).filter((id) => {
     const t = byId.get(id);
     return !(t && statusNames.has(t.name.toLowerCase()));
   });
+}
+
+// New applied_tags for a forum post: keep every non-status tag, swap the status.
+// Discord allows at most 5 applied tags; the status tag always wins a slot.
+export function nextAppliedTags(current, available, statusName) {
+  const keep = otherTags(current, available);
   const target = (available || []).find((t) => t.name.toLowerCase() === statusName.toLowerCase());
   if (!target) return null; // forum has no such tag: caller leaves tags alone
   return [...keep.slice(0, 4), target.id];
 }
 
-// The status a post shows now (a status tag's canonical name), or null.
-export function currentStatus(applied, available) {
+// The status a post shows now (a status tag's canonical name), or null. A
+// post carrying the `prefer` status tag shows it, wherever the tag sits: a
+// second status tag beside it is no reason to move, or reopen, the post.
+export function currentStatus(applied, available, prefer = null) {
   const byLower = new Map(Object.values(STATUS).map((s) => [s.toLowerCase(), s]));
   const byId = new Map((available || []).map((t) => [t.id, t]));
-  for (const id of applied || []) {
-    const t = byId.get(id);
-    if (t && byLower.has(t.name.toLowerCase())) return byLower.get(t.name.toLowerCase());
-  }
-  return null;
+  const shown = (applied || []).map((id) => byId.get(id)).filter((t) => t && byLower.has(t.name.toLowerCase()))
+    .map((t) => byLower.get(t.name.toLowerCase()));
+  return prefer && shown.includes(prefer) ? prefer : (shown[0] || null);
 }
 
 // "owner/SomeAddon" + "v5.0.120" -> "SomeAddon v5.0.120"; a tag that does not
@@ -273,15 +337,15 @@ export function isRelease(name, pattern) {
 
 export const MESSAGES = {
   tracked: (key, n) => `Thanks! This is now tracked as ${key} #${n}. We'll post here when a fix is being tested and when it ships.`,
-  inProgress: () => "Good news: a fix for this is being worked on and tested. We'll post here when it's done.",
-  fixed: () => "This is fixed! The fix will be in the next update. We'll post here when that update is out.",
-  shipped: (repoFullName, tag) => `The fix is out in ${repoDisplay(repoFullName, tag)}. Update your addons, and let us know here if you still see the problem.`,
-  done: () => "A moderator has closed this. If it's still happening for you, reply here and we'll take another look.",
+  inProgress: () => "**In progress.** A fix for this is being worked on and tested. We'll post here when it's done.",
+  fixed: () => "**Fixed!** The fix will be in the next update. We'll post here when that update is out.",
+  shipped: (repoFullName, tag) => `**Out now in ${repoDisplay(repoFullName, tag)}.** Update your addons, and let us know here if you still see the problem.`,
+  done: () => "**Closed.** A moderator has closed this. If it's still happening for you, reply here and we'll take another look.",
   // `link` is the other report's Discord post, when there is one.
   closed: (reason, link) => {
-    if (reason !== 'duplicate') return "We've decided not to change this for now, so we're closing this post. Thanks for the suggestion!";
+    if (reason !== 'duplicate') return "**Not planned.** We've decided not to change this for now, so we're closing this post. Thanks for the suggestion!";
     const other = link ? `another report (${link})` : 'another report';
-    return `This is the same problem as ${other}, so we'll follow it there and close this one. Thanks for reporting it!`;
+    return `**Duplicate.** This is the same problem as ${other}, so we'll follow it there and close this one. Thanks for reporting it!`;
   },
   needsInfo: (uid) => `${uid ? `<@${uid}> ` : ''}Could you add a bit more detail? A screenshot, your addon version and the steps to make it happen help a lot.`,
 };
@@ -332,23 +396,87 @@ export function parseForums(env) {
   return out;
 }
 
-// Role ids allowed to press the thread button (comma list), besides
+// Role ids allowed to press the send button (comma list), besides
 // moderators. Empty: moderators only.
 export function parseRoleIds(raw) {
   return String(raw || '').split(',').map((s) => s.trim()).filter((s) => /^\d+$/.test(s));
 }
 
-// The custom id of the thread button ("send:<post>") and of the form
-// ("gh:<post>:<message>[:<button message>]"). Their parts go into API paths,
-// so they are taken only when every part is digits.
+// The custom id of the send button ("send:<post>") and of the form
+// ("gh:<post>:<message>[:<button message or 0>[:<queue card>]]"). Their parts
+// go into API paths, so they are taken only when every part is digits.
 export const SEND_BUTTON = 'send';
 export function parseCustomId(id) {
   const s = String(id || '');
   let m = new RegExp(`^${SEND_BUTTON}:(\\d+)$`).exec(s);
   if (m) return { kind: 'send', threadId: m[1] };
-  m = /^gh:(\d+):(\d+)(?::(\d+))?$/.exec(s);
-  if (m) return { kind: 'form', threadId: m[1], messageId: m[2], greetingId: m[3] || '' };
+  m = /^gh:(\d+):(\d+)(?::(\d+)(?::(\d+))?)?$/.exec(s);
+  if (m) return { kind: 'form', threadId: m[1], messageId: m[2], greetingId: m[3] && m[3] !== '0' ? m[3] : '', cardId: m[4] || '' };
   return null;
+}
+
+// A URL's :// and the dot after www or discord broken, so text makes no
+// link, invite or preview.
+const noLinks = (s) => s.replace(/:\/\//g, `:${ZWSP}//`).replace(/\b(www|discord(?:app)?)\./gi, `$1${ZWSP}.`);
+
+// A post or person name inside a message of the bot's own, as text: one
+// line with no control or direction marks, Discord's Markdown marks
+// backslashed so it cannot format or mention, and no link.
+export function discordText(s) {
+  return noLinks(oneLine(s).replace(/[\\*_~|>`<[\]]/g, '\\$&'));
+}
+
+// The message flag that shows no link previews: a card stays text whatever a
+// name holds.
+const SUPPRESS_EMBEDS = 1 << 2;
+
+const openPost = (guildId, postId) => ({ type: 2, style: 5, label: 'Open post', url: `https://discord.com/channels/${guildId}/${postId}` });
+// The card's first line: the forum and the post as Discord's own mentions, so
+// Discord shows the post's current name as a link to it, and no text a player
+// chose is in the line.
+export const cardHead = (forumId, postId) => `**New post in <#${forumId}>:** <#${postId}>`;
+
+// How to file a post whose message to file is gone. The right-click command
+// is for moderators only, so the advice says who can use it.
+export const BY_RIGHT_CLICK = 'a moderator can open the post and right-click a message › Apps › Send to GitHub.';
+
+// The queue channel's card for a post nobody has filed: the post, who posted
+// it and what kind it is, with the send button and a link. The poster is a
+// mention, which opens their profile and pings no one (allowed_mentions),
+// beside their username; a poster with no user id (a webhook) is named as
+// text. Unknown parts are left out. The form files the post's first message,
+// so a post whose first message is gone gets no send button, only the way to
+// file it by hand.
+export function queueCard({ guildId, forumId, postId, author, client, type, starterGone = false }) {
+  const who = author && (/^\d+$/.test(String(author.id ?? '')) ? `<@${author.id}>` : discordText(author.name));
+  const by = author ? `by ${who}${author.username ? ` (\`${oneLine(author.username).replace(/`/g, '')}\`)` : ''}` : '';
+  const second = [by, type, client].filter(Boolean).join(' · ');
+  const lines = [cardHead(forumId, postId), second,
+    starterGone ? `Its first message was deleted: ${BY_RIGHT_CLICK}` : ''].filter(Boolean);
+  return {
+    content: lines.join('\n'),
+    allowed_mentions: { parse: [] },
+    flags: SUPPRESS_EMBEDS,
+    components: [{ type: 1, components: [
+      ...(starterGone ? [] : [{ type: 2, style: 1, label: 'Send to GitHub', custom_id: `${SEND_BUTTON}:${postId}` }]),
+      openPost(guildId, postId),
+    ] }],
+  };
+}
+
+// The card once its post is filed. `head` is the pressed card's own first
+// line as its content holds it (already escaped, so never escaped again; an
+// older card names the post as text there), or cardHead for the post. A card
+// an older version sent may still show a live link or a direction mark
+// there, so the head goes on one line with its links broken. `by`, the
+// filer, is left out when unknown.
+export function filedCard({ guildId, postId, head, key, number, by }) {
+  return {
+    content: `~~${noLinks(oneLine(head))}~~\n**Filed as ${key} #${number}**${by ? ` by ${discordText(by)}` : ''}`,
+    allowed_mentions: { parse: [] },
+    flags: SUPPRESS_EMBEDS,
+    components: [{ type: 1, components: [openPost(guildId, postId)] }],
+  };
 }
 
 // A Discord id's creation time in epoch ms.
@@ -375,9 +503,10 @@ export function parseTemplates(raw) {
 }
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-// Not an answer: a hint in ( ), a bare list number, or code-block marks (a
-// template pasted with its ``` lines).
-const isHint = (s) => /^\*?\s*\(.*\)\s*\*?$/.test(s) || /^\d+\.\s*$/.test(s) || /^`+\w*$/.test(s);
+// Not an answer: a hint in ( ), inside any * marks (a bold label's hint
+// copied as it is), a bare list number, or code-block marks (a template
+// pasted with its ``` lines).
+const isHint = (s) => /^\**\s*\(.*\)\s*\**$/.test(s) || /^\d+\.\s*$/.test(s) || /^`+\w*$/.test(s);
 
 // Advisory check of a post against its template: for each field, "present"
 // (labeled and answered), "missing" (labeled, left empty) or "unsure" (no
@@ -410,27 +539,47 @@ export function templateCheck(content, fields, attachments = 0) {
   });
 }
 
-// A line holding only a label: one to eight words of letters, digits, _, ',
-// / and -, then a colon and nothing after, with optional * bold marks. Any
-// other punctuation, such as "Screenshots (optional):", makes it no label.
-const LABEL_ONLY = /^\**\s*[A-Za-z0-9][\w'/-]*(?:\s+[\w'/-]+){0,7}\s*\**\s*:\s*\**$/;
+// A label line: one to eight words of letters, digits, _, ', / and -; then
+// optionally a ? and a ( ) group; the colon; then at most one ( ) hint, which
+// may be in * marks. * bold marks may wrap the name or the whole line. Any
+// other text after the colon ("Note: only in raids") makes it no label.
+const LABEL_LINE = /^\**\s*([A-Za-z0-9][\w'/-]*(?:\s+[\w'/-]+){0,7})\s*\??\s*(?:\(([^()]*)\))?\s*\**\s*:\s*\**\s*(?:\**\([^()]*\)\**)?\s*$/;
 
-// The field labels of a template message: the label-only lines of its first
-// code block, or of the whole message when it has none. Hint lines in ( ) are
-// not labels. An empty list means the message holds no template.
+// The field labels of a template message: the label lines of its first code
+// block, or of the whole message when it has none. Discord shows text on a
+// block's opening line unless it is one plain language word (the word
+// FENCE_OPEN takes), so that text is the block's first line. A label with
+// the word "optional" in its ( ) before the colon is optional. An empty list
+// means the message holds no template.
 export function templateLabels(content) {
   const text = String(content || '');
-  const block = /```[^\n]*\n([\s\S]*?)```/.exec(text);
+  const block = /```([^\n]*)\n([\s\S]*?)```/.exec(text);
+  const lines = (block ? block[2] : text).split('\n');
+  if (block && !FENCE_OPEN.test('```' + block[1])) lines.unshift(block[1]);
   const labels = [];
-  for (const line of (block ? block[1] : text).split('\n')) {
-    const l = line.trim();
-    if (!LABEL_ONLY.test(l)) continue;
-    const label = l.replace(/[*:]/g, '').trim();
-    if (!labels.some((x) => x.toLowerCase() === label.toLowerCase())) labels.push(label);
+  for (const line of lines) {
+    const m = LABEL_LINE.exec(line.trim());
+    if (!m) continue;
+    const name = m[1].trim();
+    if (labels.some((x) => x.name.toLowerCase() === name.toLowerCase())) continue;
+    labels.push({ name, optional: /\boptional\b/i.test(m[2] || '') });
   }
   return labels;
 }
 
-export function templateSummary(check) {
-  return check.map((c) => `${c.field} ${c.state}`).join(' · ');
+// The fields a post did not answer, as "field state". The issue's template
+// line and the moderator's note both come from it, so they agree. An
+// optional field is never a gap.
+export function templateGaps(check, optional = []) {
+  const skip = new Set(optional.map((f) => f.toLowerCase()));
+  return check.filter((c) => c.state !== 'present' && !skip.has(c.field.toLowerCase())).map((c) => `${c.field} ${c.state}`);
+}
+
+// The moderator's note when the template message could not be read; the raw
+// error goes to the log.
+export function templateNote(err) {
+  const status = (/^Discord \S+ \S+ -> (\d{3}) /.exec(String((err && err.message) || '')) || [])[1];
+  if (status === '404') return "the template message was not found; check the forum's template link, so the default fields were checked";
+  if (status === '403') return 'the bot may not read the template message; check its access to that post, so the default fields were checked';
+  return 'the template message could not be read just now, so the default fields were checked';
 }

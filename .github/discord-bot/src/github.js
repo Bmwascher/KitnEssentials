@@ -1,7 +1,7 @@
 // GitHub access for the worker: a GitHub App (installed on the repos only),
 // signed with Web Crypto so it runs on Cloudflare Workers and in Node alike.
 
-import { LABELS, parseMarker } from './core.js';
+import { LABELS, parseMarker, snowflakeMs } from './core.js';
 
 const API = 'https://api.github.com';
 
@@ -47,6 +47,9 @@ export async function appJwt(appId, key, now = Math.floor(Date.now() / 1000)) {
 }
 
 const MAX_PAGES = 100;
+// How far before a post's creation its marker search starts: room for the
+// clocks of Discord and GitHub to disagree.
+const SINCE_MARGIN_MS = 60 * 60 * 1000;
 
 export function githubClient(token, fetchImpl = fetch) {
   const headers = () => ({
@@ -76,20 +79,26 @@ export function githubClient(token, fetchImpl = fetch) {
     // A label already gone is fine; any other failure reaches the caller.
     removeLabel: (repo, n, label) => call('DELETE', `/repos/${repo}/issues/${n}/labels/${encodeURIComponent(label)}`)
       .catch((e) => { if (/-> 404 /.test(e.message)) return null; throw e; }),
-    // Every issue (open or closed) carrying a label, following every page.
-    async issuesWithLabel(repo, label) {
+    // Every issue (open or closed) carrying a label, following every page;
+    // with `since` (epoch ms), only those last updated at or after it.
+    async issuesWithLabel(repo, label, { since = null } = {}) {
+      const after = since === null ? '' : `&since=${encodeURIComponent(new Date(since).toISOString())}`;
       const out = [];
       for (let page = 1; ; page++) {
         if (page > MAX_PAGES) throw new Error(`more than ${MAX_PAGES * 100} issues labeled ${label}; stopping rather than skipping some`);
-        const batch = await call('GET', `/repos/${repo}/issues?state=all&per_page=100&page=${page}&labels=${encodeURIComponent(label)}`);
+        const batch = await call('GET', `/repos/${repo}/issues?state=all&per_page=100&page=${page}&labels=${encodeURIComponent(label)}${after}`);
         out.push(...batch.filter((i) => !i.pull_request));
         if (batch.length < 100) return out;
       }
     },
     // An issue already made from this Discord post, if any. Reads the issue list
     // (consistent at once), not search (which lags); errors reach the caller.
+    // An issue filed from a post was made, so last updated, after the post
+    // was: only issues updated since then are read, so the search, which a
+    // card press must finish in 1.5 s, does not grow with every issue ever
+    // filed.
     async findByThread(repo, threadId) {
-      const issues = await this.issuesWithLabel(repo, LABELS.fromDiscord);
+      const issues = await this.issuesWithLabel(repo, LABELS.fromDiscord, { since: snowflakeMs(threadId) - SINCE_MARGIN_MS });
       return issues.find((i) => {
         const m = parseMarker(i.body);
         return m && m.threadId === String(threadId);
@@ -97,9 +106,12 @@ export function githubClient(token, fetchImpl = fetch) {
     },
     // A per-post lock: creating a label is atomic, so of two sends of the same
     // post at the same moment only one gets true. Released once the send ends.
-    async claimThread(repo, threadId) {
+    // Its description says when it was taken, which tells a lock left behind
+    // from one a send, or a create GitHub may still apply, can hold.
+    async claimThread(repo, threadId, at = Date.now()) {
+      const taken = new Date(at).toISOString().slice(0, 19).replace('T', ' ');
       const res = await fetchImpl(`${API}/repos/${repo}/labels`, {
-        method: 'POST', headers: headers(), body: JSON.stringify({ name: lockLabel(threadId), color: 'ededed', description: 'Send to GitHub in progress' }),
+        method: 'POST', headers: headers(), body: JSON.stringify({ name: lockLabel(threadId), color: 'ededed', description: `Send to GitHub since ${taken} UTC` }),
       });
       if (res.ok) return true;
       const text = await res.text().catch(() => '');
