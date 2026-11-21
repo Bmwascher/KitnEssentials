@@ -1230,6 +1230,30 @@ test('CH8: fix mode repairs tags and the archive, opens no thread, and posts no 
   assert.deepEqual([t30.archived, recordOf(w, 30).archived], [true, `Won't fix:${closeId(w, 30)}`], 'a later close is archived and keyed');
 });
 
+test('CH8: the sweep\'s checklist work stops at its time limit, names the issues left, and later posts are still repaired', async () => {
+  const w = world();
+  w.issue(17);
+  const t17 = seed(w, 17, { applied_tags: ['c-tri', 'c-acc'] });
+  w.issue(18);
+  const t18 = seed(w, 18, { applied_tags: ['c-tri', 'c-acc'] });
+  w.issue(19);
+  const t19 = seed(w, 19, { applied_tags: ['c-tri', 'c-acc'] });
+  w.threads.get('719').applied_tags = ['t-retail'];
+  // Issue 17's thread read takes the whole of the sweep's checklist time.
+  let slow = false;
+  w.hooks.push(['GET', threadUrl(t17.id), async () => {
+    if (slow) return;
+    slow = true;
+    w.clock += 2 * 60 * 1000;
+  }]);
+  const out = [];
+  await sweep(w, 'fix', out);
+  assert.ok(out.includes("staff checklist not checked for #18, #19: this sweep's checklist work reached its 2 minutes, and the next sweep checks them"), 'the issues left are named');
+  assert.deepEqual([w.find('GET', threadUrl(t18.id)).length, w.find('GET', threadUrl(t19.id)).length], [0, 0], 'the issues left get no checklist call');
+  assert.equal(w.tagOf('719'), 'Triaged', 'a later post is still repaired');
+  assert.deepEqual(ckName(w, t17), ['Triaged'], 'the issue reached first is still repaired');
+});
+
 test('CH8: the post and the thread are swept apart, and every failure is kept', async () => {
   for (const [why, postFails, threadFails] of [['the thread read fails', false, true], ['the post read fails', true, false], ['both reads fail', true, true]]) {
     const w = world();

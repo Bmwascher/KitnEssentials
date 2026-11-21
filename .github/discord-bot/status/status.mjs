@@ -42,6 +42,11 @@ const OWED_MS = 10 * 60 * 1000;
 // and this many times.
 const RERUN_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_RERUNS = 50;
+// The sweep's own checklist calls stop once they have taken this long in a
+// run, so slow checklist reads never keep later issues' player repairs from
+// the job's time limit; the issues left are named, and the next sweep
+// checks them.
+const CHECKLIST_SWEEP_MS = 2 * 60 * 1000;
 
 const shipRecord = (tag, sha) => `Shipped in ${tag}.\n\n<!-- discord-shipped-in: ${tag} fixes: ${sha} -->`;
 // A note for each message to the player, written before the post's tag
@@ -774,6 +779,16 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const fix = env.SWEEP_MODE === 'fix';
     const issues = (await gh.issuesWithLabel(repo, LABELS.fromDiscord)).filter(eligible);
     let wrong = 0;
+    let ckSpent = 0;
+    const ckSkipped = [];
+    const ckTimed = async (fn) => {
+      const t = now();
+      try {
+        return await fn();
+      } finally {
+        ckSpent += now() - t;
+      }
+    };
     await each(issues.map((i) => i.number), async (n) => {
       let st = await stateOf(n);
       const parts = [];
@@ -902,9 +917,11 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       // kept and thrown together at the end.
       const postOwes = parts.length > 0;
       let ck = { parts: [], repair: false, unread: null };
-      if (checklist) {
+      const ckOn = !!checklist && ckSpent < CHECKLIST_SWEEP_MS;
+      if (checklist && !ckOn) ckSkipped.push(n);
+      if (ckOn) {
         try {
-          ck = await checklist.lines(n, wantFrom(st, status));
+          ck = await ckTimed(() => checklist.lines(n, wantFrom(st, status)));
         } catch (e) {
           ck = { parts: [`staff checklist not read: ${e.message.slice(0, 200)}`], repair: false, unread: e };
         }
@@ -929,7 +946,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       }
       if (fix && ck.repair) {
         try {
-          await checklist.mirror(n);
+          await ckTimed(() => checklist.mirror(n));
         } catch (e) {
           errors.push(`staff checklist: ${e.message}`);
         }
@@ -937,6 +954,11 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       if (ck.unread) errors.push(`staff checklist thread not read (${ck.unread.message.slice(0, 200)})`);
       if (errors.length) throw new Error(errors.join('; '));
     });
+    if (ckSkipped.length) {
+      const skipped = `staff checklist not checked for ${ckSkipped.map((x) => `#${x}`).join(', ')}: this sweep's checklist work reached its ${CHECKLIST_SWEEP_MS / 60000} minutes, and the next sweep checks them`;
+      log(skipped);
+      report.push(skipped);
+    }
     const head = `sweep (${fix ? 'fix' : 'report'} mode): ${wrong} of ${issues.length} issue(s) out of step`;
     log(head);
     if (env.GITHUB_STEP_SUMMARY) {
