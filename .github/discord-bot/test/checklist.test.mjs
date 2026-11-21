@@ -226,6 +226,23 @@ test('CH4: a tag staff add while the bot reads the forum is kept, and a record i
   await assert.rejects(job(y, 'closed'), /the staff checklist record changed during this run/);
   const after = recordOf(y);
   assert.deepEqual([after.threadId, after.linked, y.find('PATCH', threadUrl(a.id)).length, y.find('PATCH', threadUrl(b.id)).length], [b.id, false, 0, 0]);
+
+  // The same change landing after the archive, just before the key save:
+  // the save reads the record first and writes nothing over the change.
+  const z = world();
+  z.issue(17);
+  z.close(17, 'not_planned');
+  const p = seed(z, 17, { applied_tags: ['c-wont'] });
+  const q = z.ckThread(99);
+  let moved = false;
+  z.hooks.push(['PATCH', threadUrl(p.id), async (call) => {
+    if (moved || call.body.archived !== true) return;
+    moved = true;
+    const c = botComments(z, 17).find((x) => parseChecklist(x));
+    c.body = c.body.replace(`discord-checklist: ${p.id}`, `discord-checklist: ${q.id}`);
+  }]);
+  await assert.rejects(job(z, 'closed'), /the staff checklist record changed during this run/);
+  assert.deepEqual([recordOf(z).threadId, recordOf(z).linked], [q.id, false], 'the staff change stands');
 });
 
 // ---- Archiving ----------------------------------------------------------------------
@@ -846,10 +863,12 @@ test('CH3: an issue that stops being the bot\'s during the search, the forum rea
 });
 
 test('CH3: a thread id staff put in the record by hand is taken only when its first message is the bot\'s for this issue', async () => {
-  for (const [why, pick, ok] of [
+  for (const [why, pick, ok, visible] of [
     ['the lost thread', (w) => ours(w)[0], true],
     ['another thread in the forum', (w) => w.ckThread(99, staffStarter()), false],
     ['a bot thread for this issue outside the forum the create went to', (w) => w.ckThread(17, { parent_id: '960' }), false],
+    // Staff edit the visible line to link it too: only the bot's own line marks a record checked.
+    ['another thread in the forum, with the visible line edited to link it', (w) => w.ckThread(99, staffStarter()), false, true],
   ]) {
     const w = world();
     w.issue(17);
@@ -858,6 +877,7 @@ test('CH3: a thread id staff put in the record by hand is taken only when its fi
     const t = pick(w);
     const c = botComments(w, 17).find((x) => parseChecklist(x));
     c.body = c.body.replace('discord-checklist: creating', `discord-checklist: ${t.id}`);
+    if (visible) c.body = c.body.replace('Staff checklist thread: opening', `Staff checklist thread: https://discord.com/channels/800/${t.id}`);
     const writes = w.find('PATCH', threadUrl(t.id)).length;
     if (ok) {
       await job(w);
@@ -871,16 +891,22 @@ test('CH3: a thread id staff put in the record by hand is taken only when its fi
 });
 
 test('CH3: a record whose marker no longer parses stops the job before any write, and no second thread is made', async () => {
-  const w = world();
-  w.issue(17);
-  loseAnswer(w);
-  await assert.rejects(job(w));
-  // Staff paste the thread's link in place of "creating".
-  const c = botComments(w, 17).find((x) => parseChecklist(x));
-  c.body = c.body.replace('discord-checklist: creating', 'discord-checklist: https://discord.com/channels/800/123');
-  const comments = w.issues.get(17).comments.length;
-  await assert.rejects(job(w), /the staff checklist record \(.+\) cannot be read/);
-  assert.deepEqual([w.issues.get(17).comments.length, w.find('POST', /channels\/\d+\/threads$/).length], [comments, 1], 'no new record, no second create');
+  for (const [why, mend] of [
+    // Staff paste the thread's link in place of "creating".
+    ['a pasted link in the marker', (body) => body.replace('discord-checklist: creating', 'discord-checklist: https://discord.com/channels/800/123')],
+    // Staff delete the hidden lines; the visible line is left.
+    ['the hidden lines deleted', (body) => body.split('\n\n')[0]],
+  ]) {
+    const w = world();
+    w.issue(17);
+    loseAnswer(w);
+    await assert.rejects(job(w));
+    const c = botComments(w, 17).find((x) => parseChecklist(x));
+    c.body = mend(c.body);
+    const comments = w.issues.get(17).comments.length;
+    await assert.rejects(job(w), /the staff checklist record \(.+\) cannot be read/, why);
+    assert.deepEqual([w.issues.get(17).comments.length, w.find('POST', /channels\/\d+\/threads$/).length], [comments, 1], `${why}: no new record, no second create`);
+  }
 });
 
 test('CH3: a hand-entered id whose thread read fails for another reason is kept for a re-run', async () => {
@@ -1033,7 +1059,9 @@ test('CH8: report mode lists each checklist problem with its link and what staff
     [32, new RegExp(`no free tag slot for "Triaged" on the checklist thread \\(${discordLink(t32.id)}\\)`)],
     [33, new RegExp(`the issue is closed but its close event is not readable yet: the checklist thread \\(${discordLink(t33.id)}\\) is checked at the next sweep`)],
     [34, /the issue is closed but its close event is not readable yet: the checklist thread is checked at the next sweep/],
-    [35, /the staff checklist record \(https:\/\/github\.com\/me\/one\/issues\/35#issuecomment-\d+\) cannot be read: mend its hidden marker line/],
+    [35, new RegExp('the staff checklist record \\(https://github\\.com/me/one/issues/35#issuecomment-\\d+\\) cannot be read: mend it so its hidden marker line reads "<!-- discord-checklist: THREAD-ID guild: SERVER-ID -->", with the thread\'s id and its server\'s id\\. '
+      + 'If you are not sure a thread was made for it, put "creating" in place of THREAD-ID, and the issue\'s next event looks for one\\. '
+      + 'Put "pending" there, or delete the comment, only once you are sure no thread was made for it; the issue\'s next event then opens one')],
   ]) assert.match(lineOf(out, n), re, `#${n}`);
   assert.doesNotMatch(lineOf(out, 26), /archive owed/, 'a gone thread gets its recovery, not a repair promise');
   assert.doesNotMatch(lineOf(out, 33), /no longer holds/, 'an unreadable close is never taken as a reopen');

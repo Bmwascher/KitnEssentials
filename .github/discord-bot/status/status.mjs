@@ -161,7 +161,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const shipped = [];
     const told = [];
     // The staff checklist record, one per issue, and the address of a bot
-    // comment that carries a checklist marker the parser cannot read.
+    // comment that carries a checklist marker, or the record's visible line,
+    // that the parser cannot read.
     const ckRecords = [];
     const ckDamaged = [];
     for (let page = 1; ; page++) {
@@ -173,7 +174,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         if (checklistForum) {
           const ck = parseChecklist(c);
           if (ck) ckRecords.push(ck);
-          else if (/<!--\s*discord-checklist/.test(body)) ckDamaged.push(c.html_url || '');
+          else if (/<!--\s*discord-checklist|^Staff checklist thread:/.test(body)) ckDamaged.push(c.html_url || '');
         }
         const sh = /<!--\s*discord-shipped-in:\s*(\S+)\s+fixes:\s*([0-9a-f,]*)\s*-->/.exec(body);
         if (sh) shipped.push({ tag: sh[1], fixes: sh[2].split(',').filter(Boolean) });

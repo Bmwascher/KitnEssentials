@@ -35,6 +35,10 @@ export function checklistBody({ state, guildId, forumId = '', since, issueUrl, a
     `Staff checklist thread: ${thread ? link(guildId, state) : 'opening'}`,
     '',
     `<!-- discord-checklist: ${state} guild: ${guildId || 'none'} -->`,
+    // Written by the bot alone, for an id it made or checked. Staff mending
+    // the marker, or the visible line too, never write it, so their id is
+    // checked before any thread write.
+    ...(thread ? [`<!-- discord-checklist-linked: ${state} -->`] : []),
     ...(forumId ? [`<!-- discord-checklist-forum: ${forumId} -->`] : []),
     `<!-- discord-checklist-since: ${since} -->`,
     `<!-- discord-checklist-issue: ${issueUrl} -->`,
@@ -50,9 +54,8 @@ export function parseChecklist(c) {
   const guildId = m[2] === 'none' ? '' : m[2];
   return {
     id: c.id, url: c.html_url || '', state: m[1], threadId, guildId,
-    // False for a thread id staff put in the marker by hand: the visible
-    // line does not link it yet.
-    linked: !!threadId && body.startsWith(`Staff checklist thread: ${link(guildId, threadId)}\n`),
+    // False for a thread id staff put in the marker by hand.
+    linked: !!threadId && field(body, 'linked') === threadId,
     forumId: field(body, 'forum') || '', since: Number(field(body, 'since')) || 0, issueUrl: field(body, 'issue'), archived: field(body, 'archived'),
   };
 }
@@ -90,15 +93,20 @@ const scrubbed = (fn) => async (...args) => {
 export function checklistRunner({ gh, discord, repo, forumId, wanted, records, botIssue, log, now, settleTries, owedMs }) {
   const plan = (w) => (applied, available) => planTags(applied, available, w.name, { names: CHECKLIST_NAMES, accepted: w.accepted, dropOther: false });
   const commentPath = (rec) => `/repos/${repo}/issues/comments/${rec.id}`;
-  const write = (rec, over) => gh.call('PATCH', commentPath(rec), { body: checklistBody({ ...rec, ...over }) });
-  // The record as it is now, read just before an archive decision. It must
-  // still link the thread this run writes: an id staff changed meanwhile
-  // is left for the issue's next checklist job to check, never saved here.
-  async function fresh(rec) {
+  // The record as it is now, which must still be the one this run holds: a
+  // record staff changed meanwhile is left for the issue's next checklist
+  // job to check. GitHub has no compare-and-save, so it is read just before
+  // every archive decision and every record write.
+  async function current(rec) {
     const r = parseChecklist(await gh.call('GET', commentPath(rec)));
     if (!r) throw new Error(`the staff checklist record lost its marker (${rec.url})`);
-    if (r.threadId !== rec.threadId || !r.linked) throw new Error(`the staff checklist record changed during this run (${rec.url}); the issue's next event checks it`);
+    if (r.state !== rec.state || r.linked !== !!rec.linked) throw new Error(`the staff checklist record changed during this run (${rec.url}); the issue's next event checks it`);
     return r;
+  }
+  // `rec` is the record as this run last read or wrote it; `over` is the change.
+  async function write(rec, over) {
+    await current(rec);
+    await gh.call('PATCH', commentPath(rec), { body: checklistBody({ ...rec, ...over }) });
   }
 
   // Bring the thread in step with GitHub. The tag write keeps the archive
@@ -123,7 +131,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
         return;
       }
       if (!w.closeKnown) throw new Error(CLOSE_UNREAD);
-      let cur = await fresh(rec);
+      let cur = await current(rec);
       const reopen = !w.key && !!cur.archived;
       let r;
       try {
@@ -143,8 +151,8 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
         throw e;
       }
       if (reopen) {
+        await write(cur, { archived: null });
         cur = { ...cur, archived: null };
-        await write(cur, {});
       }
       // The same key on an open thread means staff reopened it.
       if (w.key && cur.archived !== w.key) {
@@ -216,7 +224,12 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     ].join('\n');
   };
 
-  const damagedLine = (url) => `the staff checklist record (${url}) cannot be read: mend its hidden marker line to read "discord-checklist: THREAD-ID guild: SERVER-ID" (or pending or creating in place of the id); delete the comment only if no thread was made for it, and the issue's next event opens one`;
+  // `pending` makes the next job create at once, so it is offered only for
+  // a record staff are sure has no thread; `creating` sends the job to look
+  // for one first.
+  const damagedLine = (url) => `the staff checklist record (${url}) cannot be read: mend it so its hidden marker line reads "<!-- discord-checklist: THREAD-ID guild: SERVER-ID -->", with the thread's id and its server's id. `
+    + 'If you are not sure a thread was made for it, put "creating" in place of THREAD-ID, and the issue\'s next event looks for one. '
+    + 'Put "pending" there, or delete the comment, only once you are sure no thread was made for it; the issue\'s next event then opens one';
 
   // Every opener write first reads GitHub again, after its Discord reads:
   // an issue that stopped being the bot's, or closed with its close event
@@ -334,7 +347,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     // A `pending` record has no server or forum yet; the thread gives both,
     // so the saved link works.
     const linked = { ...rec, guildId: rec.guildId || String(ch.guild_id), forumId: rec.forumId || forumId, linked: true };
-    await write(linked, {});
+    await write(rec, linked);
     return linked;
   }
 
@@ -345,9 +358,8 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     const s = await search(rec, issueUrls(w, rec));
     if (!s.id) throw new Error(`staff checklist thread not confirmed (${s.why}); see the sweep`);
     if (!(await stillOpenable(n))) return null;
-    const found = { ...rec, state: s.id, threadId: s.id };
-    await write(found, {});
-    return found;
+    await write(rec, { state: s.id });
+    return { ...rec, state: s.id, threadId: s.id, linked: true };
   }
 
   // The sweep's checklist lines for one issue, each saying what staff
