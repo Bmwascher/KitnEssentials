@@ -59,6 +59,7 @@ it along:
 | Closed by hand | Closed | "**Closed.** A moderator has closed this..." |
 | Closed as not planned / duplicate | Closed | "**Not planned.** ..." or "**Duplicate.** ..."; a duplicate links the other report's post when it came from Discord |
 | `needs-info` label added | (unchanged) | Pings the reporter for details |
+| `accepted` label on an open issue | Accepted, beside the status (see The Accepted tag) | none |
 
 "Now tracked" and every status message are replies to the reporter's message,
 the one the issue was filed from, so Discord pings the reporter even when
@@ -106,7 +107,7 @@ sends it. A message that stopped being true before its last check is dropped
 the next message corrects it).
 
 If a setup problem (a missing tag, a missing permission) stops the post's tag
-from moving, its message stays owed. The daily sweep leaves that post as it is
+from moving, its message stays owed. The sweep leaves that post as it is
 and lists the owed message with a link to the run. Fix the setup, then re-run
 that run (Re-run failed jobs, or Re-run all jobs for a run that passed), and
 the message goes out, even if another run has moved the post in the meantime.
@@ -119,9 +120,13 @@ sent, so if the same news comes true again (a PR back from draft), the bot
 writes a new note and sends it. A note a moderator marked by hand (below)
 closes its message for good.
 
-A daily sweep lists anything still out of step in the job summary, a post with
-no status tag and an unconfirmed message included (and, with
-`SWEEP_MODE=fix`, repairs the labels and tags). The sweep never messages
+Four times a day (03:17, 09:17, 15:17 and 21:17 UTC) a sweep lists anything
+still out of step in the job summary, a post with no status tag, an
+unconfirmed message and an Accepted tag out of step on a post that is not
+archived included (and, with `SWEEP_MODE=fix`, repairs the labels and tags:
+a status repair sets the Accepted tag in its own write, and a post whose
+only gap is Accepted is repaired only when it is not archived and shows
+Triaged alone). The sweep never messages
 anyone. To clear a listed message (sent by hand, or not needed), open the
 comment the sweep line links to and add `<!-- discord-sent -->` (or
 `<!-- discord-dropped -->`) at its end.
@@ -291,6 +296,41 @@ so in a plain sentence (the message was not found, the bot may not read it, or
 it could not be read just now; the Worker log keeps Discord's error) and the
 check falls back to 2 or 3; the filing goes ahead.
 
+## The Accepted tag
+
+Add the `accepted` label to an open issue to show the player that staff plan
+to act on it: its post gets an `Accepted` tag beside the status tag. It tells
+no one. The tag shows only while the issue is open, so a close that moves
+the post's status removes it.
+
+- **When it changes.** The label itself changes nothing at once, and no
+  `status` job runs for it. The post's next status change adds or removes
+  Accepted in the same write, as GitHub stood when that run read the issue:
+  a label changed after that read waits like any other. On a post that is
+  not archived and shows Triaged and no other status tag, a sweep with
+  `SWEEP_MODE=fix` also does it, so within about six hours; in report mode
+  the sweep only lists it. A post showing any other status waits for its
+  next status change, and the sweep lists it meanwhile. An archived post
+  (Discord archives an idle post on its own) waits too, and the sweep does
+  not list it (Archived posts, below).
+- **A free slot only.** A post keeps at most five tags. Accepted goes in only
+  when one is free: no tag of yours, and not the status, is moved for it. A
+  status that needs the slot takes it, and Accepted waits.
+- **Archived posts.** An archived post keeps the Accepted tag it had when it
+  was archived, or its absence: nothing writes Accepted to it. A status change
+  that reopens the post sets Accepted in that same write. A fix-mode sweep's
+  status repair that reopens an out-of-step post (Stage 3) is such a change.
+- **The bot owns the tag.** A hand-added `Accepted` tag goes at the post's
+  next status change unless the label is on, so add or remove the label, not
+  the tag. A forum without an `Accepted` tag sees no change. If a forum
+  already has a tag named `Accepted` that means something else, rename it
+  before deploying this version.
+
+Setup: give each player forum an `Accepted` tag, and make the `accepted`
+label with this command (Stage 2 step 8 runs the same one):
+
+`GITHUB_TOKEN=<a token with repo access> npm run labels <owner>/<repo>`
+
 ## Staff checklist
 
 With the repository variable `CHECKLIST_FORUM_ID` set, every issue the bot
@@ -331,7 +371,7 @@ and counts staff tags.
 **Who opens.** Only the issue's own events open its thread: opened, closed,
 reopened, and the `accepted` label added or removed. The workflow's
 `checklist` job runs them, one at a time per issue, and each job brings the
-whole thread in step with GitHub. PR and release runs and the daily sweep
+whole thread in step with GitHub. PR and release runs and the sweep
 update a thread that exists, but never open one. An issue filed before this
 version, or one whose open failed, gets its thread at its next such event, or
 when its failed checklist job is re-run. If Discord made a thread but its
@@ -486,9 +526,9 @@ Accepted on purpose; each line says how you would notice it.
 - Text between two dollar signs with no space inside them, such as `$a$`, can
   show as a math formula. What is inside stays escaped text.
 - Discord takes only a whole tag list, so a tag someone adds to a post in the
-  moment between the bot's last read of its tags and its write can be lost.
-  The bot reads the tags again just before each write, so that moment is one
-  request long.
+  moment between the bot's last read of its tags and its write can be lost,
+  and one someone removes in that moment can come back. The bot reads the
+  tags again just before each write, so that moment is one request long.
 - The status workflow never drops a tag of yours to show Triaged: a post with
   no status and five other tags shows no status until a slot is free or a
   status with news arrives (that one takes the fifth slot, as filing does),
@@ -565,10 +605,24 @@ Accepted on purpose; each line says how you would notice it.
   posts' cards, so the eighth older card can wait a run. Cards already in the
   queue channel whose record writes keep failing take the scan's card slots
   every run until a write works, and newer posts' cards wait meanwhile.
-- A status tag staff rename to a name of their own while the bot reads the
-  post just before a status write is still read under its old name, so
-  writing Triaged can drop it. Like a tag added in the moment before a write
-  (above), the window is one request long.
+- Do not rename, swap or add the bot's tags (the status tags and `Accepted`,
+  in a player forum or the staff checklist forum) while the bot may be
+  writing: a post being filed; an issue opened, closed or reopened; its
+  `accepted` label added or removed (the checklist job); a PR opened,
+  edited, reopened, closed, marked ready or converted to draft; a release
+  tag pushed; or a sweep (03:17, 09:17, 15:17 and 21:17 UTC). Each bot
+  write first reads the forum's tag names; a tag renamed, swapped or added
+  from that read until the write lands is written under its old meaning.
+  To change the tags of a post or checklist thread, the bot reads the forum,
+  then the post or thread, then writes, so the gap is about two requests.
+  A new checklist thread's names are read before the bot checks the issue
+  and saves its record on GitHub, and the thread is created after that, so
+  its gap can last a few seconds. The post can then show the wrong tag: a
+  post that wrongly shows `Closed` gets no message at the issue's next
+  close, one that wrongly shows In progress gets none at a reopen, and a
+  staff tag can be dropped or come back. After a rename, check the posts and
+  checklist threads the bot touched in those minutes and fix their tags by
+  hand.
 - If a player deletes the message being filed in the moment its issue is
   created, the issue still quotes it; close or edit it by hand. If the first
   message is deleted in the moment its card is posted, the card still offers
@@ -581,7 +635,7 @@ Accepted on purpose; each line says how you would notice it.
   post's next send had searched, the post would get two issues.
 - A failed write right after a Discord write, or two bot runs writing one
   checklist thread at once, can leave that thread's tags or archive state
-  wrong; the daily sweep names the thread and what to check. Player
+  wrong; the sweep names the thread and what to check. Player
   messages, public tags, queue cards and staff tags are never affected;
   anything else is a bug to report.
 - Two bot runs that cross on one checklist thread, or a run after a record
@@ -617,6 +671,46 @@ Accepted on purpose; each line says how you would notice it.
   reads fail, more than 20 threads were made since, or the archived listing
   stops short. The bot never creates again for it; the sweep lists it and
   says what staff do (see Staff checklist).
+- Adding or removing the `accepted` label changes nothing at once. The post
+  gets the change at its next status change, or at a fix-mode sweep while it
+  is not archived and shows Triaged alone. The same holds for a post whose
+  status run read the issue just before the label changed, for two status
+  runs on one issue that cross (the older can write Accepted back), and for
+  a slot freed after a status change. A post showing another status, or two
+  status tags, waits for its next status change; the sweep lists it
+  meanwhile.
+- An `Accepted` tag on a closed issue's post is listed by the sweep while
+  the post is not archived, and the sweep's Accepted repair never removes
+  it; nor does a close whose post already shows that close's status. A
+  fix-mode status repair removes it when the post's status is out of step
+  too, as after a put-back (below); otherwise remove it by hand.
+- A status change that lands while a fix-mode sweep writes Accepted on a
+  Triaged post (from Discord serving the sweep's last read of the post to its
+  write taking effect) is put back to Triaged, with the Accepted tag as the
+  sweep wrote it, even on an issue that was just closed. The player still
+  gets that change's message once. The post shows Triaged until the next run
+  that settles its status (an `accepted` label change runs none) or the next
+  fix-mode sweep.
+- If a status run was part-way through when such a change was put back, it
+  can write its own older status afterward, and a later run that wants that
+  status then finds it shown and sends nothing: the player can miss one
+  later message. Two cases are known. A PR run under way, a close inside the
+  sweep's one write, then a reopen with the PR still open: no In progress
+  message for the reopened issue, though the post shows In progress. A close
+  run under way, a reopen whose In progress write lands inside the sweep's
+  one write, then a close as not planned: no "Not planned." message, though
+  the post shows Closed.
+- If an issue is closed while a fix-mode sweep writes Accepted on its post,
+  and the forum has no tag for that close or the close's own tag write fails
+  or is refused, the post can show Triaged and Accepted on the closed issue.
+  The sweep lists it with the owed close message; fixing the cause (adding
+  the tag, or nothing for a passing failure) and re-running that run sends
+  the message and removes Accepted. Once that run can no longer be re-run,
+  the sweep stops holding the post. If the close's tag exists by then, a
+  fix-mode sweep moves the post and removes Accepted without the message,
+  and the sweep's line says to send it by hand if it is still needed. The
+  post keeps Triaged and Accepted while the close's tag is still missing:
+  the sweep lists it and skips the move until the tag is added.
 - If a second bot thread names the same issue and is reopened and archived
   again in the seconds the bot's search reads Discord's lists, the search
   can miss it and take the other; the missed thread is then listed nowhere.
@@ -673,9 +767,10 @@ KitnEssentials) before the real ones. Roughly 45 minutes.
 1. **Test forums.** On the test server, make the forum channels you will use
    (for example one for Retail bugs, one for Forever bugs, one for
    suggestions), each with the five status tags spelled exactly: `Triaged`,
-   `In progress`, `Fixed, next update`, `Shipped`, `Closed`, and an `Answered`
-   tag. Make a staff-only queue channel. Copy each forum's and the channel's
-   id and the server's id (Developer Mode on, right-click > Copy ID).
+   `In progress`, `Fixed, next update`, `Shipped`, `Closed`, an `Accepted`
+   tag and an `Answered` tag. Make a staff-only queue channel. Copy each
+   forum's and the channel's id and the server's id (Developer Mode on,
+   right-click > Copy ID).
 2. **Discord app.** At discord.com/developers/applications: New Application >
    Bot > Reset Token (keep it). Under Privileged Gateway Intents switch on
    **Message Content** (the bot reads the post it is pointed at; it never listens
@@ -733,7 +828,31 @@ forums and the command at first registered without `DISCORD_GUILD_ID`
 (global). Narrow who sees the right-click command under Server Settings >
 Integrations > the bot > Send to GitHub (Mod and Admin roles); the button
 checks `APPROVED_ROLE_IDS` itself. Leave `SWEEP_MODE` unset (report only)
-until a few daily reports look right, then set it to `fix`.
+and read one or two sweep summaries (run the `Discord status` workflow by
+hand, or wait for the scheduled ones). If a line names a post or thread you
+do not expect the bot to change, ask before going further; otherwise set
+`SWEEP_MODE` to `fix`. This look is a sanity check, not a guarantee of what
+fix mode will change: a run going at the same time, or two entries on one
+line, can make fix mode do more or less than the summary suggests.
+
+Fix mode turns on, for every bot issue: quiet status repairs, which also
+reopen an out-of-step archived post and set its Accepted tag; release
+labels; missing ship records; dropping notes whose message no longer holds;
+the Accepted repair on posts that are not archived and show Triaged alone;
+and, with `CHECKLIST_FORUM_ID` set, the staff checklist threads' tag and
+archive repairs, which can retag, archive or reopen a thread and update its
+record.
+It also makes five known limits possible (Known limits): a status tag
+shown without its message; a message the player may get twice; and, from
+the Accepted repair, a status change put back to Triaged, one later
+message lost when a status run was part-way through such a put-back, and a
+closed issue's post left showing Triaged and Accepted.
+Each repo's copy has its own variable and its own soak.
+
+The workflow checks out the repository's default branch, and scheduled runs
+use the default branch's workflow file, so the bot's code runs from the
+default branch only. A copy whose code lives on another branch must make
+that branch the repository's default.
 
 Each repo the bot files into needs its own copy of `discord-status.yml` and
 this folder, and the GitHub App installed. With more than one repo in

@@ -342,20 +342,39 @@ export function nextAppliedTags(current, available, statusName, names = STATUS_N
   return [...keep.slice(0, 4), target.id];
 }
 
-// The status a post shows now (a status tag's canonical name), or null. A
-// post carrying the `prefer` status tag shows it, wherever the tag sits: a
-// second status tag beside it is no reason to move, or reopen, the post.
-export function currentStatus(applied, available, prefer = null) {
-  const byLower = new Map(Object.values(STATUS).map((s) => [s.toLowerCase(), s]));
+// Every player status tag a post shows (canonical names), in tag order.
+export function shownStatuses(applied, available) {
+  const byLower = new Map(STATUS_NAMES.map((s) => [s.toLowerCase(), s]));
   const byId = new Map((available || []).map((t) => [t.id, t]));
-  const shown = (applied || []).map((id) => byId.get(id)).filter((t) => t && byLower.has(t.name.toLowerCase()))
+  return (applied || []).map((id) => byId.get(id)).filter((t) => t && byLower.has(t.name.toLowerCase()))
     .map((t) => byLower.get(t.name.toLowerCase()));
-  return prefer && shown.includes(prefer) ? prefer : (shown[0] || null);
 }
+
+// The status shown by a post's status tags: the `prefer` one wherever it
+// sits (a second status tag beside it is no reason to move, or reopen, the
+// post), else the first, else null.
+export const preferStatus = (statuses, prefer = null) => (prefer && statuses.includes(prefer) ? prefer : (statuses[0] || null));
+
+// The status a post shows now (a status tag's canonical name), or null.
+export function currentStatus(applied, available, prefer = null) {
+  return preferStatus(shownStatuses(applied, available), prefer);
+}
+
+// The only post the sweep's Accepted-only write touches: a status move that
+// lands inside that write is then put back to Triaged alone, under the tag
+// names last read.
+export const triagedAlone = (statuses) => statuses.length === 1 && statuses[0] === STATUS.triaged;
 
 const tagNamed = (available, name) => (available || []).find((t) => t.name.toLowerCase() === name.toLowerCase());
 // Every tag id the forum names Accepted, in any letter case: all are the bot's.
 const acceptedIds = (available) => new Set((available || []).filter((t) => t.name.toLowerCase() === ACCEPTED.toLowerCase()).map((t) => t.id));
+
+// Whether a post shows Accepted: any tag the forum names Accepted, as the
+// player sees it.
+export const showsAccepted = (applied, available) => {
+  const ids = acceptedIds(available);
+  return (applied || []).some((id) => ids.has(id));
+};
 
 export const sameTags = (a, b) => a.length === b.length && a.every((id) => b.includes(id));
 

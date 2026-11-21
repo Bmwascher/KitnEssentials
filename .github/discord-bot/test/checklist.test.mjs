@@ -1445,3 +1445,16 @@ test('CH8: a checklist line alone never moves the post', async () => {
   assert.match(lineOf(out, 17), new RegExp(`checklist tags Triaged, Accepted -> Triaged, keeping 0 staff tag\\(s\\) \\(${discordLink(t.id)}\\)`));
   assert.equal(w.tagOf('717'), 'Triaged');
 });
+
+test('AT10: a failed Accepted repair is reported at the end, and the issue\'s checklist repair still runs', async () => {
+  const w = world();
+  w.issue(17).labels.add('accepted');
+  w.threads.get('717').archived = false;
+  const t = seed(w, 17, { applied_tags: ['c-wont'] });
+  w.fail.push(['PATCH', threadUrl('717'), fail500(), 1]);
+  const out = [];
+  await assert.rejects(sweep(w, 'fix', out), /#17/);
+  assert.match(lineOf(out, 17), /post Accepted missing -> shown/);
+  assert.match(out.join('\n'), /Discord PATCH \/channels\/717 -> 500/, 'the refused write is reported');
+  assert.deepEqual(ckName(w, t), ['Triaged', 'Accepted'], 'the checklist thread is still repaired');
+});

@@ -466,8 +466,6 @@ test('status writes read the post again first, never reopen a post already showi
     assert.deepEqual(f.find('PATCH', /\/channels\/700$/).map((c) => c.body), patches, why);
     for (const [k, v] of Object.entries(out)) assert.equal(typeof v === 'boolean' ? !!r[k] : r[k], v, `${why}: ${k}`);
   }
-  const f = fakeFetch([['GET', /\/channels\/700$/, () => post(['p', 't'])], ['GET', /\/channels\/900$/, () => forum]]);
-  assert.equal(await discordClient('t', f).statusOf('700', 'Triaged'), 'Triaged', 'statusOf reads the wanted status wherever it sits');
 });
 
 test('a status tag renamed to a staff tag between the reads is read with the forum as it is now', async () => {
@@ -646,4 +644,97 @@ test('CT7: a Discord error\'s status is read only from its own request\'s prefix
 test('CT8: a Discord answer that is not JSON is reported by its request and status only, never its text', async () => {
   const f = fakeFetch([['GET', /\/channels\/950$/, () => new Response('<html>Needs QA</html>', { status: 200 })]]);
   await assert.rejects(discordClient('t', f).call('GET', '/channels/950'), (e) => e.message === 'Discord GET /channels/950 -> 200 (the answer was not JSON)');
+});
+
+// ---- The Accepted tag on the player's post -----------------------------------------
+
+test('AT1: a post\'s status tags are listed in tag order, and the status it shows still prefers the wanted one', () => {
+  const avail = [{ id: 'r', name: 'Retail' }, { id: 't', name: 'Triaged' }, { id: 'p', name: 'In progress' },
+    { id: 'z', name: 'Closed' }, { id: 'acc', name: 'Accepted' }, { id: 'wf', name: "Won't fix" }];
+  for (const [why, applied, want] of [
+    ['Triaged alone, beside other tags', ['r', 'acc', 't'], ['Triaged']],
+    ['two status tags, in tag order', ['z', 'r', 't'], ['Closed', 'Triaged']],
+    ['no status tag', ['r', 'acc'], []],
+    ['a checklist-only status tag is not a player status', ['wf', 't'], ['Triaged']],
+  ]) assert.deepEqual(C.shownStatuses(applied, avail), want, why);
+  assert.equal(C.currentStatus(['z', 't'], avail, 'Triaged'), 'Triaged', 'the wanted status shows wherever it sits');
+});
+
+test('AT4: only status tags that are Triaged and nothing else count as Triaged alone', () => {
+  for (const [statuses, want] of [
+    [['Triaged'], true], [['Triaged', 'Closed'], false], [['Closed', 'Triaged'], false], [['In progress'], false], [[], false],
+  ]) assert.equal(C.triagedAlone(statuses), want, statuses.join(', ') || '(none)');
+});
+
+test('AT2: a status move with `accepted` places or removes Accepted in its one write, in a free slot only; the Worker\'s move plans as before', async () => {
+  const forum = { id: '900', available_tags: [{ id: 'r', name: 'Retail' }, { id: 'x', name: 'Staff note' }, { id: 'a', name: 'A' },
+    { id: 'b2', name: 'B' }, { id: 't', name: 'Triaged' }, { id: 'p', name: 'In progress' }, { id: 'acc', name: 'Accepted' }] };
+  const noAccepted = { ...forum, available_tags: forum.available_tags.filter((t) => t.id !== 'acc') };
+  const post = (tags, archived = false) => ({ id: '700', parent_id: '900', applied_tags: tags, thread_metadata: { archived } });
+  const move = (status, accepted) => (d) => d.setStatus('700', status, undefined, { accepted });
+  for (const [why, reads, write, patches, out, forumNow = forum] of [
+    ['a move places Accepted', [post(['r', 't'])], move('In progress', true), [{ applied_tags: ['r', 'p', 'acc'] }], { noRoom: false }],
+    ['an archived post\'s move reopens it with Accepted in that write', [post(['r', 't'], true)], move('In progress', true),
+      [{ applied_tags: ['r', 'p', 'acc'], archived: false }], {}],
+    ['a move removes Accepted', [post(['acc', 'r', 't'])], move('In progress', false), [{ applied_tags: ['r', 'p'] }], {}],
+    ['no free slot: the status moves, Accepted waits, nothing is dropped', [post(['r', 'x', 'a', 'b2', 't'])], move('In progress', true),
+      [{ applied_tags: ['r', 'x', 'a', 'b2', 'p'] }], { noRoom: true }],
+    ['the status already shows, no Accepted tag and Accepted wanted: no write', [post(['r', 't'])], move('Triaged', true), [], {}],
+    ['the same on an archived post', [post(['r', 't'], true)], move('Triaged', true), [], {}],
+    ['the status already shows, an Accepted tag and Accepted not wanted: no write', [post(['r', 't', 'acc'])], move('Triaged', false), [], {}],
+    ['the same on an archived post', [post(['r', 't', 'acc'], true)], move('Triaged', false), [], {}],
+    ['a tag added between the reads is kept beside Accepted', [post(['r', 't']), post(['r', 'x', 't'])], move('In progress', true),
+      [{ applied_tags: ['r', 'x', 'p', 'acc'] }], {}],
+    ['the forum lacks the status tag: no write', [post(['r', 't'])], move('Shipped', true), [], { skipped: true }],
+    ['no Accepted tag in the forum, Accepted wanted: the status moves and noAccepted is reported', [post(['r', 't'])], move('In progress', true),
+      [{ applied_tags: ['r', 'p'] }], { noAccepted: true }, noAccepted],
+    ['no Accepted tag in the forum, Accepted not wanted: the status moves and nothing is reported', [post(['r', 't'])], move('In progress', false),
+      [{ applied_tags: ['r', 'p'] }], { noAccepted: false }, noAccepted],
+    ['the Worker\'s move (no `accepted`): Accepted is one more tag, and the status goes last', [post(['acc', 'r'])],
+      (d) => d.setStatus('700', 'Triaged'), [{ applied_tags: ['acc', 'r', 't'] }], {}],
+  ]) {
+    const queue = [...reads];
+    const f = fakeFetch([
+      ['GET', /\/channels\/700$/, () => (queue.length > 1 ? queue.shift() : queue[0])],
+      ['GET', /\/channels\/900$/, () => forumNow],
+      ['PATCH', /\/channels\/700$/, () => ({})],
+    ]);
+    const r = await write(discordClient('t', f));
+    assert.deepEqual(f.find('PATCH', /\/channels\/700$/).map((c) => c.body), patches, why);
+    for (const [k, v] of Object.entries(out)) assert.equal(!!r[k], v, `${why}: ${k}`);
+  }
+});
+
+test('AT3: the Accepted-only write changes only Accepted, and only on an active post showing Triaged alone at both reads', async () => {
+  const forum = { id: '900', available_tags: [{ id: 'r', name: 'Retail' }, { id: 'x', name: 'Staff note' }, { id: 'a', name: 'A' },
+    { id: 'b2', name: 'B' }, { id: 't', name: 'Triaged' }, { id: 'p', name: 'In progress' }, { id: 'z', name: 'Closed' }, { id: 'acc', name: 'Accepted' }] };
+  const noAccepted = { ...forum, available_tags: forum.available_tags.filter((t) => t.id !== 'acc') };
+  const twice = { ...forum, available_tags: [...forum.available_tags, { id: 'acc2', name: 'ACCEPTED' }] };
+  const post = (tags, archived = false) => ({ id: '700', parent_id: '900', applied_tags: tags, thread_metadata: { archived } });
+  for (const [why, reads, want, patches, out, forumNow = forum] of [
+    ['a second, differently cased Accepted tag already shows: no write', [post(['r', 't', 'acc2'])], true, [], { wrote: false }, twice],
+    ['Triaged alone: Accepted added, nothing else changed', [post(['r', 't'])], true, [{ applied_tags: ['r', 't', 'acc'] }], { wrote: true }],
+    ['not wanted: Accepted removed', [post(['r', 'acc', 't'])], false, [{ applied_tags: ['r', 't'] }], { wrote: true }],
+    ['a tag added between the reads is kept', [post(['r', 't']), post(['r', 'x', 't'])], true, [{ applied_tags: ['r', 'x', 't', 'acc'] }], { wrote: true }],
+    ['In progress: refused', [post(['r', 'p'])], true, [], { refused: true }],
+    ['Triaged beside Closed: refused', [post(['r', 't', 'z'])], true, [], { refused: true }],
+    ['Closed beside Triaged: refused', [post(['z', 'r', 't'])], true, [], { refused: true }],
+    ['no status tag: refused', [post(['r'])], true, [], { refused: true }],
+    ['Triaged at the first read, In progress at the fresh read: no write', [post(['r', 't']), post(['r', 'p'])], true, [], { raced: true }],
+    ['Triaged alone at the first read, Triaged beside Closed at the fresh read: no write', [post(['r', 't']), post(['r', 't', 'z'])], true, [], { raced: true }],
+    ['archived at the first read', [post(['r', 't'], true)], true, [], { archived: true }],
+    ['archived at the fresh read', [post(['r', 't']), post(['r', 't'], true)], true, [], { archived: true }],
+    ['five tags: no room', [post(['r', 'x', 'a', 'b2', 't'])], true, [], { noRoom: true, wrote: false }],
+    ['no Accepted tag in the forum', [post(['r', 't'])], true, [], { noAccepted: true, wrote: false }, noAccepted],
+  ]) {
+    const queue = [...reads];
+    const f = fakeFetch([
+      ['GET', /\/channels\/700$/, () => (queue.length > 1 ? queue.shift() : queue[0])],
+      ['GET', /\/channels\/900$/, () => forumNow],
+      ['PATCH', /\/channels\/700$/, () => ({})],
+    ]);
+    const r = await discordClient('t', f).fixAccepted('700', want);
+    assert.deepEqual(f.find('PATCH', /\/channels\/700$/).map((c) => c.body), patches, why);
+    for (const [k, v] of Object.entries(out)) assert.equal(r[k], v, `${why}: ${k}`);
+  }
 });

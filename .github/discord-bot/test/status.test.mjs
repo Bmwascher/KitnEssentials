@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { run } from '../status/status.mjs';
 import { world, shippedIn } from './fake-world.mjs';
+import { FORUM } from './fake-fetch.mjs';
 
 const env = { GITHUB_TOKEN: 'gh', DISCORD_BOT_TOKEN: 'bot', RELEASE_TAG_PATTERN: '^v\\d' };
 const repository = { full_name: 'me/one', default_branch: 'dev' };
@@ -372,7 +373,7 @@ test('an In progress write that loses to a ship is put back to Shipped', async (
 
 // ---- Sweep -----------------------------------------------------------------
 
-test('the daily sweep in report mode lists what is wrong and changes nothing', async () => {
+test('the sweep in report mode lists what is wrong and changes nothing', async () => {
   const w = world();
   w.issue(17);
   w.close(17, 'completed', 'aaaaaaa1');
@@ -383,7 +384,7 @@ test('the daily sweep in report mode lists what is wrong and changes nothing', a
   assert.ok(out.some((s) => /#17: labels \(none\) -> pending-release; post Triaged -> Fixed, next update/.test(s)), out.join('\n'));
 });
 
-test('the daily sweep in fix mode repairs labels and posts without telling anyone', async () => {
+test('the sweep in fix mode repairs labels and posts without telling anyone', async () => {
   const w = world();
   w.issue(17, { labels: ['from-discord', 'shipped', 'pending-release'] });
   w.close(17, 'completed', 'aaaaaaa1');
@@ -1453,4 +1454,315 @@ test('SS1: an opened event from a transfer is skipped by the status job and the 
   w.threads.get('717').applied_tags = ['t-retail'];
   await go(w, 'issues', { action: 'opened', issue: { number: 17 } });
   assert.equal(w.tagOf('717'), 'Triaged', 'an opened event with no transfer runs as before');
+});
+
+// ---- The Accepted tag on the player's post -----------------------------------------
+
+// Every tag name a post shows, in tag order.
+const tagNames = (w, id) => w.threads.get(id).applied_tags.map((t) => FORUM.available_tags.find((x) => x.id === t).name);
+const withLabel = (w, n) => w.issue(n, { labels: ['from-discord', 'accepted'] });
+const closeByHand = async (w, n = 17) => {
+  w.close(n, 'completed');
+  await closed(w, n);
+};
+const reopen = async (w, n = 17) => {
+  Object.assign(w.issues.get(n), { state: 'open', state_reason: 'reopened' });
+  await go(w, 'issues', { action: 'reopened', issue: { number: n } });
+};
+
+test('AT5: a status move places or removes Accepted in its own write, and Accepted says nothing', async () => {
+  {
+    const w = world();
+    withLabel(w, 17);
+    await closeByHand(w);
+    assert.deepEqual(tagNames(w, '717'), ['Retail', 'Bug', 'Closed'], 'a closed issue shows no Accepted');
+    const before = w.find('PATCH', /channels\/717$/).length;
+    await reopen(w);
+    assert.equal(w.find('PATCH', /channels\/717$/).length - before, 1, 'the reopen writes once');
+    assert.deepEqual(tagNames(w, '717'), ['Retail', 'Bug', 'Triaged', 'Accepted'], 'and places Accepted in that write');
+    assert.equal(w.tagOf('717'), 'Triaged', 'the status reader passes over Accepted');
+    assert.equal(w.said('717').length, 1, 'only the close spoke');
+  }
+  {
+    const w = world();
+    withLabel(w, 17);
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    await prEvent(w, 5);
+    assert.deepEqual(tagNames(w, '717'), ['Retail', 'Bug', 'In progress', 'Accepted']);
+    assert.deepEqual(w.said('717'), ["**In progress.** A fix for this is being worked on and tested. We'll post here when it's done."]);
+    w.prs.get(5).state = 'MERGED';
+    w.close(17, 'completed', 'aaaaaaa1');
+    const before = w.find('PATCH', /channels\/717$/).length;
+    await closed(w, 17);
+    assert.deepEqual(w.find('PATCH', /channels\/717$/).slice(before).map((c) => c.body.applied_tags), [['t-retail', 't-bug', 's-fix']],
+      'the close removes Accepted in its one write');
+    assert.deepEqual(tagNames(w, '717'), ['Retail', 'Bug', 'Fixed, next update']);
+    assert.equal(w.said('717').length, 2, 'the Fixed message once');
+    assert.match(w.said('717')[1], /^\*\*Fixed!\*\*/, 'and it is the Fixed message');
+  }
+  {
+    const w = world();
+    withLabel(w, 17);
+    await go(w, 'issues', { action: 'opened', issue: { number: 17 } });
+    assert.deepEqual(w.find('PATCH', /channels\/717$/), [], 'Triaged already shows: no write, so Accepted waits for the sweep');
+  }
+});
+
+test('AT6: an accepted label added or removed starts nothing', async () => {
+  for (const action of ['labeled', 'unlabeled']) {
+    const w = world();
+    withLabel(w, 17);
+    w.threads.get('717').archived = false;
+    await go(w, 'issues', { action, label: { name: 'accepted' }, issue: { number: 17 } });
+    assert.deepEqual(w.calls.filter((c) => /discord\.com/.test(c.url)), [], `${action}: no Discord call`);
+    assert.deepEqual(w.find('POST', /\/comments$/), [], `${action}: no comment`);
+  }
+});
+
+test('AT7: the sweep lists each Accepted gap on an active post, and none on an archived or unread one', async () => {
+  const inProgress = (w) => {
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    w.threads.get('717').applied_tags = ['t-retail', 's-prog'];
+  };
+  for (const [why, setup, line] of [
+    ['missing on a Triaged post', (w) => withLabel(w, 17), /^#17: post Accepted missing -> shown$/],
+    ['shown on a Triaged post with the label off', (w) => { w.issue(17); w.threads.get('717').applied_tags = ['t-retail', 't-acc', 's-tri']; },
+      /^#17: post Accepted shown -> removed$/],
+    ['missing on an In progress post', (w) => { withLabel(w, 17); inProgress(w); },
+      /^#17: post Accepted missing -> shown \(waits for the post's next status change\)$/],
+    ['missing on a post showing Triaged beside Closed', (w) => { withLabel(w, 17); w.threads.get('717').applied_tags = ['t-retail', 's-tri', 's-closed']; },
+      /^#17: post Accepted missing -> shown \(waits for the post's next status change\)$/],
+    ['no free slot', (w) => { withLabel(w, 17); w.threads.get('717').applied_tags = ['t-retail', 't-bug', 't-forever', 't-staff', 's-tri']; },
+      /^#17: no free tag slot for Accepted on the post$/],
+  ]) {
+    const w = world();
+    setup(w);
+    w.threads.get('717').archived = false;
+    const out = [];
+    await sweepRun(w, 'report', out);
+    assert.match(out.find((l) => l.startsWith('#17: ')) || '', line, why);
+    assert.deepEqual(w.find('PATCH', /channels\/717$/), [], `${why}: report mode writes nothing`);
+  }
+  const saved = FORUM.available_tags;
+  FORUM.available_tags = saved.filter((t) => t.id !== 't-acc');
+  try {
+    const w = world();
+    withLabel(w, 17);
+    w.threads.get('717').archived = false;
+    const out = [];
+    await sweepRun(w, 'report', out);
+    assert.match(out.find((l) => l.startsWith('#17: ')) || '', /^#17: the forum has no Accepted tag$/);
+  } finally {
+    FORUM.available_tags = saved;
+  }
+  {
+    const w = world();
+    withLabel(w, 17);
+    const out = [];
+    await sweepRun(w, 'report', out);
+    assert.ok(!out.some((l) => /Accepted/.test(l)), 'an archived post is not listed for Accepted');
+  }
+  {
+    const w = world();
+    withLabel(w, 17);
+    w.threads.get('717').archived = false;
+    w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717$/, new Response('{"message":"x"}', { status: 403 }), 1]);
+    const out = [];
+    await assert.rejects(sweepRun(w, 'report', out), /#17/);
+    assert.match(out.join('\n'), /#17: Discord post not read \(see the log\)/);
+    assert.ok(!out.some((l) => /Accepted/.test(l)), 'an unread post gets no Accepted line');
+  }
+  {
+    // A second, differently cased Accepted tag shows Accepted to the player.
+    FORUM.available_tags = [...saved, { id: 't-acc2', name: 'ACCEPTED' }];
+    try {
+      for (const mode of ['report', 'fix']) {
+        const w = world();
+        withLabel(w, 17);
+        w.threads.get('717').applied_tags = ['t-retail', 's-tri', 't-acc2'];
+        w.threads.get('717').archived = false;
+        const out = [];
+        await sweepRun(w, mode, out);
+        assert.ok(!out.some((l) => /Accepted/.test(l)), `${mode}: a post showing a second Accepted tag is in step`);
+        assert.deepEqual(w.find('PATCH', /channels\/717$/), [], `${mode}: no write`);
+      }
+    } finally {
+      FORUM.available_tags = saved;
+    }
+  }
+});
+
+test('AT8: a fix-mode sweep repairs Accepted only on a post showing Triaged alone, and an Accepted line alone moves no status', async () => {
+  // Runs `fn` at the `at`-th read of the help forum: the sweep's read is the
+  // first, the repair's two reads the second and third.
+  const atForumRead = (w, at, fn) => {
+    let k = 0;
+    w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/900$/, async () => { if (++k === at) await fn(); }]);
+  };
+  const owing = (w) => w.runs.set('555', { id: 555, status: 'in_progress', run_attempt: 1, created_at: new Date(w.start).toISOString() });
+  for (const [why, setup, patches, line] of [
+    ['a Triaged post gets Accepted', (w) => withLabel(w, 17),
+      [{ applied_tags: ['t-retail', 't-bug', 's-tri', 't-acc'] }], /^#17: post Accepted missing -> shown$/],
+    ['the label off on an open Triaged issue: removed', (w) => { w.issue(17); w.threads.get('717').applied_tags = ['t-retail', 't-acc', 's-tri']; },
+      [{ applied_tags: ['t-retail', 's-tri'] }], /^#17: post Accepted shown -> removed$/],
+    ['an In progress post with only an Accepted gap: listed, not written',
+      (w) => { withLabel(w, 17); w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] }); w.threads.get('717').applied_tags = ['t-retail', 's-prog']; },
+      [], /^#17: post Accepted missing -> shown \(waits for the post's next status change\)$/],
+    ['a post an owed note holds is left whole, Accepted included',
+      (w) => { w.issue(17); w.close(17, 'completed', 'aaaaaaa1'); w.record(17, OWED); owing(w); w.threads.get('717').applied_tags = ['t-retail', 't-acc', 's-tri']; },
+      [], /post Accepted shown -> removed \(waits for the post's next status change\)$/],
+    ['a closed issue\'s stale Accepted: listed, left', (w) => { w.issue(17); w.close(17, 'completed'); w.threads.get('717').applied_tags = ['t-retail', 't-acc', 's-closed']; },
+      [], /^#17: post Accepted shown -> removed \(waits for the post's next status change\)$/],
+    ['a status line beside it: the status move places Accepted, and the repair adds nothing', (w) => { withLabel(w, 17); w.threads.get('717').applied_tags = ['t-retail', 't-bug']; },
+      [{ applied_tags: ['t-retail', 't-bug', 's-tri', 't-acc'] }], /^#17: post \(no status\) -> Triaged; post Accepted missing -> shown \(waits/],
+    ['a staff tag added between the repair\'s reads stays', (w) => { withLabel(w, 17); atForumRead(w, 3, () => w.threads.get('717').applied_tags.push('t-staff')); },
+      [{ applied_tags: ['t-retail', 't-bug', 's-tri', 't-staff', 't-acc'] }], /^#17: post Accepted missing -> shown$/],
+    ['a status change between the repair\'s reads: no write', (w) => { withLabel(w, 17); atForumRead(w, 3, () => { w.threads.get('717').applied_tags = ['t-retail', 't-bug', 's-prog']; }); },
+      [], /^#17: post Accepted missing -> shown$/],
+  ]) {
+    const w = world();
+    setup(w);
+    w.threads.get('717').archived = false;
+    // A held note dropped, rewritten or deleted would cost its run the message.
+    const comments = structuredClone(w.issues.get(17).comments);
+    const out = [];
+    await sweepRun(w, 'fix', out);
+    assert.match(out.find((l) => l.startsWith('#17: ')) || '', line, why);
+    assert.deepEqual(w.find('PATCH', /channels\/717$/).map((c) => c.body), patches, why);
+    assert.deepEqual(w.said('717'), [], `${why}: no message`);
+    assert.deepEqual(w.issues.get(17).comments, comments, `${why}: no comment written, changed or dropped`);
+  }
+  {
+    // A PR is opened after the sweep read the post. The Accepted repair finds
+    // GitHub no longer wants Triaged and writes nothing, so the PR's own run
+    // moves the post and tells it. A quiet status move here would leave that
+    // run nothing to tell.
+    const w = world();
+    withLabel(w, 17);
+    w.threads.get('717').archived = false;
+    atForumRead(w, 1, () => w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] }));
+    const out = [];
+    await sweepRun(w, 'fix', out);
+    assert.match(out.find((l) => l.startsWith('#17: ')) || '', /^#17: post Accepted missing -> shown$/);
+    assert.deepEqual(w.find('PATCH', /channels\/717$/), [], 'no post write');
+    assert.deepEqual(w.find('POST', /issues\/17\/labels$/), [], 'no label write');
+    assert.deepEqual(w.issues.get(17).comments, [], 'no note');
+    await prEvent(w, 5);
+    assert.deepEqual(tagNames(w, '717'), ['Retail', 'Bug', 'In progress', 'Accepted']);
+    assert.equal(w.said('717').length, 1, 'the PR run tells it once');
+    assert.match(w.said('717')[0], /^\*\*In progress\.\*\*/);
+  }
+});
+
+test('AT9: a status move landing inside the repair\'s write is put back to Triaged alone, and an In progress post is never written', async () => {
+  const words = (w) => w.said('717').map((m) => /^\*\*([^*]+)\*\*/.exec(m)[1]);
+  const confirmed = (w, word) => w.issues.get(17).comments.filter((c) => c.body.startsWith(`Delivery confirmed: **${word}**`)).length;
+  // Closes the issue by hand inside the first post write made while armed,
+  // before that write applies. The test disarms it when the sweep ends.
+  const closeInWrite = (w) => {
+    const hook = { armed: true, fired: false };
+    w.hooks.push(['PATCH', /discord\.com\/api\/v10\/channels\/717$/, async () => {
+      if (!hook.armed) return;
+      hook.armed = false;
+      hook.fired = true;
+      await closeByHand(w);
+    }]);
+    return hook;
+  };
+  {
+    // The repair writes a Triaged post, and a close lands inside that write.
+    const w = world();
+    withLabel(w, 17);
+    w.threads.get('717').archived = false;
+    const hook = closeInWrite(w);
+    await sweepRun(w, 'fix');
+    hook.armed = false;
+    assert.ok(hook.fired, 'the repair wrote');
+    assert.deepEqual(tagNames(w, '717'), ['Retail', 'Bug', 'Triaged', 'Accepted'], 'the close is put back to Triaged, with Accepted as the repair wrote it');
+    await reopen(w);
+    await closeByHand(w);
+    assert.deepEqual(words(w), ['Closed.', 'Closed.'], 'each close told once; the reopen says nothing');
+    assert.equal(confirmed(w, 'Closed.'), 2, 'both notes confirmed');
+  }
+  {
+    // An In progress post. Were it written, the close inside the write would
+    // be put back to In progress, and the reopen would find In progress shown
+    // and tell nothing.
+    const w = world();
+    withLabel(w, 17);
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    w.threads.get('717').applied_tags = ['t-retail', 's-prog'];
+    w.threads.get('717').archived = false;
+    const hook = closeInWrite(w);
+    await sweepRun(w, 'fix');
+    hook.armed = false;
+    if (!hook.fired) await closeByHand(w);
+    await reopen(w);
+    assert.deepEqual(words(w), ['Closed.', 'In progress.'], 'the reopened issue is told In progress');
+    assert.equal(confirmed(w, 'In progress.'), 1, 'its note confirmed');
+    assert.equal(hook.fired, false, 'the repair sent no write');
+  }
+  {
+    const w = world();
+    withLabel(w, 17);
+    w.threads.get('717').applied_tags = ['t-retail', 's-tri', 's-closed'];
+    w.threads.get('717').archived = false;
+    let hit = false;
+    w.hooks.push(['PATCH', /discord\.com\/api\/v10\/channels\/717$/, async () => { hit = true; }]);
+    await sweepRun(w, 'fix');
+    assert.equal(hit, false, 'Triaged beside Closed: the repair sends no write, so nothing can be put back');
+  }
+});
+
+test('AT11: the Accepted repair logs each outcome on its own line', async () => {
+  // Runs `fn` before the `k`-th matching request is served: the sweep's own
+  // read of the post and its forum is the first, the repair's first read the
+  // second, and its fresh read the third.
+  const at = (w, re, k, fn) => {
+    let i = 0;
+    w.hooks.push(['GET', re, async () => { if (++i === k) await fn(); }]);
+  };
+  const POST = /discord\.com\/api\/v10\/channels\/717$/;
+  const HELP = /discord\.com\/api\/v10\/channels\/900$/;
+  const saved = FORUM.available_tags;
+  for (const [why, setup, logged] of [
+    ['shown', (w) => withLabel(w, 17), /^#17: Accepted shown on the post$/],
+    ['removed', (w) => { w.issue(17); w.threads.get('717').applied_tags = ['t-retail', 't-acc', 's-tri']; }, /^#17: Accepted removed on the post$/],
+    ['archived at the first read', (w) => { withLabel(w, 17); at(w, POST, 2, () => { w.threads.get('717').archived = true; }); },
+      /^#17: the post is archived; its Accepted tag is left as it is$/],
+    ['not Triaged alone at the first read', (w) => { withLabel(w, 17); at(w, POST, 2, () => { w.threads.get('717').applied_tags = ['t-retail', 's-prog']; }); },
+      /^#17: Accepted left: the post does not show Triaged alone$/],
+    ['moved at the fresh read', (w) => { withLabel(w, 17); at(w, POST, 3, () => { w.threads.get('717').applied_tags = ['t-retail', 's-prog']; }); },
+      /^#17: Accepted left: the post changed during the repair; the next sweep tries again$/],
+    ['no free slot at the first read', (w) => { withLabel(w, 17); at(w, POST, 2, () => { w.threads.get('717').applied_tags = ['t-retail', 't-bug', 't-forever', 't-staff', 's-tri']; }); },
+      /^#17: no free tag slot for Accepted on the post$/],
+    ['the forum loses its Accepted tag', (w) => { withLabel(w, 17); at(w, HELP, 2, () => { FORUM.available_tags = saved.filter((t) => t.id !== 't-acc'); }); },
+      /^#17: the forum has no Accepted tag$/],
+    ['already in step at the first read', (w) => { withLabel(w, 17); at(w, POST, 2, () => { w.threads.get('717').applied_tags.push('t-acc'); }); },
+      /^#17: Accepted already in step on the post$/],
+    ['GitHub no longer wants Triaged', (w) => { withLabel(w, 17); at(w, HELP, 1, () => { w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] }); }); },
+      /^#17: Accepted left for the post's next status change$/],
+  ]) {
+    try {
+      const w = world();
+      setup(w);
+      w.threads.get('717').archived = false;
+      const out = [];
+      await sweepRun(w, 'fix', out);
+      assert.ok(out.some((l) => logged.test(l)), `${why}: ${out.filter((l) => l.startsWith('#17: ')).join(' | ')}`);
+    } finally {
+      FORUM.available_tags = saved;
+    }
+  }
+});
+
+test('AT12: a failed status repair stops the Accepted repair on that post', async () => {
+  const w = world();
+  w.issue(17, { labels: ['from-discord', 'accepted', 'pending-release'] });
+  w.threads.get('717').archived = false;
+  w.fail.push(['DELETE', /issues\/17\/labels\/pending-release$/, new Response('{"message":"x"}', { status: 500 }), 99]);
+  const out = [];
+  await assert.rejects(sweepRun(w, 'fix', out), /#17/);
+  assert.match(out.find((l) => l.startsWith('#17: ')) || '', /^#17: labels pending-release -> \(none\); post Accepted missing -> shown$/);
+  assert.deepEqual(w.find('PATCH', /channels\/717$/), [], 'no post write after the failed status repair');
 });
