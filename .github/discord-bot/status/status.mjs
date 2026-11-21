@@ -90,6 +90,13 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   const failed = [];
   const report = [];
   if (runId) log(`workflow run ${runId}, attempt ${attempt}`);
+  // An issue moved in from another repo arrives as `opened`. Its post and
+  // its thread already follow it, and a commit-closed one would be told
+  // "Closed." here. Each job's next event for it settles its own part.
+  if (eventName === 'issues' && payload.action === 'opened' && payload.changes && payload.changes.old_issue) {
+    log(`#${payload.issue.number}: opened by a transfer from ${payload.changes.old_issue.html_url || 'another repo'}; nothing to do`);
+    return done;
+  }
 
   async function graphql(query, variables) {
     const r = await gh.call('POST', '/graphql', { query, variables });
