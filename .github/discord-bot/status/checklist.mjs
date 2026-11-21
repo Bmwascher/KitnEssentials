@@ -46,8 +46,9 @@ export function checklistBody({ id, state, guildId, forumId = '', since, issueUr
     ...(forumId ? [`<!-- discord-checklist-forum: ${forumId} -->`] : []),
     `<!-- discord-checklist-since: ${since} -->`,
     // Bound to this comment like `linked`: a record copied from another
-    // issue names that issue's address, which is not this issue's.
-    `<!-- discord-checklist-issue: ${issueUrl}${id ? ` comment: ${id}` : ''} -->`,
+    // issue names that issue's address, which is not this issue's. A record
+    // with no saved address has no line.
+    ...(issueUrl ? [`<!-- discord-checklist-issue: ${issueUrl}${id ? ` comment: ${id}` : ''} -->`] : []),
     ...(archived ? [`<!-- discord-checklist-archived: ${archived} -->`] : []),
   ].join('\n');
 }
@@ -325,6 +326,10 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       && String(first.content || '').split('\n').some((l) => l.startsWith('Issue: ') && urls.has(l.slice('Issue: '.length)));
   }
   const issueUrls = (w, rec) => new Set([w.issue.html_url, rec.issueUrl].filter(Boolean));
+  // A record read with no saved address (a first `pending` post, or one staff
+  // mended) takes the issue's address now, so a later transfer still finds
+  // its thread.
+  const address = (seen, w) => (seen.issueUrl ? {} : { issueUrl: w.issue.html_url });
 
   // A create whose answer was lost may have made a thread. It is found by
   // the bot's own first message naming the issue, never by name, which staff
@@ -363,7 +368,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     if (!(await stillOpenable(n))) return null;
     // A `pending` record has no server or forum yet; the thread gives both,
     // so the saved link works.
-    await write(rec, (seen) => ({ ...(seen.guildId ? {} : { guildId: String(ch.guild_id) }), ...(seen.forumId ? {} : { forumId }) }));
+    await write(rec, (seen) => ({ ...(seen.guildId ? {} : { guildId: String(ch.guild_id) }), ...(seen.forumId ? {} : { forumId }), ...address(seen, w) }));
     return { ...rec, linked: true };
   }
 
@@ -374,7 +379,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     const s = await search(rec, issueUrls(w, rec));
     if (!s.id) throw new Error(`staff checklist thread not confirmed (${s.why}); see the sweep`);
     if (!(await stillOpenable(n))) return null;
-    await write(rec, { state: s.id });
+    await write(rec, (seen) => ({ state: s.id, ...address(seen, w) }));
     return { ...rec, state: s.id, threadId: s.id, linked: true };
   }
 

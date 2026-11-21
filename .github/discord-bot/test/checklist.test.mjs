@@ -28,6 +28,9 @@ test('CH1: a checklist record reads back as written', () => {
   assert.match(checklistBody({ state: '123', guildId: '800', since: 1, issueUrl: url }), /^Staff checklist thread: https:\/\/discord\.com\/channels\/800\/123\n/);
   assert.match(checklistBody({ state: 'pending', guildId: '', since: 1, issueUrl: url }), /^Staff checklist thread: opening\n/);
   assert.equal(parseChecklist(comment('Notification attempted: x\n\n<!-- discord-told: fixed-a -->')), null, 'a message note is no record');
+  const none = checklistBody({ id: 5, state: '123', guildId: '800', since: 1, issueUrl: null });
+  assert.doesNotMatch(none, /discord-checklist-issue/, 'a record with no saved address has no address line');
+  assert.equal(parseChecklist(comment(none)).issueUrl, null);
 });
 
 // ---- The thread follows GitHub ----------------------------------------------------
@@ -1024,7 +1027,8 @@ test('CH3: a hand-entered id\'s check keeps a forum staff add to the record whil
     c.body += '\n<!-- discord-checklist-forum: 951 -->';
   }]);
   await job(w);
-  assert.deepEqual([recordOf(w).linked, recordOf(w).forumId], [true, '951']);
+  assert.deepEqual([recordOf(w).linked, recordOf(w).forumId, recordOf(w).issueUrl], [true, '951', 'https://github.com/me/one/issues/17']);
+  assert.doesNotMatch(botComments(w, 17).find((x) => parseChecklist(x)).body, /discord-checklist-issue: null/);
 });
 
 test('CH3: a hand-entered id whose thread read fails for another reason is kept for a re-run', async () => {
@@ -1040,6 +1044,18 @@ test('CH3: a hand-entered id whose thread read fails for another reason is kept 
   assert.deepEqual([recordOf(w).threadId, recordOf(w).linked], [t.id, false], 'the id is left for a re-run');
   await job(w);
   assert.equal(recordOf(w).linked, true, 'and the re-run takes it');
+});
+
+test('CH3: a record staff mend to "creating" with no address line is taken, with the issue\'s address saved', async () => {
+  const w = world();
+  w.issue(17);
+  loseAnswer(w);
+  await assert.rejects(job(w));
+  const c = botComments(w, 17).find((x) => parseChecklist(x));
+  c.body = 'Staff checklist thread: opening\n\n<!-- discord-checklist: creating guild: 800 -->';
+  await job(w);
+  assert.deepEqual([recordOf(w).threadId, recordOf(w).issueUrl], [ours(w)[0].id, 'https://github.com/me/one/issues/17']);
+  assert.doesNotMatch(c.body, /discord-checklist-issue: null/);
 });
 
 test('CH2: a closed issue whose close event is not readable yet gets no record, no thread and no adoption', async () => {
