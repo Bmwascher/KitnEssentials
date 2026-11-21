@@ -361,15 +361,21 @@ test('CH5: a bot tag change keeps the archive state, and a write that may have l
     assert.deepEqual([w.find('PATCH', threadUrl(t.id)), t.archived, recordOf(w).archived], [[], true, key]);
   }
   // Closed again after a reopen, while the event list lags: the earlier
-  // close is older than the issue's close time, so it is not taken for the
-  // current one, and a thread staff reopened after its archive is left as it is.
-  for (const [why, lagging] of [['the new close is not listed yet', 1], ['the reopen and the new close are not listed yet', 2]]) {
+  // close is older than the issue's close time, or a listed reopen came
+  // after it, so it is not taken for the current one, and a thread staff
+  // reopened after its archive is left as it is.
+  for (const [why, lagging, gap] of [
+    ['the new close is not listed yet', 1, 5 * 60 * 1000],
+    ['the reopen and the new close are not listed yet', 2, 5 * 60 * 1000],
+    // Inside the close-time slack only the listed reopen tells the two closes apart.
+    ['closed again 15 s later, the new close not listed yet', 1, 15 * 1000],
+  ]) {
     const w = world();
     const i = w.issue(17);
     w.close(17, 'not_planned');
     const key = `Won't fix:${closeId(w)}`;
     const t = seed(w, 17, { applied_tags: ['c-wont'] }, key);
-    w.clock += 5 * 60 * 1000;
+    w.clock += gap;
     i.events.push({ id: 990001, event: 'reopened', created_at: new Date(w.clock).toISOString() });
     w.close(17, 'not_planned');
     i.events.splice(-lagging);

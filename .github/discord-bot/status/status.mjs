@@ -207,19 +207,27 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // for a close as completed, the one kind whose fix is used.
   async function lastClose(n, wantFix = false) {
     let last = null;
+    let undone = false;
     for (let page = 1; ; page++) {
       const batch = await gh.call('GET', `/repos/${repo}/issues/${n}/events?per_page=100&page=${page}`);
-      for (const e of batch) if (e.event === 'closed') last = e;
+      for (const e of batch) {
+        if (e.event === 'closed') {
+          last = e;
+          undone = false;
+        } else if (e.event === 'reopened' && last) {
+          undone = true;
+        }
+      }
       if (batch.length < 100) break;
     }
     if (!last) return null;
-    // `at`: when the event says the close happened, so the checklist can
-    // tell the issue's current close from an older one while newer events
-    // are not listed yet.
+    // `at` (when the event says the close happened) and `undone` (a reopen
+    // is listed after it) let the checklist tell the issue's current close
+    // from an older one while newer events are not listed yet.
     const at = Date.parse(last.created_at) || 0;
     const here = last.commit_id && (!last.commit_url || String(last.commit_url).includes(`/repos/${repo}/commits/`));
-    if (here) return { id: last.id, sha: last.commit_id, at };
-    return { id: last.id, sha: wantFix && !last.commit_id ? await closerSha(n) : null, at };
+    if (here) return { id: last.id, sha: last.commit_id, at, undone };
+    return { id: last.id, sha: wantFix && !last.commit_id ? await closerSha(n) : null, at, undone };
   }
 
   // A merged PR closes its issues with a `closed` event that carries no
@@ -325,15 +333,16 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // What the issue's checklist thread should show, from its state and its
   // public status, and whether the bot still files the issue. `closeKnown`
   // is false for a closed issue whose current close event the read does not
-  // show yet: none, or one older than the issue's own close time (a reopen
-  // and a new close not listed yet). It gives no archive key, which must not
-  // be taken as a reopen, nor an old close's key, so no checklist write is
-  // made until the issue's next event or sweep reads it.
+  // show yet: none, one a listed reopen undid, or one older than the issue's
+  // own close time (a reopen and a new close not listed yet). It gives no
+  // archive key, which must not be taken as a reopen, nor an old close's
+  // key, so no checklist write is made until the issue's next event or
+  // sweep reads it.
   function wantFrom(st, status) {
     const name = checklistStatus(status, st.issue.state_reason);
     const marker = parseMarker(st.issue.body);
     const closedAt = Date.parse(st.issue.closed_at || '') || 0;
-    const closeKnown = st.issue.state !== 'closed' || !!(st.close && st.close.at >= closedAt - CLOSE_SLACK_MS);
+    const closeKnown = st.issue.state !== 'closed' || !!(st.close && !st.close.undone && st.close.at >= closedAt - CLOSE_SLACK_MS);
     return {
       st, issue: st.issue, name, key: closeKnown ? checklistKey(name, st.close) : null, eligible: eligible(st.issue), closeKnown,
       accepted: st.issue.state === 'open' && (st.issue.labels || []).some((l) => acceptedLabel(l.name || l)),
