@@ -466,8 +466,6 @@ test('status writes read the post again first, never reopen a post already showi
     assert.deepEqual(f.find('PATCH', /\/channels\/700$/).map((c) => c.body), patches, why);
     for (const [k, v] of Object.entries(out)) assert.equal(typeof v === 'boolean' ? !!r[k] : r[k], v, `${why}: ${k}`);
   }
-  const f = fakeFetch([['GET', /\/channels\/700$/, () => post(['p', 't'])], ['GET', /\/channels\/900$/, () => forum]]);
-  assert.equal(await discordClient('t', f).statusOf('700', 'Triaged'), 'Triaged', 'statusOf reads the wanted status wherever it sits');
 });
 
 test('a status tag renamed to a staff tag between the reads is read with the forum as it is now', async () => {

@@ -10,10 +10,11 @@
 //   - an open issue is In progress while a member's non-draft PR will close it.
 // Each run writes the labels and the tag that state gives, then reads again
 // and rewrites until a read agrees, so runs that overlap end on the state of
-// everything both wrote. The daily sweep repairs what a failed call left.
+// everything both wrote. The sweep repairs what a failed call left.
 import { readFileSync, appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { STATUS, LABELS, MESSAGES, parseMarker, parseFiledMessage, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN, checklistStatus, checklistKey } from '../src/core.js';
+import { STATUS, LABELS, MESSAGES, parseMarker, parseFiledMessage, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN, checklistStatus, checklistKey,
+  shownStatuses, preferStatus, triagedAlone, withAccepted, sameTags } from '../src/core.js';
 import { discordClient, postGone } from '../src/discord.js';
 import { githubClient } from '../src/github.js';
 import { checklistRunner, parseChecklist } from './checklist.mjs';
@@ -576,6 +577,34 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     return moved;
   }
 
+  // The sweep's Accepted-only repair, on an open issue GitHub wants at
+  // Triaged only. It reads no records, claims no note and moves no status.
+  async function repairAccepted(n) {
+    const issue = await gh.getIssue(repo, n);
+    if (!eligible(issue)) return;
+    if (issue.state !== 'open' || wantedStatus({ issue }, await prsFor(n)) !== STATUS.triaged) {
+      log(`#${n}: Accepted left for the post's next status change`);
+      return;
+    }
+    const threadId = parseMarker(issue.body).threadId;
+    const want = wantedAccepted(issue);
+    let r;
+    try {
+      r = await discord.fixAccepted(threadId, want);
+    } catch (e) {
+      if (!postGone(e, threadId)) throw e;
+      log(`#${n}: Discord post is gone (${e.message.slice(0, 120)})`);
+      return;
+    }
+    if (r.wrote) log(`#${n}: Accepted ${want ? 'shown' : 'removed'} on the post`);
+    else if (r.archived) log(`#${n}: the post is archived; its Accepted tag is left as it is`);
+    else if (r.refused) log(`#${n}: Accepted left: the post does not show Triaged alone`);
+    else if (r.raced) log(`#${n}: Accepted left: the post changed during the repair; the next sweep tries again`);
+    else if (r.noAccepted) log(`#${n}: the forum has no Accepted tag`);
+    else if (r.noRoom) log(`#${n}: no free tag slot for Accepted on the post`);
+    else log(`#${n}: Accepted already in step on the post`);
+  }
+
   // The Discord post of the issue this one was closed as a duplicate of, when
   // that issue is in this repo and the bot filed it. Only a nicety: any
   // failure gives null and the message goes out without the link.
@@ -846,12 +875,15 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       const status = wantedStatus(st, st.issue.state === 'open' ? await prsFor(n) : []);
       const threadId = parseMarker(st.issue.body).threadId;
       let shown;
+      let post = null;
       // A post read that fails for any reason but a 404 leaves the post
       // neither judged nor repaired, and its notes unjudged: it is not gone.
       let unread = null;
       try {
         // A post carrying the wanted status tag shows it, wherever it sits.
-        shown = await discord.statusOf(threadId, status);
+        const read = await discord.threadState(threadId);
+        post = { ...read, statuses: shownStatuses(read.applied, read.available) };
+        shown = preferStatus(post.statuses, status);
       } catch (e) {
         // The issue's failure line at the end of the sweep logs the error.
         // Only the post's own read answering 404 says it is gone.
@@ -865,6 +897,22 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         parts.push(`labels ${has.join(', ') || '(none)'} -> ${want.join(', ') || '(none)'}`);
       }
       if (shown !== undefined && shown !== status) parts.push(`post ${shown || '(no status)'} -> ${status}`);
+      // Accepted lines are kept apart from the post's other lines and judged
+      // on the tags as read; a status repair in the same sweep can change the
+      // answer. Only a post showing Triaged alone, on an issue GitHub wants
+      // at Triaged, is repaired; any other waits for its next status change.
+      const accParts = [];
+      let accRepairable = false;
+      if (post && !post.archived) {
+        const acc = wantedAccepted(st.issue);
+        const a = withAccepted(post.applied, post.available, acc);
+        if (acc && a.noAccepted) accParts.push('the forum has no Accepted tag');
+        else if (a.noRoom) accParts.push('no free tag slot for Accepted on the post');
+        else if (!a.noAccepted && !sameTags(a.tags, post.applied)) {
+          accRepairable = status === STATUS.triaged && triagedAlone(post.statuses);
+          accParts.push(`post Accepted ${acc ? 'missing -> shown' : 'shown -> removed'}${accRepairable ? '' : " (waits for the post's next status change)"}`);
+        }
+      }
       // The first note of each message. The sweep never messages anyone.
       // - A note in the older `Told the player` form was marked sent
       //   only after its send, so an unmarked one may have gone out: it is
@@ -936,12 +984,15 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           ck = { parts: [`staff checklist not read: ${e.message.slice(0, 200)}`], repair: false, unread: e };
         }
       }
-      if (!postOwes && !ck.parts.length) {
+      // An Accepted line alone never starts the status repair: its quiet move
+      // could leave a run that is about to tell the player nothing to send.
+      const accFix = accRepairable && !owed.length;
+      if (!postOwes && !accParts.length && !ck.parts.length) {
         if (errors.length) throw new Error(errors.join('; '));
         return;
       }
       wrong++;
-      const line = `#${n}: ${[...parts, ...ck.parts].join('; ')}`;
+      const line = `#${n}: ${[...parts, ...accParts, ...ck.parts].join('; ')}`;
       log(line);
       report.push(line);
       if (unread) errors.unshift(`#${n}: Discord post not read (${unread.message.slice(0, 200)})`);
@@ -950,6 +1001,13 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           for (const s of stale) await dropNote(s.note, s.reason);
           if (owed.length) await settleLabels(n);
           else await sync(n, false);
+        } catch (e) {
+          errors.push(e.message);
+        }
+      }
+      if (fix && accFix && !unread && !playerStop) {
+        try {
+          await repairAccepted(n);
         } catch (e) {
           errors.push(e.message);
         }

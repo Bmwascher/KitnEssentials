@@ -163,11 +163,6 @@ export function discordClient(token, fetchImpl = fetch) {
       await call('PATCH', `/channels/${threadId}`, patch);
       return { from, tags: p.tags, noRoom: !!p.noRoom, noAccepted: !!p.noAccepted };
     },
-    // With `prefer`, a post carrying that status tag shows it, wherever it sits.
-    async statusOf(threadId, prefer = null) {
-      const { thread, forum } = await threadAndForum(threadId);
-      return currentStatus(thread.applied_tags, forum.available_tags, prefer);
-    },
     // The sweep's Accepted-only write. It writes only on an active post that
     // shows Triaged and no other status tag, at its first read and again just
     // before the write, and changes only the Accepted tag, so a status move
