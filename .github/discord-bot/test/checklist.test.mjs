@@ -151,6 +151,7 @@ test('CH4: Accepted follows the label on an open issue, only into a free slot, a
     const s = seed(u, 17, { applied_tags: ['c-tri'] });
     await job(u, 'labeled', { extra: { label: { name: 'Accepted' } } });
     assert.deepEqual(ckName(u, s), ['Triaged', 'Accepted'], 'the label in another letter case');
+    readThenWrite(u);
   }
 
   for (const [why, applied, labeled, forumLacks, line] of [
@@ -366,6 +367,19 @@ test('CH5: a bot tag change keeps the archive state, and a write that may have l
     assert.deepEqual([ckName(w, t), t.archived, recordOf(w).archived], [["Won't fix"], true, key], `${why}: the next job settles it`);
     readThenWrite(w);
   }
+  // The re-archive fails, and so does the key clear after it: the run's
+  // error names both, and the thread is left open with its key (Q1-A).
+  {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'not_planned');
+    const key = `Won't fix:${closeId(w)}`;
+    const t = seed(w, 17, { applied_tags: ['c-wont', 'c-acc'], archived: true }, key);
+    failPatch(w, t.id, (b) => b.archived === true);
+    failRecord(w, (b) => !/discord-checklist-archived/.test(b));
+    await assert.rejects(job(w, 'closed'), /-> 500; clearing the archive key failed too: /);
+    assert.deepEqual([t.archived, recordOf(w).archived], [false, key]);
+  }
   // A closed issue whose close event the read does not show yet: no write, and the archive stays.
   {
     const w = world();
@@ -452,9 +466,12 @@ test('CH7: a release run settles the thread when its ship record fails, and name
       w.fail.push(['POST', /issues\/17\/comments$/, fail500(), 1]);
     }, /^could not update issue\(s\) #17; see above$/, true],
     // The release lookup (the run's first GraphQL call) fails after the
-    // compare: the proof saved at the compare still shows Shipped.
-    ['the release lookup fails', (w) => w.fail.push(['POST', /graphql$/, fail500(), 1]),
-      /^could not update issue\(s\) #17; see above$/, true],
+    // compare, and the tag list does not show the tag yet: only the proof
+    // saved at the compare can show Shipped.
+    ['the release lookup fails', (w) => {
+      w.tags = [];
+      w.fail.push(['POST', /graphql$/, fail500(), 1]);
+    }, /^could not update issue\(s\) #17; see above$/, true],
     ['the post and the checklist both fail', (w) => {
       w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717$/, fail500(), 99]);
       w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/950$/, new Response('{"message":"Missing Access"}', { status: 403 }), 99]);
@@ -470,6 +487,22 @@ test('CH7: a release run settles the thread when its ship record fails, and name
     await assert.rejects(tagPush(w, 'v5.0.1'), (e) => want.test(e.message), why);
     if (settled) assert.deepEqual([ckName(w, t), t.archived], [['Shipped'], true], `${why}: the thread is still settled`);
   }
+});
+
+test('CH7: a release run sends every player message before its first checklist request', async () => {
+  const w = world();
+  for (const n of [17, 18]) {
+    w.issue(n, { labels: ['from-discord', 'pending-release'] });
+    w.close(n, 'completed', `aaaaaa${n}`);
+    seed(w, n, { applied_tags: ['c-fix'] });
+    w.contains.set(`aaaaaa${n}...c-v5.0.1`, 'ahead');
+  }
+  w.tags = [{ name: 'v5.0.1', commit: { sha: 'c-v5.0.1' } }];
+  await tagPush(w, 'v5.0.1');
+  const ck = new Set(['950', ...ckThreads(w).map((t) => t.id)]);
+  const lastSend = w.calls.map((c) => c.method === 'POST' && /channels\/71[78]\/messages$/.test(c.url)).lastIndexOf(true);
+  const firstCk = w.calls.findIndex((c) => ck.has((/discord\.com\/api\/v10\/channels\/(\d+)$/.exec(c.url) || [])[1]));
+  assert.deepEqual([lastSend > -1, firstCk > lastSend], [true, true], 'both messages go out before any checklist request');
 });
 
 test('CH7: a failed first issue read on a PR run, or a failed owed-note scan on a re-run, still leaves the thread settled', async () => {
@@ -729,9 +762,11 @@ test('CH3: with no single bot thread to take, nothing is created and the record 
   for (const [why, first, between] of [
     ['the archived read fails', loseAnswer, (w) => failArchived(w)],
     ['21 threads made since the try', loseAnswer, (w) => { for (let k = 0; k < 21; k++) w.ckThread(99, staffStarter()); }],
+    // Two threads to a page, each archived a second after the last: every
+    // page brings a new thread, so only the page limit stops the listing.
     ['an archived listing that goes on past the pages', loseAnswer, (w) => {
-      w.archivePage = 1;
-      for (let k = 0; k < 3; k++) w.ckThread(99, { archived: true, archivedAt: w.clock + k, ...staffStarter() });
+      w.archivePage = 2;
+      for (let k = 0; k < 5; k++) w.ckThread(99, { archived: true, archivedAt: w.clock + k * 1000, ...staffStarter() });
     }],
     // The lost thread matches, then a later candidate's read fails: a partial
     // read counts no match.
@@ -1213,6 +1248,7 @@ test('CH8: a failed player-side step in fix mode stops the post\'s repair, never
     await assert.rejects(sweep(w, 'fix', out), /could not update issue\(s\) #17; see above/);
     assert.match(out.filter((l) => l.startsWith('#17: ')).at(-1), /message of .+ not read/);
     assert.deepEqual(ckName(w, t), ['In progress'], 'the thread is still repaired');
+    assert.equal(w.tagOf('717'), 'Triaged', 'and the post, due In progress, is not repaired after the failed read');
   }
 });
 
