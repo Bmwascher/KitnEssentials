@@ -595,6 +595,13 @@ test('CH2: with the forum unset, a non-bot issue, a missing status tag or a refu
   }
 });
 
+test('CH2: a forum setting with spaces around its id is read as the id', async () => {
+  const w = world();
+  w.issue(17);
+  await job(w, 'opened', { over: { CHECKLIST_FORUM_ID: ' 950 ' } });
+  assert.deepEqual([ckThreads(w).length, recordOf(w).forumId], [1, '950']);
+});
+
 test('CH2: every checklist job settles the whole thread, whatever event started it', async () => {
   {
     const w = world();
@@ -708,6 +715,13 @@ test('CH3: with no single bot thread to take, nothing is created and the record 
     ['the create never reached Discord', hangUp, () => {}],
     ['two bot threads name the issue', loseAnswer, (w) => { w.ckThread(17); }],
     ['a staff thread cites the issue, and no bot thread does', hangUp, (w) => { w.ckThread(17, staffStarter('Issue: https://github.com/me/one/issues/17')); }],
+    // The record's forum line edited to hold a space, and the listing refused
+    // with a body naming a staff tag: only the request and its status are told.
+    ['a forum line with a space, its listing refused', loseAnswer, (w) => {
+      const c = botComments(w, 17).find((x) => parseChecklist(x));
+      c.body = c.body.replace('discord-checklist-forum: 950', 'discord-checklist-forum: 950 x');
+      w.fail.push(['GET', /threads\/archived\/public/, new Response('{"message":"Missing Access","tag":"Needs QA"}', { status: 403 }), 99]);
+    }],
   ]) {
     const w = world();
     w.issue(17);
@@ -717,7 +731,7 @@ test('CH3: with no single bot thread to take, nothing is created and the record 
     const made = ckThreads(w).length;
     for (const wait of [0, 8 * DAY]) {
       w.clock += wait;
-      await assert.rejects(job(w), /staff checklist thread not confirmed \(.+\); see the sweep/, why);
+      await assert.rejects(job(w), (e) => /staff checklist thread not confirmed \(.+\); see the sweep/.test(e.message) && !/Needs QA/.test(e.message), why);
       assert.deepEqual([ckThreads(w).length, recordOf(w).state], [made, 'creating'], `${why}: nothing created`);
     }
   }

@@ -28,15 +28,18 @@ export function discordClient(token, fetchImpl = fetch) {
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+    // Kept apart from the message, so a caller that must never log a
+    // response body never has to parse one out.
+    const request = { method, path, status: res.status };
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(`Discord ${method} ${path} -> ${res.status} ${text.slice(0, 300)}`);
+      throw Object.assign(new Error(`Discord ${method} ${path} -> ${res.status} ${text.slice(0, 300)}`), { discord: request });
     }
     if (res.status === 204) return null;
     // The parser's own message can quote the body, which may hold a staff
     // tag's name; the request and its status say enough.
     return res.json().catch(() => {
-      throw new Error(`Discord ${method} ${path} -> ${res.status} (the answer was not JSON)`);
+      throw Object.assign(new Error(`Discord ${method} ${path} -> ${res.status} (the answer was not JSON)`), { discord: { ...request, notJson: true } });
     });
   }
 
@@ -57,13 +60,13 @@ export function discordClient(token, fetchImpl = fetch) {
   // and a page that brings nothing new ends the listing as cut short.
   async function archivedThreads(forumId, since, pages, { ties = false } = {}) {
     const out = [];
-    const seen = new Set();
+    const seen = ties ? new Set() : null;
     let before = '';
     for (let page = 0; page < pages; page++) {
       const arch = await call('GET', `/channels/${forumId}/threads/archived/public?limit=50${before}`);
       const threads = arch.threads || [];
       const fresh = ties ? threads.filter((t) => !seen.has(t.id)) : threads;
-      for (const t of fresh) seen.add(t.id);
+      if (ties) for (const t of fresh) seen.add(t.id);
       out.push(...fresh);
       const oldest = threads.at(-1);
       const stamp = oldest && oldest.thread_metadata && oldest.thread_metadata.archive_timestamp;

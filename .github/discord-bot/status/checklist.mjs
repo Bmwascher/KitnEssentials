@@ -14,6 +14,11 @@ const MAX_CANDIDATES = 20;
 const MAX_LABELS = 10;
 // The bot's own tag names on a checklist thread, in any letter case.
 const OWN = new Set([...CHECKLIST_NAMES, ACCEPTED].map((s) => s.toLowerCase()));
+// One copy each, so a job's error and the sweep's line for the same case
+// never drift apart.
+const CLOSE_UNREAD = 'the issue is closed but its close event is not readable yet';
+const noTag = (name) => `checklist forum has no "${name}" tag`;
+const notOurs = (n) => `#${n}: no longer an issue the bot filed; its checklist thread is left as it is`;
 
 const link = (guildId, threadId) => `https://discord.com/channels/${guildId}/${threadId}`;
 const norm = (c) => String((c && c.body) || '').replace(/\r\n?/g, '\n');
@@ -55,14 +60,18 @@ export function parseChecklist(c) {
 // A Discord error's body can hold any text, a staff tag's name included, and
 // the Actions log is public: an error leaving the runner keeps only each
 // request and its status.
+// The causes a writer keeps beside its first error, each named in the run's error.
+const ALSO = [['rearchiveError', 'the re-archive failed too'], ['keyError', 'clearing the archive key failed too']];
 const brief = (e) => {
+  // A Discord error is told from its request's fields, with the bot's own
+  // "not JSON" note, never from its message; any other error's message is
+  // the bot's own or GitHub's.
   const one = (x) => {
-    const msg = String((x && x.message) || x || '');
-    // The bot's own "not JSON" note is kept; a response body never is.
-    return (/^Discord \S+ \S+ -> \d{3}(?: \(the answer was not JSON\))?/.exec(msg) || [msg])[0];
+    const d = x && x.discord;
+    if (d) return `Discord ${d.method} ${d.path} -> ${d.status}${d.notJson ? ' (the answer was not JSON)' : ''}`;
+    return String((x && x.message) || x || '');
   };
-  return one(e) + (e && e.rearchiveError ? `; the re-archive failed too: ${one(e.rearchiveError)}` : '')
-    + (e && e.keyError ? `; clearing the archive key failed too: ${one(e.keyError)}` : '');
+  return one(e) + ALSO.map(([k, what]) => (e && e[k] ? `; ${what}: ${one(e[k])}` : '')).join('');
 };
 const scrubbed = (fn) => async (...args) => {
   try {
@@ -110,10 +119,10 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     for (let i = 0; i < settleTries; i++) {
       const w = await wanted(n, proof);
       if (!w.eligible) {
-        log(`#${n}: no longer an issue the bot filed; its checklist thread is left as it is`);
+        log(notOurs(n));
         return;
       }
-      if (!w.closeKnown) throw new Error('the issue is closed but its close event is not readable yet');
+      if (!w.closeKnown) throw new Error(CLOSE_UNREAD);
       let cur = await fresh(rec);
       const reopen = !w.key && !!cur.archived;
       let r;
@@ -142,12 +151,12 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
         if (!r.archived) await onThread(() => discord.archive(id));
         await write(cur, { archived: w.key });
       }
-      if (r.missing) throw new Error(`checklist forum has no "${w.name}" tag`);
+      if (r.missing) throw new Error(noTag(w.name));
       // Settled when a write now would change nothing and GitHub still wants
       // the same; the slot and tag notes come from that same read.
       const shown = await onThread(() => discord.threadState(id));
       const back = plan(w)(shown.applied, shown.available);
-      if (back.missing) throw new Error(`checklist forum has no "${w.name}" tag`);
+      if (back.missing) throw new Error(noTag(w.name));
       const again = await wanted(n, proof);
       if (sameTags(back.tags, shown.applied) && again.eligible && again.closeKnown && again.name === w.name && again.accepted === w.accepted && again.key === w.key) {
         if (back.full) log(`#${n}: no free tag slot for "${w.name}" on the checklist thread`);
@@ -176,7 +185,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     if (!w.eligible) return;
     // Before any write: a thread opened or taken now could not be archived
     // for a close GitHub does not show yet.
-    if (!w.closeKnown) throw new Error('the issue is closed but its close event is not readable yet');
+    if (!w.closeKnown) throw new Error(CLOSE_UNREAD);
     // A record whose marker no longer parses is not "no record": a new one
     // could make a second thread. Nothing is written until staff mend it.
     if (!w.st.records.checklist && w.st.records.checklistDamaged) throw new Error(damagedLine(w.st.records.checklistDamaged));
@@ -330,7 +339,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     // else is judged; listed with or without a record, as a first open can
     // have failed on it.
     if (!w.closeKnown) {
-      parts.push(`the issue is closed but its close event is not readable yet: the checklist ${here ? `thread (${here})` : rec ? `record (${rec.url})` : 'thread'} is checked at the next sweep`);
+      parts.push(`${CLOSE_UNREAD}: the checklist ${here ? `thread (${here})` : rec ? `record (${rec.url})` : 'thread'} is checked at the next sweep`);
       return { parts, repair: false, unread: null };
     }
     if (!rec) {
@@ -393,7 +402,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     const nameOf = (id) => (shown.available.find((t) => t.id === id) || { name: '' }).name;
     const botTags = (ids) => ids.filter((id) => OWN.has(nameOf(id).toLowerCase()));
     const listed = (ids) => botTags(ids).map(nameOf).join(', ') || '(none)';
-    if (p.missing) parts.push(`checklist forum has no "${w.name}" tag (${here}): add it, spelled as the README lists it`);
+    if (p.missing) parts.push(`${noTag(w.name)} (${here}): add it, spelled as the README lists it`);
     else if (!sameTags(p.tags, shown.applied)) {
       parts.push(`checklist tags ${listed(shown.applied)} -> ${listed(p.tags)}, keeping ${p.tags.length - botTags(p.tags).length} staff tag(s) (${here})`);
       repair = true;

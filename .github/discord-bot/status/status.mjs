@@ -79,6 +79,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   const repo = (payload.repository && payload.repository.full_name) || env.GITHUB_REPOSITORY;
   const [owner, name] = repo.split('/');
   const pattern = new RegExp(env.RELEASE_TAG_PATTERN || DEFAULT_RELEASE_PATTERN);
+  // A setting pasted with a space around the id is still that id, as the
+  // Worker reads it.
+  const checklistForum = String(env.CHECKLIST_FORUM_ID || '').trim();
   // A re-run of a workflow run keeps its id, so it can still send what the
   // run owes.
   const runId = env.GITHUB_RUN_ID || null;
@@ -167,7 +170,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         if (!c.user || c.user.login !== BOT_LOGIN) continue;
         // A body edited in the browser comes back with CRLF line ends.
         const body = (c.body || '').replace(/\r\n?/g, '\n');
-        if (env.CHECKLIST_FORUM_ID) {
+        if (checklistForum) {
           const ck = parseChecklist(c);
           if (ck) ckRecords.push(ck);
           else if (/<!--\s*discord-checklist/.test(body)) ckDamaged.push(c.html_url || '');
@@ -655,8 +658,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     return eligible(issue) ? issue : null;
   }
 
-  const checklist = env.CHECKLIST_FORUM_ID
-    ? checklistRunner({ gh, discord, repo, forumId: String(env.CHECKLIST_FORUM_ID), wanted, records: recordsOf, botIssue, log, now, settleTries: SETTLE_TRIES, owedMs: OWED_MS })
+  const checklist = checklistForum
+    ? checklistRunner({ gh, discord, repo, forumId: checklistForum, wanted, records: recordsOf, botIssue, log, now, settleTries: SETTLE_TRIES, owedMs: OWED_MS })
     : null;
 
   // The checklist job: the issue's own events, and only its checklist
