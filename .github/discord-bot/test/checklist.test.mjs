@@ -221,6 +221,9 @@ test('CH4: a tag staff add while the bot reads the forum is kept, and a record i
   cp.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [18] });
   await pr(cp, 5);
   assert.equal(cp.find('PATCH', threadUrl(own.id)).length, 0, 'a checked record copied from another issue is not checked here');
+  // 18's own checklist job checks it, against 18's addresses alone.
+  await assert.rejects(job(cp, 'reopened', { n: 18 }), /is not the bot's thread for this issue/);
+  assert.equal(recordOf(cp, 18).linked, false, 'and never takes 17\'s thread');
 
   // Staff put another thread's id in the marker while a run is under way:
   // the run writes nothing, and the new id is never saved as linked.
@@ -1007,6 +1010,23 @@ test('CH3: a record write keeps what staff changed in the record before the writ
   assert.deepEqual([recordOf(w).threadId, recordOf(w).forumId], [ours(w)[0].id, '951']);
 });
 
+test('CH3: a hand-entered id\'s check keeps a forum staff add to the record while it reads', async () => {
+  const w = world();
+  w.issue(17);
+  const t = w.ckThread(17, { applied_tags: ['c-tri'] });
+  w.record(17, checklistBody({ state: 'pending', guildId: '', since: w.clock, issueUrl: 'https://github.com/me/one/issues/17' })
+    .replace('discord-checklist: pending', `discord-checklist: ${t.id}`));
+  let once = false;
+  w.hooks.push(['GET', /discord\.com\/api\/v10\/users\/@me$/, async () => {
+    if (once) return;
+    once = true;
+    const c = botComments(w, 17).find((x) => parseChecklist(x));
+    c.body += '\n<!-- discord-checklist-forum: 951 -->';
+  }]);
+  await job(w);
+  assert.deepEqual([recordOf(w).linked, recordOf(w).forumId], [true, '951']);
+});
+
 test('CH3: a hand-entered id whose thread read fails for another reason is kept for a re-run', async () => {
   const w = world();
   w.issue(17);
@@ -1080,14 +1100,18 @@ const discordLink = (id) => `https://discord\\.com/channels/800/${id}`;
 test('CH8: report mode lists each checklist problem with its link and what staff should check', async () => {
   const w = world();
   const url = (n) => `https://github.com/me/one/issues/${n}`;
-  const body = (n, state, over = {}) => checklistBody({ state, guildId: '800', since: w.clock, issueUrl: url(n), ...over });
+  // A bot record on #n, bound to its own comment as the bot writes it.
+  const botRecord = (n, state, over = {}) => {
+    const c = w.record(n, '');
+    c.body = checklistBody({ id: c.id, state, guildId: '800', since: w.clock, issueUrl: url(n), ...over });
+  };
   w.issue(17);
   w.issue(18);
-  w.record(18, body(18, 'pending'));
+  botRecord(18, 'pending');
   // A lost create answer for an issue that was #19 in another repository
   // when its create went out, and is #9 here since its transfer.
   w.issue(9);
-  w.record(9, body(19, 'creating', { forumId: '950', issueUrl: 'https://github.com/me/old/issues/19' }));
+  botRecord(9, 'creating', { forumId: '950', issueUrl: 'https://github.com/me/old/issues/19' });
   w.issue(23);
   w.close(23, 'not_planned');
   const t23 = seed(w, 23, { applied_tags: ['c-wont'], archived: true });

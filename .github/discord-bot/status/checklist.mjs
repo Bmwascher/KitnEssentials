@@ -45,7 +45,9 @@ export function checklistBody({ id, state, guildId, forumId = '', since, issueUr
     ...(thread ? [`<!-- discord-checklist-linked: ${state} comment: ${id} -->`] : []),
     ...(forumId ? [`<!-- discord-checklist-forum: ${forumId} -->`] : []),
     `<!-- discord-checklist-since: ${since} -->`,
-    `<!-- discord-checklist-issue: ${issueUrl} -->`,
+    // Bound to this comment like `linked`: a record copied from another
+    // issue names that issue's address, which is not this issue's.
+    `<!-- discord-checklist-issue: ${issueUrl}${id ? ` comment: ${id}` : ''} -->`,
     ...(archived ? [`<!-- discord-checklist-archived: ${archived} -->`] : []),
   ].join('\n');
 }
@@ -56,12 +58,13 @@ export function parseChecklist(c) {
   if (!m) return null;
   const threadId = /^\d+$/.test(m[1]) ? m[1] : null;
   const guildId = m[2] === 'none' ? '' : m[2];
+  const issue = /^(\S+) comment: (\d+)$/.exec(field(body, 'issue') || '');
   return {
     id: c.id, url: c.html_url || '', state: m[1], threadId, guildId,
     // False for a thread id staff put in the marker by hand, or a record
     // copied from another comment.
     linked: !!threadId && field(body, 'linked') === `${threadId} comment: ${c.id}`,
-    forumId: field(body, 'forum') || '', since: Number(field(body, 'since')) || 0, issueUrl: field(body, 'issue'), archived: field(body, 'archived'),
+    forumId: field(body, 'forum') || '', since: Number(field(body, 'since')) || 0, issueUrl: issue && issue[2] === String(c.id) ? issue[1] : null, archived: field(body, 'archived'),
   };
 }
 
@@ -109,11 +112,12 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     return r;
   }
   // `rec` is the record as this run last read or wrote it; `over` is the
-  // change, laid on the record as just read, so anything else staff changed
-  // in it stays.
+  // change, or a function giving it from the record as just read. It is laid
+  // on that read, so anything else staff changed in the record stays.
   async function write(rec, over) {
     const seen = await current(rec);
-    await gh.call('PATCH', commentPath(rec), { body: checklistBody({ ...seen, ...over }) });
+    const change = typeof over === 'function' ? over(seen) : over;
+    await gh.call('PATCH', commentPath(rec), { body: checklistBody({ ...seen, ...change }) });
   }
 
   // Bring the thread in step with GitHub. The tag write keeps the archive
@@ -359,9 +363,8 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     if (!(await stillOpenable(n))) return null;
     // A `pending` record has no server or forum yet; the thread gives both,
     // so the saved link works.
-    const filled = { ...(rec.guildId ? {} : { guildId: String(ch.guild_id) }), ...(rec.forumId ? {} : { forumId }) };
-    await write(rec, filled);
-    return { ...rec, ...filled, linked: true };
+    await write(rec, (seen) => ({ ...(seen.guildId ? {} : { guildId: String(ch.guild_id) }), ...(seen.forumId ? {} : { forumId }) }));
+    return { ...rec, linked: true };
   }
 
   // For a `creating` record. It never creates: only exactly one match is
