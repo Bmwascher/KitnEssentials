@@ -768,9 +768,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       // so a failed write here still leaves its checklist thread judged and
       // repaired.
       const errors = [];
-      // A player-side failure ends this issue's player repair, as it always
-      // has; with the checklist on it is kept instead of thrown, so the
-      // checklist lines and repair still run. With it off, it is thrown.
+      // A player-side failure ends this issue's player repair. With the
+      // checklist on it is kept instead of thrown, so the checklist lines and
+      // repair still run.
       let playerStop = false;
       const playerFailed = (e, what) => {
         if (!checklist) throw e;
@@ -936,7 +936,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // tag run's window of recent closes has moved on, or a PR no longer links
   // it. The sync then sends the note while it is still true.
   // With the checklist on, a failed owed-note scan is kept, so the checklist
-  // work below still runs; with it off, it is thrown at once, as before.
+  // work below still runs; with it off, it is thrown at once.
   let rerunFailed = null;
   if (runId && attempt > 1 && eventName !== 'schedule' && eventName !== 'workflow_dispatch') {
     try {

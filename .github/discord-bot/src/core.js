@@ -357,7 +357,6 @@ const tagNamed = (available, name) => (available || []).find((t) => t.name.toLow
 // Every tag id the forum names Accepted, in any letter case: all are the bot's.
 const acceptedIds = (available) => new Set((available || []).filter((t) => t.name.toLowerCase() === ACCEPTED.toLowerCase()).map((t) => t.id));
 
-// Whether two tag lists hold the same ids, in any order.
 export const sameTags = (a, b) => a.length === b.length && a.every((id) => b.includes(id));
 
 // The Accepted tag added to `tags` when wanted and a slot is free, or taken
