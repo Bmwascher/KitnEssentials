@@ -691,11 +691,15 @@ Accepted on purpose; each line says how you would notice it.
   gets that change's message once. The post shows Triaged until the next run
   that settles its status (an `accepted` label change runs none) or the next
   fix-mode sweep.
-- If a PR run was part-way through when such a change was put back, and the
-  issue is then reopened while the PR is still open, the player gets no In
-  progress message for the reopened issue, though the post shows In
-  progress. It takes a PR run already under way when a fix-mode sweep writes
-  Accepted, a close that lands inside that one write, and a reopen afterward.
+- If a status run was part-way through when such a change was put back, it
+  can write its own older status afterward, and a later run that wants that
+  status then finds it shown and sends nothing: the player can miss one
+  later message. Two cases are known. A PR run under way, a close inside the
+  sweep's one write, then a reopen with the PR still open: no In progress
+  message for the reopened issue, though the post shows In progress. A close
+  run under way, a reopen whose In progress write lands inside the sweep's
+  one write, then a close as not planned: no "Not planned." message, though
+  the post shows Closed.
 - If an issue is closed while a fix-mode sweep writes Accepted on its post,
   and the forum has no tag for that close or the close's own tag write fails
   or is refused, the post can show Triaged and Accepted on the closed issue.
@@ -840,9 +844,9 @@ archive repairs, which can retag, archive or reopen a thread and update its
 record.
 It also makes five known limits possible (Known limits): a status tag
 shown without its message; a message the player may get twice; and, from
-the Accepted repair, a status change put back to Triaged, a reopened
-issue's In progress message skipped after such a put-back, and a closed
-issue's post left showing Triaged and Accepted.
+the Accepted repair, a status change put back to Triaged, one later
+message lost when a status run was part-way through such a put-back, and a
+closed issue's post left showing Triaged and Accepted.
 Each repo's copy has its own variable and its own soak.
 
 The workflow checks out the repository's default branch, and scheduled runs

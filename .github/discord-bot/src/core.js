@@ -342,10 +342,9 @@ export function nextAppliedTags(current, available, statusName, names = STATUS_N
   return [...keep.slice(0, 4), target.id];
 }
 
-// Every status tag a post shows (canonical names, from the forum's status
-// `names`), in tag order.
-export function shownStatuses(applied, available, names = STATUS_NAMES) {
-  const byLower = new Map(names.map((s) => [s.toLowerCase(), s]));
+// Every player status tag a post shows (canonical names), in tag order.
+export function shownStatuses(applied, available) {
+  const byLower = new Map(STATUS_NAMES.map((s) => [s.toLowerCase(), s]));
   const byId = new Map((available || []).map((t) => [t.id, t]));
   return (applied || []).map((id) => byId.get(id)).filter((t) => t && byLower.has(t.name.toLowerCase()))
     .map((t) => byLower.get(t.name.toLowerCase()));

@@ -651,12 +651,12 @@ test('CT8: a Discord answer that is not JSON is reported by its request and stat
 test('AT1: a post\'s status tags are listed in tag order, and the status it shows still prefers the wanted one', () => {
   const avail = [{ id: 'r', name: 'Retail' }, { id: 't', name: 'Triaged' }, { id: 'p', name: 'In progress' },
     { id: 'z', name: 'Closed' }, { id: 'acc', name: 'Accepted' }, { id: 'wf', name: "Won't fix" }];
-  for (const [why, applied, names, want] of [
-    ['Triaged alone, beside other tags', ['r', 'acc', 't'], undefined, ['Triaged']],
-    ['two status tags, in tag order', ['z', 'r', 't'], undefined, ['Closed', 'Triaged']],
-    ['no status tag', ['r', 'acc'], undefined, []],
-    ['another forum\'s status names', ['wf', 't'], C.CHECKLIST_NAMES, ["Won't fix", 'Triaged']],
-  ]) assert.deepEqual(C.shownStatuses(applied, avail, names), want, why);
+  for (const [why, applied, want] of [
+    ['Triaged alone, beside other tags', ['r', 'acc', 't'], ['Triaged']],
+    ['two status tags, in tag order', ['z', 'r', 't'], ['Closed', 'Triaged']],
+    ['no status tag', ['r', 'acc'], []],
+    ['a checklist-only status tag is not a player status', ['wf', 't'], ['Triaged']],
+  ]) assert.deepEqual(C.shownStatuses(applied, avail), want, why);
   assert.equal(C.currentStatus(['z', 't'], avail, 'Triaged'), 'Triaged', 'the wanted status shows wherever it sits');
 });
 
