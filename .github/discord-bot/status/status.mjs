@@ -14,7 +14,7 @@
 import { readFileSync, appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { STATUS, LABELS, MESSAGES, parseMarker, parseFiledMessage, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN, checklistStatus, checklistKey,
-  shownStatuses, preferStatus, triagedAlone, withAccepted, sameTags } from '../src/core.js';
+  shownStatuses, preferStatus, triagedAlone, withAccepted, showsAccepted } from '../src/core.js';
 import { discordClient, postGone } from '../src/discord.js';
 import { githubClient } from '../src/github.js';
 import { checklistRunner, parseChecklist } from './checklist.mjs';
@@ -22,6 +22,8 @@ import { checklistRunner, parseChecklist } from './checklist.mjs';
 const hasLabel = (issue, name) => (issue.labels || []).some((l) => (l.name || l) === name);
 // The bot's own issues: the label and the marker it writes last.
 const eligible = (issue) => hasLabel(issue, LABELS.fromDiscord) && parseMarker(issue.body) !== null;
+const NO_ACCEPTED_SLOT = 'no free tag slot for Accepted on the post';
+const NO_ACCEPTED_TAG = 'the forum has no Accepted tag';
 // Only PRs from people with a role on the repo move a post to In progress.
 const TRUSTED = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 const PR_EVENTS = new Set(['pull_request', 'pull_request_target']);
@@ -507,8 +509,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       // Another writer moved the status just before this write: decide again
       // from what the post shows now.
       if (r.raced) continue;
-      if (r.noRoom) log(`#${n}: no free tag slot for Accepted on the post`);
-      if (r.noAccepted) log(`#${n}: the forum has no Accepted tag`);
+      if (r.noRoom) log(`#${n}: ${NO_ACCEPTED_SLOT}`);
+      if (r.noAccepted) log(`#${n}: ${NO_ACCEPTED_TAG}`);
       if (r.skipped) {
         // The forum has no such tag, or no free slot for Triaged: the post did
         // not move, and this move's
@@ -600,8 +602,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     else if (r.archived) log(`#${n}: the post is archived; its Accepted tag is left as it is`);
     else if (r.refused) log(`#${n}: Accepted left: the post does not show Triaged alone`);
     else if (r.raced) log(`#${n}: Accepted left: the post changed during the repair; the next sweep tries again`);
-    else if (r.noAccepted) log(`#${n}: the forum has no Accepted tag`);
-    else if (r.noRoom) log(`#${n}: no free tag slot for Accepted on the post`);
+    else if (r.noAccepted) log(`#${n}: ${NO_ACCEPTED_TAG}`);
+    else if (r.noRoom) log(`#${n}: ${NO_ACCEPTED_SLOT}`);
     else log(`#${n}: Accepted already in step on the post`);
   }
 
@@ -906,9 +908,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       if (post && !post.archived) {
         const acc = wantedAccepted(st.issue);
         const a = withAccepted(post.applied, post.available, acc);
-        if (acc && a.noAccepted) accParts.push('the forum has no Accepted tag');
-        else if (a.noRoom) accParts.push('no free tag slot for Accepted on the post');
-        else if (!a.noAccepted && !sameTags(a.tags, post.applied)) {
+        if (acc && a.noAccepted) accParts.push(NO_ACCEPTED_TAG);
+        else if (a.noRoom) accParts.push(NO_ACCEPTED_SLOT);
+        else if (!a.noAccepted && acc !== showsAccepted(post.applied, post.available)) {
           accRepairable = status === STATUS.triaged && triagedAlone(post.statuses);
           accParts.push(`post Accepted ${acc ? 'missing -> shown' : 'shown -> removed'}${accRepairable ? '' : " (waits for the post's next status change)"}`);
         }
@@ -1002,6 +1004,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           if (owed.length) await settleLabels(n);
           else await sync(n, false);
         } catch (e) {
+          // A post whose status repair failed gets no Accepted write either.
+          playerStop = true;
           errors.push(e.message);
         }
       }

@@ -10,8 +10,8 @@ name: Discord status
 # staff checklist thread per issue at the issue's own events, and PR and
 # release runs and the sweep keep its tags and archive in step.
 # An `accepted` label on an open issue shows an Accepted tag on its post, set
-# by the post's next status change or, on an active Triaged post, a fix-mode
-# sweep; an `accepted` label change starts no status job.
+# by the post's next status change or, on an active post showing Triaged
+# alone, a fix-mode sweep; an `accepted` label change starts no status job.
 # pull_request_target (not pull_request) so contributor PRs from forks still
 # update Discord; it runs this repo's own script and never checks out PR code.
 # Only a PR whose author has a role on the repo shows as In progress. An edit

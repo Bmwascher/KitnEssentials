@@ -679,8 +679,10 @@ test('AT2: a status move with `accepted` places or removes Accepted in its one w
     ['a move removes Accepted', [post(['acc', 'r', 't'])], move('In progress', false), [{ applied_tags: ['r', 'p'] }], {}],
     ['no free slot: the status moves, Accepted waits, nothing is dropped', [post(['r', 'x', 'a', 'b2', 't'])], move('In progress', true),
       [{ applied_tags: ['r', 'x', 'a', 'b2', 'p'] }], { noRoom: true }],
-    ['the status already shows, Accepted off: no write', [post(['r', 't'])], move('Triaged', true), [], {}],
+    ['the status already shows, no Accepted tag and Accepted wanted: no write', [post(['r', 't'])], move('Triaged', true), [], {}],
     ['the same on an archived post', [post(['r', 't'], true)], move('Triaged', true), [], {}],
+    ['the status already shows, an Accepted tag and Accepted not wanted: no write', [post(['r', 't', 'acc'])], move('Triaged', false), [], {}],
+    ['the same on an archived post', [post(['r', 't', 'acc'], true)], move('Triaged', false), [], {}],
     ['a tag added between the reads is kept beside Accepted', [post(['r', 't']), post(['r', 'x', 't'])], move('In progress', true),
       [{ applied_tags: ['r', 'x', 'p', 'acc'] }], {}],
     ['the forum lacks the status tag: no write', [post(['r', 't'])], move('Shipped', true), [], { skipped: true }],
@@ -707,8 +709,10 @@ test('AT3: the Accepted-only write changes only Accepted, and only on an active 
   const forum = { id: '900', available_tags: [{ id: 'r', name: 'Retail' }, { id: 'x', name: 'Staff note' }, { id: 'a', name: 'A' },
     { id: 'b2', name: 'B' }, { id: 't', name: 'Triaged' }, { id: 'p', name: 'In progress' }, { id: 'z', name: 'Closed' }, { id: 'acc', name: 'Accepted' }] };
   const noAccepted = { ...forum, available_tags: forum.available_tags.filter((t) => t.id !== 'acc') };
+  const twice = { ...forum, available_tags: [...forum.available_tags, { id: 'acc2', name: 'ACCEPTED' }] };
   const post = (tags, archived = false) => ({ id: '700', parent_id: '900', applied_tags: tags, thread_metadata: { archived } });
   for (const [why, reads, want, patches, out, forumNow = forum] of [
+    ['a second, differently cased Accepted tag already shows: no write', [post(['r', 't', 'acc2'])], true, [], { wrote: false }, twice],
     ['Triaged alone: Accepted added, nothing else changed', [post(['r', 't'])], true, [{ applied_tags: ['r', 't', 'acc'] }], { wrote: true }],
     ['not wanted: Accepted removed', [post(['r', 'acc', 't'])], false, [{ applied_tags: ['r', 't'] }], { wrote: true }],
     ['a tag added between the reads is kept', [post(['r', 't']), post(['r', 'x', 't'])], true, [{ applied_tags: ['r', 'x', 't', 'acc'] }], { wrote: true }],

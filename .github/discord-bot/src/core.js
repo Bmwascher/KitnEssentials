@@ -357,8 +357,8 @@ export function shownStatuses(applied, available, names = STATUS_NAMES) {
 export const preferStatus = (statuses, prefer = null) => (prefer && statuses.includes(prefer) ? prefer : (statuses[0] || null));
 
 // The status a post shows now (a status tag's canonical name), or null.
-export function currentStatus(applied, available, prefer = null, names = STATUS_NAMES) {
-  return preferStatus(shownStatuses(applied, available, names), prefer);
+export function currentStatus(applied, available, prefer = null) {
+  return preferStatus(shownStatuses(applied, available), prefer);
 }
 
 // The only post the sweep's Accepted-only write touches: a status move that
@@ -369,6 +369,13 @@ export const triagedAlone = (statuses) => statuses.length === 1 && statuses[0] =
 const tagNamed = (available, name) => (available || []).find((t) => t.name.toLowerCase() === name.toLowerCase());
 // Every tag id the forum names Accepted, in any letter case: all are the bot's.
 const acceptedIds = (available) => new Set((available || []).filter((t) => t.name.toLowerCase() === ACCEPTED.toLowerCase()).map((t) => t.id));
+
+// Whether a post shows Accepted: any tag the forum names Accepted, as the
+// player sees it.
+export const showsAccepted = (applied, available) => {
+  const ids = acceptedIds(available);
+  return (applied || []).some((id) => ids.has(id));
+};
 
 export const sameTags = (a, b) => a.length === b.length && a.every((id) => b.includes(id));
 

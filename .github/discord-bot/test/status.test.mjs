@@ -1492,9 +1492,13 @@ test('AT5: a status move places or removes Accepted in its own write, and Accept
     assert.deepEqual(w.said('717'), ["**In progress.** A fix for this is being worked on and tested. We'll post here when it's done."]);
     w.prs.get(5).state = 'MERGED';
     w.close(17, 'completed', 'aaaaaaa1');
+    const before = w.find('PATCH', /channels\/717$/).length;
     await closed(w, 17);
-    assert.deepEqual(tagNames(w, '717'), ['Retail', 'Bug', 'Fixed, next update'], 'the close removes Accepted');
+    assert.deepEqual(w.find('PATCH', /channels\/717$/).slice(before).map((c) => c.body.applied_tags), [['t-retail', 't-bug', 's-fix']],
+      'the close removes Accepted in its one write');
+    assert.deepEqual(tagNames(w, '717'), ['Retail', 'Bug', 'Fixed, next update']);
     assert.equal(w.said('717').length, 2, 'the Fixed message once');
+    assert.match(w.said('717')[1], /^\*\*Fixed!\*\*/, 'and it is the Fixed message');
   }
   {
     const w = world();
@@ -1567,6 +1571,24 @@ test('AT7: the sweep lists each Accepted gap on an active post, and none on an a
     await assert.rejects(sweepRun(w, 'report', out), /#17/);
     assert.match(out.join('\n'), /#17: Discord post not read \(see the log\)/);
     assert.ok(!out.some((l) => /Accepted/.test(l)), 'an unread post gets no Accepted line');
+  }
+  {
+    // A second, differently cased Accepted tag shows Accepted to the player.
+    FORUM.available_tags = [...saved, { id: 't-acc2', name: 'ACCEPTED' }];
+    try {
+      for (const mode of ['report', 'fix']) {
+        const w = world();
+        withLabel(w, 17);
+        w.threads.get('717').applied_tags = ['t-retail', 's-tri', 't-acc2'];
+        w.threads.get('717').archived = false;
+        const out = [];
+        await sweepRun(w, mode, out);
+        assert.ok(!out.some((l) => /Accepted/.test(l)), `${mode}: a post showing a second Accepted tag is in step`);
+        assert.deepEqual(w.find('PATCH', /channels\/717$/), [], `${mode}: no write`);
+      }
+    } finally {
+      FORUM.available_tags = saved;
+    }
   }
 });
 
@@ -1690,4 +1712,57 @@ test('AT9: a status move landing inside the repair\'s write is put back to Triag
     await sweepRun(w, 'fix');
     assert.equal(hit, false, 'Triaged beside Closed: the repair sends no write, so nothing can be put back');
   }
+});
+
+test('AT11: the Accepted repair logs each outcome on its own line', async () => {
+  // Runs `fn` before the `k`-th matching request is served: the sweep's own
+  // read of the post and its forum is the first, the repair's first read the
+  // second, and its fresh read the third.
+  const at = (w, re, k, fn) => {
+    let i = 0;
+    w.hooks.push(['GET', re, async () => { if (++i === k) await fn(); }]);
+  };
+  const POST = /discord\.com\/api\/v10\/channels\/717$/;
+  const HELP = /discord\.com\/api\/v10\/channels\/900$/;
+  const saved = FORUM.available_tags;
+  for (const [why, setup, logged] of [
+    ['shown', (w) => withLabel(w, 17), /^#17: Accepted shown on the post$/],
+    ['removed', (w) => { w.issue(17); w.threads.get('717').applied_tags = ['t-retail', 't-acc', 's-tri']; }, /^#17: Accepted removed on the post$/],
+    ['archived at the first read', (w) => { withLabel(w, 17); at(w, POST, 2, () => { w.threads.get('717').archived = true; }); },
+      /^#17: the post is archived; its Accepted tag is left as it is$/],
+    ['not Triaged alone at the first read', (w) => { withLabel(w, 17); at(w, POST, 2, () => { w.threads.get('717').applied_tags = ['t-retail', 's-prog']; }); },
+      /^#17: Accepted left: the post does not show Triaged alone$/],
+    ['moved at the fresh read', (w) => { withLabel(w, 17); at(w, POST, 3, () => { w.threads.get('717').applied_tags = ['t-retail', 's-prog']; }); },
+      /^#17: Accepted left: the post changed during the repair; the next sweep tries again$/],
+    ['no free slot at the first read', (w) => { withLabel(w, 17); at(w, POST, 2, () => { w.threads.get('717').applied_tags = ['t-retail', 't-bug', 't-forever', 't-staff', 's-tri']; }); },
+      /^#17: no free tag slot for Accepted on the post$/],
+    ['the forum loses its Accepted tag', (w) => { withLabel(w, 17); at(w, HELP, 2, () => { FORUM.available_tags = saved.filter((t) => t.id !== 't-acc'); }); },
+      /^#17: the forum has no Accepted tag$/],
+    ['already in step at the first read', (w) => { withLabel(w, 17); at(w, POST, 2, () => { w.threads.get('717').applied_tags.push('t-acc'); }); },
+      /^#17: Accepted already in step on the post$/],
+    ['GitHub no longer wants Triaged', (w) => { withLabel(w, 17); at(w, HELP, 1, () => { w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] }); }); },
+      /^#17: Accepted left for the post's next status change$/],
+  ]) {
+    try {
+      const w = world();
+      setup(w);
+      w.threads.get('717').archived = false;
+      const out = [];
+      await sweepRun(w, 'fix', out);
+      assert.ok(out.some((l) => logged.test(l)), `${why}: ${out.filter((l) => l.startsWith('#17: ')).join(' | ')}`);
+    } finally {
+      FORUM.available_tags = saved;
+    }
+  }
+});
+
+test('AT12: a failed status repair stops the Accepted repair on that post', async () => {
+  const w = world();
+  w.issue(17, { labels: ['from-discord', 'accepted', 'pending-release'] });
+  w.threads.get('717').archived = false;
+  w.fail.push(['DELETE', /issues\/17\/labels\/pending-release$/, new Response('{"message":"x"}', { status: 500 }), 99]);
+  const out = [];
+  await assert.rejects(sweepRun(w, 'fix', out), /#17/);
+  assert.match(out.find((l) => l.startsWith('#17: ')) || '', /^#17: labels pending-release -> \(none\); post Accepted missing -> shown$/);
+  assert.deepEqual(w.find('PATCH', /channels\/717$/), [], 'no post write after the failed status repair');
 });

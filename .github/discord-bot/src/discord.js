@@ -1,5 +1,5 @@
 // Minimal Discord REST client. `fetchImpl` is injectable so tests never hit the network.
-import { nextAppliedTags, currentStatus, otherTags, sameTags, snowflakeMs, planTags, withAccepted, shownStatuses, triagedAlone } from './core.js';
+import { nextAppliedTags, currentStatus, otherTags, sameTags, snowflakeMs, planTags, withAccepted, shownStatuses, triagedAlone, showsAccepted } from './core.js';
 
 const API = 'https://discord.com/api/v10';
 
@@ -174,15 +174,17 @@ export function discordClient(token, fetchImpl = fetch) {
       const { thread, forum } = await threadAndForum(threadId);
       if (archivedOf(thread)) return out({ archived: true });
       if (!alone(thread, forum.available_tags)) return out({ refused: true });
+      // Already as wanted: a post showing another Accepted tag shows it.
+      const inStep = (t, avail, q) => want === showsAccepted(t.applied_tags, avail) || sameTags(q.tags, t.applied_tags || []);
       let p = withAccepted(thread.applied_tags || [], forum.available_tags, want);
-      if (sameTags(p.tags, thread.applied_tags || [])) return out({ noRoom: p.noRoom, noAccepted: p.noAccepted });
+      if (inStep(thread, forum.available_tags, p)) return out({ noRoom: p.noRoom, noAccepted: p.noAccepted });
       const freshForum = await call('GET', `/channels/${thread.parent_id}`);
       const fresh = await call('GET', `/channels/${threadId}`);
       if (fresh.parent_id !== thread.parent_id) return out({ raced: true });
       if (archivedOf(fresh)) return out({ archived: true });
       if (!alone(fresh, freshForum.available_tags)) return out({ raced: true });
       p = withAccepted(fresh.applied_tags || [], freshForum.available_tags, want);
-      if (sameTags(p.tags, fresh.applied_tags || [])) return out({ noRoom: p.noRoom, noAccepted: p.noAccepted });
+      if (inStep(fresh, freshForum.available_tags, p)) return out({ noRoom: p.noRoom, noAccepted: p.noAccepted });
       await call('PATCH', `/channels/${threadId}`, { applied_tags: p.tags });
       return out({ wrote: true });
     },

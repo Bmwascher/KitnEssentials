@@ -673,11 +673,12 @@ Accepted on purpose; each line says how you would notice it.
   says what staff do (see Staff checklist).
 - Adding or removing the `accepted` label changes nothing at once. The post
   gets the change at its next status change, or at a fix-mode sweep while it
-  is not archived and shows Triaged alone. The same holds for a post whose status run read the
-  issue just before the label changed, for two status runs on one issue that
-  cross (the older can write Accepted back), and for a slot freed after a
-  status change. A post showing another status, or two status tags, waits
-  for its next status change; the sweep lists it meanwhile.
+  is not archived and shows Triaged alone. The same holds for a post whose
+  status run read the issue just before the label changed, for two status
+  runs on one issue that cross (the older can write Accepted back), and for
+  a slot freed after a status change. A post showing another status, or two
+  status tags, waits for its next status change; the sweep lists it
+  meanwhile.
 - An `Accepted` tag on a closed issue's post is listed by the sweep while
   the post is not archived, and the sweep's Accepted repair never removes
   it; nor does a close whose post already shows that close's status. A
@@ -687,8 +688,9 @@ Accepted on purpose; each line says how you would notice it.
   Triaged post (from Discord serving the sweep's last read of the post to its
   write taking effect) is put back to Triaged, with the Accepted tag as the
   sweep wrote it, even on an issue that was just closed. The player still
-  gets that change's message once. The post shows Triaged until the issue's
-  next event or the next fix-mode sweep.
+  gets that change's message once. The post shows Triaged until the next run
+  that settles its status (an `accepted` label change runs none) or the next
+  fix-mode sweep.
 - If a PR run was part-way through when such a change was put back, and the
   issue is then reopened while the PR is still open, the player gets no In
   progress message for the reopened issue, though the post shows In
@@ -763,8 +765,8 @@ KitnEssentials) before the real ones. Roughly 45 minutes.
    suggestions), each with the five status tags spelled exactly: `Triaged`,
    `In progress`, `Fixed, next update`, `Shipped`, `Closed`, an `Accepted`
    tag and an `Answered` tag. Make a staff-only queue channel. Copy each
-   forum's and the channel's
-   id and the server's id (Developer Mode on, right-click > Copy ID).
+   forum's and the channel's id and the server's id (Developer Mode on,
+   right-click > Copy ID).
 2. **Discord app.** At discord.com/developers/applications: New Application >
    Bot > Reset Token (keep it). Under Privileged Gateway Intents switch on
    **Message Content** (the bot reads the post it is pointed at; it never listens
@@ -833,9 +835,9 @@ Fix mode turns on, for every bot issue: quiet status repairs, which also
 reopen an out-of-step archived post and set its Accepted tag; release
 labels; missing ship records; dropping notes whose message no longer holds;
 the Accepted repair on posts that are not archived and show Triaged alone;
-and, with
-`CHECKLIST_FORUM_ID` set, the staff checklist threads' tag and archive
-repairs, which can retag, archive or reopen a thread and update its record.
+and, with `CHECKLIST_FORUM_ID` set, the staff checklist threads' tag and
+archive repairs, which can retag, archive or reopen a thread and update its
+record.
 It also makes five known limits possible (Known limits): a status tag
 shown without its message; a message the player may get twice; and, from
 the Accepted repair, a status change put back to Triaged, a reopened
