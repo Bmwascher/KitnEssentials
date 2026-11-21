@@ -342,16 +342,29 @@ export function nextAppliedTags(current, available, statusName, names = STATUS_N
   return [...keep.slice(0, 4), target.id];
 }
 
-// The status a post shows now (a status tag's canonical name), or null. A
-// post carrying the `prefer` status tag shows it, wherever the tag sits: a
-// second status tag beside it is no reason to move, or reopen, the post.
-export function currentStatus(applied, available, prefer = null) {
-  const byLower = new Map(Object.values(STATUS).map((s) => [s.toLowerCase(), s]));
+// Every status tag a post shows (canonical names, from the forum's status
+// `names`), in tag order.
+export function shownStatuses(applied, available, names = STATUS_NAMES) {
+  const byLower = new Map(names.map((s) => [s.toLowerCase(), s]));
   const byId = new Map((available || []).map((t) => [t.id, t]));
-  const shown = (applied || []).map((id) => byId.get(id)).filter((t) => t && byLower.has(t.name.toLowerCase()))
+  return (applied || []).map((id) => byId.get(id)).filter((t) => t && byLower.has(t.name.toLowerCase()))
     .map((t) => byLower.get(t.name.toLowerCase()));
-  return prefer && shown.includes(prefer) ? prefer : (shown[0] || null);
 }
+
+// The status shown by a post's status tags: the `prefer` one wherever it
+// sits (a second status tag beside it is no reason to move, or reopen, the
+// post), else the first, else null.
+export const preferStatus = (statuses, prefer = null) => (prefer && statuses.includes(prefer) ? prefer : (statuses[0] || null));
+
+// The status a post shows now (a status tag's canonical name), or null.
+export function currentStatus(applied, available, prefer = null, names = STATUS_NAMES) {
+  return preferStatus(shownStatuses(applied, available, names), prefer);
+}
+
+// The only post the sweep's Accepted-only write touches: a status move that
+// lands inside that write is then put back to Triaged alone, under the tag
+// names last read.
+export const triagedAlone = (statuses) => statuses.length === 1 && statuses[0] === STATUS.triaged;
 
 const tagNamed = (available, name) => (available || []).find((t) => t.name.toLowerCase() === name.toLowerCase());
 // Every tag id the forum names Accepted, in any letter case: all are the bot's.

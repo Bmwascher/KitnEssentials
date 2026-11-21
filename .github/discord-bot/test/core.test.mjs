@@ -647,3 +647,23 @@ test('CT8: a Discord answer that is not JSON is reported by its request and stat
   const f = fakeFetch([['GET', /\/channels\/950$/, () => new Response('<html>Needs QA</html>', { status: 200 })]]);
   await assert.rejects(discordClient('t', f).call('GET', '/channels/950'), (e) => e.message === 'Discord GET /channels/950 -> 200 (the answer was not JSON)');
 });
+
+// ---- The Accepted tag on the player's post -----------------------------------------
+
+test('AT1: a post\'s status tags are listed in tag order, and the status it shows still prefers the wanted one', () => {
+  const avail = [{ id: 'r', name: 'Retail' }, { id: 't', name: 'Triaged' }, { id: 'p', name: 'In progress' },
+    { id: 'z', name: 'Closed' }, { id: 'acc', name: 'Accepted' }, { id: 'wf', name: "Won't fix" }];
+  for (const [why, applied, names, want] of [
+    ['Triaged alone, beside other tags', ['r', 'acc', 't'], undefined, ['Triaged']],
+    ['two status tags, in tag order', ['z', 'r', 't'], undefined, ['Closed', 'Triaged']],
+    ['no status tag', ['r', 'acc'], undefined, []],
+    ['another forum\'s status names', ['wf', 't'], C.CHECKLIST_NAMES, ["Won't fix", 'Triaged']],
+  ]) assert.deepEqual(C.shownStatuses(applied, avail, names), want, why);
+  assert.equal(C.currentStatus(['z', 't'], avail, 'Triaged'), 'Triaged', 'the wanted status shows wherever it sits');
+});
+
+test('AT4: only status tags that are Triaged and nothing else count as Triaged alone', () => {
+  for (const [statuses, want] of [
+    [['Triaged'], true], [['Triaged', 'Closed'], false], [['Closed', 'Triaged'], false], [['In progress'], false], [[], false],
+  ]) assert.equal(C.triagedAlone(statuses), want, statuses.join(', ') || '(none)');
+});
