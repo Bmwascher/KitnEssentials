@@ -53,6 +53,12 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
     const lines = configProblems({ ...CLEAN, ...over });
     assert.ok(lines.some((l) => re.test(l)), `${why}: ${lines.join(' | ')}`);
   }
+  // A JSON variable with no text form throws wherever it is turned into
+  // text. The list is written here, not taken from the checker.
+  for (const k of ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID', 'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS']) {
+    const lines = configProblems({ ...CLEAN, [k]: { toString: null } });
+    assert.ok(lines.includes(`${k} is not text: set it as text. The checks below read it as unset.`), `${k} with no text form: ${lines.join(' | ')}`);
+  }
   for (const [why, over] of [
     ['a key with a line break', { REPOS: `{"a\\nb${'x'.repeat(200)}":"me/one"}` }],
     ['a forum key of 300 digits with a broken template', { FORUMS: `{"${'9'.repeat(300)}":{"template":"x"}}` }],
@@ -166,6 +172,8 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
       /^me\/one: the GitHub App is not installed there \(404\)\./],
     ['a FORUMS value with no text form: the forum checks say they did not run', (s) => { s.env = { FORUMS: '{"900":{"template":{"toString":null}}}' }; },
       /^The forum checks \(permissions, tags and template messages\) did not run: fix FORUMS above, then run the check again\.$/],
+    ['a setting with no text form: named, and every group still runs', (s) => { s.env = { STALE_DAYS: { toString: null } }; s.installs['me/one'] = refusal(404); },
+      /^me\/one: the GitHub App is not installed there \(404\)\./],
     ['an empty forum list: the forum checks say they did not run', (s) => { s.env = { FORUMS: '{}' }; },
       /^The forum checks \(permissions, tags and template messages\) did not run: fix FORUMS above, then run the check again\.$/],
     ['the roles read answered 204, with no role list', (s) => { s.rolesAnswer = new Response(null, { status: 204 }); },

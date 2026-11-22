@@ -13,7 +13,7 @@ import {
 import { discordClient, postGone } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
 import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch } from './scan.js';
-import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems } from './setup.js';
+import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems, settingsText } from './setup.js';
 
 export const COMMAND_NAME = 'Send to GitHub';
 export const CHECK_COMMAND = 'bot-check';
@@ -67,7 +67,7 @@ const reply = (content) => json({ type: 4, data: { content, flags: EPHEMERAL } }
 // another server learns nothing of this one's setup. Callers check the
 // caller first.
 const notSetUp = (env, interaction) => {
-  const guild = String(env.GUILD_ID ?? '');
+  const guild = String(settingsText(env).env.GUILD_ID ?? '');
   if (!isDiscordId(guild)) return reply("The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).");
   if (String(interaction.guild_id ?? '') !== guild) return reply('This only works on posts in the forums the bot is set up for.');
   return reply(`The bot is not set up yet: ${configProblems(env, { bindings: false })[0] || 'FORUMS is empty.'}`);
@@ -891,7 +891,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     if (!canUse(interaction.member)) return reply('Only moderators and admins can check the bot setup.');
     // Fails closed: a moderator of another server the bot is in neither
     // posts here nor reads this setup, also when GUILD_ID is broken.
-    const guild = String(env.GUILD_ID ?? '');
+    const guild = String(settingsText(env).env.GUILD_ID ?? '');
     if (!isDiscordId(guild)) return reply("The bot's GUILD_ID is not set to a server id, so it can check nothing. Fix it in the Worker's settings.");
     if (String(interaction.guild_id) !== guild) return reply('This command checks only the server the bot is set up for.');
     ctx.waitUntil(runCheck(interaction, env, deps, t0));
@@ -902,7 +902,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     const ids = parseCustomId(interaction.data.custom_id);
     if (!ids) return reply(BAD_IDS);
     const cfg = configOr(env);
-    if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
+    if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(settingsText(env).env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
     if (!cfg.roles.length && !canUse(interaction.member)) {
       return reply('The button is not set up yet: APPROVED_ROLE_IDS is empty. A moderator can right-click the post > Apps > Send to GitHub.');
     }
@@ -923,7 +923,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
   if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('gh:')) {
     if (!parseCustomId(interaction.data.custom_id)) return reply(BAD_IDS);
     const cfg = configOr(env);
-    if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
+    if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(settingsText(env).env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
     if (!allowed(interaction.member, cfg)) return reply(NOT_ALLOWED);
     if (!cfg.forums.length) return notSetUp(env, interaction);
     const v = modalValues(interaction.data);

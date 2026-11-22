@@ -1179,6 +1179,7 @@ test('WT1: /bot-check is for moderators of this server, answers privately at onc
     ['a moderator of another server', MOD, {}, '2', /^This command checks only the server the bot is set up for\.$/],
     ['a moderator with GUILD_ID unset', MOD, { GUILD_ID: '' }, '1', /^The bot's GUILD_ID is not set to a server id, so it can check nothing\./],
     ['a moderator with GUILD_ID malformed', MOD, { GUILD_ID: '1x' }, '1', /^The bot's GUILD_ID is not set to a server id, so it can check nothing\./],
+    ['a moderator with a GUILD_ID of no text form', MOD, { GUILD_ID: { toString: null } }, '1', /^The bot's GUILD_ID is not set to a server id, so it can check nothing\./],
   ]) {
     const { env: e, deps } = setupWorld(undefined, pubHex);
     const j = await (await handle(await signed(checkCmd(member, { guild_id: guild })), { ...e, ...envOver }, ctxFor(), quiet(deps))).json();
@@ -1307,6 +1308,10 @@ test("WT4: the not-set-up reply names the first broken setting only to a caller 
     ['a player press, broken REPOS', badRepos, press(PLAYER), ROLES],
     ['a player submit, broken REPOS', badRepos, sub(PLAYER), ROLES],
     ['a moderator submit, a FORUMS value with no text form', textless, sub(MOD), TEXTLESS_LINE],
+    ['a moderator right-click, no forums and a STALE_DAYS of no text form', { FORUMS: '', FORUM_CHANNEL_IDS: '', STALE_DAYS: { toString: null } }, rightClick(MOD),
+      'The bot is not set up yet: STALE_DAYS is not text: set it as text. The checks below read it as unset.'],
+    ['an approved role press, broken REPOS and an APPROVED_ROLE_IDS of no text form', { ...badRepos, APPROVED_ROLE_IDS: { toString: null } }, press(HELPER), ROLES],
+    ['a moderator submit, a GUILD_ID of no text form', { ...badRepos, GUILD_ID: { toString: null } }, sub(MOD), GUILD_LINE],
     ['a moderator of another server, right-click', badRepos, rightClick(MOD, '2'), ELSEWHERE],
     ['a moderator of another server, press', badRepos, press(MOD, '2'), ELSEWHERE],
     ['a moderator of another server, submit', badForums, sub(MOD, '2'), ELSEWHERE],

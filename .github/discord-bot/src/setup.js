@@ -13,6 +13,20 @@ import { BudgetSpent, countedFetch } from './scan.js';
 const present = (v) => v !== undefined && v !== null && String(v) !== '';
 // These the code reads as unset when blank.
 const blank = (v) => String(v ?? '').trim() === '';
+// Every setting the checks read. A JSON variable such as {"toString":null}
+// has no text form and throws wherever it is turned into text, so the
+// checks read such a value as unset, and configProblems names it.
+const SETTINGS = ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID',
+  'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'DISCORD_PUBLIC_KEY', 'DISCORD_BOT_TOKEN', 'GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY'];
+export function settingsText(env) {
+  const text = { ...env };
+  const bad = [];
+  for (const k of SETTINGS) {
+    if (env[k] === undefined || env[k] === null) continue;
+    try { String(env[k]); } catch { bad.push(k); delete text[k]; }
+  }
+  return { env: text, bad };
+}
 // owner/repo within GitHub's name limits.
 const REPO = /^[\w.-]{1,39}\/[\w.-]{1,100}$/;
 // The form's repo field takes at most this many characters.
@@ -29,8 +43,9 @@ const shown = (v) => {
 
 // One line per broken setting, each naming the setting and its fix. With
 // `bindings`, the STATE namespace must be bound too.
-export function configProblems(env, { bindings = true } = {}) {
-  const out = [];
+export function configProblems(raw, { bindings = true } = {}) {
+  const { env, bad } = settingsText(raw);
+  const out = bad.map((k) => `${k} is not text: set it as text. The checks below read it as unset.`);
   let repos = null;
   try {
     repos = parseRepos(env.REPOS);
@@ -218,8 +233,9 @@ function secretProblems(env) {
 // answer says so; otherwise it gives one line, a fix or "could not check".
 // `mod` is 'ok' only when the moderator channel is a text channel of this
 // server where the bot can post; otherwise it says why.
-export async function setupCheck(env, deps, { deadline, probe = null }) {
-  const problems = [...configProblems(env), ...secretProblems(env)];
+export async function setupCheck(raw, deps, { deadline, probe = null }) {
+  const { env } = settingsText(raw);
+  const problems = [...configProblems(raw), ...secretProblems(env)];
   let passed = 0;
   const ok = (cond, line) => {
     if (cond) passed++;
