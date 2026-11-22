@@ -128,11 +128,10 @@ export const lockLabel = (threadId) => `discord-lock-${threadId}`;
 
 // An installation token for `repo`, with the permissions GitHub granted it
 // (null when its answer named none). Only a 404 on the installation read
-// means the App is not installed there, so only that error says so.
-export async function installationAccess({ appId, privateKey, repo }, fetchImpl = fetch) {
-  const key = await importAppKey(privateKey);
-  const jwt = await appJwt(appId, key);
-  const app = githubClient(jwt, fetchImpl);
+// means the App is not installed there, so only that error says so. A
+// caller checking several repos passes one signed `jwt` for all of them.
+export async function installationAccess({ appId, privateKey, repo, jwt = null }, fetchImpl = fetch) {
+  const app = githubClient(jwt || await appJwt(appId, await importAppKey(privateKey)), fetchImpl);
   const inst = await app.call('GET', `/repos/${repo}/installation`).catch((e) => {
     if (e.github && e.github.status === 404) e.notInstalled = true;
     throw e;

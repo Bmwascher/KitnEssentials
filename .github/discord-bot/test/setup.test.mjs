@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { configProblems, channelPermissions, fitLines, setupCheck } from '../src/setup.js';
 import { PERMS, postLines, taken, STATUS_NAMES, CHECKLIST_NAMES, LABEL_DEFS, LABELS } from '../src/core.js';
 import { setupWorld } from './setup-world.mjs';
+import { stall } from './fake-fetch.mjs';
 
 // Discord's own message limit, which every message sent must fit.
 const DISCORD_MAX = 2000;
@@ -218,7 +219,14 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
     ['a forum answer with no tag list', (s) => { delete s.channels[0].available_tags; }, /^Forum <#900>: could not check its tags \(Discord's answer had no tag list\)\.$/],
     ['an application answer with no flags (an optional field)', (s) => { s.app = {}; }, /^Could not check the Message Content setting \(Discord's answer had no flags\)\.$/],
     ['a failed read of the server group', (s) => { s.rolesAnswer = refusal(500); },
-      /^Could not check the bot's access to the server \(Discord GET \/guilds\/1\/roles -> 500 .*\), so its channel, tag and role checks did not run: fix this, then run the check again\.$/],
+      /^Could not check the bot's access to the server \(Discord GET \/guilds\/1\/roles -> 500\), so its channel, tag and role checks did not run: fix this, then run the check again\.$/],
+    ['a token request answered 301, which is no moved repo', (s) => { s.token = new Response('', { status: 301, headers: { location: 'https://api.github.com/x' } }); },
+      /^Could not check me\/one \(GitHub POST \/app\/installations\/1\/access_tokens -> 301\)\.$/],
+    ['a token request refused with a body: its why holds no body', (s) => { s.token = new Response('{"message":"some text"}', { status: 422 }); },
+      /^Could not check me\/one \(GitHub POST \/app\/installations\/1\/access_tokens -> 422\)\.$/],
+    ['a token answer that is not JSON', (s) => { s.token = new Response('token text, not JSON', { status: 201 }); }, /^Could not check me\/one \(GitHub's answer was not JSON\)\.$/],
+    ['two labels in another letter case', (s) => { s.labelPages = [LABEL_DEFS.map(([name]) => ({ name: ['from-discord', 'needs-info'].includes(name) ? name.toUpperCase() : name }))]; },
+      /^me\/one: the labels ".+" must be named ".+", ".+" must be named ".+", as the bot matches names exactly\. Rename them on GitHub\.$/],
     ['a spent call budget', (s) => { s.env = { FORUMS: JSON.stringify(Object.fromEntries(Array.from({ length: 30 }, (_, i) => [String(1000 + i), {}]))) }; }, /^Forum <#\d+>: not checked \(out of time or calls\)\.$/],
   ]) {
     const { problems } = await checkOf(edit);
@@ -266,11 +274,31 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
       [['GET', /\/installation$/, 1]]],
     ['Message Content on through 1 << 18', (s) => { s.app = { flags: 1 << 18 }; }, /Message Content/, []],
     ['Message Content on through flags_new alone', (s) => { s.app = { flags: 0, flags_new: String(1n << 19n) }; }, /Message Content/, []],
-    ['missing from the list, a same-server channel that passes', (s) => { s.channels.splice(1, 1); s.alone['556'] = { id: '556', guild_id: '1', type: 0, permission_overwrites: [] }; }, /556/, []],
+    ['missing from the list, a same-server channel that passes', (s) => { s.channels.splice(1, 1); s.alone['556'] = { ...setupWorld().s.channels[1] }; }, /556/,
+      [['GET', /\/channels\/556$/, 1]]],
   ]) {
     const { problems, f } = await checkOf(edit);
     assert.ok(!problems.some((l) => gone.test(l)), `${why}: ${problems.join(' | ')}`);
     for (const [method, re, n] of calls) assert.equal(count(f, method, re), n, `${why}: ${method} ${re}`);
+  }
+  {
+    // Read on its own, the channel passes the checks it passes when listed.
+    const r = await checkOf((s) => { s.channels.splice(1, 1); s.alone['556'] = { ...setupWorld().s.channels[1] }; });
+    assert.equal(r.passed, clean.passed, `an unlisted channel that passes counts its checks: ${r.problems.join(' | ')}`);
+  }
+  {
+    // Four calls a repo (two label pages): the fourth repo's first label
+    // page is the share's 15th call, and its second page is never sent.
+    const r = await checkOf((s) => { s.env = { REPOS: JSON.stringify({ A: 'me/a', B: 'me/b', C: 'me/c', D: 'me/d' }), LOCK_REPO: 'me/a' }; s.labelPages = [others(1), allLabels()]; });
+    assert.equal(r.f.calls.filter((c) => /api\.github\.com/.test(c.url)).length, 15, `the GitHub share ends at its 15th call: ${r.problems.join(' | ')}`);
+    assert.ok(r.problems.includes("me/d's labels: not checked (out of time or calls)."), `the fourth repo's second page: ${r.problems.join(' | ')}`);
+  }
+  {
+    // The application read stalls until the run's deadline cuts it off.
+    const { env, deps } = setupWorld();
+    const fetch = (url, init) => (/\/applications\/@me$/.test(url) ? stall(init) : deps.fetch(url, init));
+    const r = await setupCheck(env, { fetch }, { deadline: Date.now() + 300 });
+    assert.ok(r.problems.includes('Could not check the Message Content setting or the public key (out of time or calls).'), `a read the deadline cuts off: ${r.problems.join(' | ')}`);
   }
   const unlisted = { ...setupWorld().s.channels[2] };
   // Each row breaks one thing; the moderator channel's state stays its own.

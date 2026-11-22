@@ -70,7 +70,7 @@ const notSetUp = (env, interaction) => {
   const guild = String(settingsText(env).env.GUILD_ID ?? '');
   if (!isDiscordId(guild)) return reply("The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).");
   if (String(interaction.guild_id ?? '') !== guild) return reply('This only works on posts in the forums the bot is set up for.');
-  return reply(`The bot is not set up yet: ${configProblems(env, { bindings: false })[0] || 'FORUMS is empty.'}`);
+  return reply(`The bot is not set up yet: ${configProblems(env, { bindings: false })[0]}`);
 };
 // The config, or null when it cannot be read (a broken REPOS throws), so
 // every entry point answers with the problem instead of failing.
@@ -465,9 +465,7 @@ function privateText(head, lines) {
 
 // Discord's own permissions for the bot in that channel, masked to the ones
 // the checks need, or null when it gave none.
-const givenBits = (raw) => {
-  try { return raw === undefined || raw === null ? null : String(BigInt(raw) & NEEDED_BITS); } catch { return null; }
-};
+const givenBits = (raw) => (raw === undefined || raw === null ? null : String(BigInt(raw) & NEEDED_BITS));
 
 // /bot-check: the result goes to the moderator channel when the check found
 // it fit to post to; whatever it did not take goes to the moderator's

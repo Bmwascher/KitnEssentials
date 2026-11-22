@@ -2,11 +2,11 @@
 // come first; /bot-check, the daily setup check and the Worker's "not set up
 // yet" replies use them.
 import {
-  parseRepos, parseForums, parseRoleIds, isTemplates, PERMS, packGroups, clipLine, MESSAGE_MAX, isDiscordId as digits, STATUS_NAMES, CHECKLIST_NAMES, ACCEPTED,
+  parseRepos, parseForums, parseRoleIds, isTemplates, PERMS, packGroups, clipLine, isDiscordId as digits, STATUS_NAMES, CHECKLIST_NAMES, ACCEPTED,
   LABELS, LABEL_DEFS, TEXT_TYPES, THREAD_TYPES, timedFetch, discordText, oneHop,
 } from './core.js';
 import { discordClient } from './discord.js';
-import { installationAccess, githubClient } from './github.js';
+import { installationAccess, githubClient, appJwt, importAppKey } from './github.js';
 import { BudgetSpent, countedFetch } from './scan.js';
 // The code uses these settings whenever they are non-empty, spaces included,
 // so that is when they are checked.
@@ -149,16 +149,11 @@ export function channelPermissions({ guildId, botId, botRoles, roles, channel })
 // says how many were left out, and those are returned for the log.
 export function fitLines(lines, max) {
   const cut = lines.map(clipLine);
-  if (packGroups(cut).length <= max) return { lines: cut, rest: [] };
-  // The longest start that fills `max` messages, in one pass.
-  let keep = 0;
-  let count = 0;
-  let size = 0;
-  for (; keep < cut.length; keep++) {
-    const n = cut[keep].length;
-    if (count && size + 1 + n <= MESSAGE_MAX) size += 1 + n;
-    else if (count < max) { count++; size = n; } else break;
-  }
+  const groups = packGroups(cut);
+  if (groups.length <= max) return { lines: cut, rest: [] };
+  // The packer fills its messages in order, so the lines of its first `max`
+  // messages are the longest start that fits.
+  let keep = groups[max - 1].at(-1) + 1;
   // Room for the closing line: a few kept lines at most give way to it.
   for (;;) {
     const kept = [...cut.slice(0, keep), `- and ${cut.length - keep} more (see the Worker log)`];
@@ -197,7 +192,16 @@ const NO_HISTORY = ' Without it every queue card says the first message was dele
 // waiting posts leaves such a post out.
 const ANSWERED_TAG = 'Answered';
 const stopped = (e) => e instanceof BudgetSpent || /^out of time /.test(String((e && e.message) || ''));
-const short = (e) => (stopped(e) ? 'out of time or calls' : String((e && e.message) || e).replace(/\s+/g, ' ').slice(0, 160));
+// Why a call failed, for a line the moderator channel may show: its request
+// and status, never the answer's body. GitHub's client passes the parser's
+// own error on, and its message can quote the answer.
+const short = (e) => {
+  if (stopped(e)) return 'out of time or calls';
+  const r = e && (e.discord || e.github);
+  if (r) return `${e.discord ? 'Discord' : 'GitHub'} ${r.method} ${r.path} -> ${r.status}${r.notJson ? ' (the answer was not JSON)' : ''}`;
+  if (e && e.name === 'SyntaxError') return "GitHub's answer was not JSON";
+  return String((e && e.message) || e).replace(/\s+/g, ' ').slice(0, 160);
+};
 const them = (list) => (list.length > 1 ? 'them' : 'it');
 
 // Discord's and GitHub's answers are read as documented: a required field
@@ -254,12 +258,23 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
   try { forums = Object.fromEntries(Object.entries(parseForums(env)).filter(([id]) => digits(id))); } catch { /* named by configProblems */ }
   // configProblems says why no player forum is left; this says what it hides.
   if (token && !Object.keys(forums).length) problems.push('The forum checks (permissions, tags and template messages) did not run: fix FORUMS above, then run the check again.');
-  const timed = timedFetch(oneHop(deps.fetch || fetch), CALL_MS, deadline);
+  // A call whose time limit came from the deadline, not from its own
+  // CALL_MS, was stopped by the deadline when it times out.
+  const cutOff = (f) => async (url, init = {}) => {
+    const late = deadline - Date.now() < CALL_MS;
+    try {
+      return await f(url, init);
+    } catch (e) {
+      if (late && e.name === 'TimeoutError') throw new Error(`out of time during ${init.method || 'GET'} ${url}`);
+      throw e;
+    }
+  };
+  const timed = cutOff(timedFetch(oneHop(deps.fetch || fetch), CALL_MS, deadline));
   // One Discord share for every read. The channel list ends one call's time
   // before the deadline, so a slow list never leaves the moderator channel's
   // own read without time.
   const shared = countedFetch(oneHop(deps.fetch || fetch), DISCORD_BUDGET);
-  const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(shared, CALL_MS, deadline));
+  const discord = discordClient(env.DISCORD_BOT_TOKEN, cutOff(timedFetch(shared, CALL_MS, deadline)));
   const lister = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(shared, CALL_MS, deadline - CALL_MS));
   // A 204 is an answer with no record.
   const need = (v, what) => {
@@ -375,9 +390,7 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
         }
       }
       const here = probe ? listed.get(String(probe)) : null;
-      if (here && !unset(here.permission_overwrites)) {
-        try { probed = { id: String(probe), bits: String(perms(here) & NEEDED_BITS) }; } catch { /* the channel's own check says why */ }
-      }
+      if (here && !unset(here.permission_overwrites)) probed = { id: String(probe), bits: String(perms(here) & NEEDED_BITS) };
     }
     // The application group needs the bot token alone. Its public key must
     // be the one Discord signs this bot's commands with.
@@ -448,23 +461,27 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
     const fix = [!githubReady(env) && 'GITHUB_APP_ID or GITHUB_APP_PRIVATE_KEY', !all.length && 'REPOS'].filter(Boolean).join(' and ');
     problems.push(`The GitHub checks (install, permissions and labels) did not run: fix ${fix} above, then run the check again.`);
   }
+  // One signed token serves every repo: it is valid for 9 minutes, and
+  // each signing costs CPU time the Worker's limit counts.
+  let jwt = null;
   for (const repo of githubReady(env) ? all : []) {
     const name = shown(repo);
-    // A repo the share or the deadline cannot cover is not started: its key
-    // import and signing would only be refused.
+    // A repo the share or the deadline cannot cover is not started: its
+    // calls would only be refused.
     if (gf.left() < 2 || Date.now() >= deadline) {
       problems.push(`${name}: not checked (out of time or calls).`);
       continue;
     }
     let a;
     try {
-      a = await installationAccess({ appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY, repo }, gf);
+      jwt = jwt || await appJwt(env.GITHUB_APP_ID, await importAppKey(env.GITHUB_APP_PRIVATE_KEY));
+      a = await installationAccess({ repo, jwt }, gf);
     } catch (e) {
       // No redirect is followed, so a renamed or moved repo answers 3xx here,
       // while filing, which follows it, still works.
       const st = e.github && e.github.status;
       problems.push(e.notInstalled ? `${name}: the GitHub App is not installed there (404). Install it on that repo.`
-        : st >= 300 && st < 400 ? `${name}: GitHub says the repo has moved (${st}). Set REPOS or LOCK_REPO to its new owner/repo.`
+        : st >= 300 && st < 400 && /\/installation$/.test(e.github.path) ? `${name}: GitHub says the repo has moved (${st}). Set REPOS or LOCK_REPO to its new owner/repo.`
           : stopped(e) ? `${name}: not checked (out of time or calls).` : `Could not check ${name} (${short(e)}).`);
       continue;
     }
@@ -501,7 +518,7 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
       } else {
         ok(!absent.length, `${name}: the label${absent.length > 1 ? 's' : ''} ${absent.join(', ')} ${absent.length > 1 ? 'are' : 'is'} missing. Run npm run labels ${repo}.`);
       }
-      ok(!renamed.length, `${name}: the label ${renamed.join(', ')}, as the bot matches names exactly. Rename it on GitHub.`);
+      ok(!renamed.length, `${name}: the label${renamed.length > 1 ? 's' : ''} ${renamed.join(', ')}, as the bot matches names exactly. Rename ${them(renamed)} on GitHub.`);
     } catch (e) {
       problems.push(stopped(e) ? `${name}'s labels: not checked (out of time or calls).` : `Could not check ${name}'s labels (${short(e)}).`);
     }
@@ -516,7 +533,7 @@ export function setupLines({ problems, passed, kind, by }) {
     return [`**Weekly bot setup check:** every check passes today (${passed} checks). This line comes each Monday that every check passes. A Monday with neither this line nor a problem list means the daily setup check is not running or cannot post.`];
   }
   if (kind === 'daily') return [`**Daily bot setup check:** ${problems.length} problem(s):`, ...problems.map((p) => `- ${p}`)];
-  const head = `**Bot setup check**${by ? ` (run by ${discordText(by)})` : ''}`;
+  const head = `**Bot setup check** (run by ${discordText(by)})`;
   if (!problems.length) return [`${head}: every check passed (${passed} checks).`];
   return [`${head}: ${problems.length} problem(s), ${passed} checks passed.`, ...problems.map((p) => `- ${p}`)];
 }

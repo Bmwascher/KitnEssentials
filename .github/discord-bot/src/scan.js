@@ -568,20 +568,17 @@ export async function daily(env, deps = {}) {
   const discord = budgetClient(env, deps, FORUM_BUDGET);
   const poster = budgetClient(env, deps, POST_BUDGET);
   let posted = false;
-  // True when the text reached the channel, or the log by design (no
-  // channel set, or past the run's posting share); false when the channel
-  // failed it, so what it names is named again another day.
   // Only a text or announcement channel of this server takes the bot's
   // messages: the channel is read once, before the forum reads can spend
   // their share, on a client of its own.
   const checker = discordClient(env.DISCORD_BOT_TOKEN, countedFetch(timedFetch(oneHop(deps.fetch || fetch), CALL_MS), 1));
   let wrongChannel = null;
-  // A channel's server id is optional in Discord's answer; its absence
-  // leaves the channel unverified.
   const id = isDiscordId(env.MOD_CHANNEL_ID) ? String(env.MOD_CHANNEL_ID) : null;
   const checkChannel = async () => {
     if (wrongChannel === null) {
       wrongChannel = !id ? 'MOD_CHANNEL_ID is not a channel id' : await checker.getChannel(id).then(
+        // A channel's server id is optional in Discord's answer; its absence
+        // leaves the channel unverified.
         (c) => (!c || c.guild_id === undefined || c.guild_id === null ? `MOD_CHANNEL_ID ${id} could not be checked (Discord's answer had no server id)`
           : TEXT_TYPES.includes(c.type) && String(c.guild_id) === String(env.GUILD_ID) ? '' : `MOD_CHANNEL_ID ${id} is not a text channel of this server`),
         (err) => `MOD_CHANNEL_ID ${id} could not be checked (${err instanceof BudgetSpent ? 'out of calls' : `Discord ${(err.discord && err.discord.status) || 'gave no answer'}`})`,
@@ -590,6 +587,9 @@ export async function daily(env, deps = {}) {
     return wrongChannel;
   };
   if (env.MOD_CHANNEL_ID) await checkChannel();
+  // True when the text reached the channel, or the log by design (no
+  // channel set, or past the run's posting share); false when the channel
+  // failed it, so what it names is named again another day.
   const post = async (text) => {
     text = text.slice(0, 1900);
     if (!env.MOD_CHANNEL_ID) { log(text); return true; }

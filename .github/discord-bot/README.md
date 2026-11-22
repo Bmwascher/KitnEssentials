@@ -192,12 +192,13 @@ setup check, and its replies to a moderator while a setting is broken.
   passing day posts nothing, except Mondays: "every check passes today". A
   Monday with neither that line nor a problem list means the daily setup
   check is not running or cannot post.
-- **The Worker's replies.** While a setting the Worker needs is broken, a
-  moderator or a member of an approved role who right-clicks a post,
-  presses a queue card's button or submits the form in this server is told
-  "The bot is not set up yet:" and the first broken setting. Anyone else
-  gets the usual "Only moderators ..." refusal first, and a moderator of
-  another server gets "This only works on posts in the forums the bot is
+- **The Worker's replies.** While the Worker cannot read its settings (a
+  broken `REPOS`, for one) or they name no player forum, a moderator who
+  right-clicks a post, and a moderator or a member of an approved role who
+  presses a queue card's button or submits the form, in this server, is
+  told "The bot is not set up yet:" and the first broken setting. Anyone
+  else gets the usual "Only moderators ..." refusal first, and a moderator
+  of another server gets "This only works on posts in the forums the bot is
   set up for."; neither sees the setup line. A press on a post already
   filed still answers "Already tracked" first.
 - **Filing** into a forum without the `Triaged` tag still files the issue.
@@ -885,15 +886,16 @@ KitnEssentials) before the real ones. Roughly 45 minutes.
    `QUEUE_CHANNEL_ID`.
    `FORUMS` is required: while it is empty (and the older `FORUM_CHANNEL_IDS`
    is empty too) the bot does nothing anywhere.
-   `npm run deploy` prints a URL. Wrangler then lists the schedules it deployed: there must be three,
+   `npm run deploy` prints a URL. The first scan only starts its clock, so
+   posts made before it never get a message.
+   Wrangler then lists the schedules it deployed: there must be three,
    `* * * * *` (the post scan), `0 15 * * *` (the daily list) and
    `30 15 * * *` (the daily setup check). If any of the three is missing or
    different, copy the `[triggers]` block of the committed `wrangler.toml`,
    its `crons = [...]` line included, into yours, compare the three
    expressions, and deploy again; the Worker cannot see its own triggers, so
-   no check names a missing one. Then
-   run `/bot-check` after every deploy (step 10). The first scan only starts its clock, so
-   posts made before it never get a message.
+   no check names a missing one. Then run `/bot-check`
+   after every deploy (step 10).
 6. **Point Discord at it.** Developer portal > General Information >
    Interactions Endpoint URL = that URL. Discord checks it on save.
 7. **Register the commands** (the right-click Send to GitHub and `/bot-check`)
