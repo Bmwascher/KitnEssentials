@@ -475,7 +475,7 @@ const givenBits = (raw) => {
 export async function runCheck(interaction, env, deps, t0 = Date.now()) {
   const log = deps.log || console.error;
   const followup = followupFor(interaction, { ...deps, fetch: oneHop(deps.fetch) }, log, t0);
-  const by = interaction.member && interaction.member.user ? personName(interaction.member.user, interaction.member) : null;
+  const by = personName(interaction.member.user, interaction.member);
   // A post's permissions are its forum's; any other channel is its own.
   const ch = interaction.channel || {};
   const probe = THREAD_TYPES.includes(ch.type) && ch.parent_id ? String(ch.parent_id) : String(interaction.channel_id || '');

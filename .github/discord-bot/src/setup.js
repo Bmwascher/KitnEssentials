@@ -352,10 +352,8 @@ export async function setupCheck(env, deps, { deadline, probe = null }) {
         // Players can then read every result and alert. A warning, not a
         // gate: the channel still gets its posts.
         if (r.c) {
-          try {
-            const everyone = channelPermissions({ guildId: guild, botId: '', botRoles: [], roles: base.roles, channel: r.c });
-            if ((everyone & PERMS.viewChannel) !== 0n) problems.push(`Moderator channel <#${mod}>: everyone in the server can see it, and the bot's setup results and alerts there name its settings. Deny View Channel for @everyone in it, and allow it for the staff roles.`);
-          } catch { /* its permission check above says why */ }
+          const everyone = channelPermissions({ guildId: guild, botId: '', botRoles: [], roles: base.roles, channel: r.c });
+          if ((everyone & PERMS.viewChannel) !== 0n) problems.push(`Moderator channel <#${mod}>: everyone in the server can see it, and the bot's setup results and alerts there name its settings. Deny View Channel for @everyone in it, and allow it for the staff roles.`);
         }
       }
       const here = probe ? listed.get(String(probe)) : null;
@@ -392,17 +390,12 @@ export async function setupCheck(env, deps, { deadline, probe = null }) {
       const ck = String(env.CHECKLIST_FORUM_ID ?? '').trim();
       if (digits(queue)) await check(`Queue channel <#${queue}>`, queue, 'queue', TEXT_TYPES, null);
       if (digits(ck)) await check(`Checklist forum <#${ck}>`, ck, 'checklist', [FORUM_TYPE], [...CHECKLIST_NAMES, ACCEPTED]);
-      try {
-        const roleIds = new Set(base.roles.map((r) => String(r.id)));
-        for (const r of parseRoleIds(env.APPROVED_ROLE_IDS).filter((x) => digits(x))) {
-          // Every member has @everyone, but the filing check looks only at
-          // the roles a member is given, so it never matches that one.
-          if (r === guild) problems.push(`APPROVED_ROLE_IDS: <@&${r}> is the @everyone role, which the filing check never matches. Name a role members are given.`);
-          else ok(roleIds.has(r), `APPROVED_ROLE_IDS: the role <@&${r}> does not exist in this server.`);
-        }
-      } catch (e) {
-        // This check makes no call, so only an answer it cannot read lands here.
-        problems.push(`Could not check APPROVED_ROLE_IDS (${short(e)}).`);
+      const roleIds = new Set(base.roles.map((r) => String(r.id)));
+      for (const r of parseRoleIds(env.APPROVED_ROLE_IDS).filter((x) => digits(x))) {
+        // Every member has @everyone, but the filing check looks only at
+        // the roles a member is given, so it never matches that one.
+        if (r === guild) problems.push(`APPROVED_ROLE_IDS: <@&${r}> is the @everyone role, which the filing check never matches. Name a role members are given.`);
+        else ok(roleIds.has(r), `APPROVED_ROLE_IDS: the role <@&${r}> does not exist in this server.`);
       }
     }
     // The template group needs the bot token alone. A template may sit in a
@@ -500,7 +493,7 @@ export async function setupCheck(env, deps, { deadline, probe = null }) {
 
 // The message lines of a check's result: `command` names who ran it,
 // `daily` lists the problems, `weekly` is the Monday line.
-export function setupLines({ problems, passed, kind, by = null }) {
+export function setupLines({ problems, passed, kind, by }) {
   if (kind === 'weekly') {
     return [`**Weekly bot setup check:** every check passes today (${passed} checks). This line comes each Monday that every check passes. A Monday with neither this line nor a problem list means the daily setup check is not running or cannot post.`];
   }

@@ -402,7 +402,7 @@ export async function scan(env, deps = {}) {
       // the request the client kept, never the response body, and only a
       // request on the post itself names it: a 403 from a shared endpoint
       // (the bot's own user) is no fault of the post.
-      const own = !!err.discord && !err.queue && new RegExp(`^/channels/${t.id}(/|$)`).test(String(err.discord.path || ''));
+      const own = !!err.discord && !err.queue && new RegExp(`^/channels/${t.id}(/|$)`).test(err.discord.path);
       const denied = own && err.discord.status === 403;
       const told = giveUp && (!!err.damaged || !refused(err) || !!err.queue || denied);
       log(`${what} ${giveUp ? 'skipped' : 'left for the next run'}: ${err.message}`);
