@@ -207,9 +207,10 @@ setup check, and its replies to a moderator while a setting is broken.
   `DISCORD_PUBLIC_KEY` or `GITHUB_APP_PRIVATE_KEY` that is not text (a JSON
   `null` included). While it stands, new posts get no greeting and no queue
   card, the daily list of waiting posts is not posted, and nothing is filed:
-  a moderator who right-clicks a post, and a moderator or a member of an
-  approved role who presses a card or submits the form, is told "The bot is
-  not set up yet:" and the setting's name. The daily setup check still runs
+  a moderator who right-clicks a post or runs `/bot-check`, and a moderator
+  or a member of an approved role who presses a card or submits the form, is
+  told privately "The bot is not set up yet:" and the setting's name.
+  `/bot-check` runs no checks then. The daily setup check still runs
   and names it, in the moderator channel when it can post there, otherwise
   in the Worker's log. Once the setting is fixed, the scan greets and cards
   the open posts made meanwhile; a post archived or locked meanwhile gets no
