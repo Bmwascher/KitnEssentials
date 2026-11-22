@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { configProblems, channelPermissions, fitLines, setupCheck } from '../src/setup.js';
 import { PERMS, postLines, taken, STATUS_NAMES, CHECKLIST_NAMES, LABEL_DEFS, LABELS } from '../src/core.js';
 import { setupWorld } from './setup-world.mjs';
-import { stall } from './fake-fetch.mjs';
+import { stall, stallBody } from './fake-fetch.mjs';
 
 // Discord's own message limit, which every message sent must fit.
 const DISCORD_MAX = 2000;
@@ -24,6 +24,7 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
     ['a REPOS key longer than the form field', { REPOS: '{"ELEVENCHARS":"me/one"}' }, /^REPOS key "ELEVENCHARS" can never be chosen in the form/],
     ['a short upper-case REPOS key holding a line break, which a one-line field cannot hold', { REPOS: '{"K\\nE":"me/one"}' }, /^REPOS key "K\sE" can never be chosen in the form/],
     ['a FORUMS value with no text form, which the reader would throw on', { FORUMS: '{"900":{"template":{"toString":null}}}' }, /^FORUMS entry 900: "client", "type" and "template" must each be text/],
+    ['a broken template beside a forum field that is an object the reader still reads', { FORUMS: '{"900":{"client":{}},"901":{"template":"typo"}}' }, /^FORUMS entry 901: its "template" is not a message link/],
     ['a REPOS entry past GitHub name limits', { REPOS: `{"KE":"me/${'r'.repeat(101)}"}` }, /^REPOS entry KE is not owner\/repo\.$/],
     ['an id longer than any Discord id', { MOD_CHANNEL_ID: '1'.repeat(21) }, /^MOD_CHANNEL_ID is not a channel id/],
     ['a STATE that is not a KV namespace', { STATE: {} }, /^The STATE KV namespace is not bound/],
@@ -177,6 +178,8 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
       /^me\/one: the GitHub App is not installed there \(404\)\./],
     ['an empty forum list: the forum checks say they did not run', (s) => { s.env = { FORUMS: '{}' }; },
       /^The forum checks \(permissions, tags and template messages\) did not run: fix FORUMS above, then run the check again\.$/],
+    ['FORUM_CHANNEL_IDS naming no id: the forum checks name that setting', (s) => { s.env = { FORUMS: '', FORUM_CHANNEL_IDS: 'abc' }; },
+      /^The forum checks \(permissions, tags and template messages\) did not run: fix FORUM_CHANNEL_IDS above, then run the check again\.$/],
     ['the roles read answered 204, with no role list', (s) => { s.rolesAnswer = new Response(null, { status: 204 }); },
       /^Could not check the bot's access to the server \(Discord's answer had no role list\), so its channel, tag and role checks did not run: fix this, then run the check again\.$/],
     ['the application read answered 204', (s) => { s.app = new Response(null, { status: 204 }); },
@@ -300,6 +303,13 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
     const r = await setupCheck(env, { fetch }, { deadline: Date.now() + 300 });
     assert.ok(r.problems.includes('Could not check the Message Content setting or the public key (out of time or calls).'), `a read the deadline cuts off: ${r.problems.join(' | ')}`);
   }
+  {
+    // The headers come at once; the body stalls until the deadline.
+    const { env, deps } = setupWorld();
+    const fetch = (url, init) => (/\/applications\/@me$/.test(url) ? stallBody(init) : deps.fetch(url, init));
+    const r = await setupCheck(env, { fetch }, { deadline: Date.now() + 300 });
+    assert.ok(r.problems.includes('Could not check the Message Content setting or the public key (out of time or calls).'), `a body the deadline cuts off: ${r.problems.join(' | ')}`);
+  }
   const unlisted = { ...setupWorld().s.channels[2] };
   // Each row breaks one thing; the moderator channel's state stays its own.
   for (const [why, edit, mod] of [
@@ -333,6 +343,7 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
     ['the application read failing (500)', (s) => { s.app = refusal(500); }, ['server', 'template', 'github']],
     ['the template read answered 204', (s) => { s.template = new Response(null, { status: 204 }); }, ['github']],
     ['the template read failing (500)', (s) => { s.template = refusal(500); }, ['github']],
+    ['a STALE_DAYS with no text form', (s) => { s.env = { STALE_DAYS: { toString: null } }; }, ['server', 'app', 'template', 'github']],
   ]) {
     const r = await checkOf((s) => { edit(s); for (const k of after) later[k][0](s); });
     for (const k of after) assert.ok(r.problems.some((l) => later[k][1].test(l)), `${why}: the ${k} checks still run: ${r.problems.join(' | ')}`);

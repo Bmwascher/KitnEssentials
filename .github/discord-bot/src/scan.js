@@ -103,6 +103,7 @@ const isIssue = (v) => isRecord(v) && typeof v.repo === 'string' && /^[\w.-]+\/[
 const SCAN_FIELDS = {
   greeting: isText, card: isText, tracked: isText, skipped: isText, cardSkipped: isText,
   buttonless: (v) => v === true,
+  ended: (v) => v === true,
   tries: (v) => Number.isInteger(v) && v > 0,
   gaveUp: (v) => isRecord(v) && Number.isFinite(v.at) && isText(v.what),
   issue: isIssue,

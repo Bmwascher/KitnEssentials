@@ -997,6 +997,17 @@ test('NT1: a post that refuses the bot (403) is named once, only in a text chann
     const text = real.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content).join('\n');
     assert.equal(n, 2, 'a lost state write: two sends');
     assert.equal(text.split(a).length - 1, 1, `a lost state write: the refused post is named once: ${text}`);
+    assert.ok(text.split('\n').includes(`- greeting refused by the post (403): https://discord.com/channels/1/${a}`), `a lost state write: the recovered 403 line is posted: ${text}`);
+  }
+  {
+    // An `ended` the bot could not have written makes the record damaged,
+    // never a reason to drop a saved entry.
+    const a = idAt(T0 + 1000);
+    const kv = started(T0, { error: { at: T0, text: `could not read or message post ${a}`, items: [`post ${a}`] } });
+    await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g', skipped: 'x', ended: 'false' }));
+    const f = discord({ active: [{ id: a, parent_id: '900' }] });
+    await scan(baseEnv(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+    assert.match(String((stateOf(kv).error || {}).text), new RegExp(`post ${a} \\(its saved record .* is damaged\\)`), 'an ended of the wrong type: the record is damaged');
   }
   {
     // A MOD_CHANNEL_ID with no text form is no channel id: the alert is

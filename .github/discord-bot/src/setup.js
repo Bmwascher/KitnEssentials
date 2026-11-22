@@ -71,16 +71,15 @@ export function configProblems(raw, { bindings = true } = {}) {
       out.push('FORUMS is not valid JSON: set it to JSON keyed by forum channel id, like {"111":{}}.');
     } else {
       for (const id of Object.keys(raw)) if (!digits(id)) out.push(`FORUMS key ${shown(id)} is not a channel id.`);
-      // The reader turns client, type and template into text, and an object
-      // there can have no text form at all, so the reader is not run on it.
       const textless = Object.entries(raw).filter(([, v]) => v && typeof v === 'object'
         && ['client', 'type', 'template'].some((k) => v[k] !== null && typeof v[k] === 'object'));
       for (const [id] of textless) out.push(`FORUMS entry ${shown(id)}: "client", "type" and "template" must each be text, like "template":"https://discord.com/channels/...".`);
-      if (textless.length) forumsRead = false;
-      else {
-        for (const [id, v] of Object.entries(parseForums(env))) {
-          if (v.badTemplate) out.push(`FORUMS entry ${shown(id)}: its "template" is not a message link (right-click the template message > Copy Message Link).`);
-        }
+      // The reader turns those fields into text, which throws on an object
+      // with no text form (named above); an object it can read, it reads.
+      let read = null;
+      try { read = parseForums(env); } catch { forumsRead = false; }
+      for (const [id, v] of Object.entries(read || {})) {
+        if (v.badTemplate) out.push(`FORUMS entry ${shown(id)}: its "template" is not a message link (right-click the template message > Copy Message Link).`);
       }
     }
   } else if (!blank(env.FORUM_CHANNEL_IDS)) {
@@ -257,13 +256,18 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
   let forums = {};
   try { forums = Object.fromEntries(Object.entries(parseForums(env)).filter(([id]) => digits(id))); } catch { /* named by configProblems */ }
   // configProblems says why no player forum is left; this says what it hides.
-  if (token && !Object.keys(forums).length) problems.push('The forum checks (permissions, tags and template messages) did not run: fix FORUMS above, then run the check again.');
-  // A call whose time limit came from the deadline, not from its own
+  const forumSetting = blank(env.FORUMS) && !blank(env.FORUM_CHANNEL_IDS) ? 'FORUM_CHANNEL_IDS' : 'FORUMS';
+  if (token && !Object.keys(forums).length) problems.push(`The forum checks (permissions, tags and template messages) did not run: fix ${forumSetting} above, then run the check again.`);
+  // A call ends when its answer's body is read, so its time limit covers
+  // both steps. A call whose limit came from the deadline, not from its own
   // CALL_MS, was stopped by the deadline when it times out.
   const cutOff = (f) => async (url, init = {}) => {
     const late = deadline - Date.now() < CALL_MS;
     try {
-      return await f(url, init);
+      const res = await f(url, init);
+      const body = await res.arrayBuffer();
+      // A 204, 205 or 304 answer may carry no body.
+      return new Response([204, 205, 304].includes(res.status) ? null : body, { status: res.status, statusText: res.statusText, headers: res.headers });
     } catch (e) {
       if (late && e.name === 'TimeoutError') throw new Error(`out of time during ${init.method || 'GET'} ${url}`);
       throw e;
@@ -461,9 +465,10 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
     const fix = [!githubReady(env) && 'GITHUB_APP_ID or GITHUB_APP_PRIVATE_KEY', !all.length && 'REPOS'].filter(Boolean).join(' and ');
     problems.push(`The GitHub checks (install, permissions and labels) did not run: fix ${fix} above, then run the check again.`);
   }
-  // One signed token serves every repo: it is valid for 9 minutes, and
-  // each signing costs CPU time the Worker's limit counts.
-  let jwt = null;
+  // One signing serves every repo: its token is valid for 9 minutes, and
+  // each signing costs CPU time the Worker's limit counts. A key that
+  // cannot be imported fails once, and every repo reports that failure.
+  let signing = null;
   for (const repo of githubReady(env) ? all : []) {
     const name = shown(repo);
     // A repo the share or the deadline cannot cover is not started: its
@@ -474,8 +479,8 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
     }
     let a;
     try {
-      jwt = jwt || await appJwt(env.GITHUB_APP_ID, await importAppKey(env.GITHUB_APP_PRIVATE_KEY));
-      a = await installationAccess({ repo, jwt }, gf);
+      signing = signing || importAppKey(env.GITHUB_APP_PRIVATE_KEY).then((key) => appJwt(env.GITHUB_APP_ID, key));
+      a = await installationAccess({ repo, jwt: await signing }, gf);
     } catch (e) {
       // No redirect is followed, so a renamed or moved repo answers 3xx here,
       // while filing, which follows it, still works.

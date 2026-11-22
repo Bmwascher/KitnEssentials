@@ -199,8 +199,8 @@ setup check, and its replies to a moderator while a setting is broken.
   told "The bot is not set up yet:" and the first broken setting. Anyone
   else gets the usual "Only moderators ..." refusal first, and a moderator
   of another server gets "This only works on posts in the forums the bot is
-  set up for."; neither sees the setup line. A press on a post already
-  filed still answers "Already tracked" first.
+  set up for."; neither sees the setup line. While `REPOS` can be read, a
+  press on a post already filed still answers "Already tracked" first.
 - **Filing** into a forum without the `Triaged` tag still files the issue.
   When the bot tries to set `Triaged` on a post with no status and cannot,
   the moderator's reply includes "tag not set" with the reason, among its
