@@ -1401,7 +1401,8 @@ test('WT6: with a setting no reader can read, a request never starts filing; a c
   // A readable forum list and an approved role the player lacks.
   const G = { GUILD_ID: '1', FORUMS: '{"900":{}}', APPROVED_ROLE_IDS: '77' };
   for (const [k, v] of UNREADABLE) {
-    for (const [who, interaction, may] of [['a moderator right-click', rightClick(MOD), true], ['a player press', press(PLAYER), false]]) {
+    for (const [who, interaction, may] of [['a moderator right-click', rightClick(MOD), true], ['a player press', press(PLAYER), false],
+      ['a moderator form submit', submit(), true], ['a moderator /bot-check', checkCmd(MOD), true]]) {
       const f = fakeFetch([]);
       const res = await handle(await signed(interaction), { ...env, ...G, [k]: v }, ctxFor(), { fetch: f });
       if (k === 'DISCORD_PUBLIC_KEY') {
@@ -1409,6 +1410,7 @@ test('WT6: with a setting no reader can read, a request never starts filing; a c
         continue;
       }
       const want = !may ? 'Only moderators and approved roles can send posts to GitHub.'
+        : k === 'GUILD_ID' && interaction.data.name === CHECK_COMMAND ? "The bot's GUILD_ID is not set to a server id, so it can check nothing. Fix it in the Worker's settings."
         : k === 'GUILD_ID' ? "The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces)."
           : `The bot is not set up yet: ${k} is not text: set it as text. The checks below read it as unset.`;
       assert.equal((await res.json()).data.content, want, `${k}, ${who}`);
