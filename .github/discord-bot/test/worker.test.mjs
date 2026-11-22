@@ -1348,45 +1348,57 @@ test("WT4: the not-set-up reply names the first broken setting only to a caller 
   }
 });
 
-test('WT5: no setting with no text form stops a cron run, and each reads as unset', async () => {
+test('WT5: with a setting no reader can read, the scan and the daily list do nothing, and the daily setup check names it', async () => {
   const T = Date.UTC(2026, 10, 24, 15, 30);
   const AGO = T - 3 * 60 * 60 * 1000;
-  const STALE = /The post scan has not run for at least/;
   for (const k of ALL_SETTINGS) {
     for (const cron of [CRONS.scan, CRONS.daily, CRONS.setup]) {
-      // The moderator channel answers its own read, so the daily list can post.
       const { env: e, deps } = setupWorld((s) => { s.alone['555'] = { ...s.channels[2] }; }, pubHex);
       const kv = fakeKv({ 'scan:since': String(AGO), 'scan:state': JSON.stringify({ last: AGO }) });
-      const fetch = (url, init) => (/\/threads\/active$/.test(url) ? new Response('{"threads":[]}') : deps.fetch(url, init));
+      const before = kv.m.get('scan:state');
+      // A new post waits in a player forum.
+      const active = { threads: [{ id: '1300000000000000000', parent_id: '900' }] };
+      const sent = [];
+      const fetch = (url, init) => { sent.push(url); return /\/threads\/active$/.test(url) ? new Response(JSON.stringify(active)) : deps.fetch(url, init); };
       const out = [];
       await scheduled({ cron }, { ...e, STATE: kv, [k]: NO_TEXT }, {}, { fetch, now: () => T, log: (s) => out.push(s) });
-      if (cron !== CRONS.daily) continue;
+      if (cron !== CRONS.setup) {
+        const job = cron === CRONS.scan ? 'scan' : 'daily list';
+        assert.deepEqual(out, [`${k} is not text: the ${job} did not run.`], `${k}, the ${job}: one log line`);
+        assert.deepEqual(sent, [], `${k}, the ${job}: no call`);
+        assert.equal(kv.m.get('scan:state'), before, `${k}, the ${job}: no marker moves`);
+        continue;
+      }
+      const named = `- ${k} is not text: set it as text. The checks below read it as unset.`;
       const posts = deps.fetch.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content);
-      if (k === 'GUILD_ID' || k === 'FORUMS') {
-        assert.ok(out.includes('daily skipped: FORUMS and GUILD_ID must be set'), `${k}: the daily list skips, as for an unset ${k}: ${out.join(' | ')}`);
-      } else if (k === 'MOD_CHANNEL_ID') {
-        assert.ok(out.some((l) => STALE.test(l)) && !posts.length, `${k}: the warning goes to the log, as for an unset channel: ${out.join(' | ')}`);
+      if (['MOD_CHANNEL_ID', 'GUILD_ID', 'DISCORD_BOT_TOKEN'].includes(k)) {
+        assert.ok(!posts.length && out.some((l) => l.split('\n').includes(named)), `${k}, the setup check: logged, never posted: ${out.join(' | ')}`);
       } else {
-        assert.ok(posts.some((p) => STALE.test(p)), `${k}: the warning is posted: ${out.join(' | ')}`);
+        assert.ok(posts.some((p) => p.split('\n').includes(named)), `${k}, the setup check: named in the moderator channel: ${posts.join(' | ')}`);
       }
     }
   }
 });
 
-test('WT6: no setting with no text form stops a request; a right-click names it', async () => {
-  const rightClick = { type: 2, member: MOD, guild_id: '1', channel_id: '700', application_id: 'app', token: 'rtok', data: { name: COMMAND_NAME, target_id: '700' } };
-  const noForums = { GUILD_ID: '1', FORUMS: '', FORUM_CHANNEL_IDS: '' };
+test('WT6: with a setting no reader can read, a request never starts filing; a caller who may send is told which', async () => {
+  const rightClick = (member) => ({ type: 2, member, guild_id: '1', channel_id: '700', application_id: 'app', token: 'rtok', data: { name: COMMAND_NAME, target_id: '700' } });
+  const press = (member) => ({ type: 3, member, guild_id: '1', channel_id: '556', application_id: 'app', token: 'ptok', message: { id: '9' }, data: { custom_id: 'send:700' } });
+  // A readable forum list and an approved role the player lacks.
+  const G = { GUILD_ID: '1', FORUMS: '{"900":{}}', APPROVED_ROLE_IDS: '77' };
   for (const k of ALL_SETTINGS) {
-    const f = fakeFetch([]);
-    const res = await handle(await signed(rightClick), { ...env, ...noForums, [k]: NO_TEXT }, ctxFor(), { fetch: f });
-    if (k === 'DISCORD_PUBLIC_KEY') {
-      assert.equal(res.status, 401, `${k}: refused, as with no key`);
-      continue;
+    for (const [who, interaction, may] of [['a moderator right-click', rightClick(MOD), true], ['a player press', press(PLAYER), false]]) {
+      const f = fakeFetch([]);
+      const res = await handle(await signed(interaction), { ...env, ...G, [k]: NO_TEXT }, ctxFor(), { fetch: f });
+      if (k === 'DISCORD_PUBLIC_KEY') {
+        assert.equal(res.status, 401, `${k}, ${who}: refused, as main refuses a key it cannot read`);
+        continue;
+      }
+      const want = !may ? 'Only moderators and approved roles can send posts to GitHub.'
+        : k === 'GUILD_ID' ? "The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces)."
+          : `The bot is not set up yet: ${k} is not text: set it as text. The checks below read it as unset.`;
+      assert.equal((await res.json()).data.content, want, `${k}, ${who}`);
+      assert.equal(f.calls.length, 0, `${k}, ${who}: no calls, and no filing`);
     }
-    const want = k === 'GUILD_ID' ? "The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces)."
-      : `The bot is not set up yet: ${k} is not text: set it as text. The checks below read it as unset.`;
-    assert.equal((await res.json()).data.content, want, k);
-    assert.equal(f.calls.length, 0, `${k}: no calls`);
   }
 });
 

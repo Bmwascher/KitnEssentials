@@ -13,7 +13,7 @@ import {
 import { discordClient, postGone } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
 import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch } from './scan.js';
-import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems, settingsText } from './setup.js';
+import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems, unreadableSettings } from './setup.js';
 
 export const COMMAND_NAME = 'Send to GitHub';
 export const CHECK_COMMAND = 'bot-check';
@@ -67,7 +67,8 @@ const reply = (content) => json({ type: 4, data: { content, flags: EPHEMERAL } }
 // another server learns nothing of this one's setup. Callers check the
 // caller first.
 const notSetUp = (env, interaction) => {
-  const guild = String(env.GUILD_ID ?? '');
+  // A GUILD_ID no reader can read names no server.
+  const guild = unreadableSettings(env).includes('GUILD_ID') ? '' : String(env.GUILD_ID ?? '');
   if (!isDiscordId(guild)) return reply("The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).");
   if (String(interaction.guild_id ?? '') !== guild) return reply('This only works on posts in the forums the bot is set up for.');
   return reply(`The bot is not set up yet: ${configProblems(env, { bindings: false })[0]}`);
@@ -872,9 +873,6 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
   // checking the signature count against it. Every path's deadlines count
   // from this moment: the press, the right-click form and the filing.
   const t0 = Date.now();
-  // Every setting is read once, as text or unset (settingsText), so no
-  // reader below throws on one.
-  env = settingsText(env).env;
   if (request.method !== 'POST') return new Response('ok');
   const body = await request.text();
   const ok = await verifyDiscord(env.DISCORD_PUBLIC_KEY,
@@ -883,9 +881,14 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
 
   const interaction = JSON.parse(body);
   if (interaction.type === 1) return json({ type: 1 });
+  // A setting no reader can read: past the caller check, each entry point
+  // answers with the not-set-up reply, and nothing reads the settings.
+  const bad = unreadableSettings(env);
+  const roles = () => (bad.includes('APPROVED_ROLE_IDS') ? [] : parseRoleIds(env.APPROVED_ROLE_IDS));
 
   if (interaction.type === 2 && interaction.data.name === COMMAND_NAME) {
     if (!canUse(interaction.member)) return reply('Only moderators and admins can send posts to GitHub.');
+    if (bad.length) return notSetUp(env, interaction);
     return openForm(interaction, env, deps, { threadId: interaction.channel_id, messageId: interaction.data.target_id, deadline: t0 + FORM_BY_MS });
   }
 
@@ -893,9 +896,10 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     if (!canUse(interaction.member)) return reply('Only moderators and admins can check the bot setup.');
     // Fails closed: a moderator of another server the bot is in neither
     // posts here nor reads this setup, also when GUILD_ID is broken.
-    const guild = String(env.GUILD_ID ?? '');
+    const guild = bad.includes('GUILD_ID') ? '' : String(env.GUILD_ID ?? '');
     if (!isDiscordId(guild)) return reply("The bot's GUILD_ID is not set to a server id, so it can check nothing. Fix it in the Worker's settings.");
     if (String(interaction.guild_id) !== guild) return reply('This command checks only the server the bot is set up for.');
+    if (bad.length) return notSetUp(env, interaction);
     ctx.waitUntil(runCheck(interaction, env, deps, t0));
     return json({ type: 5, data: { flags: EPHEMERAL } });
   }
@@ -903,6 +907,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
   if (interaction.type === 3 && String(interaction.data.custom_id).startsWith(`${SEND_BUTTON}:`)) {
     const ids = parseCustomId(interaction.data.custom_id);
     if (!ids) return reply(BAD_IDS);
+    if (bad.length) return allowed(interaction.member, { roles: roles() }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
     const cfg = configOr(env);
     if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
     if (!cfg.roles.length && !canUse(interaction.member)) {
@@ -924,6 +929,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
 
   if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('gh:')) {
     if (!parseCustomId(interaction.data.custom_id)) return reply(BAD_IDS);
+    if (bad.length) return allowed(interaction.member, { roles: roles() }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
     const cfg = configOr(env);
     if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
     if (!allowed(interaction.member, cfg)) return reply(NOT_ALLOWED);
@@ -944,11 +950,16 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
 }
 
 export async function scheduled(controller, env, ctx, deps = { fetch: (...a) => fetch(...a) }) {
-  // Every setting is read once, as text or unset (settingsText), so no
-  // reader below throws on one.
-  env = settingsText(env).env;
-  if (controller.cron === CRONS.daily) return daily(env, deps);
+  // The daily setup check reads the settings through its own copy and names
+  // the unreadable ones. The scan and the daily list would act on them, so
+  // they do nothing: no marker moves and no card is given up.
   if (controller.cron === CRONS.setup) return setupDaily(env, deps);
+  const bad = unreadableSettings(env);
+  if (bad.length) {
+    (deps.log || console.log)(`${bad.join(', ')} ${bad.length > 1 ? 'are' : 'is'} not text: the ${controller.cron === CRONS.daily ? 'daily list' : 'scan'} did not run.`);
+    return null;
+  }
+  if (controller.cron === CRONS.daily) return daily(env, deps);
   return scan(env, deps);
 }
 

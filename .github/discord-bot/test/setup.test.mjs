@@ -155,6 +155,7 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
       /^Could not check me\/one \(GitHub GET \/repos\/me\/one\/installation -> 500/],
     ['a missing public key', (s) => { s.env = { DISCORD_PUBLIC_KEY: '' }; }, /^DISCORD_PUBLIC_KEY is not the 64-character public key/],
     ['a public key of the wrong form', (s) => { s.env = { DISCORD_PUBLIC_KEY: 'z'.repeat(64) }; }, /^DISCORD_PUBLIC_KEY is not the 64-character public key/],
+    ['a public key that is not a string, which the verifier cannot read', (s) => { s.env = { DISCORD_PUBLIC_KEY: ['a'.repeat(64)] }; }, /^DISCORD_PUBLIC_KEY is not text/],
     ["a public key of another app than the token's", (s) => { s.app = { ...s.app, verify_key: 'b'.repeat(64) }; },
       /^DISCORD_PUBLIC_KEY and DISCORD_BOT_TOKEN belong to different Discord apps\. In the developer portal, open the bot's app and set both from it/],
     ['a broken GUILD_ID: the application group still runs', (s) => { s.env = { GUILD_ID: 'x' }; s.app = { flags: 0 }; }, /^The Message Content setting is off/],

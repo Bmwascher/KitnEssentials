@@ -16,28 +16,30 @@ const blank = (v) => String(v ?? '').trim() === '';
 // The forum setting the bot reads: the older FORUM_CHANNEL_IDS only while
 // FORUMS is blank.
 const forumSetting = (env) => (blank(env.FORUMS) && !blank(env.FORUM_CHANNEL_IDS) ? 'FORUM_CHANNEL_IDS' : 'FORUMS');
-// Every setting the Worker reads. The Worker's entry points read them once,
-// here, so no reader throws: a JSON variable such as {"toString":null} has
-// no text form, and is read as unset and named by configProblems; a falsy
-// value (false, 0) is unset, as every reader already reads it.
+// Every setting the Worker reads.
 const SETTINGS = ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID',
   'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'DISCORD_PUBLIC_KEY', 'DISCORD_BOT_TOKEN', 'GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY'];
-// The settings a copy left out for having no text form, so a second read
-// of the copy still names them.
-const NOT_TEXT = Symbol('settings with no text form');
-export function settingsText(env) {
-  if (env[NOT_TEXT]) return { env, bad: env[NOT_TEXT] };
-  const text = { ...env };
-  const bad = [];
-  for (const k of SETTINGS) {
-    if (!env[k]) delete text[k];
-    else {
-      try { String(env[k]); } catch { bad.push(k); delete text[k]; }
-    }
-  }
-  text[NOT_TEXT] = bad;
-  return { env: text, bad };
+// Their readers call string methods on these two, so only a string is read.
+const STRINGS = ['DISCORD_PUBLIC_KEY', 'GITHUB_APP_PRIVATE_KEY'];
+// The settings no reader can read: a JSON variable such as {"toString":null}
+// has no text form, and the two keys must be strings. The Worker stops at
+// its entry points on any of them, since a reader that took one as unset
+// would act on a setting it was never given.
+export function unreadableSettings(env) {
+  return SETTINGS.filter((k) => {
+    const v = env[k];
+    if (v === undefined || v === null) return false;
+    if (STRINGS.includes(k)) return typeof v !== 'string';
+    try { String(v); return false; } catch { return true; }
+  });
 }
+// The settings as the checks read them: an unreadable one unset, and a falsy
+// one unset, as every reader reads it.
+const readable = (env, bad) => {
+  const out = { ...env };
+  for (const k of SETTINGS) if (!env[k] || bad.includes(k)) delete out[k];
+  return out;
+};
 // owner/repo within GitHub's name limits.
 const REPO = /^[\w.-]{1,39}\/[\w.-]{1,100}$/;
 // The form's repo field takes at most this many characters.
@@ -55,7 +57,8 @@ const shown = (v) => {
 // One line per broken setting, each naming the setting and its fix. With
 // `bindings`, the STATE namespace must be bound too.
 export function configProblems(raw, { bindings = true } = {}) {
-  const { env, bad } = settingsText(raw);
+  const bad = unreadableSettings(raw);
+  const env = readable(raw, bad);
   const out = bad.map((k) => `${k} is not text: set it as text. The checks below read it as unset.`);
   let repos = null;
   try {
@@ -247,8 +250,9 @@ function secretProblems(env) {
 // answer says so; otherwise it gives one line, a fix or "could not check".
 // `mod` is 'ok' only when the moderator channel is a text channel of this
 // server where the bot can post; otherwise it says why.
-export async function setupCheck(env, deps, { deadline, probe = null }) {
-  const problems = [...configProblems(env), ...secretProblems(env)];
+export async function setupCheck(raw, deps, { deadline, probe = null }) {
+  const env = readable(raw, unreadableSettings(raw));
+  const problems = [...configProblems(raw), ...secretProblems(env)];
   let passed = 0;
   const ok = (cond, line) => {
     if (cond) passed++;
