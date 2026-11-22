@@ -67,7 +67,7 @@ const reply = (content) => json({ type: 4, data: { content, flags: EPHEMERAL } }
 // another server learns nothing of this one's setup. Callers check the
 // caller first.
 const notSetUp = (env, interaction) => {
-  const guild = String(settingsText(env).env.GUILD_ID ?? '');
+  const guild = String(env.GUILD_ID ?? '');
   if (!isDiscordId(guild)) return reply("The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).");
   if (String(interaction.guild_id ?? '') !== guild) return reply('This only works on posts in the forums the bot is set up for.');
   return reply(`The bot is not set up yet: ${configProblems(env, { bindings: false })[0]}`);
@@ -871,6 +871,9 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
   // checking the signature count against it. Every path's deadlines count
   // from this moment: the press, the right-click form and the filing.
   const t0 = Date.now();
+  // Every setting is read once, as text or unset (settingsText), so no
+  // reader below throws on one.
+  env = settingsText(env).env;
   if (request.method !== 'POST') return new Response('ok');
   const body = await request.text();
   const ok = await verifyDiscord(env.DISCORD_PUBLIC_KEY,
@@ -889,7 +892,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     if (!canUse(interaction.member)) return reply('Only moderators and admins can check the bot setup.');
     // Fails closed: a moderator of another server the bot is in neither
     // posts here nor reads this setup, also when GUILD_ID is broken.
-    const guild = String(settingsText(env).env.GUILD_ID ?? '');
+    const guild = String(env.GUILD_ID ?? '');
     if (!isDiscordId(guild)) return reply("The bot's GUILD_ID is not set to a server id, so it can check nothing. Fix it in the Worker's settings.");
     if (String(interaction.guild_id) !== guild) return reply('This command checks only the server the bot is set up for.');
     ctx.waitUntil(runCheck(interaction, env, deps, t0));
@@ -900,7 +903,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     const ids = parseCustomId(interaction.data.custom_id);
     if (!ids) return reply(BAD_IDS);
     const cfg = configOr(env);
-    if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(settingsText(env).env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
+    if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
     if (!cfg.roles.length && !canUse(interaction.member)) {
       return reply('The button is not set up yet: APPROVED_ROLE_IDS is empty. A moderator can right-click the post > Apps > Send to GitHub.');
     }
@@ -921,7 +924,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
   if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('gh:')) {
     if (!parseCustomId(interaction.data.custom_id)) return reply(BAD_IDS);
     const cfg = configOr(env);
-    if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(settingsText(env).env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
+    if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
     if (!allowed(interaction.member, cfg)) return reply(NOT_ALLOWED);
     if (!cfg.forums.length) return notSetUp(env, interaction);
     const v = modalValues(interaction.data);
@@ -940,6 +943,9 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
 }
 
 export async function scheduled(controller, env, ctx, deps = { fetch: (...a) => fetch(...a) }) {
+  // Every setting is read once, as text or unset (settingsText), so no
+  // reader below throws on one.
+  env = settingsText(env).env;
   if (controller.cron === CRONS.daily) return daily(env, deps);
   if (controller.cron === CRONS.setup) return setupDaily(env, deps);
   return scan(env, deps);

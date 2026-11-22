@@ -14,6 +14,7 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
   assert.deepEqual(configProblems(CLEAN), []);
   assert.deepEqual(configProblems({ ...CLEAN, STATE: undefined }, { bindings: false }), [], 'bindings off skips STATE');
   assert.deepEqual(configProblems({ ...CLEAN, FORUMS: '', FORUM_CHANNEL_IDS: '900' }), [], 'the older FORUM_CHANNEL_IDS still counts');
+  assert.deepEqual(configProblems({ ...CLEAN, FORUMS: false, FORUM_CHANNEL_IDS: '900' }), [], 'a false FORUMS is unset, as the reader reads it');
   assert.deepEqual(configProblems({ ...CLEAN, STALE_DAYS: '  ', TEMPLATES: ' ', CHECKLIST_FORUM_ID: '  ' }), [], 'settings read as unset when blank stay unset');
   assert.deepEqual(configProblems({ ...CLEAN, CHECKLIST_FORUM_ID: ' 950 ' }), [], 'the checklist id is read trimmed, as the code reads it');
   assert.deepEqual(configProblems({ ...CLEAN, REPOS: '{"AB CD":"me/one"}' }), [], 'an inner space is a key the form can choose');

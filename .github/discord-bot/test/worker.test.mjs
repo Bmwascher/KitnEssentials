@@ -1171,6 +1171,10 @@ const BIG = {
 // The same line 30 times: two messages whose lines are equal.
 const SAME = { APPROVED_ROLE_IDS: Array(30).fill('777').join(',') };
 const quiet = (deps) => ({ ...deps, log: () => {} });
+// Every setting the Worker reads, written here, not taken from the code.
+const ALL_SETTINGS = ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID',
+  'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'DISCORD_PUBLIC_KEY', 'DISCORD_BOT_TOKEN', 'GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY'];
+const NO_TEXT = { toString: null };
 const checkCmd = (member, over = {}) => ({ type: 2, member, channel_id: '555', guild_id: '1', application_id: 'app', token: 'tok', data: { name: CHECK_COMMAND }, ...over });
 
 test('WT1: /bot-check is for moderators of this server, answers privately at once, and posts only to a verified moderator channel', async () => {
@@ -1341,5 +1345,47 @@ test("WT4: the not-set-up reply names the first broken setting only to a caller 
     await Promise.all(ctx.jobs);
     assert.match(j.data.content, /^Already tracked as ONE #3: /, 'a filed post still answers Already tracked');
     assert.equal(f.find('PATCH', /\/channels\/556\/messages\/96$/).length, 1, 'and its card is marked');
+  }
+});
+
+test('WT5: no setting with no text form stops a cron run, and each reads as unset', async () => {
+  const T = Date.UTC(2026, 10, 24, 15, 30);
+  const AGO = T - 3 * 60 * 60 * 1000;
+  const STALE = /The post scan has not run for at least/;
+  for (const k of ALL_SETTINGS) {
+    for (const cron of [CRONS.scan, CRONS.daily, CRONS.setup]) {
+      // The moderator channel answers its own read, so the daily list can post.
+      const { env: e, deps } = setupWorld((s) => { s.alone['555'] = { ...s.channels[2] }; }, pubHex);
+      const kv = fakeKv({ 'scan:since': String(AGO), 'scan:state': JSON.stringify({ last: AGO }) });
+      const fetch = (url, init) => (/\/threads\/active$/.test(url) ? new Response('{"threads":[]}') : deps.fetch(url, init));
+      const out = [];
+      await scheduled({ cron }, { ...e, STATE: kv, [k]: NO_TEXT }, {}, { fetch, now: () => T, log: (s) => out.push(s) });
+      if (cron !== CRONS.daily) continue;
+      const posts = deps.fetch.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content);
+      if (k === 'GUILD_ID' || k === 'FORUMS') {
+        assert.ok(out.includes('daily skipped: FORUMS and GUILD_ID must be set'), `${k}: the daily list skips, as for an unset ${k}: ${out.join(' | ')}`);
+      } else if (k === 'MOD_CHANNEL_ID') {
+        assert.ok(out.some((l) => STALE.test(l)) && !posts.length, `${k}: the warning goes to the log, as for an unset channel: ${out.join(' | ')}`);
+      } else {
+        assert.ok(posts.some((p) => STALE.test(p)), `${k}: the warning is posted: ${out.join(' | ')}`);
+      }
+    }
+  }
+});
+
+test('WT6: no setting with no text form stops a request; a right-click names it', async () => {
+  const rightClick = { type: 2, member: MOD, guild_id: '1', channel_id: '700', application_id: 'app', token: 'rtok', data: { name: COMMAND_NAME, target_id: '700' } };
+  const noForums = { GUILD_ID: '1', FORUMS: '', FORUM_CHANNEL_IDS: '' };
+  for (const k of ALL_SETTINGS) {
+    const f = fakeFetch([]);
+    const res = await handle(await signed(rightClick), { ...env, ...noForums, [k]: NO_TEXT }, ctxFor(), { fetch: f });
+    if (k === 'DISCORD_PUBLIC_KEY') {
+      assert.equal(res.status, 401, `${k}: refused, as with no key`);
+      continue;
+    }
+    const want = k === 'GUILD_ID' ? "The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces)."
+      : `The bot is not set up yet: ${k} is not text: set it as text. The checks below read it as unset.`;
+    assert.equal((await res.json()).data.content, want, k);
+    assert.equal(f.calls.length, 0, `${k}: no calls`);
   }
 });

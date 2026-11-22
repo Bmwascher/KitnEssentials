@@ -16,18 +16,26 @@ const blank = (v) => String(v ?? '').trim() === '';
 // The forum setting the bot reads: the older FORUM_CHANNEL_IDS only while
 // FORUMS is blank.
 const forumSetting = (env) => (blank(env.FORUMS) && !blank(env.FORUM_CHANNEL_IDS) ? 'FORUM_CHANNEL_IDS' : 'FORUMS');
-// Every setting the checks read. A JSON variable such as {"toString":null}
-// has no text form and throws wherever it is turned into text, so the
-// checks read such a value as unset, and configProblems names it.
+// Every setting the Worker reads. The Worker's entry points read them once,
+// here, so no reader throws: a JSON variable such as {"toString":null} has
+// no text form, and is read as unset and named by configProblems; a falsy
+// value (false, 0) is unset, as every reader already reads it.
 const SETTINGS = ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID',
   'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'DISCORD_PUBLIC_KEY', 'DISCORD_BOT_TOKEN', 'GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY'];
+// The settings a copy left out for having no text form, so a second read
+// of the copy still names them.
+const NOT_TEXT = Symbol('settings with no text form');
 export function settingsText(env) {
+  if (env[NOT_TEXT]) return { env, bad: env[NOT_TEXT] };
   const text = { ...env };
   const bad = [];
   for (const k of SETTINGS) {
-    if (env[k] === undefined || env[k] === null) continue;
-    try { String(env[k]); } catch { bad.push(k); delete text[k]; }
+    if (!env[k]) delete text[k];
+    else {
+      try { String(env[k]); } catch { bad.push(k); delete text[k]; }
+    }
   }
+  text[NOT_TEXT] = bad;
   return { env: text, bad };
 }
 // owner/repo within GitHub's name limits.
@@ -239,9 +247,8 @@ function secretProblems(env) {
 // answer says so; otherwise it gives one line, a fix or "could not check".
 // `mod` is 'ok' only when the moderator channel is a text channel of this
 // server where the bot can post; otherwise it says why.
-export async function setupCheck(raw, deps, { deadline, probe = null }) {
-  const { env } = settingsText(raw);
-  const problems = [...configProblems(raw), ...secretProblems(env)];
+export async function setupCheck(env, deps, { deadline, probe = null }) {
+  const problems = [...configProblems(env), ...secretProblems(env)];
   let passed = 0;
   const ok = (cond, line) => {
     if (cond) passed++;

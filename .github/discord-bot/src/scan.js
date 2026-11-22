@@ -574,20 +574,14 @@ export async function daily(env, deps = {}) {
   // their share, on a client of its own.
   const checker = discordClient(env.DISCORD_BOT_TOKEN, countedFetch(timedFetch(oneHop(deps.fetch || fetch), CALL_MS), 1));
   let wrongChannel = null;
-  // A setting with no text form throws when read as text: such a
-  // MOD_CHANNEL_ID is no channel id, and such a GUILD_ID verifies no channel.
-  let id = null;
-  try { if (isDiscordId(env.MOD_CHANNEL_ID)) id = String(env.MOD_CHANNEL_ID); } catch { /* no text form */ }
-  let guild = null;
-  try { guild = String(env.GUILD_ID); } catch { /* no text form */ }
+  const id = isDiscordId(env.MOD_CHANNEL_ID) ? String(env.MOD_CHANNEL_ID) : null;
   const checkChannel = async () => {
     if (wrongChannel === null) {
-      wrongChannel = !id ? 'MOD_CHANNEL_ID is not a channel id'
-        : guild === null ? `MOD_CHANNEL_ID ${id} could not be checked (GUILD_ID is not text)` : await checker.getChannel(id).then(
+      wrongChannel = !id ? 'MOD_CHANNEL_ID is not a channel id' : await checker.getChannel(id).then(
         // A channel's server id is optional in Discord's answer; its absence
         // leaves the channel unverified.
         (c) => (!c || c.guild_id === undefined || c.guild_id === null ? `MOD_CHANNEL_ID ${id} could not be checked (Discord's answer had no server id)`
-          : TEXT_TYPES.includes(c.type) && String(c.guild_id) === guild ? '' : `MOD_CHANNEL_ID ${id} is not a text channel of this server`),
+          : TEXT_TYPES.includes(c.type) && String(c.guild_id) === String(env.GUILD_ID) ? '' : `MOD_CHANNEL_ID ${id} is not a text channel of this server`),
         (err) => `MOD_CHANNEL_ID ${id} could not be checked (${err instanceof BudgetSpent ? 'out of calls' : `Discord ${(err.discord && err.discord.status) || 'gave no answer'}`})`,
       );
     }
