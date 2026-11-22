@@ -236,6 +236,8 @@ export async function setupCheck(env, deps, { deadline, probe = null }) {
   try { repos = parseRepos(env.REPOS); } catch { /* named by configProblems */ }
   let forums = {};
   try { forums = Object.fromEntries(Object.entries(parseForums(env)).filter(([id]) => digits(id))); } catch { /* named by configProblems */ }
+  // configProblems says why no player forum is left; this says what it hides.
+  if (token && !Object.keys(forums).length) problems.push('The forum checks (permissions, tags and template messages) did not run: fix FORUMS above, then run the check again.');
   const timed = timedFetch(oneHop(deps.fetch || fetch), CALL_MS, deadline);
   // One Discord share for every read. The channel list ends one call's time
   // before the deadline, so a slow list never leaves the moderator channel's

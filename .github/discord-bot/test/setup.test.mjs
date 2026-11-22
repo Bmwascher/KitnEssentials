@@ -164,6 +164,10 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
       /^The GitHub checks \(install, permissions and labels\) did not run: fix REPOS above, then run the check again\.$/],
     ['a FORUMS value with no text form: named, and every group still runs', (s) => { s.env = { FORUMS: '{"900":{"template":{"toString":null}}}' }; s.installs['me/one'] = refusal(404); },
       /^me\/one: the GitHub App is not installed there \(404\)\./],
+    ['a FORUMS value with no text form: the forum checks say they did not run', (s) => { s.env = { FORUMS: '{"900":{"template":{"toString":null}}}' }; },
+      /^The forum checks \(permissions, tags and template messages\) did not run: fix FORUMS above, then run the check again\.$/],
+    ['an empty forum list: the forum checks say they did not run', (s) => { s.env = { FORUMS: '{}' }; },
+      /^The forum checks \(permissions, tags and template messages\) did not run: fix FORUMS above, then run the check again\.$/],
     ['the roles read answered 204, with no role list', (s) => { s.rolesAnswer = new Response(null, { status: 204 }); },
       /^Could not check the bot's access to the server \(Discord's answer had no role list\), so its channel, tag and role checks did not run: fix this, then run the check again\.$/],
     ['the application read answered 204', (s) => { s.app = new Response(null, { status: 204 }); },
@@ -214,6 +218,11 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
     assert.ok(problems.every((l) => !l.includes('\n')), `${why}: one line each`);
     assert.ok(!problems.some((l) => /lacks|is missing|is off|is not installed/.test(l) && /optional field|no overwrite list|no tag list|no permissions|204|failing \(500\)|failed read/.test(why)), `${why}: never a fact without the evidence`);
     if (/^missing from the list/.test(why)) assert.equal(problems.filter((l) => l.includes('<#556>')).length, 1, `${why}: one line only`);
+  }
+  {
+    // Without the token, the Discord checks' own line already says why.
+    const r = await checkOf((s) => { s.env = { DISCORD_BOT_TOKEN: '', FORUMS: '{}' }; });
+    assert.ok(!r.problems.some((l) => l.startsWith('The forum checks')), `no bot token: no forum line: ${r.problems.join(' | ')}`);
   }
   // The permissions each kind of channel needs, written out here and not
   // taken from the checker: each, denied alone, gives its line and one check
