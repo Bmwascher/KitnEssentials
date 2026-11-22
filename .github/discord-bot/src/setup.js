@@ -3,7 +3,7 @@
 // yet" replies use them.
 import {
   parseRepos, parseForums, parseRoleIds, isTemplates, PERMS, packGroups, clipLine, isDiscordId as digits, STATUS_NAMES, CHECKLIST_NAMES, ACCEPTED,
-  LABELS, LABEL_DEFS, TEXT_TYPES, THREAD_TYPES, timedFetch, discordText, oneHop,
+  LABELS, LABEL_DEFS, TEXT_TYPES, THREAD_TYPES, timedFetch, oneHop,
 } from './core.js';
 import { discordClient } from './discord.js';
 import { installationAccess, githubClient, appJwt, importAppKey } from './github.js';
@@ -94,7 +94,7 @@ export function configProblems(raw, { bindings = true } = {}) {
       let read = null;
       try { read = parseForums(env); } catch { forumsRead = false; }
       for (const [id, v] of Object.entries(read || {})) {
-        if (v.badTemplate) out.push(`FORUMS entry ${shown(id)}: its "template" is not a message link (right-click the template message > Copy Message Link).`);
+        if (v.badTemplate) out.push(`FORUMS entry ${shown(id)}: its "template" is not a message link (right-click the template message › Copy Message Link).`);
       }
     }
   } else if (!blank(env.FORUM_CHANNEL_IDS)) {
@@ -235,7 +235,7 @@ function secretProblems(env) {
   const put = (k) => `Set it with npx wrangler@3 secret put ${k}.`;
   if (!HEX_KEY.test(String(env.DISCORD_PUBLIC_KEY ?? ''))) out.push(`DISCORD_PUBLIC_KEY is not the 64-character public key from the developer portal (General Information): Discord refuses every command until it is. ${put('DISCORD_PUBLIC_KEY')}`);
   if (blank(env.DISCORD_BOT_TOKEN)) out.push(`DISCORD_BOT_TOKEN is not set: the bot can read and post nothing. ${put('DISCORD_BOT_TOKEN')}`);
-  if (!appIdSet(env.GITHUB_APP_ID)) out.push(`GITHUB_APP_ID is not set, or holds a space: set it to the App ID (the App's settings, About). ${put('GITHUB_APP_ID')}`);
+  if (!appIdSet(env.GITHUB_APP_ID)) out.push(`GITHUB_APP_ID is not set, or holds a space: set it to the App ID (the App's settings › About). ${put('GITHUB_APP_ID')}`);
   if (!PEM.test(String(env.GITHUB_APP_PRIVATE_KEY ?? ''))) out.push(`GITHUB_APP_PRIVATE_KEY is not the text of a private key file: paste the whole .pem. ${put('GITHUB_APP_PRIVATE_KEY')}`);
   return out;
 }
@@ -429,7 +429,7 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
         } else {
           const raw = app.flags_new ?? app.flags;
           if (unset(raw)) problems.push("Could not check the Message Content setting (Discord's answer had no flags).");
-          else ok((BigInt(raw) & MESSAGE_CONTENT) !== 0n, 'The Message Content setting is off: filed issues would quote no text, and the bot would see no attachments. Turn it on in the developer portal, Bot, Privileged Gateway Intents.');
+          else ok((BigInt(raw) & MESSAGE_CONTENT) !== 0n, 'The Message Content setting is off: filed issues would quote no text, and the bot would see no attachments. Turn it on in the developer portal › Bot › Privileged Gateway Intents.');
           // A mismatch shows the two secrets name different apps, not which
           // of them is wrong.
           if (HEX_KEY.test(String(env.DISCORD_PUBLIC_KEY ?? ''))) {
@@ -562,7 +562,7 @@ export function setupLines({ problems, passed, kind, by }) {
     return [`**Weekly bot setup check:** every check passes today (${passed} checks). This line comes each Monday that every check passes. A Monday with neither this line nor a problem list means the daily setup check is not running or cannot post.`];
   }
   if (kind === 'daily') return [`**Daily bot setup check:** ${problems.length} problem(s):`, ...problems.map((p) => `- ${p}`)];
-  const head = `**Bot setup check** (run by ${discordText(by)})`;
+  const head = `**Bot setup check** (run by <@${by}>)`;
   if (!problems.length) return [`${head}: every check passed (${passed} checks).`];
   return [`${head}: ${problems.length} problem(s), ${passed} checks passed.`, ...problems.map((p) => `- ${p}`)];
 }

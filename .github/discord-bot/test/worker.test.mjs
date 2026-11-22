@@ -518,7 +518,7 @@ test('the button refuses anyone without an approved role, and with no roles set 
   assert.equal(j.type, 4);
   assert.match(j.data.content, /Only moderators and approved roles/);
   j = await (await handle(await signed(press(HELPER)), { ...P3, APPROVED_ROLE_IDS: '' }, ctxFor(), { fetch: fakeFetch(discordRoutes()) })).json();
-  assert.match(j.data.content, /APPROVED_ROLE_IDS is empty.*right-click/);
+  assert.equal(j.data.content, 'The button is not set up yet: APPROVED_ROLE_IDS is empty. A moderator can open the post and right-click a message › Apps › Send to GitHub.');
 });
 
 test('a moderator can still press the button with no roles set', async () => {
@@ -1196,7 +1196,7 @@ test('WT1: /bot-check is for moderators of this server, answers privately at onc
   let n = 0;
   for (const [why, edit, posted, said] of [
     ['posted', () => {}, 1, /^Posted in <#555>: 0 problem\(s\)\.$/],
-    ['channel unset', (s) => { s.env = { MOD_CHANNEL_ID: '' }; }, 0, /^Not posted in the moderator channel: MOD_CHANNEL_ID is not set\.\n\n\*\*Bot setup check\*\* \(run by moddy\): 1 problem\(s\)/],
+    ['channel unset', (s) => { s.env = { MOD_CHANNEL_ID: '' }; }, 0, /^Not posted in the moderator channel: MOD_CHANNEL_ID is not set\.\n\n\*\*Bot setup check\*\* \(run by <@5>\): 1 problem\(s\)/],
     ['channel set to a post', (s) => { s.env = { MOD_CHANNEL_ID: '777' }; s.alone['777'] = { id: '777', guild_id: '1', type: 11 }; }, 0,
       /^Not posted in the moderator channel: <#777> is not verified \(it is a post, not a channel\)\./],
     ['a listed channel of another server', (s) => { s.channels[2].guild_id = '2'; }, 0,
@@ -1205,7 +1205,7 @@ test('WT1: /bot-check is for moderators of this server, answers privately at onc
     ['channel without Send Messages', (s) => { s.channels[2].permission_overwrites = [{ id: '11', type: 0, deny: String(1n << 11n), allow: '0' }]; }, 0,
       /^Not posted in the moderator channel: the bot lacks Send Messages in <#555>\./],
     ['post refused', (s) => { s.modPost = new Response('{"message":"Missing Permissions"}', { status: 403 }); }, 1,
-      /^Not posted in the moderator channel: the moderator channel refused the post \(403\)\.\n\n\*\*Bot setup check\*\* \(run by moddy\): 1 problem\(s\), \d+ checks passed\.\n- Moderator channel <#555>: the bot's post was refused \(403\)/],
+      /^Not posted in the moderator channel: the moderator channel refused the post \(403\)\.\n\n\*\*Bot setup check\*\* \(run by <@5>\): 1 problem\(s\), \d+ checks passed\.\n- Moderator channel <#555>: the bot's post was refused \(403\)/],
     // The reason comes first, however long the rest: a failure with no answer.
     ['the post failing with no answer', (s) => { s.modPost = () => { throw new TypeError('network down'); }; }, 1,
       /^Not posted in the moderator channel: the post could not be sent \(network down\)\./],
@@ -1225,10 +1225,16 @@ test('WT1: /bot-check is for moderators of this server, answers privately at onc
     const count = deps.fetch.find('POST', /\/channels\/555\/messages$/).length;
     assert.equal(count, posted, why);
     assert.deepEqual(deps.fetch.find('POST', /\/channels\/777\/messages$/), [], `${why}: never into a post`);
-    assert.match(deps.fetch.find('PATCH', /\/webhooks\/app\/tok\/messages\/@original$/)[0].body.content, said, why);
-    // What the moderators read: the command's own result, naming who ran it.
+    const reply = deps.fetch.find('PATCH', /\/webhooks\/app\/tok\/messages\/@original$/)[0].body;
+    assert.match(reply.content, said, why);
+    // The private reply pings no one, whoever it names.
+    assert.deepEqual(reply.allowed_mentions, { parse: [] }, `${why}: the private reply pings no one`);
+    // What the moderators read: the command's own result, naming who ran it
+    // as a mention that pings no one.
     if (why === 'posted') {
-      assert.match(deps.fetch.find('POST', /\/channels\/555\/messages$/)[0].body.content, /^\*\*Bot setup check\*\* \(run by moddy\): every check passed \(\d+ checks\)\.$/, `${why}: the posted result`);
+      const post = deps.fetch.find('POST', /\/channels\/555\/messages$/)[0].body;
+      assert.match(post.content, /^\*\*Bot setup check\*\* \(run by <@5>\): every check passed \(\d+ checks\)\.$/, `${why}: the posted result`);
+      assert.deepEqual(post.allowed_mentions, { parse: [] }, `${why}: the posted result pings no one`);
     }
   }
   for (const [why, over, channel] of [
