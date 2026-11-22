@@ -977,6 +977,28 @@ test('NT1: a post that refuses the bot (403) is named once, only in a text chann
     assert.ok(text.includes(`post ${b}`), `the other post's saved problem stays: ${text}`);
   }
   {
+    // The run that ends the post on its 403 loses its state write; the next
+    // scan finds the finished record and still drops the saved entry.
+    const kv = started(T0);
+    const a = idAt(T0 + 1000);
+    const real = discord({ active: [{ id: a, parent_id: '900' }] });
+    let n = 0;
+    const g = async (url, init = {}) => (init.method === 'POST' && new RegExp(`/channels/${a}/messages$`).test(url)
+      ? new Response('{"message":"no"}', { status: ++n === 1 ? 500 : 403 }) : real(url, init));
+    g.find = real.find;
+    const env = { ...baseEnv(kv), MOD_CHANNEL_ID: '555' };
+    await scan(env, { fetch: g, now: () => T0 + 5 * 60000, log: () => {} });
+    const put = kv.put;
+    kv.put = async (k, v) => { if (k === 'scan:state') throw new Error('KV write failed'); return put(k, v); };
+    await scan(env, { fetch: g, now: () => T0 + 10 * 60000, log: () => {} }).catch(() => {});
+    kv.put = put;
+    await scan(env, { fetch: g, now: () => T0 + 15 * 60000, log: () => {} });
+    await daily(env, { fetch: g, now: () => T0 + HOUR, log: () => {} });
+    const text = real.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content).join('\n');
+    assert.equal(n, 2, 'a lost state write: two sends');
+    assert.equal(text.split(a).length - 1, 1, `a lost state write: the refused post is named once: ${text}`);
+  }
+  {
     // Discord takes the alert but its answer is not JSON: the give-up counts
     // as named, and the next daily check does not repeat it.
     const kv = started(T0);

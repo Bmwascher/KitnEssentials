@@ -347,10 +347,12 @@ export async function scan(env, deps = {}) {
     };
     // A finished post whose record says the scan gave up on it, but which
     // the state does not name (its state write was lost, or an overlapping
-    // scan wrote over it), is named again from its record.
+    // scan wrote over it), is named again from its record; one that ended
+    // on its own refusal drops its entries from the saved paragraph again.
     const restored = (t, rec) => {
       const g = rec.gaveUp;
       if (g && now - g.at < GAVE_UP_KEPT_MS) name(t.id, g.what, g.at);
+      if (rec.ended) endedNow.push(t.id);
       return { greeted: true, finished: true };
     };
     // A failed pass. Out of this run's calls or reads, or with its record
@@ -415,12 +417,13 @@ export async function scan(env, deps = {}) {
       // A post that refused the bot (403) is named once, by its give-up line,
       // and a deleted one (404) nowhere; a saved problem paragraph would
       // name either again.
-      if (giveUp && own && [403, 404].includes(err.discord.status)) endedNow.push(t.id);
+      const ended = giveUp && own && [403, 404].includes(err.discord.status);
+      if (ended) endedNow.push(t.id);
       const kind = greetedNow ? 'queue card' : 'greeting';
       const label = err.damaged ? `damaged record ${err.damaged}` : denied ? `${kind} refused by the post (403)` : kind;
       try {
         await putRecord(t.id, giveUp
-          ? { ...rec, [greetedNow ? 'cardSkipped' : 'skipped']: err.message.slice(0, 200), ...(told ? { gaveUp: { at: now, what: label } } : {}) }
+          ? { ...rec, [greetedNow ? 'cardSkipped' : 'skipped']: err.message.slice(0, 200), ...(told ? { gaveUp: { at: now, what: label } } : {}), ...(ended ? { ended: true } : {}) }
           : { ...rec, tries });
       } catch (e) {
         log(`${what}: its record was not saved: ${e.message}`);
