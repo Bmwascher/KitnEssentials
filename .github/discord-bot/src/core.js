@@ -63,7 +63,62 @@ export const LABEL_DEFS = [
   [LABELS.accepted, '1d76db', 'Staff plan to do this (sets the Accepted tag)'],
 ];
 
-export const PERMS = { administrator: 1n << 3n, manageThreads: 1n << 34n };
+export const PERMS = {
+  administrator: 1n << 3n, viewChannel: 1n << 10n, sendMessages: 1n << 11n, readMessageHistory: 1n << 16n,
+  manageThreads: 1n << 34n, sendMessagesInThreads: 1n << 38n,
+};
+
+// Messages to the moderator channel stay under Discord's 2,000 characters:
+// cut only between lines, and a line longer than a message is cut to fit.
+export const MESSAGE_MAX = 1900;
+export const clipLine = (l) => (l.length > MESSAGE_MAX ? `${l.slice(0, MESSAGE_MAX - 1)}…` : l);
+
+// The lines' indexes, grouped one message per group, in one pass.
+export function packGroups(lines) {
+  const out = [];
+  let group = null;
+  let size = 0;
+  lines.forEach((raw, i) => {
+    const n = clipLine(raw).length;
+    if (group && size + 1 + n <= MESSAGE_MAX) {
+      group.push(i);
+      size += 1 + n;
+    } else {
+      group = [i];
+      size = n;
+      out.push(group);
+    }
+  });
+  return out;
+}
+
+// Lines to the moderator channel in as few messages as fit (packGroups).
+// `post(text)` says whether a message was taken; the indexes of the lines
+// taken are returned, so equal lines in different messages are told apart.
+export async function postLines(post, lines) {
+  const took = [];
+  for (const g of packGroups(lines)) {
+    if (await post(g.map((i) => clipLine(lines[i])).join('\n'))) took.push(...g);
+  }
+  return took;
+}
+
+// Whether a failed post was taken all the same: Discord answered 2xx and
+// only its body could not be read.
+export const taken = (err) => !!(err && err.discord && err.discord.notJson && err.discord.status >= 200 && err.discord.status < 300);
+
+// Each counted call is one request: a redirect is answered, never followed,
+// so a call count bounds what a Worker run sends and a redirect cannot
+// move a post to another channel.
+export const oneHop = (f) => (url, init = {}) => f(url, { ...init, redirect: 'manual' });
+
+// A Discord id: digits, at most 20 (a snowflake fits in 64 bits), exactly as
+// written.
+export const isDiscordId = (v) => /^\d{1,20}$/.test(String(v ?? ''));
+// Discord's channel types: a text or announcement channel takes the bot's
+// messages; a thread (a forum post among them) takes its parent's permissions.
+export const TEXT_TYPES = [0, 5];
+export const THREAD_TYPES = [10, 11, 12];
 
 const CLIENTS = { retail: 'Retail', forever: 'Forever', all: 'All' };
 const TYPES = { bug: 'Bug', feature: 'Feature', feedback: 'Feature', request: 'Feature' };
@@ -598,13 +653,15 @@ export const DEFAULT_TEMPLATES = {
   Feature: ['Area', 'My idea or feedback', 'Why it matters', 'Screenshots'],
 };
 
+// The shape TEMPLATES must have: each type names a list of field labels.
+export const isTemplates = (t) => !!t && typeof t === 'object' && !Array.isArray(t)
+  && Object.values(t).every((v) => Array.isArray(v) && v.every((f) => typeof f === 'string'));
+
 export function parseTemplates(raw) {
   if (!raw || !String(raw).trim()) return DEFAULT_TEMPLATES;
   try {
     const t = JSON.parse(String(raw));
-    const ok = t && typeof t === 'object' && !Array.isArray(t)
-      && Object.values(t).every((v) => Array.isArray(v) && v.every((f) => typeof f === 'string'));
-    if (ok) return t;
+    if (isTemplates(t)) return t;
   } catch { /* fall through */ }
   return DEFAULT_TEMPLATES;
 }

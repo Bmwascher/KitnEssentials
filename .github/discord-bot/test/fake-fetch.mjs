@@ -4,7 +4,7 @@ export function fakeFetch(routes) {
   const fn = async (url, init = {}) => {
     const method = init.method || 'GET';
     const body = init.body ? JSON.parse(init.body) : undefined;
-    calls.push({ method, url, body });
+    calls.push({ method, url, body, ...(init.redirect ? { redirect: init.redirect } : {}) });
     const route = routes.find(([m, re]) => m === method && re.test(url));
     if (!route) return new Response(`no route for ${method} ${url}`, { status: 404 });
     const out = await route[2](body, url);
@@ -28,6 +28,20 @@ export function stall(init, onAbort = () => {}) {
       reject(init.signal.reason);
     });
   });
+}
+
+// An answer whose headers come at once and whose body never ends until the
+// signal aborts.
+export function stallBody(init, status = 200) {
+  const keep = setInterval(() => {}, 1000);
+  return new Response(new ReadableStream({
+    start(c) {
+      init.signal.addEventListener('abort', () => {
+        clearInterval(keep);
+        c.error(init.signal.reason);
+      });
+    },
+  }), { status });
 }
 
 // Workers KV with only the two calls the bot makes.

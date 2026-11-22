@@ -5,16 +5,24 @@
 // filed answers "Already tracked" instead of opening the form. Submitting the
 // form files the issue and replies to the filed message in the post.
 import {
-  STATUS, MESSAGES, PERMS, buildTitle, buildBody, labelsFor, cleanPostTitle, personName, titleText,
+  STATUS, MESSAGES, PERMS, packGroups, postLines, taken, oneHop, isDiscordId, THREAD_TYPES, buildTitle, buildBody, labelsFor, cleanPostTitle, personName, titleText,
   guessFromTags, normClient, normType, normRepoKey, parseRepos, timedFetch,
   parseForums, parseRoleIds, parseTemplates, templateCheck, templateGaps,
   templateNote, parseCustomId, templateLabels, filedCard, cardHead, BY_RIGHT_CLICK,
 } from './core.js';
 import { discordClient, postGone } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
-import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton } from './scan.js';
+import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch } from './scan.js';
+import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems, unreadableSettings } from './setup.js';
 
 export const COMMAND_NAME = 'Send to GitHub';
+export const CHECK_COMMAND = 'bot-check';
+// The setup check ends by 20 s from the request's arrival and its posts by
+// 22 s, leaving the private reply its own time before REPORT_BY_MS. The
+// posts have their own share of calls, so a run stays within 50 requests.
+const CHECK_BY_MS = 20000;
+const CHECK_POSTS_BY_MS = 22000;
+const POST_SHARE = 5;
 const EPHEMERAL = 64;
 // Discord refuses a message longer than this.
 const MAX_REPLY = 2000;
@@ -54,6 +62,22 @@ const json = (obj, status = 200) => new Response(JSON.stringify(obj), {
   status, headers: { 'Content-Type': 'application/json' },
 });
 const reply = (content) => json({ type: 4, data: { content, flags: EPHEMERAL } });
+// The bot works nowhere until its config holds: the reply names the first
+// problem, but only in the server the bot is set up for, so a moderator of
+// another server learns nothing of this one's setup. Callers check the
+// caller first.
+const notSetUp = (env, interaction) => {
+  // A GUILD_ID no reader can read names no server.
+  const guild = unreadableSettings(env).includes('GUILD_ID') ? '' : String(env.GUILD_ID ?? '');
+  if (!isDiscordId(guild)) return reply("The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).");
+  if (String(interaction.guild_id ?? '') !== guild) return reply('This only works on posts in the forums the bot is set up for.');
+  return reply(`The bot is not set up yet: ${configProblems(env, { bindings: false })[0]}`);
+};
+// The config, or null when it cannot be read (a broken REPOS throws), so
+// every entry point answers with the problem instead of failing.
+const configOr = (env) => {
+  try { return config(env); } catch { return null; }
+};
 
 function hexToBytes(hex) {
   const out = new Uint8Array(hex.length / 2);
@@ -126,8 +150,8 @@ function modalValues(data) {
 }
 
 async function openForm(interaction, env, deps, { threadId, messageId, greetingId = '', cardId = '', deadline = Date.now() + FORM_LOOKUP_MS }) {
-  const cfg = config(env);
-  if (!cfg.forums.length) return reply('The bot is not set up yet: FORUMS is empty.');
+  const cfg = configOr(env);
+  if (!cfg || !cfg.forums.length) return notSetUp(env, interaction);
   const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, deadline));
   let ch = interaction.channel && interaction.channel.id === threadId ? interaction.channel : {};
   if (!ch.parent_id || !ch.applied_tags) {
@@ -399,6 +423,151 @@ async function pressCheck(interaction, env, deps, cfg, postId, t0, ctx) {
   return reply(`Already tracked as ${key} #${where.number}: ${issue.html_url}`);
 }
 
+// The private reply that replaces Discord's "thinking...": cut to Discord's
+// length, and ended by REPORT_BY_MS from the request's arrival.
+const followupFor = (interaction, deps, log, t0) => async (text) => {
+  const content = text.length > MAX_REPLY ? `${text.slice(0, MAX_REPLY - 1)}…` : text;
+  try {
+    const res = await timedFetch(deps.fetch, TAIL_MS, t0 + REPORT_BY_MS)(
+      `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) },
+    );
+    // The request's URL holds the interaction's token, and an answer may
+    // echo it, so only the status and the failure's kind are logged.
+    if (!res.ok) log(`followup failed: ${res.status}`);
+  } catch (e) {
+    log(`followup failed: ${/^out of time /.test(String(e.message)) ? 'out of time' : e.name}`);
+  }
+};
+
+// A post to the moderator channel that says whether it was taken (`taken`).
+const modPost = (discord, mod, onFail) => async (text) => {
+  try {
+    await discord.call('POST', `/channels/${mod}/messages`, { content: text, allowed_mentions: { parse: [] } });
+    return true;
+  } catch (e) {
+    if (taken(e)) return true;
+    onFail(e, text);
+    return false;
+  }
+};
+
+// The private result: its head first, then as many whole lines as fit
+// Discord's length, the last saying how many more there are.
+export function privateText(head, lines) {
+  const whole = lines.length ? `${head}\n\n${lines.join('\n')}` : head;
+  if (whole.length <= MAX_REPLY) return whole;
+  // It does not fit: a line is kept only if the notice for the lines after
+  // it still fits beside it.
+  const notice = (n) => `\n…and ${n} more line(s): fix these, then run /bot-check again.`;
+  let text = head;
+  for (let i = 0; i < lines.length; i++) {
+    const next = `${text}${i ? '\n' : '\n\n'}${lines[i]}`;
+    if (next.length + notice(lines.length - i - 1).length > MAX_REPLY) return `${text}${notice(lines.length - i)}`;
+    text = next;
+  }
+  return text;
+}
+
+// Discord's own permissions for the bot in that channel, masked to the ones
+// the checks need, or null when it gave none.
+const givenBits = (raw) => (raw === undefined || raw === null ? null : String(BigInt(raw) & NEEDED_BITS));
+
+// /bot-check: the result goes to the moderator channel when the check found
+// it fit to post to; whatever it did not take goes to the moderator's
+// private reply, with the reason first.
+export async function runCheck(interaction, env, deps, t0 = Date.now()) {
+  const log = deps.log || console.error;
+  const followup = followupFor(interaction, { ...deps, fetch: oneHop(deps.fetch) }, log, t0);
+  const by = personName(interaction.member.user, interaction.member);
+  // A post's permissions are its forum's; any other channel is its own.
+  const ch = interaction.channel || {};
+  const probe = THREAD_TYPES.includes(ch.type) && ch.parent_id ? String(ch.parent_id) : String(interaction.channel_id || '');
+  let result;
+  try {
+    result = await setupCheck(env, deps, { deadline: t0 + CHECK_BY_MS, probe });
+  } catch (e) {
+    // Each group catches its own failures; this is the last guard, so the
+    // moderator is never left with "thinking...".
+    log(`setup check stopped: ${String(e && e.message).slice(0, 200)}`);
+    await followup('The setup check stopped on an error before it finished. The Worker log has it; run /bot-check again.');
+    return null;
+  }
+  if (result.probe) {
+    const given = givenBits(interaction.app_permissions);
+    log(`setup check: needed permissions computed ${result.probe.bits}, app_permissions ${given ?? 'not given'}, in channel ${result.probe.id}: ${given === result.probe.bits ? 'same' : 'different'}`);
+  }
+  if (result.mod !== 'ok') {
+    await followup(privateText(`Not posted in the moderator channel: ${result.mod}.`, setupLines({ ...result, kind: 'command', by })));
+    return result;
+  }
+  const mod = String(env.MOD_CHANNEL_ID);
+  const { lines, rest } = fitLines(setupLines({ ...result, kind: 'command', by }), POST_SHARE);
+  if (rest.length) log(`check result lines past the posting share:\n${rest.join('\n')}`);
+  let failure = null;
+  const discord = discordClient(env.DISCORD_BOT_TOKEN, countedFetch(timedFetch(oneHop(deps.fetch), TAIL_MS, t0 + CHECK_POSTS_BY_MS), POST_SHARE));
+  const took = new Set(await postLines(modPost(discord, mod, (e) => {
+    failure = failure || e;
+    log(`check result not posted: ${String(e.message).slice(0, 200)}`);
+  }), lines));
+  const missed = lines.filter((_, i) => !took.has(i));
+  if (!missed.length) {
+    await followup(`Posted in <#${mod}>: ${result.problems.length} problem(s).`);
+    return result;
+  }
+  const status = failure && failure.discord ? failure.discord.status : null;
+  const cause = failure ? String(failure.message).replace(/\s+/g, ' ').slice(0, 120) : 'no answer';
+  // Too many requests, or Discord's own failure: a retry is the fix, not the
+  // channel's settings.
+  const busy = status === 429 || status >= 500;
+  const line = !status ? `Moderator channel <#${mod}>: the result could not be posted (${cause}). Run /bot-check again.`
+    : busy ? `Moderator channel <#${mod}>: Discord could not take the post just now (${status}). Run /bot-check again in a minute.`
+      : `Moderator channel <#${mod}>: the bot's post was refused (${status}), though its permissions there look right. Check the channel's settings, then run /bot-check again.`;
+  result.problems.push(line);
+  // The reason goes in the head, which the length limit never cuts.
+  const why = !status ? `the post could not be sent (${cause})`
+    : busy ? `Discord could not take the post just now (${status})` : `the moderator channel refused the post (${status})`;
+  if (took.size) {
+    const groups = packGroups(lines);
+    const whole = groups.filter((g) => g.every((i) => took.has(i))).length;
+    await followup(privateText(`Posted in part in <#${mod}>: ${whole} of ${groups.length} messages; ${why}. The rest:`, [...missed, `- ${line}`]));
+  } else {
+    await followup(privateText(`Not posted in the moderator channel: ${why}.`, setupLines({ ...result, kind: 'command', by })));
+  }
+  return result;
+}
+
+// The daily setup check: problems go to the moderator channel every day they
+// last, a passing Monday (UTC) posts the weekly line, and any other passing
+// day only logs. A moderator channel the check did not find fit gets
+// nothing: the lines are logged with the reason. It writes no KV.
+export async function setupDaily(env, deps) {
+  const log = deps.log || console.log;
+  const today = new Date((deps.now || Date.now)());
+  let result;
+  try {
+    result = await setupCheck(env, deps, { deadline: Date.now() + CHECK_BY_MS });
+  } catch (e) {
+    // The last guard: each group catches its own failures.
+    log(`daily setup check stopped: ${String(e && e.message).slice(0, 200)}`);
+    return;
+  }
+  if (!result.problems.length && today.getUTCDay() !== 1) {
+    log(`daily setup check: every check passed (${result.passed} checks)`);
+    return;
+  }
+  const all = setupLines({ ...result, kind: result.problems.length ? 'daily' : 'weekly' });
+  if (result.mod !== 'ok') {
+    log(`daily setup check not posted (${result.mod}):\n${all.join('\n')}`);
+    return;
+  }
+  const { lines, rest } = fitLines(all, POST_SHARE);
+  if (rest.length) log(`daily setup check lines past the posting share:\n${rest.join('\n')}`);
+  const discord = discordClient(env.DISCORD_BOT_TOKEN, countedFetch(timedFetch(oneHop(deps.fetch), CALL_MS), POST_SHARE));
+  // A message the channel did not take is logged with its lines (modPost).
+  await postLines(modPost(discord, String(env.MOD_CHANNEL_ID), (e, text) => log(`could not post to the moderator channel: ${e.message}\n${text}`)), lines);
+}
+
 // Runs after Discord already has its "thinking..." answer. Every call is timed,
 // and every outcome, partial ones included, is reported back to the moderator.
 // `t0` is the moment the request arrived; every phase's end counts from it.
@@ -417,18 +586,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
   const discord = discordClient(env.DISCORD_BOT_TOKEN, f);
   // The issue's link comes first, so a long template result is what Discord's
   // length cuts.
-  const followup = async (text) => {
-    const content = text.length > MAX_REPLY ? `${text.slice(0, MAX_REPLY - 1)}…` : text;
-    try {
-      const res = await timedFetch(deps.fetch, TAIL_MS, t0 + REPORT_BY_MS)(
-        `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
-        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) },
-      );
-      if (!res.ok) log(`followup failed: ${res.status} ${(await res.text().catch(() => '')).slice(0, 300)}`);
-    } catch (e) {
-      log(`followup failed: ${e.message}`);
-    }
-  };
+  const followup = followupFor(interaction, deps, log, t0);
 
   const repo = cfg.repos[repoKey];
   let gh;
@@ -727,16 +885,35 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
 
   const interaction = JSON.parse(body);
   if (interaction.type === 1) return json({ type: 1 });
+  // A setting no reader can read: past the caller check, each entry point
+  // answers with the not-set-up reply, and nothing reads the settings.
+  const bad = unreadableSettings(env);
+  const roles = () => (bad.includes('APPROVED_ROLE_IDS') ? [] : parseRoleIds(env.APPROVED_ROLE_IDS));
 
   if (interaction.type === 2 && interaction.data.name === COMMAND_NAME) {
     if (!canUse(interaction.member)) return reply('Only moderators and admins can send posts to GitHub.');
+    if (bad.length) return notSetUp(env, interaction);
     return openForm(interaction, env, deps, { threadId: interaction.channel_id, messageId: interaction.data.target_id, deadline: t0 + FORM_BY_MS });
+  }
+
+  if (interaction.type === 2 && interaction.data.name === CHECK_COMMAND) {
+    if (!canUse(interaction.member)) return reply('Only moderators and admins can check the bot setup.');
+    // Fails closed: a moderator of another server the bot is in neither
+    // posts here nor reads this setup, also when GUILD_ID is broken.
+    const guild = bad.includes('GUILD_ID') ? '' : String(env.GUILD_ID ?? '');
+    if (!isDiscordId(guild)) return reply("The bot's GUILD_ID is not set to a server id, so it can check nothing. Fix it in the Worker's settings.");
+    if (String(interaction.guild_id) !== guild) return reply('This command checks only the server the bot is set up for.');
+    if (bad.length) return notSetUp(env, interaction);
+    ctx.waitUntil(runCheck(interaction, env, deps, t0));
+    return json({ type: 5, data: { flags: EPHEMERAL } });
   }
 
   if (interaction.type === 3 && String(interaction.data.custom_id).startsWith(`${SEND_BUTTON}:`)) {
     const ids = parseCustomId(interaction.data.custom_id);
     if (!ids) return reply(BAD_IDS);
-    const cfg = config(env);
+    if (bad.length) return allowed(interaction.member, { roles: roles() }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
+    const cfg = configOr(env);
+    if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
     if (!cfg.roles.length && !canUse(interaction.member)) {
       return reply('The button is not set up yet: APPROVED_ROLE_IDS is empty. A moderator can right-click the post > Apps > Send to GitHub.');
     }
@@ -756,9 +933,11 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
 
   if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('gh:')) {
     if (!parseCustomId(interaction.data.custom_id)) return reply(BAD_IDS);
-    const cfg = config(env);
+    if (bad.length) return allowed(interaction.member, { roles: roles() }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
+    const cfg = configOr(env);
+    if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
     if (!allowed(interaction.member, cfg)) return reply(NOT_ALLOWED);
-    if (!cfg.forums.length) return reply('The bot is not set up yet: FORUMS is empty.');
+    if (!cfg.forums.length) return notSetUp(env, interaction);
     const v = modalValues(interaction.data);
     const problems = [];
     if (!normRepoKey(v.repo, cfg.repos)) problems.push(`Repo must be ${Object.keys(cfg.repos).join(' or ')}.`);
@@ -775,6 +954,15 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
 }
 
 export async function scheduled(controller, env, ctx, deps = { fetch: (...a) => fetch(...a) }) {
+  // The daily setup check reads the settings through its own copy and names
+  // the unreadable ones. The scan and the daily list would act on them, so
+  // they do nothing: no marker moves and no card is given up.
+  if (controller.cron === CRONS.setup) return setupDaily(env, deps);
+  const bad = unreadableSettings(env);
+  if (bad.length) {
+    (deps.log || console.log)(`${bad.join(', ')} ${bad.length > 1 ? 'are' : 'is'} not text: the ${controller.cron === CRONS.daily ? 'daily list' : 'scan'} did not run.`);
+    return null;
+  }
   if (controller.cron === CRONS.daily) return daily(env, deps);
   return scan(env, deps);
 }

@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, createVerify } from 'node:crypto';
-import { handle, COMMAND_NAME } from '../src/worker.js';
+import { handle, COMMAND_NAME, CHECK_COMMAND, scheduled, privateText } from '../src/worker.js';
+import { CRONS } from '../src/scan.js';
 import { importAppKey, appJwt } from '../src/github.js';
 import { MESSAGES } from '../src/core.js';
 import { fakeFetch, fakeKv, FORUM, stall } from './fake-fetch.mjs';
+import { setupWorld } from './setup-world.mjs';
 
 const keys = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
 const pubHex = Buffer.from(await crypto.subtle.exportKey('raw', keys.publicKey)).toString('hex');
@@ -1154,4 +1156,279 @@ test('a title of direction marks alone is empty, as the issue would get it', asy
   const r = await handle(await signed(submit({ title: '\u200f\u202e' })), env, ctx, { fetch: fakeFetch([]) });
   assert.match((await r.json()).data.content, /Title is empty\./);
   assert.equal(ctx.jobs.length, 0);
+});
+
+// A setup failing in many ways at once: 30 forums that do not exist (more
+// reads than the Discord share), 200 roles that do not (more lines than five
+// messages hold), and eight healthy repos (24 GitHub calls, more than the
+// GitHub share).
+const BIG = {
+  FORUMS: JSON.stringify(Object.fromEntries(Array.from({ length: 30 }, (_, i) => [String(1000 + i), {}]))),
+  APPROVED_ROLE_IDS: Array.from({ length: 200 }, (_, i) => String(5000 + i)).join(','),
+  REPOS: JSON.stringify(Object.fromEntries(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((k) => [k, `me/${k.toLowerCase()}`]))),
+  LOCK_REPO: 'me/a',
+};
+// The same line 30 times: two messages whose lines are equal.
+const SAME = { APPROVED_ROLE_IDS: Array(30).fill('777').join(',') };
+const quiet = (deps) => ({ ...deps, log: () => {} });
+// Every setting the Worker reads, written here, not taken from the code.
+const ALL_SETTINGS = ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID',
+  'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'DISCORD_PUBLIC_KEY', 'DISCORD_BOT_TOKEN', 'GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY'];
+const NO_TEXT = { toString: null };
+// Every value the entry points must stop on: each setting with no text form,
+// and the two keys read with string methods bound to null.
+const UNREADABLE = [...ALL_SETTINGS.map((k) => [k, NO_TEXT]), ['DISCORD_PUBLIC_KEY', null], ['GITHUB_APP_PRIVATE_KEY', null]];
+const checkCmd = (member, over = {}) => ({ type: 2, member, channel_id: '555', guild_id: '1', application_id: 'app', token: 'tok', data: { name: CHECK_COMMAND }, ...over });
+
+test('WT1: /bot-check is for moderators of this server, answers privately at once, and posts only to a verified moderator channel', async () => {
+  for (const [why, member, envOver, guild, said] of [
+    ['a player', PLAYER, {}, '1', /^Only moderators and admins can check the bot setup\.$/],
+    ['a moderator of another server', MOD, {}, '2', /^This command checks only the server the bot is set up for\.$/],
+    ['a moderator with GUILD_ID unset', MOD, { GUILD_ID: '' }, '1', /^The bot's GUILD_ID is not set to a server id, so it can check nothing\./],
+    ['a moderator with GUILD_ID malformed', MOD, { GUILD_ID: '1x' }, '1', /^The bot's GUILD_ID is not set to a server id, so it can check nothing\./],
+    ['a moderator with a GUILD_ID of no text form', MOD, { GUILD_ID: { toString: null } }, '1', /^The bot's GUILD_ID is not set to a server id, so it can check nothing\./],
+  ]) {
+    const { env: e, deps } = setupWorld(undefined, pubHex);
+    const j = await (await handle(await signed(checkCmd(member, { guild_id: guild })), { ...e, ...envOver }, ctxFor(), quiet(deps))).json();
+    assert.match(j.data.content, said, why);
+    assert.equal(deps.fetch.calls.length, 0, `${why}: no calls`);
+  }
+  let n = 0;
+  for (const [why, edit, posted, said] of [
+    ['posted', () => {}, 1, /^Posted in <#555>: 0 problem\(s\)\.$/],
+    ['channel unset', (s) => { s.env = { MOD_CHANNEL_ID: '' }; }, 0, /^Not posted in the moderator channel: MOD_CHANNEL_ID is not set\.\n\n\*\*Bot setup check\*\* \(run by moddy\): 1 problem\(s\)/],
+    ['channel set to a post', (s) => { s.env = { MOD_CHANNEL_ID: '777' }; s.alone['777'] = { id: '777', guild_id: '1', type: 11 }; }, 0,
+      /^Not posted in the moderator channel: <#777> is not verified \(it is a post, not a channel\)\./],
+    ['a listed channel of another server', (s) => { s.channels[2].guild_id = '2'; }, 0,
+      /^Not posted in the moderator channel: <#555> is not verified \(it is not a channel of this server\)\./],
+    ['a post taken with an answer that is not JSON', (s) => { s.modPost = new Response('<html>', { status: 200 }); }, 1, /^Posted in <#555>: 0 problem\(s\)\.$/],
+    ['channel without Send Messages', (s) => { s.channels[2].permission_overwrites = [{ id: '11', type: 0, deny: String(1n << 11n), allow: '0' }]; }, 0,
+      /^Not posted in the moderator channel: the bot lacks Send Messages in <#555>\./],
+    ['post refused', (s) => { s.modPost = new Response('{"message":"Missing Permissions"}', { status: 403 }); }, 1,
+      /^Not posted in the moderator channel: the moderator channel refused the post \(403\)\.\n\n\*\*Bot setup check\*\* \(run by moddy\): 1 problem\(s\), \d+ checks passed\.\n- Moderator channel <#555>: the bot's post was refused \(403\)/],
+    // The reason comes first, however long the rest: a failure with no answer.
+    ['the post failing with no answer', (s) => { s.modPost = () => { throw new TypeError('network down'); }; }, 1,
+      /^Not posted in the moderator channel: the post could not be sent \(network down\)\./],
+    // A busy Discord is a retry, never a channel fault.
+    ['the post answered 503', (s) => { s.modPost = new Response('{"message":"busy"}', { status: 503 }); }, 1,
+      /^Not posted in the moderator channel: Discord could not take the post just now \(503\)\.\n[\s\S]*\n- Moderator channel <#555>: Discord could not take the post just now \(503\)\. Run \/bot-check again in a minute\./],
+    // Two messages of equal lines, the first taken and the second refused:
+    // the refused lines are named although their text was taken once.
+    ['first message taken, the second refused', (s) => { s.env = SAME; n = 0; s.modPost = () => (++n === 1 ? { id: 'm1' } : new Response('{"message":"no"}', { status: 403 })); }, 2,
+      /^Posted in part in <#555>: 1 of 2 messages; the moderator channel refused the post \(403\)\. The rest:\n\n- APPROVED_ROLE_IDS: the role <@&777> does not exist in this server\.\n/],
+  ]) {
+    const { env: e, deps } = setupWorld(edit, pubHex);
+    const ctx = ctxFor();
+    const r = await (await handle(await signed(checkCmd(MOD)), e, ctx, quiet(deps))).json();
+    assert.deepEqual(r, { type: 5, data: { flags: 64 } }, why);
+    await Promise.all(ctx.jobs);
+    const count = deps.fetch.find('POST', /\/channels\/555\/messages$/).length;
+    assert.equal(count, posted, why);
+    assert.deepEqual(deps.fetch.find('POST', /\/channels\/777\/messages$/), [], `${why}: never into a post`);
+    assert.match(deps.fetch.find('PATCH', /\/webhooks\/app\/tok\/messages\/@original$/)[0].body.content, said, why);
+    // What the moderators read: the command's own result, naming who ran it.
+    if (why === 'posted') {
+      assert.match(deps.fetch.find('POST', /\/channels\/555\/messages$/)[0].body.content, /^\*\*Bot setup check\*\* \(run by moddy\): every check passed \(\d+ checks\)\.$/, `${why}: the posted result`);
+    }
+  }
+  for (const [why, over, channel] of [
+    ['in a forum post: its forum', { channel_id: '777', channel: { id: '777', type: 11, parent_id: '900' } }, '900'],
+    ['in a text channel: that channel', { channel: { id: '555', type: 0, parent_id: '42' } }, '555'],
+  ]) {
+    const { env: e, deps } = setupWorld(undefined, pubHex);
+    const out = [];
+    const ctx = ctxFor();
+    await handle(await signed(checkCmd(MOD, over)), e, ctx, { ...deps, log: (s) => out.push(s) });
+    await Promise.all(ctx.jobs);
+    assert.ok(out.some((l) => new RegExp(`^setup check: needed permissions computed \\d+, app_permissions not given, in channel ${channel}: different$`).test(l)), `${why}: ${out.join(' | ')}`);
+  }
+  const { env: e, deps } = setupWorld((s) => { s.env = BIG; }, pubHex);
+  const ctx = ctxFor();
+  await handle(await signed(checkCmd(MOD)), e, ctx, quiet(deps));
+  await Promise.all(ctx.jobs);
+  const calls = deps.fetch.calls;
+  const github = calls.filter((c) => /api\.github\.com/.test(c.url)).length;
+  const discordReads = calls.filter((c) => /discord\.com/.test(c.url) && c.method === 'GET').length;
+  assert.equal(github, 15, `GitHub's share is used to its end and no further: ${github}`);
+  assert.equal(discordReads, 28, `Discord's share is used to its end and no further: ${discordReads}`);
+  assert.ok(calls.length <= 49, `the run stays within 49 requests: ${calls.length}`);
+  assert.ok(calls.every((c) => c.redirect === 'manual'), 'no call may follow a redirect');
+  const posts = deps.fetch.find('POST', /\/channels\/555\/messages$/);
+  assert.ok(posts.length === 5 && posts.every((c) => c.body.content.length <= 2000), `${posts.length} posts`);
+  assert.match(posts[4].body.content, /\n- and \d+ more \(see the Worker log\)$/, 'the fit names what it left out');
+  assert.match(deps.fetch.find('PATCH', /\/webhooks\//)[0].body.content, /^Posted in <#555>: \d+ problem\(s\)\.$/);
+});
+
+test('WT2: the daily setup check posts problems every day, the weekly line on a passing Monday, and nothing on another passing day', async () => {
+  const MON = Date.UTC(2026, 10, 23, 15, 30);
+  const TUE = MON + 24 * 60 * 60 * 1000;
+  for (const [why, edit, now, re] of [
+    ['a problem on a Tuesday', (s) => { s.app = { flags: 0 }; }, TUE, /^\*\*Daily bot setup check:\*\* 1 problem\(s\):\n- The Message Content setting is off/],
+    ['all pass on a Monday', () => {}, MON,
+      /^\*\*Weekly bot setup check:\*\* every check passes today \(\d+ checks\)\. This line comes each Monday that every check passes\. A Monday with neither this line nor a problem list means the daily setup check is not running or cannot post\.$/],
+    ['all pass on a Tuesday', () => {}, TUE, null],
+    ['a moderator channel that is a post', (s) => { s.env = { MOD_CHANNEL_ID: '777' }; s.alone['777'] = { id: '777', guild_id: '1', type: 11 }; }, TUE, null],
+    ['the large failing setup', (s) => { s.env = BIG; }, TUE, /^\*\*Daily bot setup check:\*\* \d+ problem\(s\):/],
+  ]) {
+    const { env: e, deps } = setupWorld(edit);
+    const kv = fakeKv();
+    const out = [];
+    await scheduled({ cron: CRONS.setup }, { ...e, STATE: kv }, {}, { ...deps, now: () => now, log: (s) => out.push(s) });
+    const posts = deps.fetch.find('POST', /\/channels\/\d+\/messages$/).map((c) => c.body.content);
+    if (re) assert.match(posts[0] || '', re, why);
+    else assert.deepEqual(posts, [], why);
+    if (why === 'a moderator channel that is a post') assert.match(out.join('\n'), /Moderator channel <#777>: it is a post, not a channel/, `${why}: logged`);
+    if (why === 'all pass on a Tuesday') assert.match(out.join('\n'), /^daily setup check: every check passed \(\d+ checks\)$/m, `${why}: the log says it ran`);
+    assert.ok(deps.fetch.calls.length <= 48, `${why}: ${deps.fetch.calls.length} calls`);
+    assert.ok(deps.fetch.calls.every((c) => c.redirect === 'manual'), `${why}: no call follows a redirect`);
+    assert.equal(kv.m.size, 0, `${why}: no KV write`);
+  }
+});
+
+test("WT4: the not-set-up reply names the first broken setting only to a caller who may send, in the bot's server, after the caller check", async () => {
+  // A role the player lacks and the helper has, so a player reaches the
+  // caller check's refusal and not the empty-role advice.
+  const G = { GUILD_ID: '1', APPROVED_ROLE_IDS: '77' };
+  const press = (member, guild = '1') => ({ type: 3, member, guild_id: guild, channel_id: '556', application_id: 'app', token: 'ptok', message: { id: '9' }, data: { custom_id: 'send:700' } });
+  const rightClick = (member, guild = '1') => ({ type: 2, member, guild_id: guild, channel_id: '700', application_id: 'app', token: 'rtok', data: { name: COMMAND_NAME, target_id: '700' } });
+  const sub = (member, guild = '1') => ({ ...submit(), member, guild_id: guild });
+  const ADMINS = 'Only moderators and admins can send posts to GitHub.';
+  const ROLES = 'Only moderators and approved roles can send posts to GitHub.';
+  const ELSEWHERE = 'This only works on posts in the forums the bot is set up for.';
+  const GUILD_LINE = "The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).";
+  const FORUMS_LINE = 'The bot is not set up yet: FORUMS is not valid JSON: set it to JSON keyed by forum channel id, like {"111":{}}.';
+  const REPOS_LINE = 'The bot is not set up yet: REPOS is not set or not valid JSON: set it to JSON like {"KE":"owner/repo"}.';
+  const TEXTLESS_LINE = 'The bot is not set up yet: FORUMS entry 900: "client", "type" and "template" must each be text, like "template":"https://discord.com/channels/...".';
+  const badForums = { FORUM_CHANNEL_IDS: '', FORUMS: '{not json' };
+  const badRepos = { ...badForums, REPOS: '' };
+  const textless = { FORUM_CHANNEL_IDS: '', FORUMS: '{"900":{"template":{"toString":null}}}' };
+  for (const [why, broken, interaction, want] of [
+    ['a moderator right-click, broken FORUMS', badForums, rightClick(MOD), FORUMS_LINE],
+    ['a moderator submit, broken FORUMS', badForums, sub(MOD), FORUMS_LINE],
+    ['an approved role submit, broken FORUMS', badForums, sub(HELPER), FORUMS_LINE],
+    ['a player right-click, broken FORUMS', badForums, rightClick(PLAYER), ADMINS],
+    ['a player submit, broken FORUMS', badForums, sub(PLAYER), ROLES],
+    ['a moderator right-click, broken REPOS', badRepos, rightClick(MOD), REPOS_LINE],
+    ['a moderator submit, broken REPOS', badRepos, sub(MOD), REPOS_LINE],
+    ['a moderator press, broken REPOS', badRepos, press(MOD), REPOS_LINE],
+    ['an approved role press, broken REPOS', badRepos, press(HELPER), REPOS_LINE],
+    ['a player press, broken REPOS', badRepos, press(PLAYER), ROLES],
+    ['a player submit, broken REPOS', badRepos, sub(PLAYER), ROLES],
+    ['a moderator submit, a FORUMS value with no text form', textless, sub(MOD), TEXTLESS_LINE],
+    ['a moderator right-click, no forums and a STALE_DAYS of no text form', { FORUMS: '', FORUM_CHANNEL_IDS: '', STALE_DAYS: { toString: null } }, rightClick(MOD),
+      'The bot is not set up yet: STALE_DAYS is not text: set it as text. The checks below read it as unset.'],
+    ['an approved role press, broken REPOS and an APPROVED_ROLE_IDS of no text form', { ...badRepos, APPROVED_ROLE_IDS: { toString: null } }, press(HELPER), ROLES],
+    ['a moderator submit, a GUILD_ID of no text form', { ...badRepos, GUILD_ID: { toString: null } }, sub(MOD), GUILD_LINE],
+    ['a moderator of another server, right-click', badRepos, rightClick(MOD, '2'), ELSEWHERE],
+    ['a moderator of another server, press', badRepos, press(MOD, '2'), ELSEWHERE],
+    ['a moderator of another server, submit', badForums, sub(MOD, '2'), ELSEWHERE],
+    // With GUILD_ID not an id the caller's server cannot be told, so the
+    // reply names GUILD_ID alone, never the broken REPOS behind it.
+    ['GUILD_ID unset, a moderator of another server, press', { ...badRepos, GUILD_ID: '' }, press(MOD, '2'), GUILD_LINE],
+    ['GUILD_ID malformed, a moderator of another server, right-click', { ...badRepos, GUILD_ID: '1x' }, rightClick(MOD, '2'), GUILD_LINE],
+    ['GUILD_ID malformed, a moderator of another server, submit', { ...badRepos, GUILD_ID: '1x' }, sub(MOD, '2'), GUILD_LINE],
+    ['GUILD_ID unset, a moderator in the server, submit', { ...badRepos, GUILD_ID: '' }, sub(MOD), GUILD_LINE],
+  ]) {
+    const f = fakeFetch([]);
+    const j = await (await handle(await signed(interaction), { ...env, ...G, ...broken }, ctxFor(), { fetch: f })).json();
+    assert.equal(j.data.content, want, why);
+    assert.equal(f.calls.length, 0, `${why}: no calls`);
+  }
+  {
+    // With REPOS readable, a press keeps its order: the search for a
+    // filing comes first, so a filed post answers Already tracked and its
+    // card is marked, broken FORUMS or not.
+    const f = fakeFetch(discordRoutes([
+      ['GET', /api\.github\.com\/repos\/me\/test-one\/issues\/3$/, () => ({ number: 3, html_url: 'https://github.com/me/test-one/issues/3' })],
+      ['PATCH', /\/channels\/556\/messages\/96$/, () => ({})],
+    ]));
+    const kv = fakeKv({ 'issue:700': JSON.stringify({ repo: 'me/test-one', number: 3, key: 'ONE', by: 'Bite' }) });
+    const ctx = ctxFor();
+    const j = await (await handle(await signed(cardPress(HELPER)), { ...QUEUE, ...badForums, GUILD_ID: '1', STATE: kv }, ctx, { fetch: f, ...INST, log: () => {} })).json();
+    await Promise.all(ctx.jobs);
+    assert.match(j.data.content, /^Already tracked as ONE #3: /, 'a filed post still answers Already tracked');
+    assert.equal(f.find('PATCH', /\/channels\/556\/messages\/96$/).length, 1, 'and its card is marked');
+  }
+});
+
+test('WT5: with a setting no reader can read, the scan and the daily list do nothing, and the daily setup check names it', async () => {
+  const T = Date.UTC(2026, 10, 24, 15, 30);
+  const AGO = T - 3 * 60 * 60 * 1000;
+  // Made an hour ago: after the scan's start and past every marker.
+  const POST = String(BigInt(T - 60 * 60 * 1000 - 1420070400000) << 22n);
+  const activeWith = (deps, sent) => (url, init) => {
+    sent.push(url);
+    return /\/threads\/active$/.test(url) ? new Response(JSON.stringify({ threads: [{ id: POST, parent_id: '900' }] })) : deps.fetch(url, init);
+  };
+  {
+    // With every setting readable, the same scan reads the post, so the
+    // runs below have a post to skip.
+    const { env: e, deps } = setupWorld((s) => { s.alone['555'] = { ...s.channels[2] }; }, pubHex);
+    const kv = fakeKv({ 'scan:since': String(AGO), 'scan:state': JSON.stringify({ last: AGO }) });
+    const sent = [];
+    await scheduled({ cron: CRONS.scan }, { ...e, STATE: kv }, {}, { fetch: activeWith(deps, sent), now: () => T, log: () => {} }).catch(() => {});
+    assert.ok(sent.some((u) => u.includes(POST)), `with every setting readable, the scan reads the waiting post: ${sent.join(' | ')}`);
+  }
+  for (const [k, v] of UNREADABLE) {
+    for (const cron of [CRONS.scan, CRONS.daily, CRONS.setup]) {
+      const { env: e, deps } = setupWorld((s) => { s.alone['555'] = { ...s.channels[2] }; }, pubHex);
+      const kv = fakeKv({ 'scan:since': String(AGO), 'scan:state': JSON.stringify({ last: AGO }) });
+      const before = kv.m.get('scan:state');
+      const sent = [];
+      const out = [];
+      await scheduled({ cron }, { ...e, STATE: kv, [k]: v }, {}, { fetch: activeWith(deps, sent), now: () => T, log: (s) => out.push(s) });
+      if (cron !== CRONS.setup) {
+        const job = cron === CRONS.scan ? 'scan' : 'daily list';
+        assert.deepEqual(out, [`${k} is not text: the ${job} did not run.`], `${k}, the ${job}: one log line`);
+        assert.deepEqual(sent, [], `${k}, the ${job}: no call`);
+        assert.equal(kv.m.get('scan:state'), before, `${k}, the ${job}: no marker moves`);
+        continue;
+      }
+      const named = `- ${k} is not text: set it as text. The checks below read it as unset.`;
+      const posts = deps.fetch.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content);
+      if (['MOD_CHANNEL_ID', 'GUILD_ID', 'DISCORD_BOT_TOKEN'].includes(k)) {
+        assert.ok(!posts.length && out.some((l) => l.split('\n').includes(named)), `${k}, the setup check: logged, never posted: ${out.join(' | ')}`);
+      } else {
+        assert.ok(posts.some((p) => p.split('\n').includes(named)), `${k}, the setup check: named in the moderator channel: ${posts.join(' | ')}`);
+      }
+    }
+  }
+});
+
+test('WT6: with a setting no reader can read, a request never starts filing; a caller who may send is told which', async () => {
+  const rightClick = (member) => ({ type: 2, member, guild_id: '1', channel_id: '700', application_id: 'app', token: 'rtok', data: { name: COMMAND_NAME, target_id: '700' } });
+  const press = (member) => ({ type: 3, member, guild_id: '1', channel_id: '556', application_id: 'app', token: 'ptok', message: { id: '9' }, data: { custom_id: 'send:700' } });
+  // A readable forum list and an approved role the player lacks.
+  const G = { GUILD_ID: '1', FORUMS: '{"900":{}}', APPROVED_ROLE_IDS: '77' };
+  for (const [k, v] of UNREADABLE) {
+    for (const [who, interaction, may] of [['a moderator right-click', rightClick(MOD), true], ['a player press', press(PLAYER), false],
+      ['a moderator form submit', submit(), true], ['a moderator /bot-check', checkCmd(MOD), true]]) {
+      const f = fakeFetch([]);
+      const res = await handle(await signed(interaction), { ...env, ...G, [k]: v }, ctxFor(), { fetch: f });
+      if (k === 'DISCORD_PUBLIC_KEY') {
+        assert.equal(res.status, 401, `${k}, ${who}: refused, as main refuses a key it cannot read`);
+        continue;
+      }
+      const want = !may ? 'Only moderators and approved roles can send posts to GitHub.'
+        : k === 'GUILD_ID' && interaction.data.name === CHECK_COMMAND ? "The bot's GUILD_ID is not set to a server id, so it can check nothing. Fix it in the Worker's settings."
+        : k === 'GUILD_ID' ? "The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces)."
+          : `The bot is not set up yet: ${k} is not text: set it as text. The checks below read it as unset.`;
+      assert.equal((await res.json()).data.content, want, `${k}, ${who}`);
+      assert.equal(f.calls.length, 0, `${k}, ${who}: no calls, and no filing`);
+    }
+  }
+});
+
+test('WT7: the private reply keeps a last line that fits, and names what it leaves out', () => {
+  const head = 'Not posted in the moderator channel: x.';
+  const last = `- ${'y'.repeat(1950 - head.length - 4)}`;
+  assert.equal(privateText(head, [last]), `${head}\n\n${last}`, 'a last line within 2,000 characters is kept whole');
+  assert.equal(privateText(head, [last, '- z']), `${head}\n\n${last}\n- z`, 'a reply of 1,954 characters is sent whole, both lines kept');
+  const cut = privateText(head, [last, `- ${'z'.repeat(60)}`]);
+  assert.ok(cut.length <= 2000 && cut.endsWith('…and 2 more line(s): fix these, then run /bot-check again.'), `lines past the limit are counted: ${cut.slice(-90)}`);
+  // 1,930 characters kept and the 59-character notice for one more line: 1,989.
+  const a = `- ${'a'.repeat(1880 - head.length - 4)}`;
+  const b = `- ${'b'.repeat(47)}`;
+  assert.equal(privateText(head, [a, b, `- ${'c'.repeat(100)}`]), `${head}\n\n${a}\n${b}\n…and 1 more line(s): fix these, then run /bot-check again.`,
+    'a line that fits beside the notice is kept');
 });

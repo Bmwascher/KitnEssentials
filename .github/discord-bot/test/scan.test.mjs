@@ -23,7 +23,7 @@ const baseEnv = (kv) => ({ DISCORD_BOT_TOKEN: 'bot', GUILD_ID: '1', FORUMS: '{"9
 // id to the status its message calls answer with, and `postRefuse` refuses
 // only its sends; `said` holds a channel's messages, newest first. A post is
 // read from the active and archived lists. The bot's own user id is 'b'.
-function discord({ active = [], archived = [], pageSize = 50, refuse = {}, postRefuse = {}, said = {} } = {}) {
+function discord({ active = [], archived = [], pageSize = 50, refuse = {}, postRefuse = {}, said = {}, mod = { id: '555', type: 0, guild_id: '1' } } = {}) {
   let n = 0;
   const no = (status) => new Response(JSON.stringify({ message: 'no' }), { status });
   return fakeFetch([
@@ -35,6 +35,7 @@ function discord({ active = [], archived = [], pageSize = 50, refuse = {}, postR
       return { threads: rest.slice(0, pageSize), has_more: rest.length > pageSize };
     }],
     ['GET', /\/channels\/900$/, () => ({ ...FORUM, available_tags: [...FORUM.available_tags, { id: 's-ans', name: 'Answered' }] })],
+    ['GET', /\/channels\/555$/, () => mod],
     ['GET', /\/channels\/\d+$/, (b, url) => [...active, ...archived].find((t) => url.endsWith(`/${t.id}`)) || no(404)],
     ['GET', /\/channels\/\d+\/messages\/\d+$/, (b, url) => {
       const [, ch, id] = /channels\/(\d+)\/messages\/(\d+)$/.exec(url);
@@ -534,7 +535,7 @@ test('a long daily alert goes out in whole lines under 1,900 characters, and wha
   await daily({ ...baseEnv(kv), MOD_CHANNEL_ID: '555' }, { fetch: f, now: () => T0 + 7 * 60000, log: (s) => out.push(s) });
   const posted = f.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content);
   assert.equal(posted.length, 4, 'the daily posting share');
-  assert.match(posted[0], /^The post scan gave up on these posts, after 30 tries/);
+  assert.match(posted[0], /^The post scan gave up on these posts: after 30 tries;/);
   const entry = /^- queue card: https:\/\/discord\.com\/channels\/1\/\d+$/;
   for (const [i, msg] of posted.entries()) {
     assert.ok(msg.length <= 1900, `message ${i}: ${msg.length} characters`);
@@ -867,6 +868,7 @@ test('the daily check reports whether its message really went out', async () => 
     ['GET', /\/guilds\/1\/threads\/active$/, () => ({ threads: [] })],
     ['GET', /\/channels\/900$/, () => FORUM],
     ['GET', /\/threads\/archived\/public/, () => ({ threads: [] })],
+    ['GET', /\/channels\/555$/, () => ({ id: '555', type: 0, guild_id: '1' })],
     ['POST', /\/channels\/555\/messages$/, () => new Response('{}', { status: 500 })],
   ]);
   const r = await daily({ ...baseEnv(kv), MOD_CHANNEL_ID: '555' }, { fetch: f, now: () => T0 + 3 * HOUR, log: () => {} });
@@ -914,4 +916,161 @@ test('the daily check keeps its warnings when a long list is cut to fit', async 
   const out = [];
   await daily(baseEnv(kv), { fetch: f, now: () => T0 + 30 * 24 * HOUR, log: (s) => out.push(s) });
   assert.match(out.join('\n'), /Only the most recently archived posts were checked/);
+});
+
+test('NT1: a post that refuses the bot (403) is named once, only in a text channel of the server; a deleted one (404) never is', async () => {
+  for (const [status, named] of [[403, 1], [404, 0]]) {
+    const kv = started(T0);
+    const a = idAt(T0 + 1000);
+    const f = discord({ active: [{ id: a, parent_id: '900' }], postRefuse: { [a]: status } });
+    const env = { ...baseEnv(kv), MOD_CHANNEL_ID: '555' };
+    await scan(env, { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+    await scan(env, { fetch: f, now: () => T0 + 10 * 60000, log: () => {} });
+    assert.equal(f.find('POST', new RegExp(`/channels/${a}/messages$`)).length, 1, `${status}: one send, then given up`);
+    for (const hours of [1, 2]) await daily(env, { fetch: f, now: () => T0 + hours * HOUR, log: () => {} });
+    const link = `https://discord.com/channels/1/${a}`;
+    const posts = f.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content);
+    assert.equal(posts.filter((p) => p.split('\n').includes(`- greeting refused by the post (403): ${link}`)).length, named, `${status}: ${posts.join(' | ')}`);
+    // The post is too new for the waiting list, so the alert is the only
+    // place that could name it.
+    assert.equal(posts.join('\n').split(a).length - 1, named, `${status}: the post's id is written ${named} time(s) in all, the scan's problem paragraph included`);
+    assert.ok(f.calls.every((c) => c.redirect === 'manual'), `${status}: no scan or daily request follows a redirect`);
+  }
+  for (const [final, named] of [[403, 1], [404, 0]]) {
+    // The first send fails (500) and is retried; the second is the post's own
+    // refusal, which drops the saved entry the first failure left.
+    const why = `a retried failure, then the ${final}`;
+    const kv = started(T0);
+    const a = idAt(T0 + 1000);
+    const real = discord({ active: [{ id: a, parent_id: '900' }] });
+    let n = 0;
+    const g = async (url, init = {}) => (init.method === 'POST' && new RegExp(`/channels/${a}/messages$`).test(url)
+      ? new Response('{"message":"no"}', { status: ++n === 1 ? 500 : final }) : real(url, init));
+    g.find = real.find;
+    const env = { ...baseEnv(kv), MOD_CHANNEL_ID: '555' };
+    for (const m of [5, 10]) await scan(env, { fetch: g, now: () => T0 + m * 60000, log: () => {} });
+    await daily(env, { fetch: g, now: () => T0 + HOUR, log: () => {} });
+    const posts = real.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content);
+    assert.equal(n, 2, `${why}: two sends`);
+    assert.equal(posts.join('\n').split(a).length - 1, named, `${why}: named ${named} time(s): ${posts.join(' | ')}`);
+  }
+  {
+    // Two posts fail (500); on the retry one refuses the bot (403) and the
+    // other is sent. Only the refused post's entry leaves the saved paragraph.
+    const kv = started(T0);
+    const a = idAt(T0 + 1000);
+    const b = idAt(T0 + 2000);
+    const real = discord({ active: [{ id: a, parent_id: '900' }, { id: b, parent_id: '900' }] });
+    const sends = { [a]: 0, [b]: 0 };
+    const g = async (url, init = {}) => {
+      const m = init.method === 'POST' && /\/channels\/(\d+)\/messages$/.exec(url);
+      if (m && m[1] in sends && ++sends[m[1]] === 1) return new Response('{"message":"no"}', { status: 500 });
+      if (m && m[1] === a) return new Response('{"message":"no"}', { status: 403 });
+      return real(url, init);
+    };
+    g.find = real.find;
+    const env = { ...baseEnv(kv), MOD_CHANNEL_ID: '555' };
+    for (const m of [5, 10]) await scan(env, { fetch: g, now: () => T0 + m * 60000, log: () => {} });
+    await daily(env, { fetch: g, now: () => T0 + HOUR, log: () => {} });
+    const text = real.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content).join('\n');
+    assert.equal(text.split(a).length - 1, 1, `the refused post is named once: ${text}`);
+    assert.ok(text.includes(`post ${b}`), `the other post's saved problem stays: ${text}`);
+  }
+  {
+    // The run that ends the post on its 403 loses its state write; the next
+    // scan finds the finished record and still drops the saved entry.
+    const kv = started(T0);
+    const a = idAt(T0 + 1000);
+    const real = discord({ active: [{ id: a, parent_id: '900' }] });
+    let n = 0;
+    const g = async (url, init = {}) => (init.method === 'POST' && new RegExp(`/channels/${a}/messages$`).test(url)
+      ? new Response('{"message":"no"}', { status: ++n === 1 ? 500 : 403 }) : real(url, init));
+    g.find = real.find;
+    const env = { ...baseEnv(kv), MOD_CHANNEL_ID: '555' };
+    await scan(env, { fetch: g, now: () => T0 + 5 * 60000, log: () => {} });
+    const put = kv.put;
+    kv.put = async (k, v) => { if (k === 'scan:state') throw new Error('KV write failed'); return put(k, v); };
+    await scan(env, { fetch: g, now: () => T0 + 10 * 60000, log: () => {} }).catch(() => {});
+    kv.put = put;
+    await scan(env, { fetch: g, now: () => T0 + 15 * 60000, log: () => {} });
+    await daily(env, { fetch: g, now: () => T0 + HOUR, log: () => {} });
+    const text = real.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content).join('\n');
+    assert.equal(n, 2, 'a lost state write: two sends');
+    assert.equal(text.split(a).length - 1, 1, `a lost state write: the refused post is named once: ${text}`);
+    assert.ok(text.split('\n').includes(`- greeting refused by the post (403): https://discord.com/channels/1/${a}`), `a lost state write: the recovered 403 line is posted: ${text}`);
+  }
+  {
+    // An `ended` the bot could not have written makes the record damaged,
+    // never a reason to drop a saved entry.
+    const a = idAt(T0 + 1000);
+    const kv = started(T0, { error: { at: T0, text: `could not read or message post ${a}`, items: [`post ${a}`] } });
+    await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g', skipped: 'x', ended: 'false' }));
+    const f = discord({ active: [{ id: a, parent_id: '900' }] });
+    await scan(baseEnv(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+    assert.match(String((stateOf(kv).error || {}).text), new RegExp(`post ${a} \\(its saved record .* is damaged\\)`), 'an ended of the wrong type: the record is damaged');
+  }
+  {
+    // Discord takes the alert but its answer is not JSON: the give-up counts
+    // as named, and the next daily check does not repeat it.
+    const kv = started(T0);
+    const a = idAt(T0 + 1000);
+    const real = discord({ active: [{ id: a, parent_id: '900' }], postRefuse: { [a]: 403 } });
+    const g = async (url, init = {}) => (init.method === 'POST' && /\/channels\/555\/messages$/.test(url)
+      ? (real.calls.push({ method: 'POST', url, body: JSON.parse(init.body) }), new Response('<html>', { status: 200 })) : real(url, init));
+    g.find = real.find;
+    const env = { ...baseEnv(kv), MOD_CHANNEL_ID: '555' };
+    await scan(env, { fetch: g, now: () => T0 + 5 * 60000, log: () => {} });
+    for (const hours of [1, 2]) await daily(env, { fetch: g, now: () => T0 + hours * HOUR, log: () => {} });
+    const posts = real.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content);
+    assert.equal(posts.join('\n').split(a).length - 1, 1, `a taken post with an answer that is not JSON: named once: ${posts.join(' | ')}`);
+  }
+  {
+    // A 403 on the bot's own user, a request every post shares, names no post.
+    const kv = started(T0);
+    const a = idAt(T0 + 1000);
+    // A post with a message, so the greeting look asks for the bot's own user.
+    const f = discord({ active: [{ id: a, parent_id: '900' }], said: { [a]: [{ id: a, author: { id: 'p' }, content: 'hi' }] } });
+    const real = f;
+    const g = async (url, init) => (/\/users\/@me$/.test(url) ? new Response('{"message":"no"}', { status: 403 }) : real(url, init));
+    g.find = real.find;
+    const env = { ...baseEnv(kv), MOD_CHANNEL_ID: '555' };
+    await scan(env, { fetch: g, now: () => T0 + 5 * 60000, log: () => {} });
+    await daily(env, { fetch: g, now: () => T0 + HOUR, log: () => {} });
+    assert.ok(!real.find('POST', /\/channels\/555\/messages$/).some((c) => c.body.content.includes('refused by the post')), 'no post blamed');
+  }
+  for (const [why, wrong] of [['a post', { type: 11, guild_id: '1' }], ["another server's text channel", { type: 0, guild_id: '2' }]]) {
+    const kv = started(T0);
+    const a = idAt(T0 + 1000);
+    const mod = { id: '555', ...wrong };
+    const f = discord({ active: [{ id: a, parent_id: '900' }], postRefuse: { [a]: 403 }, mod });
+    const env = { ...baseEnv(kv), MOD_CHANNEL_ID: '555' };
+    await scan(env, { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+    const out = [];
+    await daily(env, { fetch: f, now: () => T0 + HOUR, log: (s) => out.push(s) });
+    assert.deepEqual(f.find('POST', /\/channels\/555\/messages$/), [], `${why}: never posted there`);
+    assert.match(out.join('\n'), /not posted to the moderator channel: MOD_CHANNEL_ID 555 is not a text channel of this server/, why);
+    Object.assign(mod, { type: 0, guild_id: '1' });
+    await daily(env, { fetch: f, now: () => T0 + 2 * HOUR, log: () => {} });
+    assert.ok(f.find('POST', /\/channels\/555\/messages$/).some((c) => c.body.content.includes(`https://discord.com/channels/1/${a}`)), `${why}: named once the channel is right`);
+    const toMod = f.calls.filter((c) => /\/channels\/555(\/messages)?$/.test(c.url));
+    assert.ok(toMod.some((c) => c.method === 'POST') && toMod.every((c) => c.redirect === 'manual'), `${why}: the check and the posts follow no redirect`);
+  }
+  // The gate's other refusals: a failed read, an answer with no server id,
+  // and an id that is not one, which is never read.
+  for (const [why, mod, modId, logged, reads] of [
+    ['a channel read failing (500)', new Response('{}', { status: 500 }), '555', /not posted to the moderator channel: MOD_CHANNEL_ID 555 could not be checked \(Discord 500\)/, 1],
+    ['an answer with no server id', { id: '555', type: 0 }, '555', /not posted to the moderator channel: MOD_CHANNEL_ID 555 could not be checked \(Discord's answer had no server id\)/, 1],
+    ['a MOD_CHANNEL_ID that is no id', undefined, '5x', /not posted to the moderator channel: MOD_CHANNEL_ID is not a channel id/, 0],
+  ]) {
+    const kv = started(T0);
+    const a = idAt(T0 + 1000);
+    const f = discord({ active: [{ id: a, parent_id: '900' }], postRefuse: { [a]: 403 }, ...(mod ? { mod } : {}) });
+    const env = { ...baseEnv(kv), MOD_CHANNEL_ID: modId };
+    await scan(env, { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+    const out = [];
+    await daily(env, { fetch: f, now: () => T0 + HOUR, log: (s) => out.push(s) });
+    assert.deepEqual(f.find('POST', new RegExp(`/channels/${modId}/messages$`)), [], `${why}: never posted there`);
+    assert.match(out.join('\n'), logged, why);
+    assert.equal(f.find('GET', new RegExp(`/channels/${modId}$`)).length, reads, `${why}: ${reads} channel read(s)`);
+  }
 });
