@@ -1227,7 +1227,7 @@ test('WT1: /bot-check is for moderators of this server, answers privately at onc
     assert.deepEqual(deps.fetch.find('POST', /\/channels\/777\/messages$/), [], `${why}: never into a post`);
     const reply = deps.fetch.find('PATCH', /\/webhooks\/app\/tok\/messages\/@original$/)[0].body;
     assert.match(reply.content, said, why);
-    // The private reply names who ran the check, and pings no one.
+    // The private reply pings no one, whoever it names.
     assert.deepEqual(reply.allowed_mentions, { parse: [] }, `${why}: the private reply pings no one`);
     // What the moderators read: the command's own result, naming who ran it
     // as a mention that pings no one.
