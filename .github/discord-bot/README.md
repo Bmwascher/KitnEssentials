@@ -500,6 +500,11 @@ Accepted on purpose; each line says how you would notice it.
 - A post the scan fails to greet in 30 runs in a row (server errors included),
   about 30 minutes at one scan a minute, is given up on; the daily alert names
   it.
+- If the scan cannot save its state in the run that gives up on a deleted
+  post, the next daily alert can name that post once more.
+- If the scan cannot save its state in the run that gives up on a post that
+  refuses the bot (403), and the post is locked or archived before the next
+  scan, the daily alert never names it.
 - A post can rarely get two greetings when two scans overlap (a scan that runs
   longer than a minute).
 - A queue card can stay live on a filed post, or a post can get two cards:
