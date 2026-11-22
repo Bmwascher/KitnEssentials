@@ -999,6 +999,20 @@ test('NT1: a post that refuses the bot (403) is named once, only in a text chann
     assert.equal(text.split(a).length - 1, 1, `a lost state write: the refused post is named once: ${text}`);
   }
   {
+    // A MOD_CHANNEL_ID with no text form is no channel id: the alert is
+    // logged with the reason, and its give-up is named again later.
+    const kv = started(T0);
+    const a = idAt(T0 + 1000);
+    const f = discord({ active: [{ id: a, parent_id: '900' }], postRefuse: { [a]: 403 } });
+    const env = { ...baseEnv(kv), MOD_CHANNEL_ID: { toString: null } };
+    await scan(env, { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+    const out = [];
+    await daily(env, { fetch: f, now: () => T0 + HOUR, log: (s) => out.push(s) });
+    assert.ok(out.some((l) => l.startsWith('not posted to the moderator channel: MOD_CHANNEL_ID is not a channel id') && l.includes(a)),
+      `a MOD_CHANNEL_ID with no text form: the alert is logged: ${out.join(' | ')}`);
+    assert.equal(kv.m.get('daily:named'), undefined, 'a MOD_CHANNEL_ID with no text form: the give-up is not counted as named');
+  }
+  {
     // Discord takes the alert but its answer is not JSON: the give-up counts
     // as named, and the next daily check does not repeat it.
     const kv = started(T0);

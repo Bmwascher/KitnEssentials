@@ -573,7 +573,9 @@ export async function daily(env, deps = {}) {
   // their share, on a client of its own.
   const checker = discordClient(env.DISCORD_BOT_TOKEN, countedFetch(timedFetch(oneHop(deps.fetch || fetch), CALL_MS), 1));
   let wrongChannel = null;
-  const id = isDiscordId(env.MOD_CHANNEL_ID) ? String(env.MOD_CHANNEL_ID) : null;
+  // A setting with no text form throws when read as text; it is no channel id.
+  let id = null;
+  try { if (isDiscordId(env.MOD_CHANNEL_ID)) id = String(env.MOD_CHANNEL_ID); } catch { /* no text form */ }
   const checkChannel = async () => {
     if (wrongChannel === null) {
       wrongChannel = !id ? 'MOD_CHANNEL_ID is not a channel id' : await checker.getChannel(id).then(
