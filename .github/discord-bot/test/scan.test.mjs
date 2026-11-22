@@ -1088,3 +1088,16 @@ test('NT1: a post that refuses the bot (403) is named once, only in a text chann
     assert.equal(f.find('GET', new RegExp(`/channels/${modId}$`)).length, reads, `${why}: ${reads} channel read(s)`);
   }
 });
+
+test('NT2: a setting the daily list reads with no text form never stops its alert', async () => {
+  // The settings the daily list's own channel check reads, written here.
+  for (const k of ['GUILD_ID', 'MOD_CHANNEL_ID', 'DISCORD_BOT_TOKEN']) {
+    const kv = started(T0);
+    const f = discord({ active: [] });
+    const env = { ...baseEnv(kv), MOD_CHANNEL_ID: '555', [k]: { toString: null } };
+    const out = [];
+    await daily(env, { fetch: f, now: () => T0 + 3 * HOUR, log: (s) => out.push(s) });
+    assert.ok(out.some((l) => l.startsWith('not posted to the moderator channel: ') && l.includes('The post scan has not run for at least')),
+      `${k} with no text form: the stale-scan warning is logged with its reason: ${out.join(' | ')}`);
+  }
+});
