@@ -13,6 +13,9 @@ import { BudgetSpent, countedFetch } from './scan.js';
 const present = (v) => v !== undefined && v !== null && String(v) !== '';
 // These the code reads as unset when blank.
 const blank = (v) => String(v ?? '').trim() === '';
+// The forum setting the bot reads: the older FORUM_CHANNEL_IDS only while
+// FORUMS is blank.
+const forumSetting = (env) => (blank(env.FORUMS) && !blank(env.FORUM_CHANNEL_IDS) ? 'FORUM_CHANNEL_IDS' : 'FORUMS');
 // Every setting the checks read. A JSON variable such as {"toString":null}
 // has no text form and throws wherever it is turned into text, so the
 // checks read such a value as unset, and configProblems names it.
@@ -91,7 +94,7 @@ export function configProblems(raw, { bindings = true } = {}) {
     out.push('FORUMS is empty: the bot does nothing anywhere until it names the player forums.');
   }
   // What the bot will use: the checklist forum is never a player forum.
-  if (forumsRead && !Object.keys(parseForums(env)).length) out.push('FORUMS names no player forum (the checklist forum does not count).');
+  if (forumsRead && !Object.keys(parseForums(env)).length) out.push(`${forumSetting(env)} names no player forum (the checklist forum does not count).`);
   if (!digits(env.GUILD_ID)) out.push("GUILD_ID is not set to the server's id (digits only, no spaces).");
   if (!blank(env.TEMPLATES)) {
     let t = null;
@@ -256,8 +259,7 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
   let forums = {};
   try { forums = Object.fromEntries(Object.entries(parseForums(env)).filter(([id]) => digits(id))); } catch { /* named by configProblems */ }
   // configProblems says why no player forum is left; this says what it hides.
-  const forumSetting = blank(env.FORUMS) && !blank(env.FORUM_CHANNEL_IDS) ? 'FORUM_CHANNEL_IDS' : 'FORUMS';
-  if (token && !Object.keys(forums).length) problems.push(`The forum checks (permissions, tags and template messages) did not run: fix ${forumSetting} above, then run the check again.`);
+  if (token && !Object.keys(forums).length) problems.push(`The forum checks (permissions, tags and template messages) did not run: fix ${forumSetting(env)} above, then run the check again.`);
   // A call ends when its answer's body is read, so its time limit covers
   // both steps. A call whose limit came from the deadline, not from its own
   // CALL_MS, was stopped by the deadline when it times out.
@@ -265,9 +267,11 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
     const late = deadline - Date.now() < CALL_MS;
     try {
       const res = await f(url, init);
-      const body = await res.arrayBuffer();
+      // An error answer's status is the diagnosis, so a body that cannot be
+      // read costs only the body, as the clients' own readers treat it.
+      const body = await res.arrayBuffer().catch((e) => { if (res.ok) throw e; return null; });
       // A 204, 205 or 304 answer may carry no body.
-      return new Response([204, 205, 304].includes(res.status) ? null : body, { status: res.status, statusText: res.statusText, headers: res.headers });
+      return new Response([204, 205, 304].includes(res.status) || body === null ? null : body, { status: res.status, statusText: res.statusText, headers: res.headers });
     } catch (e) {
       if (late && e.name === 'TimeoutError') throw new Error(`out of time during ${init.method || 'GET'} ${url}`);
       throw e;
@@ -302,8 +306,9 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
       const roles = need(await discord.call('GET', `/guilds/${guild}/roles`), 'role list');
       base = { me, member, roles };
     } catch (e) {
-      problems.push(`Could not check the bot's access to the server (${short(e)}), so its channel, tag and role checks did not run: fix this, then run the check again.`);
-      if (digits(mod)) modState = `the moderator channel could not be checked (${short(e)})`;
+      problems.push(stopped(e) ? "The bot's access to the server: not checked (out of time or calls), so its channel, tag and role checks did not run: run the check again."
+        : `Could not check the bot's access to the server (${short(e)}), so its channel, tag and role checks did not run: fix this, then run the check again.`);
+      if (digits(mod)) modState = stopped(e) ? 'the moderator channel was not checked (out of time or calls)' : `the moderator channel could not be checked (${short(e)})`;
     }
     if (base) {
       try {
@@ -414,7 +419,8 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
           }
         }
       } catch (e) {
-        problems.push(`Could not check the Message Content setting or the public key (${short(e)}).`);
+        problems.push(stopped(e) ? 'The Message Content setting and the public key: not checked (out of time or calls).'
+          : `Could not check the Message Content setting or the public key (${short(e)}).`);
       }
     }
 

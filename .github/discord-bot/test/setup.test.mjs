@@ -37,7 +37,7 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
     ['a FORUM_CHANNEL_IDS entry that is no id', { FORUMS: '', FORUM_CHANNEL_IDS: '900,help' }, /^FORUM_CHANNEL_IDS entry help is not a channel id\.$/],
     ['a template that is no message link', { FORUMS: '{"900":{"template":"https://discord.com/channels/1/2"}}' }, /^FORUMS entry 900: its "template" is not a message link/],
     ['FORUMS naming only the checklist forum', { FORUMS: '{"950":{}}', CHECKLIST_FORUM_ID: '950' }, /^FORUMS names no player forum/],
-    ['FORUM_CHANNEL_IDS holding only commas', { FORUMS: '', FORUM_CHANNEL_IDS: ' , ' }, /^FORUMS names no player forum/],
+    ['FORUM_CHANNEL_IDS holding only commas', { FORUMS: '', FORUM_CHANNEL_IDS: ' , ' }, /^FORUM_CHANNEL_IDS names no player forum/],
     ['no GUILD_ID', { GUILD_ID: '' }, /^GUILD_ID is not set/],
     ['a GUILD_ID of spaces', { GUILD_ID: '  ' }, /^GUILD_ID is not set/],
     ['a GUILD_ID with a space', { GUILD_ID: ' 1' }, /^GUILD_ID is not set/],
@@ -209,6 +209,8 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
     ['a template read answered 204, with no message', (s) => { s.template = new Response(null, { status: 204 }); }, /^Forum <#900>: could not check its template message \(Discord's answer had no message\)\.$/],
     ['a missing role', (s) => { s.env = { APPROVED_ROLE_IDS: '777' }; }, /^APPROVED_ROLE_IDS: the role <@&777> does not exist in this server\.$/],
     ['no installation', (s) => { s.installs['me/one'] = refusal(404); }, /^me\/one: the GitHub App is not installed there \(404\)\. Install it on that repo\.$/],
+    ['no installation, its answer body cut off', (s) => { s.installs['me/one'] = new Response(new ReadableStream({ start(c) { c.error(new TypeError('connection reset')); } }), { status: 404 }); },
+      /^me\/one: the GitHub App is not installed there \(404\)\. Install it on that repo\.$/],
     ['a renamed repo (301 on the installation read)', (s) => { s.installs['me/one'] = new Response('', { status: 301, headers: { location: 'https://api.github.com/repositories/9/installation' } }); },
       /^me\/one: GitHub says the repo has moved \(301\)\. Set REPOS or LOCK_REPO to its new owner\/repo\.$/],
     ['issues not write', (s) => { s.token = { token: 't', permissions: { issues: 'read' } }; }, /^me\/one: the GitHub App lacks Issues: Read and write\./],
@@ -301,14 +303,14 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
     const { env, deps } = setupWorld();
     const fetch = (url, init) => (/\/applications\/@me$/.test(url) ? stall(init) : deps.fetch(url, init));
     const r = await setupCheck(env, { fetch }, { deadline: Date.now() + 300 });
-    assert.ok(r.problems.includes('Could not check the Message Content setting or the public key (out of time or calls).'), `a read the deadline cuts off: ${r.problems.join(' | ')}`);
+    assert.ok(r.problems.includes('The Message Content setting and the public key: not checked (out of time or calls).'), `a read the deadline cuts off: ${r.problems.join(' | ')}`);
   }
   {
     // The headers come at once; the body stalls until the deadline.
     const { env, deps } = setupWorld();
     const fetch = (url, init) => (/\/applications\/@me$/.test(url) ? stallBody(init) : deps.fetch(url, init));
     const r = await setupCheck(env, { fetch }, { deadline: Date.now() + 300 });
-    assert.ok(r.problems.includes('Could not check the Message Content setting or the public key (out of time or calls).'), `a body the deadline cuts off: ${r.problems.join(' | ')}`);
+    assert.ok(r.problems.includes('The Message Content setting and the public key: not checked (out of time or calls).'), `a body the deadline cuts off: ${r.problems.join(' | ')}`);
   }
   const unlisted = { ...setupWorld().s.channels[2] };
   // Each row breaks one thing; the moderator channel's state stays its own.
