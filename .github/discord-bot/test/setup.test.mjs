@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { configProblems, channelPermissions, fitLines } from '../src/setup.js';
-import { PERMS, postLines, taken } from '../src/core.js';
+import { configProblems, channelPermissions, fitLines, setupCheck } from '../src/setup.js';
+import { PERMS, postLines, taken, STATUS_NAMES, CHECKLIST_NAMES, LABEL_DEFS, LABELS } from '../src/core.js';
+import { setupWorld } from './setup-world.mjs';
 
 // Discord's own message limit, which every message sent must fit.
 const DISCORD_MAX = 2000;
@@ -120,4 +121,175 @@ test('ST4: postLines sends whole lines in bounded messages and says which it sen
     ['a failure with no answer', new Error('network'), false],
     ['no error at all', undefined, false],
   ]) assert.equal(taken(err), want, why);
+});
+
+const checkOf = async (edit) => {
+  const { env, deps, f } = setupWorld(edit);
+  return { ...(await setupCheck(env, deps, { deadline: Date.now() + 20000 })), f };
+};
+const deny = (id, bits) => ({ id, type: 0, deny: String(bits), allow: '0' });
+const tagNames = (names) => names.map((name, i) => ({ id: String(800 + i), name }));
+const refusal = (status) => new Response('{"message":"no"}', { status });
+const others = (n, size = 100) => Array.from({ length: size }, (_, i) => ({ name: `other-${n}-${i}` }));
+const allLabels = () => LABEL_DEFS.map(([name]) => ({ name }));
+
+test('ST3: setupCheck names each problem in one line with its fix, passes only on the evidence it needs, and checks the moderator channel whatever else fails', async () => {
+  const clean = await checkOf(() => {});
+  assert.deepEqual(clean.problems, [], "all pass, the template in a post read directly (444 is not in the guild's list) included");
+  assert.equal(clean.mod, 'ok');
+  assert.ok(clean.passed > 0);
+  for (const [why, edit, re] of [
+    ['a listed channel naming another server', (s) => { s.channels[2].guild_id = '2'; }, /^Moderator channel <#555>: it is not a channel of this server\. Check the id\.$/],
+    ['a listed channel without its server id (an optional field)', (s) => { delete s.channels[1].guild_id; }, /^Queue channel <#556>: could not check it \(Discord's answer had no server id\)\.$/],
+    ['a token request refused (404), which is no missing install', (s) => { s.token = refusal(404); }, /^Could not check me\/one \(GitHub POST \/app\/installations\/1\/access_tokens -> 404/],
+    ['an installation read failing (500) with " -> 404 " in its body', (s) => { s.installs['me/one'] = new Response('upstream said -> 404 x', { status: 500 }); },
+      /^Could not check me\/one \(GitHub GET \/repos\/me\/one\/installation -> 500/],
+    ['a missing public key', (s) => { s.env = { DISCORD_PUBLIC_KEY: '' }; }, /^DISCORD_PUBLIC_KEY is not the 64-character public key/],
+    ['a public key of the wrong form', (s) => { s.env = { DISCORD_PUBLIC_KEY: 'z'.repeat(64) }; }, /^DISCORD_PUBLIC_KEY is not the 64-character public key/],
+    ["a public key of another app than the token's", (s) => { s.app = { ...s.app, verify_key: 'b'.repeat(64) }; },
+      /^DISCORD_PUBLIC_KEY and DISCORD_BOT_TOKEN belong to different Discord apps\. In the developer portal, open the bot's app and set both from it/],
+    ['a broken GUILD_ID: the application group still runs', (s) => { s.env = { GUILD_ID: 'x' }; s.app = { flags: 0 }; }, /^The Message Content setting is off/],
+    ['a broken GUILD_ID: the template group still runs', (s) => { s.env = { GUILD_ID: 'x' }; s.template = refusal(403); }, /^Forum <#900>: its template message cannot be read \(403\)\./],
+    ['a broken GUILD_ID: the server group says it did not run', (s) => { s.env = { GUILD_ID: 'x' }; },
+      /^The channel, tag and role checks did not run: fix GUILD_ID above, then run the check again\.$/],
+    ['no bot token', (s) => { s.env = { DISCORD_BOT_TOKEN: '' }; }, /^DISCORD_BOT_TOKEN is not set/],
+    ['no bot token: the Discord groups say they did not run', (s) => { s.env = { DISCORD_BOT_TOKEN: '' }; },
+      /^The Discord checks \(channels, tags, roles, Message Content, the public key and the template messages\) did not run: fix DISCORD_BOT_TOKEN above, then run the check again\.$/],
+    ['no bot token: the GitHub group still runs', (s) => { s.env = { DISCORD_BOT_TOKEN: '' }; s.installs['me/one'] = refusal(404); }, /^me\/one: the GitHub App is not installed there \(404\)\./],
+    ['no App id', (s) => { s.env = { GITHUB_APP_ID: '' }; }, /^GITHUB_APP_ID is not set, or holds a space/],
+    ['an App id holding a space', (s) => { s.env = { GITHUB_APP_ID: '12 34' }; }, /^GITHUB_APP_ID is not set, or holds a space/],
+    ['no App id: the GitHub group says it did not run', (s) => { s.env = { GITHUB_APP_ID: '' }; },
+      /^The GitHub checks \(install, permissions and labels\) did not run: fix GITHUB_APP_ID or GITHUB_APP_PRIVATE_KEY above, then run the check again\.$/],
+    ['no REPOS and no LOCK_REPO: the GitHub group says it did not run', (s) => { s.env = { REPOS: '' }; },
+      /^The GitHub checks \(install, permissions and labels\) did not run: fix REPOS above, then run the check again\.$/],
+    ['a FORUMS value with no text form: named, and every group still runs', (s) => { s.env = { FORUMS: '{"900":{"template":{"toString":null}}}' }; s.installs['me/one'] = refusal(404); },
+      /^me\/one: the GitHub App is not installed there \(404\)\./],
+    ['the roles read answered 204, with no role list', (s) => { s.rolesAnswer = new Response(null, { status: 204 }); },
+      /^Could not check the bot's access to the server \(Discord's answer had no role list\), so its channel, tag and role checks did not run: fix this, then run the check again\.$/],
+    ['the application read answered 204', (s) => { s.app = new Response(null, { status: 204 }); },
+      /^Could not check the Message Content setting or the public key \(Discord's answer had no application\)\.$/],
+    ['@everyone as an approved role', (s) => { s.env = { APPROVED_ROLE_IDS: '1' }; }, /^APPROVED_ROLE_IDS: <@&1> is the @everyone role, which the filing check never matches\./],
+    ['a moderator channel everyone can see', (s) => { s.channels[2].permission_overwrites = []; }, /^Moderator channel <#555>: everyone in the server can see it/],
+    ['a missing Answered tag', (s) => { s.channels[0].available_tags = tagNames([...STATUS_NAMES, 'Accepted']); }, /^Forum <#900> has no "Answered" tag\./],
+    ['a private key that is no key file', (s) => { s.env = { GITHUB_APP_PRIVATE_KEY: 'secret' }; }, /^GITHUB_APP_PRIVATE_KEY is not the text of a private key file/],
+    ['a broken GUILD_ID, the GitHub checks still run', (s) => { s.env = { GUILD_ID: 'x' }; s.installs['me/one'] = refusal(404); }, /^me\/one: the GitHub App is not installed there \(404\)\./],
+    ['a broken REPOS, LOCK_REPO still checked', (s) => { s.env = { REPOS: '', LOCK_REPO: 'me/lock' }; s.installs['me/lock'] = refusal(404); }, /^me\/lock: the GitHub App is not installed there \(404\)\./],
+    ['a lock-only repo with read-only issue access', (s) => { s.env = { LOCK_REPO: 'me/lock' }; s.installs['me/lock'] = { id: 2 }; s.tokens['2'] = { token: 't2', permissions: { issues: 'read' } }; },
+      /^me\/lock: the GitHub App lacks Issues: Read and write\./],
+    ['a listed channel of the wrong kind', (s) => { s.channels[0].type = 0; }, /^Forum <#900>: it is the wrong kind of channel \(a forum is needed\)\. Check the id\.$/],
+    ['missing from the list, its own read refused (403)', (s) => { s.channels.splice(1, 1); s.alone['556'] = refusal(403); }, /^Queue channel <#556>: the bot cannot see it\. Allow View Channel for the bot's role there\.$/],
+    ['missing from the list, no such channel (404)', (s) => { s.channels.splice(1, 1); }, /^Queue channel <#556>: no such channel\. Check the id\.$/],
+    ['missing from the list, its read failing (500)', (s) => { s.channels.splice(1, 1); s.alone['556'] = refusal(500); }, /^Queue channel <#556>: could not check it \(Discord GET \/channels\/556 -> 500/],
+    ['missing from the list, in another server', (s) => { s.channels.splice(1, 1); s.alone['556'] = { id: '556', guild_id: '2', type: 0 }; }, /^Queue channel <#556>: it is not a channel of this server\. Check the id\.$/],
+    ['missing from the list, a post', (s) => { s.channels.splice(1, 1); s.alone['556'] = { id: '556', guild_id: '1', type: 11 }; }, /^Queue channel <#556>: it is a post, not a channel\. Check the id\.$/],
+    ['missing from the list, then checked from its own answer', (s) => { s.channels.splice(1, 1); s.alone['556'] = { id: '556', guild_id: '1', type: 0, permission_overwrites: [deny('11', PERMS.sendMessages)] }; },
+      /^Queue channel <#556>: the bot lacks Send Messages\./],
+    ['a missing status tag', (s) => { s.channels[0].available_tags = tagNames([...STATUS_NAMES.filter((n) => n !== 'Shipped'), 'Accepted', 'Answered']); }, /^Forum <#900> has no "Shipped" tag\. Add it, spelled as the README lists it\.$/],
+    ['a missing Accepted tag', (s) => { s.channels[0].available_tags = tagNames([...STATUS_NAMES, 'Answered']); }, /^Forum <#900> has no "Accepted" tag\./],
+    ['a missing checklist tag', (s) => { s.channels[3].available_tags = tagNames([...CHECKLIST_NAMES.filter((n) => n !== 'Done'), 'Accepted']); }, /^Checklist forum <#950> has no "Done" tag\./],
+    ['Message Content off', (s) => { s.app = { flags: 0 }; }, /^The Message Content setting is off: filed issues would quote no text, and the bot would see no attachments\./],
+    ['an unreadable template', (s) => { s.template = refusal(403); }, /^Forum <#900>: its template message cannot be read \(403\)\./],
+    ['a template read failing (500), which says nothing of the link', (s) => { s.template = refusal(500); }, /^Forum <#900>: could not check its template message \(Discord GET \/channels\/444\/messages\/555 -> 500/],
+    ['a template read answered 204, with no message', (s) => { s.template = new Response(null, { status: 204 }); }, /^Forum <#900>: could not check its template message \(Discord's answer had no message\)\.$/],
+    ['a missing role', (s) => { s.env = { APPROVED_ROLE_IDS: '777' }; }, /^APPROVED_ROLE_IDS: the role <@&777> does not exist in this server\.$/],
+    ['no installation', (s) => { s.installs['me/one'] = refusal(404); }, /^me\/one: the GitHub App is not installed there \(404\)\. Install it on that repo\.$/],
+    ['a renamed repo (301 on the installation read)', (s) => { s.installs['me/one'] = new Response('', { status: 301, headers: { location: 'https://api.github.com/repositories/9/installation' } }); },
+      /^me\/one: GitHub says the repo has moved \(301\)\. Set REPOS or LOCK_REPO to its new owner\/repo\.$/],
+    ['issues not write', (s) => { s.token = { token: 't', permissions: { issues: 'read' } }; }, /^me\/one: the GitHub App lacks Issues: Read and write\./],
+    ['a token answer with no permissions', (s) => { s.token = { token: 't' }; }, /^me\/one: could not check the GitHub App's permissions \(GitHub's answer had none\)\.$/],
+    ['a missing label', (s) => { s.labelPages = [allLabels().filter((l) => l.name !== 'needs-info')]; }, /^me\/one: the label "needs-info" is missing\. Run npm run labels me\/one\.$/],
+    ['a label in another letter case', (s) => { s.labelPages = [LABEL_DEFS.map(([name]) => ({ name: name === 'from-discord' ? 'From-Discord' : name }))]; },
+      /^me\/one: the label "From-Discord" must be named "from-discord", as the bot matches names exactly\. Rename it on GitHub\.$/],
+    ['exactly 300 labels, three full pages, the bot labels unseen', (s) => { s.labelPages = [others(1), others(2), others(3)]; },
+      /^me\/one: could not check the labels "from-discord", .*: the repo has at least 300 labels, and the bot read only the first 300\.$/],
+    ['a channel answer with no overwrite list', (s) => { delete s.channels[1].permission_overwrites; }, /^Queue channel <#556>: could not check the bot's permissions \(Discord's answer had no permission overwrites\)\.$/],
+    ['a forum answer with no tag list', (s) => { delete s.channels[0].available_tags; }, /^Forum <#900>: could not check its tags \(Discord's answer had no tag list\)\.$/],
+    ['an application answer with no flags (an optional field)', (s) => { s.app = {}; }, /^Could not check the Message Content setting \(Discord's answer had no flags\)\.$/],
+    ['a failed read of the server group', (s) => { s.rolesAnswer = refusal(500); },
+      /^Could not check the bot's access to the server \(Discord GET \/guilds\/1\/roles -> 500 .*\), so its channel, tag and role checks did not run: fix this, then run the check again\.$/],
+    ['a spent call budget', (s) => { s.env = { FORUMS: JSON.stringify(Object.fromEntries(Array.from({ length: 30 }, (_, i) => [String(1000 + i), {}]))) }; }, /^Forum <#\d+>: not checked \(out of time or calls\)\.$/],
+  ]) {
+    const { problems } = await checkOf(edit);
+    assert.ok(problems.some((l) => re.test(l)), `${why}: ${problems.join(' | ')}`);
+    assert.ok(problems.every((l) => !l.includes('\n')), `${why}: one line each`);
+    assert.ok(!problems.some((l) => /lacks|is missing|is off|is not installed/.test(l) && /optional field|no overwrite list|no tag list|no permissions|204|failing \(500\)|failed read/.test(why)), `${why}: never a fact without the evidence`);
+    if (/^missing from the list/.test(why)) assert.equal(problems.filter((l) => l.includes('<#556>')).length, 1, `${why}: one line only`);
+  }
+  // The permissions each kind of channel needs, written out here and not
+  // taken from the checker: each, denied alone, gives its line and one check
+  // fewer passed.
+  const V = ['View Channel', PERMS.viewChannel];
+  const S = ['Send Messages', PERMS.sendMessages];
+  const T = ['Send Messages in Threads', PERMS.sendMessagesInThreads];
+  const M = ['Manage Threads', PERMS.manageThreads];
+  const H = ['Read Message History', PERMS.readMessageHistory];
+  for (const [label, at, needed] of [
+    ['Forum <#900>', 0, [V, T, M, H]],
+    ['Queue channel <#556>', 1, [V, S, H]],
+    ['Moderator channel <#555>', 2, [V, S]],
+    ['Checklist forum <#950>', 3, [V, S, T, M, H]],
+  ]) {
+    for (const [perm, bit] of needed) {
+      const r = await checkOf((s) => { s.channels[at].permission_overwrites = [deny('11', bit)]; });
+      assert.ok(r.problems.some((l) => l.startsWith(`${label}: the bot lacks ${perm}.`)), `${label}, ${perm}: ${r.problems.join(' | ')}`);
+      assert.equal(r.passed, clean.passed - 1, `${label}, ${perm}: one check fewer passed`);
+    }
+  }
+  // Each row names the calls its behavior makes: `calls` counts a pattern
+  // in the fake's record, so a check skipped or repeated shows.
+  const count = (f, method, re) => f.find(method, re).length;
+  const full = [...allLabels(), ...others(0, 100 - LABEL_DEFS.length)];
+  for (const [why, edit, gone, calls] of [
+    ['the labels on a second page', (s) => { s.labelPages = [others(1), allLabels()]; }, /label/, [['GET', /\/repos\/me\/one\/labels/, 2]]],
+    ['every label on a full first page: no second read', (s) => { s.labelPages = [full, others(2)]; }, /label/, [['GET', /\/repos\/me\/one\/labels/, 1]]],
+    ['Accepted in another letter case, which the bot accepts', (s) => { s.labelPages = [LABEL_DEFS.map(([name]) => ({ name: name === LABELS.accepted ? 'Accepted' : name }))]; }, /label/, []],
+    ['a lock-only repo: its access checked, its labels never read', (s) => { s.env = { LOCK_REPO: 'me/lock' }; }, /me\/lock/,
+      [['GET', /\/repos\/me\/lock\/installation$/, 1], ['GET', /\/repos\/me\/lock\/labels/, 0]]],
+    ['one repo under aliases and LOCK_REPO in other letter cases: checked once', (s) => { s.env = { REPOS: '{"A":"me/one","B":"Me/One"}', LOCK_REPO: 'ME/ONE' }; }, /one/i,
+      [['GET', /\/installation$/, 1]]],
+    ['Message Content on through 1 << 18', (s) => { s.app = { flags: 1 << 18 }; }, /Message Content/, []],
+    ['Message Content on through flags_new alone', (s) => { s.app = { flags: 0, flags_new: String(1n << 19n) }; }, /Message Content/, []],
+    ['missing from the list, a same-server channel that passes', (s) => { s.channels.splice(1, 1); s.alone['556'] = { id: '556', guild_id: '1', type: 0, permission_overwrites: [] }; }, /556/, []],
+  ]) {
+    const { problems, f } = await checkOf(edit);
+    assert.ok(!problems.some((l) => gone.test(l)), `${why}: ${problems.join(' | ')}`);
+    for (const [method, re, n] of calls) assert.equal(count(f, method, re), n, `${why}: ${method} ${re}`);
+  }
+  const unlisted = { ...setupWorld().s.channels[2] };
+  // Each row breaks one thing; the moderator channel's state stays its own.
+  for (const [why, edit, mod] of [
+    ['a post as the moderator channel', (s) => { s.env = { MOD_CHANNEL_ID: '777' }; s.alone['777'] = { id: '777', guild_id: '1', type: 11 }; }, /^<#777> is not verified \(it is a post, not a channel\)$/],
+    ['a listed moderator channel of another server', (s) => { s.channels[2].guild_id = '2'; }, /^<#555> is not verified \(it is not a channel of this server\)$/],
+    ['a moderator channel without Send Messages', (s) => { s.channels[2].permission_overwrites = [deny('11', PERMS.sendMessages)]; }, /^the bot lacks Send Messages in <#555>$/],
+    ['a roles read answered 204', (s) => { s.rolesAnswer = new Response(null, { status: 204 }); }, /^the moderator channel could not be checked \(Discord's answer had no role list\)$/],
+    ['a failed channel list: the moderator channel read on its own', (s) => { s.channelsAnswer = refusal(500); s.alone['555'] = unlisted; }, /^ok$/],
+    ['a broken REPOS', (s) => { s.env = { REPOS: '' }; }, /^ok$/],
+    ['an empty forum list', (s) => { s.env = { FORUMS: '{}' }; }, /^ok$/],
+    ['a failed application read', (s) => { s.app = refusal(500); }, /^ok$/],
+  ]) {
+    const r = await checkOf(edit);
+    assert.match(r.mod, mod, `${why}: ${r.mod} | ${r.problems.join(' | ')}`);
+    if (/\^ok/.test(String(mod))) assert.ok(r.problems.length > 0, `${why}: its own line is still there`);
+  }
+  // An early failure stops only its own group: each row also breaks one
+  // check in every group that runs after it, and each of those lines must
+  // still come.
+  const later = {
+    app: [(s) => { s.app = { ...s.app, flags: 0 }; }, /^The Message Content setting is off/],
+    server: [(s) => { s.channels[0].available_tags = tagNames([...STATUS_NAMES.filter((n) => n !== 'Shipped'), 'Accepted', 'Answered']); }, /^Forum <#900> has no "Shipped" tag\./],
+    template: [(s) => { s.template = refusal(403); }, /^Forum <#900>: its template message cannot be read \(403\)\./],
+    github: [(s) => { s.installs['me/one'] = refusal(404); }, /^me\/one: the GitHub App is not installed there \(404\)\./],
+  };
+  for (const [why, edit, after] of [
+    ['the roles read failing (500)', (s) => { s.rolesAnswer = refusal(500); }, ['app', 'template', 'github']],
+    ['the roles read answered 204', (s) => { s.rolesAnswer = new Response(null, { status: 204 }); }, ['app', 'template', 'github']],
+    ['the channel list answered 204', (s) => { s.channelsAnswer = new Response(null, { status: 204 }); }, ['app', 'template', 'github']],
+    ['the application read answered 204', (s) => { s.app = new Response(null, { status: 204 }); }, ['server', 'template', 'github']],
+    ['the application read failing (500)', (s) => { s.app = refusal(500); }, ['server', 'template', 'github']],
+    ['the template read answered 204', (s) => { s.template = new Response(null, { status: 204 }); }, ['github']],
+    ['the template read failing (500)', (s) => { s.template = refusal(500); }, ['github']],
+  ]) {
+    const r = await checkOf((s) => { edit(s); for (const k of after) later[k][0](s); });
+    for (const k of after) assert.ok(r.problems.some((l) => later[k][1].test(l)), `${why}: the ${k} checks still run: ${r.problems.join(' | ')}`);
+  }
 });
