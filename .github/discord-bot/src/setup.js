@@ -235,7 +235,7 @@ function secretProblems(env) {
   const put = (k) => `Set it with npx wrangler@3 secret put ${k}.`;
   if (!HEX_KEY.test(String(env.DISCORD_PUBLIC_KEY ?? ''))) out.push(`DISCORD_PUBLIC_KEY is not the 64-character public key from the developer portal (General Information): Discord refuses every command until it is. ${put('DISCORD_PUBLIC_KEY')}`);
   if (blank(env.DISCORD_BOT_TOKEN)) out.push(`DISCORD_BOT_TOKEN is not set: the bot can read and post nothing. ${put('DISCORD_BOT_TOKEN')}`);
-  if (!appIdSet(env.GITHUB_APP_ID)) out.push(`GITHUB_APP_ID is not set, or holds a space: set it to the App ID (the App's settings, About). ${put('GITHUB_APP_ID')}`);
+  if (!appIdSet(env.GITHUB_APP_ID)) out.push(`GITHUB_APP_ID is not set, or holds a space: set it to the App ID (the App's settings › About). ${put('GITHUB_APP_ID')}`);
   if (!PEM.test(String(env.GITHUB_APP_PRIVATE_KEY ?? ''))) out.push(`GITHUB_APP_PRIVATE_KEY is not the text of a private key file: paste the whole .pem. ${put('GITHUB_APP_PRIVATE_KEY')}`);
   return out;
 }

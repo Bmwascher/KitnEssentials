@@ -518,7 +518,7 @@ test('the button refuses anyone without an approved role, and with no roles set 
   assert.equal(j.type, 4);
   assert.match(j.data.content, /Only moderators and approved roles/);
   j = await (await handle(await signed(press(HELPER)), { ...P3, APPROVED_ROLE_IDS: '' }, ctxFor(), { fetch: fakeFetch(discordRoutes()) })).json();
-  assert.match(j.data.content, /APPROVED_ROLE_IDS is empty.*right-click/);
+  assert.equal(j.data.content, 'The button is not set up yet: APPROVED_ROLE_IDS is empty. A moderator can open the post and right-click a message › Apps › Send to GitHub.');
 });
 
 test('a moderator can still press the button with no roles set', async () => {

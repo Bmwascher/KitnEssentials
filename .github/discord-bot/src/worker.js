@@ -915,7 +915,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     const cfg = configOr(env);
     if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
     if (!cfg.roles.length && !canUse(interaction.member)) {
-      return reply('The button is not set up yet: APPROVED_ROLE_IDS is empty. A moderator can right-click the post > Apps > Send to GitHub.');
+      return reply('The button is not set up yet: APPROVED_ROLE_IDS is empty. A moderator can open the post and right-click a message › Apps › Send to GitHub.');
     }
     if (!allowed(interaction.member, cfg)) return reply(NOT_ALLOWED);
     // A press on a post already filed answers at once and opens no form.
