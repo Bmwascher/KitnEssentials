@@ -6,10 +6,13 @@ name = "discord-issue-bot"
 main = "src/worker.js"
 compatibility_date = "2025-06-01"
 
-# The post scan every minute, and the daily check of waiting posts.
-# These must match CRONS in src/scan.js.
+# The post scan every minute, the daily check of waiting posts, and the
+# daily setup check. These must match CRONS in src/scan.js; the Worker
+# cannot see its own triggers, so after each deploy check that Wrangler
+# lists these three schedules. The free plan allows 5 cron triggers per
+# account, across all its Workers.
 [triggers]
-crons = ["* * * * *", "0 15 * * *"]
+crons = ["* * * * *", "0 15 * * *", "30 15 * * *"]
 
 # Where the scan remembers which posts it has messaged. Create it once with
 # `npx wrangler@3 kv namespace create STATE`, then uncomment these three lines

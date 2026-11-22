@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, createVerify } from 'node:crypto';
-import { handle, COMMAND_NAME } from '../src/worker.js';
+import { handle, COMMAND_NAME, CHECK_COMMAND, scheduled } from '../src/worker.js';
+import { CRONS } from '../src/scan.js';
 import { importAppKey, appJwt } from '../src/github.js';
 import { MESSAGES } from '../src/core.js';
 import { fakeFetch, fakeKv, FORUM, stall } from './fake-fetch.mjs';
+import { setupWorld } from './setup-world.mjs';
 
 const keys = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
 const pubHex = Buffer.from(await crypto.subtle.exportKey('raw', keys.publicKey)).toString('hex');
@@ -1154,4 +1156,123 @@ test('a title of direction marks alone is empty, as the issue would get it', asy
   const r = await handle(await signed(submit({ title: '\u200f\u202e' })), env, ctx, { fetch: fakeFetch([]) });
   assert.match((await r.json()).data.content, /Title is empty\./);
   assert.equal(ctx.jobs.length, 0);
+});
+
+// A setup failing in many ways at once: 30 forums that do not exist (more
+// reads than the Discord share), 200 roles that do not (more lines than five
+// messages hold), and eight healthy repos (24 GitHub calls, more than the
+// GitHub share).
+const BIG = {
+  FORUMS: JSON.stringify(Object.fromEntries(Array.from({ length: 30 }, (_, i) => [String(1000 + i), {}]))),
+  APPROVED_ROLE_IDS: Array.from({ length: 200 }, (_, i) => String(5000 + i)).join(','),
+  REPOS: JSON.stringify(Object.fromEntries(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((k) => [k, `me/${k.toLowerCase()}`]))),
+  LOCK_REPO: 'me/a',
+};
+// The same line 30 times: two messages whose lines are equal.
+const SAME = { APPROVED_ROLE_IDS: Array(30).fill('777').join(',') };
+const quiet = (deps) => ({ ...deps, log: () => {} });
+const checkCmd = (member, over = {}) => ({ type: 2, member, channel_id: '555', guild_id: '1', application_id: 'app', token: 'tok', data: { name: CHECK_COMMAND }, ...over });
+
+test('WT1: /bot-check is for moderators of this server, answers privately at once, and posts only to a verified moderator channel', async () => {
+  for (const [why, member, envOver, guild, said] of [
+    ['a player', PLAYER, {}, '1', /^Only moderators and admins can check the bot setup\.$/],
+    ['a moderator of another server', MOD, {}, '2', /^This command checks only the server the bot is set up for\.$/],
+    ['a moderator with GUILD_ID unset', MOD, { GUILD_ID: '' }, '1', /^The bot's GUILD_ID is not set to a server id, so it can check nothing\./],
+    ['a moderator with GUILD_ID malformed', MOD, { GUILD_ID: '1x' }, '1', /^The bot's GUILD_ID is not set to a server id, so it can check nothing\./],
+  ]) {
+    const { env: e, deps } = setupWorld(undefined, pubHex);
+    const j = await (await handle(await signed(checkCmd(member, { guild_id: guild })), { ...e, ...envOver }, ctxFor(), quiet(deps))).json();
+    assert.match(j.data.content, said, why);
+    assert.equal(deps.fetch.calls.length, 0, `${why}: no calls`);
+  }
+  let n = 0;
+  for (const [why, edit, posted, said] of [
+    ['posted', () => {}, 1, /^Posted in <#555>: 0 problem\(s\)\.$/],
+    ['channel unset', (s) => { s.env = { MOD_CHANNEL_ID: '' }; }, 0, /^Not posted in the moderator channel: MOD_CHANNEL_ID is not set\.\n\n\*\*Bot setup check\*\* \(run by moddy\): 1 problem\(s\)/],
+    ['channel set to a post', (s) => { s.env = { MOD_CHANNEL_ID: '777' }; s.alone['777'] = { id: '777', guild_id: '1', type: 11 }; }, 0,
+      /^Not posted in the moderator channel: <#777> is not verified \(it is a post, not a channel\)\./],
+    ['a listed channel of another server', (s) => { s.channels[2].guild_id = '2'; }, 0,
+      /^Not posted in the moderator channel: <#555> is not verified \(it is not a channel of this server\)\./],
+    ['a post taken with an answer that is not JSON', (s) => { s.modPost = new Response('<html>', { status: 200 }); }, 1, /^Posted in <#555>: 0 problem\(s\)\.$/],
+    ['channel without Send Messages', (s) => { s.channels[2].permission_overwrites = [{ id: '11', type: 0, deny: String(1n << 11n), allow: '0' }]; }, 0,
+      /^Not posted in the moderator channel: the bot lacks Send Messages in <#555>\./],
+    ['post refused', (s) => { s.modPost = new Response('{"message":"Missing Permissions"}', { status: 403 }); }, 1,
+      /^Not posted in the moderator channel: the moderator channel refused the post \(403\)\.\n\n\*\*Bot setup check\*\* \(run by moddy\): 1 problem\(s\), \d+ checks passed\.\n- Moderator channel <#555>: the bot's post was refused \(403\)/],
+    // The reason comes first, however long the rest: a failure with no answer.
+    ['the post failing with no answer', (s) => { s.modPost = () => { throw new TypeError('network down'); }; }, 1,
+      /^Not posted in the moderator channel: the post could not be sent \(network down\)\./],
+    // A busy Discord is a retry, never a channel fault.
+    ['the post answered 503', (s) => { s.modPost = new Response('{"message":"busy"}', { status: 503 }); }, 1,
+      /^Not posted in the moderator channel: Discord could not take the post just now \(503\)\.\n[\s\S]*\n- Moderator channel <#555>: Discord could not take the post just now \(503\)\. Run \/bot-check again in a minute\./],
+    // Two messages of equal lines, the first taken and the second refused:
+    // the refused lines are named although their text was taken once.
+    ['first message taken, the second refused', (s) => { s.env = SAME; n = 0; s.modPost = () => (++n === 1 ? { id: 'm1' } : new Response('{"message":"no"}', { status: 403 })); }, 2,
+      /^Posted in part in <#555>: 1 of 2 messages; the moderator channel refused the post \(403\)\. The rest:\n\n- APPROVED_ROLE_IDS: the role <@&777> does not exist in this server\.\n/],
+  ]) {
+    const { env: e, deps } = setupWorld(edit, pubHex);
+    const ctx = ctxFor();
+    const r = await (await handle(await signed(checkCmd(MOD)), e, ctx, quiet(deps))).json();
+    assert.deepEqual(r, { type: 5, data: { flags: 64 } }, why);
+    await Promise.all(ctx.jobs);
+    const count = deps.fetch.find('POST', /\/channels\/555\/messages$/).length;
+    assert.equal(count, posted, why);
+    assert.deepEqual(deps.fetch.find('POST', /\/channels\/777\/messages$/), [], `${why}: never into a post`);
+    assert.match(deps.fetch.find('PATCH', /\/webhooks\/app\/tok\/messages\/@original$/)[0].body.content, said, why);
+    // What the moderators read: the command's own result, naming who ran it.
+    if (why === 'posted') {
+      assert.match(deps.fetch.find('POST', /\/channels\/555\/messages$/)[0].body.content, /^\*\*Bot setup check\*\* \(run by moddy\): every check passed \(\d+ checks\)\.$/, `${why}: the posted result`);
+    }
+  }
+  for (const [why, over, channel] of [
+    ['in a forum post: its forum', { channel_id: '777', channel: { id: '777', type: 11, parent_id: '900' } }, '900'],
+    ['in a text channel: that channel', { channel: { id: '555', type: 0, parent_id: '42' } }, '555'],
+  ]) {
+    const { env: e, deps } = setupWorld(undefined, pubHex);
+    const out = [];
+    const ctx = ctxFor();
+    await handle(await signed(checkCmd(MOD, over)), e, ctx, { ...deps, log: (s) => out.push(s) });
+    await Promise.all(ctx.jobs);
+    assert.ok(out.some((l) => new RegExp(`^setup check: needed permissions computed \\d+, app_permissions not given, in channel ${channel}: different$`).test(l)), `${why}: ${out.join(' | ')}`);
+  }
+  const { env: e, deps } = setupWorld((s) => { s.env = BIG; }, pubHex);
+  const ctx = ctxFor();
+  await handle(await signed(checkCmd(MOD)), e, ctx, quiet(deps));
+  await Promise.all(ctx.jobs);
+  const calls = deps.fetch.calls;
+  const github = calls.filter((c) => /api\.github\.com/.test(c.url)).length;
+  const discordReads = calls.filter((c) => /discord\.com/.test(c.url) && c.method === 'GET').length;
+  assert.equal(github, 15, `GitHub's share is used to its end and no further: ${github}`);
+  assert.equal(discordReads, 28, `Discord's share is used to its end and no further: ${discordReads}`);
+  assert.ok(calls.length <= 49, `the run stays within 49 requests: ${calls.length}`);
+  assert.ok(calls.every((c) => c.redirect === 'manual'), 'no call may follow a redirect');
+  const posts = deps.fetch.find('POST', /\/channels\/555\/messages$/);
+  assert.ok(posts.length === 5 && posts.every((c) => c.body.content.length <= 2000), `${posts.length} posts`);
+  assert.match(posts[4].body.content, /\n- and \d+ more \(see the Worker log\)$/, 'the fit names what it left out');
+  assert.match(deps.fetch.find('PATCH', /\/webhooks\//)[0].body.content, /^Posted in <#555>: \d+ problem\(s\)\.$/);
+});
+
+test('WT2: the daily setup check posts problems every day, the weekly line on a passing Monday, and nothing on another passing day', async () => {
+  const MON = Date.UTC(2026, 10, 23, 15, 30);
+  const TUE = MON + 24 * 60 * 60 * 1000;
+  for (const [why, edit, now, re] of [
+    ['a problem on a Tuesday', (s) => { s.app = { flags: 0 }; }, TUE, /^\*\*Daily bot setup check:\*\* 1 problem\(s\):\n- The Message Content setting is off/],
+    ['all pass on a Monday', () => {}, MON,
+      /^\*\*Weekly bot setup check:\*\* every check passes today \(\d+ checks\)\. This line comes each Monday that every check passes\. A Monday with neither this line nor a problem list means the daily setup check is not running or cannot post\.$/],
+    ['all pass on a Tuesday', () => {}, TUE, null],
+    ['a moderator channel that is a post', (s) => { s.env = { MOD_CHANNEL_ID: '777' }; s.alone['777'] = { id: '777', guild_id: '1', type: 11 }; }, TUE, null],
+    ['the large failing setup', (s) => { s.env = BIG; }, TUE, /^\*\*Daily bot setup check:\*\* \d+ problem\(s\):/],
+  ]) {
+    const { env: e, deps } = setupWorld(edit);
+    const kv = fakeKv();
+    const out = [];
+    await scheduled({ cron: CRONS.setup }, { ...e, STATE: kv }, {}, { ...deps, now: () => now, log: (s) => out.push(s) });
+    const posts = deps.fetch.find('POST', /\/channels\/\d+\/messages$/).map((c) => c.body.content);
+    if (re) assert.match(posts[0] || '', re, why);
+    else assert.deepEqual(posts, [], why);
+    if (why === 'a moderator channel that is a post') assert.match(out.join('\n'), /Moderator channel <#777>: it is a post, not a channel/, `${why}: logged`);
+    if (why === 'all pass on a Tuesday') assert.match(out.join('\n'), /^daily setup check: every check passed \(\d+ checks\)$/m, `${why}: the log says it ran`);
+    assert.ok(deps.fetch.calls.length <= 48, `${why}: ${deps.fetch.calls.length} calls`);
+    assert.ok(deps.fetch.calls.every((c) => c.redirect === 'manual'), `${why}: no call follows a redirect`);
+    assert.equal(kv.m.size, 0, `${why}: no KV write`);
+  }
 });
