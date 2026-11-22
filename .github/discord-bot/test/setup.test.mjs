@@ -206,7 +206,7 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
     ['a missing status tag', (s) => { s.channels[0].available_tags = tagNames([...STATUS_NAMES.filter((n) => n !== 'Shipped'), 'Accepted', 'Answered']); }, /^Forum <#900> has no "Shipped" tag\. Add it, spelled as the README lists it\.$/],
     ['a missing Accepted tag', (s) => { s.channels[0].available_tags = tagNames([...STATUS_NAMES, 'Answered']); }, /^Forum <#900> has no "Accepted" tag\./],
     ['a missing checklist tag', (s) => { s.channels[3].available_tags = tagNames([...CHECKLIST_NAMES.filter((n) => n !== 'Done'), 'Accepted']); }, /^Checklist forum <#950> has no "Done" tag\./],
-    ['Message Content off', (s) => { s.app = { flags: 0 }; }, /^The Message Content setting is off: filed issues would quote no text, and the bot would see no attachments\./],
+    ['Message Content off', (s) => { s.app = { flags: 0 }; }, /^The Message Content setting is off: filed issues would quote no text, and the bot would see no attachments\. Turn it on in the developer portal › Bot › Privileged Gateway Intents\.$/],
     ['an unreadable template', (s) => { s.template = refusal(403); }, /^Forum <#900>: its template message cannot be read \(403\)\./],
     ['a template read failing (500), which says nothing of the link', (s) => { s.template = refusal(500); }, /^Forum <#900>: could not check its template message \(Discord GET \/channels\/444\/messages\/555 -> 500/],
     ['a template read answered 204, with no message', (s) => { s.template = new Response(null, { status: 204 }); }, /^Forum <#900>: could not check its template message \(Discord's answer had no message\)\.$/],

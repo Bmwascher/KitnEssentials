@@ -430,7 +430,7 @@ const followupFor = (interaction, deps, log, t0) => async (text) => {
   try {
     const res = await timedFetch(deps.fetch, TAIL_MS, t0 + REPORT_BY_MS)(
       `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
-      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) },
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content, allowed_mentions: { parse: [] } }) },
     );
     // The request's URL holds the interaction's token, and an answer may
     // echo it, so only the status and the failure's kind are logged.
@@ -479,7 +479,7 @@ const givenBits = (raw) => (raw === undefined || raw === null ? null : String(Bi
 export async function runCheck(interaction, env, deps, t0 = Date.now()) {
   const log = deps.log || console.error;
   const followup = followupFor(interaction, { ...deps, fetch: oneHop(deps.fetch) }, log, t0);
-  const by = personName(interaction.member.user, interaction.member);
+  const by = interaction.member.user.id;
   // A post's permissions are its forum's; any other channel is its own.
   const ch = interaction.channel || {};
   const probe = THREAD_TYPES.includes(ch.type) && ch.parent_id ? String(ch.parent_id) : String(interaction.channel_id || '');
