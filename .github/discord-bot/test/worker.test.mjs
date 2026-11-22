@@ -1406,6 +1406,7 @@ test('WT7: the private reply keeps a last line that fits, and names what it leav
   const head = 'Not posted in the moderator channel: x.';
   const last = `- ${'y'.repeat(1950 - head.length - 4)}`;
   assert.equal(privateText(head, [last]), `${head}\n\n${last}`, 'a last line within 2,000 characters is kept whole');
-  const cut = privateText(head, [last, '- z']);
+  assert.equal(privateText(head, [last, '- z']), `${head}\n\n${last}\n- z`, 'a reply of 1,954 characters is sent whole, both lines kept');
+  const cut = privateText(head, [last, `- ${'z'.repeat(60)}`]);
   assert.ok(cut.length <= 2000 && cut.endsWith('…and 2 more line(s): fix these, then run /bot-check again.'), `lines past the limit are counted: ${cut.slice(-90)}`);
 });
