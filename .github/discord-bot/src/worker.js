@@ -457,11 +457,13 @@ const modPost = (discord, mod, onFail) => async (text) => {
 export function privateText(head, lines) {
   const whole = lines.length ? `${head}\n\n${lines.join('\n')}` : head;
   if (whole.length <= MAX_REPLY) return whole;
-  // It does not fit: room is kept for the notice that says how many more.
+  // It does not fit: a line is kept only if the notice for the lines after
+  // it still fits beside it.
+  const notice = (n) => `\n…and ${n} more line(s): fix these, then run /bot-check again.`;
   let text = head;
   for (let i = 0; i < lines.length; i++) {
     const next = `${text}${i ? '\n' : '\n\n'}${lines[i]}`;
-    if (next.length > MAX_REPLY - 80) return `${text}\n…and ${lines.length - i} more line(s): fix these, then run /bot-check again.`;
+    if (next.length + notice(lines.length - i - 1).length > MAX_REPLY) return `${text}${notice(lines.length - i)}`;
     text = next;
   }
   return text;

@@ -202,6 +202,18 @@ setup check, and its replies to a moderator while a setting is broken.
   set up for."; neither sees the setup line. While the Worker can read its
   settings, a press on a post already filed still answers "Already tracked"
   first.
+- **A setting the Worker cannot read** stops the bot until it is fixed: a
+  setting saved as a JSON value with no text form, or a
+  `DISCORD_PUBLIC_KEY` or `GITHUB_APP_PRIVATE_KEY` that is not text (a JSON
+  `null` included). While it stands, new posts get no greeting and no queue
+  card, the daily list of waiting posts is not posted, and nothing is filed:
+  a moderator who right-clicks a post, and a moderator or a member of an
+  approved role who presses a card or submits the form, is told "The bot is
+  not set up yet:" and the setting's name. The daily setup check still runs
+  and names it, in the moderator channel when it can post there, otherwise
+  in the Worker's log. Once the setting is fixed, the scan greets and cards
+  the open posts made meanwhile; a post archived or locked meanwhile gets no
+  card (Known limits).
 - **Filing** into a forum without the `Triaged` tag still files the issue.
   When the bot tries to set `Triaged` on a post with no status and cannot,
   the moderator's reply includes "tag not set" with the reason, among its
@@ -510,7 +522,8 @@ Accepted on purpose; each line says how you would notice it.
   the channel yet) gets no card, even after the permission is fixed. The next
   daily alert names each such post, and moderators file it by right-click.
 - A post archived or locked before its card went out gets no card, and nothing
-  names the missing card. The daily waiting list covers it only in part: it
+  names the missing card. This includes a post archived or locked while a
+  setting the Worker cannot read stopped the scan. The daily waiting list covers it only in part: it
   lists posts older than `STALE_DAYS` (3 by default) with no status or
   `Answered` tag, leaves out locked posts, reads archived posts from the last
   30 days only (up to 300 per forum), and names about 20 posts at most.

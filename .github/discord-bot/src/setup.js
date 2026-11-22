@@ -22,14 +22,15 @@ const SETTINGS = ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID
 // Their readers call string methods on these two, so only a string is read.
 const STRINGS = ['DISCORD_PUBLIC_KEY', 'GITHUB_APP_PRIVATE_KEY'];
 // The settings no reader can read: a JSON variable such as {"toString":null}
-// has no text form, and the two keys must be strings. The Worker stops at
-// its entry points on any of them, since a reader that took one as unset
-// would act on a setting it was never given.
+// has no text form, and the two keys must be strings, null included. The
+// Worker stops at its entry points on any of them, since a reader that took
+// one as unset would act on a setting it was never given.
 export function unreadableSettings(env) {
   return SETTINGS.filter((k) => {
     const v = env[k];
-    if (v === undefined || v === null) return false;
+    if (v === undefined) return false;
     if (STRINGS.includes(k)) return typeof v !== 'string';
+    if (v === null) return false;
     try { String(v); return false; } catch { return true; }
   });
 }

@@ -1175,6 +1175,9 @@ const quiet = (deps) => ({ ...deps, log: () => {} });
 const ALL_SETTINGS = ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID',
   'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'DISCORD_PUBLIC_KEY', 'DISCORD_BOT_TOKEN', 'GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY'];
 const NO_TEXT = { toString: null };
+// Every value the entry points must stop on: each setting with no text form,
+// and the two keys read with string methods bound to null.
+const UNREADABLE = [...ALL_SETTINGS.map((k) => [k, NO_TEXT]), ['DISCORD_PUBLIC_KEY', null], ['GITHUB_APP_PRIVATE_KEY', null]];
 const checkCmd = (member, over = {}) => ({ type: 2, member, channel_id: '555', guild_id: '1', application_id: 'app', token: 'tok', data: { name: CHECK_COMMAND }, ...over });
 
 test('WT1: /bot-check is for moderators of this server, answers privately at once, and posts only to a verified moderator channel', async () => {
@@ -1351,17 +1354,29 @@ test("WT4: the not-set-up reply names the first broken setting only to a caller 
 test('WT5: with a setting no reader can read, the scan and the daily list do nothing, and the daily setup check names it', async () => {
   const T = Date.UTC(2026, 10, 24, 15, 30);
   const AGO = T - 3 * 60 * 60 * 1000;
-  for (const k of ALL_SETTINGS) {
+  // Made an hour ago: after the scan's start and past every marker.
+  const POST = String(BigInt(T - 60 * 60 * 1000 - 1420070400000) << 22n);
+  const activeWith = (deps, sent) => (url, init) => {
+    sent.push(url);
+    return /\/threads\/active$/.test(url) ? new Response(JSON.stringify({ threads: [{ id: POST, parent_id: '900' }] })) : deps.fetch(url, init);
+  };
+  {
+    // With every setting readable, the same scan reads the post, so the
+    // runs below have a post to skip.
+    const { env: e, deps } = setupWorld((s) => { s.alone['555'] = { ...s.channels[2] }; }, pubHex);
+    const kv = fakeKv({ 'scan:since': String(AGO), 'scan:state': JSON.stringify({ last: AGO }) });
+    const sent = [];
+    await scheduled({ cron: CRONS.scan }, { ...e, STATE: kv }, {}, { fetch: activeWith(deps, sent), now: () => T, log: () => {} }).catch(() => {});
+    assert.ok(sent.some((u) => u.includes(POST)), `with every setting readable, the scan reads the waiting post: ${sent.join(' | ')}`);
+  }
+  for (const [k, v] of UNREADABLE) {
     for (const cron of [CRONS.scan, CRONS.daily, CRONS.setup]) {
       const { env: e, deps } = setupWorld((s) => { s.alone['555'] = { ...s.channels[2] }; }, pubHex);
       const kv = fakeKv({ 'scan:since': String(AGO), 'scan:state': JSON.stringify({ last: AGO }) });
       const before = kv.m.get('scan:state');
-      // A new post waits in a player forum.
-      const active = { threads: [{ id: '1300000000000000000', parent_id: '900' }] };
       const sent = [];
-      const fetch = (url, init) => { sent.push(url); return /\/threads\/active$/.test(url) ? new Response(JSON.stringify(active)) : deps.fetch(url, init); };
       const out = [];
-      await scheduled({ cron }, { ...e, STATE: kv, [k]: NO_TEXT }, {}, { fetch, now: () => T, log: (s) => out.push(s) });
+      await scheduled({ cron }, { ...e, STATE: kv, [k]: v }, {}, { fetch: activeWith(deps, sent), now: () => T, log: (s) => out.push(s) });
       if (cron !== CRONS.setup) {
         const job = cron === CRONS.scan ? 'scan' : 'daily list';
         assert.deepEqual(out, [`${k} is not text: the ${job} did not run.`], `${k}, the ${job}: one log line`);
@@ -1385,10 +1400,10 @@ test('WT6: with a setting no reader can read, a request never starts filing; a c
   const press = (member) => ({ type: 3, member, guild_id: '1', channel_id: '556', application_id: 'app', token: 'ptok', message: { id: '9' }, data: { custom_id: 'send:700' } });
   // A readable forum list and an approved role the player lacks.
   const G = { GUILD_ID: '1', FORUMS: '{"900":{}}', APPROVED_ROLE_IDS: '77' };
-  for (const k of ALL_SETTINGS) {
+  for (const [k, v] of UNREADABLE) {
     for (const [who, interaction, may] of [['a moderator right-click', rightClick(MOD), true], ['a player press', press(PLAYER), false]]) {
       const f = fakeFetch([]);
-      const res = await handle(await signed(interaction), { ...env, ...G, [k]: NO_TEXT }, ctxFor(), { fetch: f });
+      const res = await handle(await signed(interaction), { ...env, ...G, [k]: v }, ctxFor(), { fetch: f });
       if (k === 'DISCORD_PUBLIC_KEY') {
         assert.equal(res.status, 401, `${k}, ${who}: refused, as main refuses a key it cannot read`);
         continue;
@@ -1409,4 +1424,9 @@ test('WT7: the private reply keeps a last line that fits, and names what it leav
   assert.equal(privateText(head, [last, '- z']), `${head}\n\n${last}\n- z`, 'a reply of 1,954 characters is sent whole, both lines kept');
   const cut = privateText(head, [last, `- ${'z'.repeat(60)}`]);
   assert.ok(cut.length <= 2000 && cut.endsWith('…and 2 more line(s): fix these, then run /bot-check again.'), `lines past the limit are counted: ${cut.slice(-90)}`);
+  // 1,930 characters kept and the 59-character notice for one more line: 1,989.
+  const a = `- ${'a'.repeat(1880 - head.length - 4)}`;
+  const b = `- ${'b'.repeat(47)}`;
+  assert.equal(privateText(head, [a, b, `- ${'c'.repeat(100)}`]), `${head}\n\n${a}\n${b}\n…and 1 more line(s): fix these, then run /bot-check again.`,
+    'a line that fits beside the notice is kept');
 });
