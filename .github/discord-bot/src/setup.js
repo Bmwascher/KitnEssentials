@@ -334,11 +334,17 @@ export async function setupCheck(env, deps, { deadline, probe = null }) {
     // list left it out (the list holds no thread and no channel the bot
     // cannot view). Only a 403 is read as missing access. A listed channel
     // meets the same rules as one read on its own.
+    // A channel read on its own is read once, whichever checks name it.
+    const alone = new Map();
+    const readAlone = (id) => {
+      if (!alone.has(String(id))) alone.set(String(id), discord.call('GET', `/channels/${id}`));
+      return alone.get(String(id));
+    };
     const find = async (label, id) => {
       let c = listed.get(String(id));
       if (!c) {
         try {
-          c = await discord.call('GET', `/channels/${id}`);
+          c = await readAlone(id);
         } catch (e) {
           const status = e.discord && e.discord.status;
           return status === 404 ? say(label, 'no such channel', 'Check the id.')

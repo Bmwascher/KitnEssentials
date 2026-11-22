@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, createVerify } from 'node:crypto';
-import { handle, COMMAND_NAME, CHECK_COMMAND, scheduled } from '../src/worker.js';
+import { handle, COMMAND_NAME, CHECK_COMMAND, scheduled, privateText } from '../src/worker.js';
 import { CRONS } from '../src/scan.js';
 import { importAppKey, appJwt } from '../src/github.js';
 import { MESSAGES } from '../src/core.js';
@@ -1388,4 +1388,12 @@ test('WT6: no setting with no text form stops a request; a right-click names it'
     assert.equal((await res.json()).data.content, want, k);
     assert.equal(f.calls.length, 0, `${k}: no calls`);
   }
+});
+
+test('WT7: the private reply keeps a last line that fits, and names what it leaves out', () => {
+  const head = 'Not posted in the moderator channel: x.';
+  const last = `- ${'y'.repeat(1950 - head.length - 4)}`;
+  assert.equal(privateText(head, [last]), `${head}\n\n${last}`, 'a last line within 2,000 characters is kept whole');
+  const cut = privateText(head, [last, '- z']);
+  assert.ok(cut.length <= 2000 && cut.endsWith('…and 2 more line(s): fix these, then run /bot-check again.'), `lines past the limit are counted: ${cut.slice(-90)}`);
 });

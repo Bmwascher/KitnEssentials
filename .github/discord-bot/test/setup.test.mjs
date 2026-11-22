@@ -282,6 +282,8 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
     ['Message Content on through flags_new alone', (s) => { s.app = { flags: 0, flags_new: String(1n << 19n) }; }, /Message Content/, []],
     ['missing from the list, a same-server channel that passes', (s) => { s.channels.splice(1, 1); s.alone['556'] = { ...setupWorld().s.channels[1] }; }, /556/,
       [['GET', /\/channels\/556$/, 1]]],
+    ['a failed channel list, the moderator channel also the queue channel: read once', (s) => { s.env = { QUEUE_CHANNEL_ID: '555' }; s.channelsAnswer = refusal(500); s.alone['555'] = { ...setupWorld().s.channels[2] }; }, /^$/,
+      [['GET', /\/channels\/555$/, 1]]],
   ]) {
     const { problems, f } = await checkOf(edit);
     assert.ok(!problems.some((l) => gone.test(l)), `${why}: ${problems.join(' | ')}`);

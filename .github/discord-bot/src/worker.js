@@ -453,11 +453,12 @@ const modPost = (discord, mod, onFail) => async (text) => {
 
 // The private result: its head first, then as many whole lines as fit
 // Discord's length, the last saying how many more there are.
-function privateText(head, lines) {
+export function privateText(head, lines) {
   let text = head;
   for (let i = 0; i < lines.length; i++) {
     const next = `${text}${i ? '\n' : '\n\n'}${lines[i]}`;
-    if (next.length > MAX_REPLY - 80) return `${text}\n…and ${lines.length - i} more line(s): fix these, then run /bot-check again.`;
+    // Room for the notice is kept only while another line may follow.
+    if (next.length > (i === lines.length - 1 ? MAX_REPLY : MAX_REPLY - 80)) return `${text}\n…and ${lines.length - i} more line(s): fix these, then run /bot-check again.`;
     text = next;
   }
   return text;
