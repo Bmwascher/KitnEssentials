@@ -17,10 +17,13 @@
 //                             post there is handled, so a run reads KV only after it},
 //                 "greeted": {forum: the same, for the greeting alone: posts past
 //                             it are new, and go before any card retry},
-//                 "error": {"at": epoch ms, "text": the last failure},
-//                 "gaveUp": [{"at", "post", "what": "greeting", "queue card" or
-//                             "damaged record <key>"}], each kept two days
-//                             for the daily alert}
+//                 "error": {"at": epoch ms, "text": the last failure,
+//                           "items": its entries, one per post or read},
+//                 "gaveUp": [{"at", "post", "what": "greeting", "queue card",
+//                             "greeting refused by the post (403)", "queue
+//                             card refused by the post (403)" or "damaged
+//                             record <key>"}], each kept two days for the
+//                             daily alert}
 //   thread:<id>  the scan's record of a post: {"greeting": message id,
 //                 "buttonless": true for the greeting without a button,
 //                 "card": queue card id, "cardSkipped": why no card goes out,
@@ -34,7 +37,7 @@
 //   daily:named  the posts of the give-ups a daily check has named
 // Each key has one writer: the scan writes thread: and scan:, the Worker
 // issue:, the daily check daily:named.
-import { parseForums, snowflakeMs, timedFetch, currentStatus, SEND_BUTTON, queueCard, personName, MESSAGES, discordText } from './core.js';
+import { parseForums, snowflakeMs, timedFetch, currentStatus, SEND_BUTTON, queueCard, personName, MESSAGES, discordText, postLines, taken, oneHop, isDiscordId, TEXT_TYPES } from './core.js';
 import { discordClient } from './discord.js';
 
 export { SEND_BUTTON };
@@ -152,17 +155,23 @@ export async function saveIssueRecord(kv, threadId, rec) {
 const finished = (rec, queue) => !!rec && (!!rec.skipped || !!rec.issue || !!rec.tracked
   || (!!rec.greeting && (!queue || !!rec.card || !!rec.cardSkipped)));
 
-// A Discord client that refuses calls past its share of the run's budget.
-class BudgetSpent extends Error {}
-function budgetClient(env, deps, budget) {
-  const timed = timedFetch(deps.fetch || fetch, CALL_MS);
+// A fetch that refuses calls past its share of the run's budget. `left()`
+// says how many it has left, so work that would only be refused is not
+// started. Every client built on it follows no redirect, so each counted
+// call is one request.
+export class BudgetSpent extends Error {}
+export function countedFetch(f, budget) {
   let left = budget;
   const counted = (url, init) => {
     if (left <= 0) throw new BudgetSpent('call budget for this run is spent');
     left--;
-    return timed(url, init);
+    return f(url, init);
   };
-  return discordClient(env.DISCORD_BOT_TOKEN, counted);
+  counted.left = () => left;
+  return counted;
+}
+function budgetClient(env, deps, budget) {
+  return discordClient(env.DISCORD_BOT_TOKEN, countedFetch(timedFetch(oneHop(deps.fetch || fetch), CALL_MS), budget));
 }
 
 const refused = (err) => / -> (403|404) /.test(String(err && err.message));
@@ -216,6 +225,7 @@ export async function scan(env, deps = {}) {
   }
   const since = Number(rawSince);
   const errors = [];
+  const endedNow = [];
   // A damaged state is rebuilt, and said so: each post's record still says
   // what it needs, and the marks only spare reads.
   const saved = await readOwn(kv, 'scan:state', isState);
@@ -386,19 +396,30 @@ export async function scan(env, deps = {}) {
       }
       const tries = (rec.tries || 0) + 1;
       const giveUp = !!err.damaged || refused(err) || tries >= MAX_TRIES;
-      // A refusal by the post itself (deleted, closed to the bot) is that
-      // post's own end, as before; one by the queue channel is a setup
-      // problem every later post shares, so it is named, as are 30 tries
-      // and a damaged record.
-      const told = giveUp && (!!err.damaged || !refused(err) || !!err.queue);
+      // A refusal by the post itself is that post's own end. A 404 (the post
+      // was deleted) is named to no one; a 403 (the bot may not read or
+      // message it) is a setup problem, so it is named, as is a refusal by
+      // the queue channel, which every later post shares, and so are 30
+      // tries and a damaged record. The status comes from the request the
+      // client kept, never from the response body.
+      // Only a refusal of a request on the post itself names the post: a 403
+      // from a shared endpoint (the bot's own user) is no fault of the post.
+      const own = !!err.discord && !err.queue && new RegExp(`^/channels/${t.id}(/|$)`).test(String(err.discord.path || ''));
+      const denied = own && err.discord.status === 403;
+      const told = giveUp && (!!err.damaged || !refused(err) || !!err.queue || denied);
       log(`${what} ${giveUp ? 'skipped' : 'left for the next run'}: ${err.message}`);
       if (!giveUp) {
         errors.push(what);
         left++;
-      } else if (told) {
+      } else if (told && !denied) {
         errors.push(`${what} (${err.damaged ? `its saved record ${err.damaged} is damaged` : refused(err) ? 'the queue channel refused the bot' : `gave up after ${tries} tries`})`);
       }
-      const label = err.damaged ? `damaged record ${err.damaged}` : greetedNow ? 'queue card' : 'greeting';
+      // A post that refused the bot (403) is named once, by its give-up line,
+      // and a deleted one (404) nowhere; a saved problem paragraph would
+      // name either again.
+      if (giveUp && own && [403, 404].includes(err.discord.status)) endedNow.push(t.id);
+      const kind = greetedNow ? 'queue card' : 'greeting';
+      const label = err.damaged ? `damaged record ${err.damaged}` : denied ? `${kind} refused by the post (403)` : kind;
       try {
         await putRecord(t.id, giveUp
           ? { ...rec, [greetedNow ? 'cardSkipped' : 'skipped']: err.message.slice(0, 200), ...(told ? { gaveUp: { at: now, what: label } } : {}) }
@@ -506,8 +527,17 @@ export async function scan(env, deps = {}) {
     if (!errors.length) errors.push(err.message);
     throw err;
   } finally {
-    const next = { last: now, through, greeted: greetedTo, error: state.error };
-    if (errors.length) next.error = { at: now, text: `could not read or message ${errors.slice(0, 5).join(', ')}` };
+    const namesEnded = (s) => endedNow.some((id) => new RegExp(`post ${id}\\b`).test(s));
+    const withoutEnded = (e) => {
+      if (!e || !endedNow.length) return e;
+      // A paragraph saved before its entries were kept apart is left whole.
+      if (!Array.isArray(e.items) || !e.items.every((s) => typeof s === 'string')) return e;
+      const items = e.items.filter((s) => !namesEnded(s));
+      return items.length ? { at: e.at, text: `could not read or message ${items.join(', ')}`, items } : undefined;
+    };
+    const keptError = withoutEnded(state.error);
+    const next = { last: now, through, greeted: greetedTo, ...(keptError ? { error: keptError } : {}) };
+    if (errors.length) next.error = { at: now, text: `could not read or message ${errors.slice(0, 5).join(', ')}`, items: errors.slice(0, 5) };
     // Every post given up on stays named for two days, whatever errors
     // follow, so the daily alert lists each one.
     const gaveUp = [...kept, ...gaveUpNow];
@@ -540,31 +570,45 @@ export async function daily(env, deps = {}) {
   // True when the text reached the channel, or the log by design (no
   // channel set, or past the run's posting share); false when the channel
   // failed it, so what it names is named again another day.
+  // Only a text or announcement channel of this server takes the bot's
+  // messages: the channel is read once, before the forum reads can spend
+  // their share, on a client of its own. Text that does not go out counts as
+  // not taken, so it is named again once the channel is fixed; with no
+  // channel set, the log is where it goes, and it counts as taken.
+  const checker = discordClient(env.DISCORD_BOT_TOKEN, countedFetch(timedFetch(oneHop(deps.fetch || fetch), CALL_MS), 1));
+  let wrongChannel = null;
+  // A channel's server id is an optional field of Discord's answer, so its
+  // absence leaves the channel unverified; a server id that differs says it
+  // is the wrong channel.
+  const id = isDiscordId(env.MOD_CHANNEL_ID) ? String(env.MOD_CHANNEL_ID) : null;
+  const checkChannel = async () => {
+    if (wrongChannel === null) {
+      wrongChannel = !id ? 'MOD_CHANNEL_ID is not a channel id' : await checker.getChannel(id).then(
+        (c) => (!c || c.guild_id === undefined || c.guild_id === null ? `MOD_CHANNEL_ID ${id} could not be checked (Discord's answer had no server id)`
+          : TEXT_TYPES.includes(c.type) && String(c.guild_id) === String(env.GUILD_ID) ? '' : `MOD_CHANNEL_ID ${id} is not a text channel of this server`),
+        (err) => `MOD_CHANNEL_ID ${id} could not be checked (${err instanceof BudgetSpent ? 'out of calls' : `Discord ${(err.discord && err.discord.status) || 'gave no answer'}`})`,
+      );
+    }
+    return wrongChannel;
+  };
+  if (env.MOD_CHANNEL_ID) await checkChannel();
   const post = async (text) => {
     text = text.slice(0, 1900);
     if (!env.MOD_CHANNEL_ID) { log(text); return true; }
+    const wrong = await checkChannel();
+    if (wrong) {
+      log(`not posted to the moderator channel: ${wrong}\n${text}`);
+      return false;
+    }
     try {
       await poster.send(env.MOD_CHANNEL_ID, text);
       posted = true;
       return true;
     } catch (err) {
+      if (taken(err)) { posted = true; return true; }
       log(`could not post to the moderator channel: ${err.message}\n${text}`);
       return err instanceof BudgetSpent;
     }
-  };
-  // Lines in as few messages as fit, each under 1,900 characters and cut
-  // only between lines. Past the run's posting share, the rest goes to the
-  // log. Returns the lines `post` took.
-  const postLines = async (lines) => {
-    const took = [];
-    let msg = [];
-    const flush = async () => { if (await post(msg.join('\n'))) took.push(...msg); msg = []; };
-    for (const line of lines) {
-      if (msg.length && msg.join('\n').length + 1 + line.length > 1900) await flush();
-      msg.push(line);
-    }
-    if (msg.length) await flush();
-    return took;
   };
 
   const kv = env.STATE;
@@ -597,15 +641,21 @@ export async function daily(env, deps = {}) {
     const shown = new Set(prior.value || []);
     const gaveUp = all.filter((g) => !shown.has(g.post));
     const lineOf = (g) => `- ${g.what}: https://discord.com/channels/${env.GUILD_ID}/${g.post}`;
+    const at = new Map();
     if (gaveUp.length) {
       if (prior.damaged) alert.push('The list of give-ups already named (daily:named) was damaged, so some below may have been named before.');
-      alert.push(`The post scan gave up on these posts, after ${MAX_TRIES} tries, because the queue channel refused the bot, or because a saved record is damaged or could not be read. A moderator can file each by right-click; for one listed with a damaged or unreadable record, a bot admin first fixes or deletes that KV key (README, "Clearing a filing record").`);
-      for (const g of gaveUp) alert.push(lineOf(g));
+      alert.push(`The post scan gave up on these posts: after ${MAX_TRIES} tries; at once when the queue channel or the post refused the bot; or because a saved record is damaged or could not be read. For a refusal, check the bot's permissions: in the queue channel, View Channel, Send Messages and Read Message History; in the post's forum, View Channel, Send Messages in Threads and Read Message History. A moderator can file each by right-click once access is fixed; for one listed with a damaged or unreadable record, a bot admin first fixes or deletes that KV key (README, "Clearing a filing record").`);
+      for (const g of gaveUp) {
+        at.set(g, alert.length);
+        alert.push(lineOf(g));
+      }
     }
-    const took = new Set(alert.length ? await postLines(alert) : []);
+    // Past the run's posting share, the rest goes to the log (`post`).
+    const tookAt = new Set(alert.length ? await postLines(post, alert) : []);
+    const named = (g) => at.has(g) && tookAt.has(at.get(g));
     if (alert.length) alerted = true;
-    if (gaveUp.some((g) => took.has(lineOf(g))) || prior.damaged) {
-      await kv.put('daily:named', JSON.stringify(all.filter((g) => shown.has(g.post) || took.has(lineOf(g))).map((g) => g.post)));
+    if (gaveUp.some(named) || prior.damaged) {
+      await kv.put('daily:named', JSON.stringify(all.filter((g) => shown.has(g.post) || named(g)).map((g) => g.post)));
     }
   }
 
@@ -654,9 +704,9 @@ export async function daily(env, deps = {}) {
     if (waiting.length > 20) lines.push(`- and ${waiting.length - 20} more`);
   }
 
-  if (lines.length) await post(lines.join('\n'));
+  if (lines.length) await postLines(post, lines);
   return { waiting: waiting.length, alerted, unread, posted };
 }
 
 // Which job a cron expression runs (wrangler.toml [triggers]).
-export const CRONS = { scan: '* * * * *', daily: '0 15 * * *' };
+export const CRONS = { scan: '* * * * *', daily: '0 15 * * *', setup: '30 15 * * *' };

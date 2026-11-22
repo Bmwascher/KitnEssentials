@@ -4,7 +4,7 @@ export function fakeFetch(routes) {
   const fn = async (url, init = {}) => {
     const method = init.method || 'GET';
     const body = init.body ? JSON.parse(init.body) : undefined;
-    calls.push({ method, url, body });
+    calls.push({ method, url, body, ...(init.redirect ? { redirect: init.redirect } : {}) });
     const route = routes.find(([m, re]) => m === method && re.test(url));
     if (!route) return new Response(`no route for ${method} ${url}`, { status: 404 });
     const out = await route[2](body, url);
