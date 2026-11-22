@@ -13,7 +13,7 @@ import {
 import { discordClient, postGone } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
 import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch } from './scan.js';
-import { setupCheck, setupLines, fitLines, NEEDED_BITS } from './setup.js';
+import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems } from './setup.js';
 
 export const COMMAND_NAME = 'Send to GitHub';
 export const CHECK_COMMAND = 'bot-check';
@@ -62,6 +62,21 @@ const json = (obj, status = 200) => new Response(JSON.stringify(obj), {
   status, headers: { 'Content-Type': 'application/json' },
 });
 const reply = (content) => json({ type: 4, data: { content, flags: EPHEMERAL } });
+// The bot works nowhere until its config holds: the reply names the first
+// problem, but only in the server the bot is set up for, so a moderator of
+// another server learns nothing of this one's setup. Callers check the
+// caller first.
+const notSetUp = (env, interaction) => {
+  const guild = String(env.GUILD_ID ?? '');
+  if (!isDiscordId(guild)) return reply("The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).");
+  if (String(interaction.guild_id ?? '') !== guild) return reply('This only works on posts in the forums the bot is set up for.');
+  return reply(`The bot is not set up yet: ${configProblems(env, { bindings: false })[0] || 'FORUMS is empty.'}`);
+};
+// The config, or null when it cannot be read (a broken REPOS throws), so
+// every entry point answers with the problem instead of failing.
+const configOr = (env) => {
+  try { return config(env); } catch { return null; }
+};
 
 function hexToBytes(hex) {
   const out = new Uint8Array(hex.length / 2);
@@ -134,8 +149,8 @@ function modalValues(data) {
 }
 
 async function openForm(interaction, env, deps, { threadId, messageId, greetingId = '', cardId = '', deadline = Date.now() + FORM_LOOKUP_MS }) {
-  const cfg = config(env);
-  if (!cfg.forums.length) return reply('The bot is not set up yet: FORUMS is empty.');
+  const cfg = configOr(env);
+  if (!cfg || !cfg.forums.length) return notSetUp(env, interaction);
   const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, deadline));
   let ch = interaction.channel && interaction.channel.id === threadId ? interaction.channel : {};
   if (!ch.parent_id || !ch.applied_tags) {
@@ -888,7 +903,8 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
   if (interaction.type === 3 && String(interaction.data.custom_id).startsWith(`${SEND_BUTTON}:`)) {
     const ids = parseCustomId(interaction.data.custom_id);
     if (!ids) return reply(BAD_IDS);
-    const cfg = config(env);
+    const cfg = configOr(env);
+    if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
     if (!cfg.roles.length && !canUse(interaction.member)) {
       return reply('The button is not set up yet: APPROVED_ROLE_IDS is empty. A moderator can right-click the post > Apps > Send to GitHub.');
     }
@@ -908,9 +924,10 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
 
   if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('gh:')) {
     if (!parseCustomId(interaction.data.custom_id)) return reply(BAD_IDS);
-    const cfg = config(env);
+    const cfg = configOr(env);
+    if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
     if (!allowed(interaction.member, cfg)) return reply(NOT_ALLOWED);
-    if (!cfg.forums.length) return reply('The bot is not set up yet: FORUMS is empty.');
+    if (!cfg.forums.length) return notSetUp(env, interaction);
     const v = modalValues(interaction.data);
     const problems = [];
     if (!normRepoKey(v.repo, cfg.repos)) problems.push(`Repo must be ${Object.keys(cfg.repos).join(' or ')}.`);

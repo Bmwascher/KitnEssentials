@@ -1276,3 +1276,65 @@ test('WT2: the daily setup check posts problems every day, the weekly line on a 
     assert.equal(kv.m.size, 0, `${why}: no KV write`);
   }
 });
+
+test("WT4: the not-set-up reply names the first broken setting only to a caller who may send, in the bot's server, after the caller check", async () => {
+  // A role the player lacks and the helper has, so a player reaches the
+  // caller check's refusal and not main's empty-role advice.
+  const G = { GUILD_ID: '1', APPROVED_ROLE_IDS: '77' };
+  const press = (member, guild = '1') => ({ type: 3, member, guild_id: guild, channel_id: '556', application_id: 'app', token: 'ptok', message: { id: '9' }, data: { custom_id: 'send:700' } });
+  const rightClick = (member, guild = '1') => ({ type: 2, member, guild_id: guild, channel_id: '700', application_id: 'app', token: 'rtok', data: { name: COMMAND_NAME, target_id: '700' } });
+  const sub = (member, guild = '1') => ({ ...submit(), member, guild_id: guild });
+  const ADMINS = 'Only moderators and admins can send posts to GitHub.';
+  const ROLES = 'Only moderators and approved roles can send posts to GitHub.';
+  const ELSEWHERE = 'This only works on posts in the forums the bot is set up for.';
+  const GUILD_LINE = "The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).";
+  const FORUMS_LINE = 'The bot is not set up yet: FORUMS is not valid JSON: set it to JSON keyed by forum channel id, like {"111":{}}.';
+  const REPOS_LINE = 'The bot is not set up yet: REPOS is not set or not valid JSON: set it to JSON like {"KE":"owner/repo"}.';
+  const TEXTLESS_LINE = 'The bot is not set up yet: FORUMS entry 900: "client", "type" and "template" must each be text, like "template":"https://discord.com/channels/...".';
+  const badForums = { FORUM_CHANNEL_IDS: '', FORUMS: '{not json' };
+  const badRepos = { ...badForums, REPOS: '' };
+  const textless = { FORUM_CHANNEL_IDS: '', FORUMS: '{"900":{"template":{"toString":null}}}' };
+  for (const [why, broken, interaction, want] of [
+    ['a moderator right-click, broken FORUMS', badForums, rightClick(MOD), FORUMS_LINE],
+    ['a moderator submit, broken FORUMS', badForums, sub(MOD), FORUMS_LINE],
+    ['an approved role submit, broken FORUMS', badForums, sub(HELPER), FORUMS_LINE],
+    ['a player right-click, broken FORUMS', badForums, rightClick(PLAYER), ADMINS],
+    ['a player submit, broken FORUMS', badForums, sub(PLAYER), ROLES],
+    ['a moderator right-click, broken REPOS', badRepos, rightClick(MOD), REPOS_LINE],
+    ['a moderator submit, broken REPOS', badRepos, sub(MOD), REPOS_LINE],
+    ['a moderator press, broken REPOS', badRepos, press(MOD), REPOS_LINE],
+    ['an approved role press, broken REPOS', badRepos, press(HELPER), REPOS_LINE],
+    ['a player press, broken REPOS', badRepos, press(PLAYER), ROLES],
+    ['a player submit, broken REPOS', badRepos, sub(PLAYER), ROLES],
+    ['a moderator submit, a FORUMS value with no text form', textless, sub(MOD), TEXTLESS_LINE],
+    ['a moderator of another server, right-click', badRepos, rightClick(MOD, '2'), ELSEWHERE],
+    ['a moderator of another server, press', badRepos, press(MOD, '2'), ELSEWHERE],
+    ['a moderator of another server, submit', badForums, sub(MOD, '2'), ELSEWHERE],
+    // With GUILD_ID not an id the caller's server cannot be told, so the
+    // reply names GUILD_ID alone, never the broken REPOS behind it.
+    ['GUILD_ID unset, a moderator of another server, press', { ...badRepos, GUILD_ID: '' }, press(MOD, '2'), GUILD_LINE],
+    ['GUILD_ID malformed, a moderator of another server, right-click', { ...badRepos, GUILD_ID: '1x' }, rightClick(MOD, '2'), GUILD_LINE],
+    ['GUILD_ID malformed, a moderator of another server, submit', { ...badRepos, GUILD_ID: '1x' }, sub(MOD, '2'), GUILD_LINE],
+    ['GUILD_ID unset, a moderator in the server, submit', { ...badRepos, GUILD_ID: '' }, sub(MOD), GUILD_LINE],
+  ]) {
+    const f = fakeFetch([]);
+    const j = await (await handle(await signed(interaction), { ...env, ...G, ...broken }, ctxFor(), { fetch: f })).json();
+    assert.equal(j.data.content, want, why);
+    assert.equal(f.calls.length, 0, `${why}: no calls`);
+  }
+  {
+    // With REPOS readable, a press keeps main's order: the search for a
+    // filing comes first, so a filed post answers Already tracked and its
+    // card is marked, broken FORUMS or not.
+    const f = fakeFetch(discordRoutes([
+      ['GET', /api\.github\.com\/repos\/me\/test-one\/issues\/3$/, () => ({ number: 3, html_url: 'https://github.com/me/test-one/issues/3' })],
+      ['PATCH', /\/channels\/556\/messages\/96$/, () => ({})],
+    ]));
+    const kv = fakeKv({ 'issue:700': JSON.stringify({ repo: 'me/test-one', number: 3, key: 'ONE', by: 'Bite' }) });
+    const ctx = ctxFor();
+    const j = await (await handle(await signed(cardPress(HELPER)), { ...QUEUE, ...badForums, GUILD_ID: '1', STATE: kv }, ctx, { fetch: f, ...INST, log: () => {} })).json();
+    await Promise.all(ctx.jobs);
+    assert.match(j.data.content, /^Already tracked as ONE #3: /, 'a filed post still answers Already tracked');
+    assert.equal(f.find('PATCH', /\/channels\/556\/messages\/96$/).length, 1, 'and its card is marked');
+  }
+});
