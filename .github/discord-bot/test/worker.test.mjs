@@ -1279,7 +1279,7 @@ test('WT2: the daily setup check posts problems every day, the weekly line on a 
 
 test("WT4: the not-set-up reply names the first broken setting only to a caller who may send, in the bot's server, after the caller check", async () => {
   // A role the player lacks and the helper has, so a player reaches the
-  // caller check's refusal and not main's empty-role advice.
+  // caller check's refusal and not the empty-role advice.
   const G = { GUILD_ID: '1', APPROVED_ROLE_IDS: '77' };
   const press = (member, guild = '1') => ({ type: 3, member, guild_id: guild, channel_id: '556', application_id: 'app', token: 'ptok', message: { id: '9' }, data: { custom_id: 'send:700' } });
   const rightClick = (member, guild = '1') => ({ type: 2, member, guild_id: guild, channel_id: '700', application_id: 'app', token: 'rtok', data: { name: COMMAND_NAME, target_id: '700' } });
@@ -1323,7 +1323,7 @@ test("WT4: the not-set-up reply names the first broken setting only to a caller 
     assert.equal(f.calls.length, 0, `${why}: no calls`);
   }
   {
-    // With REPOS readable, a press keeps main's order: the search for a
+    // With REPOS readable, a press keeps its order: the search for a
     // filing comes first, so a filed post answers Already tracked and its
     // card is marked, broken FORUMS or not.
     const f = fakeFetch(discordRoutes([

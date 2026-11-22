@@ -157,8 +157,7 @@ const finished = (rec, queue) => !!rec && (!!rec.skipped || !!rec.issue || !!rec
 
 // A fetch that refuses calls past its share of the run's budget. `left()`
 // says how many it has left, so work that would only be refused is not
-// started. Every client built on it follows no redirect, so each counted
-// call is one request.
+// started.
 export class BudgetSpent extends Error {}
 export function countedFetch(f, budget) {
   let left = budget;
@@ -396,14 +395,13 @@ export async function scan(env, deps = {}) {
       }
       const tries = (rec.tries || 0) + 1;
       const giveUp = !!err.damaged || refused(err) || tries >= MAX_TRIES;
-      // A refusal by the post itself is that post's own end. A 404 (the post
-      // was deleted) is named to no one; a 403 (the bot may not read or
-      // message it) is a setup problem, so it is named, as is a refusal by
-      // the queue channel, which every later post shares, and so are 30
-      // tries and a damaged record. The status comes from the request the
-      // client kept, never from the response body.
-      // Only a refusal of a request on the post itself names the post: a 403
-      // from a shared endpoint (the bot's own user) is no fault of the post.
+      // A refusal by the post itself ends that post. A 404 (deleted) is named
+      // to no one; a 403 (the bot may not read or message it) is a setup
+      // problem and is named, as are a queue-channel refusal (every later
+      // post shares it), 30 tries and a damaged record. The status comes from
+      // the request the client kept, never the response body, and only a
+      // request on the post itself names it: a 403 from a shared endpoint
+      // (the bot's own user) is no fault of the post.
       const own = !!err.discord && !err.queue && new RegExp(`^/channels/${t.id}(/|$)`).test(String(err.discord.path || ''));
       const denied = own && err.discord.status === 403;
       const told = giveUp && (!!err.damaged || !refused(err) || !!err.queue || denied);
@@ -530,7 +528,7 @@ export async function scan(env, deps = {}) {
     const namesEnded = (s) => endedNow.some((id) => new RegExp(`post ${id}\\b`).test(s));
     const withoutEnded = (e) => {
       if (!e || !endedNow.length) return e;
-      // A paragraph saved before its entries were kept apart is left whole.
+      // A saved error with no `items` list is left whole.
       if (!Array.isArray(e.items) || !e.items.every((s) => typeof s === 'string')) return e;
       const items = e.items.filter((s) => !namesEnded(s));
       return items.length ? { at: e.at, text: `could not read or message ${items.join(', ')}`, items } : undefined;
@@ -572,14 +570,11 @@ export async function daily(env, deps = {}) {
   // failed it, so what it names is named again another day.
   // Only a text or announcement channel of this server takes the bot's
   // messages: the channel is read once, before the forum reads can spend
-  // their share, on a client of its own. Text that does not go out counts as
-  // not taken, so it is named again once the channel is fixed; with no
-  // channel set, the log is where it goes, and it counts as taken.
+  // their share, on a client of its own.
   const checker = discordClient(env.DISCORD_BOT_TOKEN, countedFetch(timedFetch(oneHop(deps.fetch || fetch), CALL_MS), 1));
   let wrongChannel = null;
-  // A channel's server id is an optional field of Discord's answer, so its
-  // absence leaves the channel unverified; a server id that differs says it
-  // is the wrong channel.
+  // A channel's server id is optional in Discord's answer; its absence
+  // leaves the channel unverified.
   const id = isDiscordId(env.MOD_CHANNEL_ID) ? String(env.MOD_CHANNEL_ID) : null;
   const checkChannel = async () => {
     if (wrongChannel === null) {

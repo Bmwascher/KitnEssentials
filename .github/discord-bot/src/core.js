@@ -92,10 +92,9 @@ export function packGroups(lines) {
   return out;
 }
 
-// The one sender of lines to the moderator channel: as few messages as fit
-// (packGroups). `post(text)` says whether a message was taken; the indexes
-// of the lines it took are returned, so two equal lines in different
-// messages are told apart.
+// Lines to the moderator channel in as few messages as fit (packGroups).
+// `post(text)` says whether a message was taken; the indexes of the lines
+// taken are returned, so equal lines in different messages are told apart.
 export async function postLines(post, lines) {
   const took = [];
   for (const g of packGroups(lines)) {
@@ -105,7 +104,7 @@ export async function postLines(post, lines) {
 }
 
 // Whether a failed post was taken all the same: Discord answered 2xx and
-// only its body could not be read. Every moderator-channel sender uses it.
+// only its body could not be read.
 export const taken = (err) => !!(err && err.discord && err.discord.notJson && err.discord.status >= 200 && err.discord.status < 300);
 
 // Each counted call is one request: a redirect is answered, never followed,

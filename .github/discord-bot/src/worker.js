@@ -502,8 +502,6 @@ export async function runCheck(interaction, env, deps, t0 = Date.now()) {
   if (rest.length) log(`check result lines past the posting share:\n${rest.join('\n')}`);
   let failure = null;
   const discord = discordClient(env.DISCORD_BOT_TOKEN, countedFetch(timedFetch(oneHop(deps.fetch), TAIL_MS, t0 + CHECK_POSTS_BY_MS), POST_SHARE));
-  // Lines are told apart by their place, so of two equal lines in different
-  // messages each counts for its own message.
   const took = new Set(await postLines(modPost(discord, mod, (e) => {
     failure = failure || e;
     log(`check result not posted: ${String(e.message).slice(0, 200)}`);
