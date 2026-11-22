@@ -37,7 +37,10 @@ GUILD_ID = ""
 # Role ids allowed to press the "Send to GitHub" button, comma separated.
 # Empty: only moderators (Manage Threads) can use it.
 APPROVED_ROLE_IDS = ""
-# Channel for the daily list of posts waiting with no status. Empty: logged only.
+# The moderator channel, a staff-only text channel of the server: the daily
+# list, the scan alert, /bot-check results, the daily setup check, the
+# weekly line. The bot needs View Channel and Send Messages there. Empty is
+# a setup problem (the messages reach only the Worker log).
 MOD_CHANNEL_ID = ""
 # Staff channel for queue cards: one per new post, with the "Send to GitHub"
 # button. Empty: no cards, and moderators file by right-click.

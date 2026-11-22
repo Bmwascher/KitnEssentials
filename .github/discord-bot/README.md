@@ -134,7 +134,12 @@ comment the sweep line links to and add `<!-- discord-sent -->` (or
 Every day the Worker also lists posts older than `STALE_DAYS` that have no
 status tag and no `Answered` tag (open posts, and posts archived in the last
 30 days) in `MOD_CHANNEL_ID`, and warns there first if the post scan has
-stopped, or hit a problem with some post or forum in the last day. A post the bot may not message (locked, or no permission) is skipped; one
+stopped, or hit a problem with some post or forum in the last day. A post
+that refuses the bot (Discord's 403: a missing permission) is given up on at
+once and named in the next alert as "refused by the post (403)", with the
+permissions to check; a deleted post is skipped without a word. The alert,
+like every bot message to `MOD_CHANNEL_ID`, goes only to a text channel of
+the server; otherwise it goes to the Worker log. A post
 that fails 30 runs in a row (about 30 minutes) is given up on, and so is one
 whose saved record still cannot be read an hour after the post was made. The
 alert names each post given up on that no earlier alert named; one the
@@ -150,6 +155,59 @@ Two halves, no always-on server:
   It does nothing until the `DISCORD_BOT_TOKEN` secret exists, so it is safe to merge early.
 
 None of this ships to players: `.github` is excluded from sync and builds.
+
+## Checking the setup
+
+The Worker checks its own setup in three places: `/bot-check`, the daily
+setup check, and its replies to a moderator while a setting is broken.
+
+- **`/bot-check`.** A moderator (Manage Threads) runs it in the server the
+  bot is set up for; in any other server, or while `GUILD_ID` is not set, it
+  is refused. It checks:
+  - the Worker's settings, as the bot reads them;
+  - the bot's permissions in each player forum, the queue channel, the
+    moderator channel and the checklist forum;
+  - each forum's tags and template message;
+  - the Message Content setting and the approved roles;
+  - that the moderator channel is hidden from `@everyone`;
+  - that the four secrets are set and of the right form (never their values),
+    and that `DISCORD_PUBLIC_KEY` and `DISCORD_BOT_TOKEN` belong to the same
+    app;
+  - for each repo in `REPOS` and `LOCK_REPO`, once in any letter case, the
+    GitHub App's install, its Issues permission and, for a filing repo, the
+    bot's labels.
+
+  The result goes to `MOD_CHANNEL_ID`, one line per problem with its fix,
+  but only when the check found that channel to be a text channel of this
+  server where the bot can post. Otherwise, or when the channel refuses the
+  post, it comes back to you privately, the reason first; if only part of it
+  was posted, the private reply holds the rest. A check that could not run
+  counts as a problem. The checks run in groups (the server's channels,
+  tags and roles; the bot's application; the template messages; GitHub),
+  so one failure hides only the rest of its own group, and the result then
+  holds a line that says which checks did not run: fix that problem, then
+  run the check again.
+- **The daily setup check.** At 15:30 UTC the Worker runs the same checks.
+  Problems are posted in the moderator channel every day they last. A
+  passing day posts nothing, except Mondays: "every check passes today". A
+  Monday with neither that line nor a problem list means the daily setup
+  check is not running or cannot post.
+- **The Worker's replies.** While a setting the Worker needs is broken, a
+  moderator or a member of an approved role who right-clicks a post,
+  presses a queue card's button or submits the form in this server is told
+  "The bot is not set up yet:" and the first broken setting. Anyone else
+  gets the usual "Only moderators ..." refusal first, and a moderator of
+  another server gets "This only works on posts in the forums the bot is
+  set up for."; neither sees the setup line. A press on a post already
+  filed still answers "Already tracked" first.
+- **Filing** into a forum without the `Triaged` tag still files the issue.
+  When the bot tries to set `Triaged` on a post with no status and cannot,
+  the moderator's reply includes "tag not set" with the reason, among its
+  other notes. The setup checks name a missing status tag of every forum
+  every day.
+
+Neither check can see the Worker's cron triggers. After every deploy, read
+Wrangler's output (step 5 of the setup).
 
 ## The issue
 
@@ -459,10 +517,9 @@ Accepted on purpose; each line says how you would notice it.
   on: before the greeting is out, it gets neither; after, it keeps its
   greeting and gets no card. The next daily alert names every post given up
   on since the last one, with its link, and moderators file it by
-  right-click. With more than about 65 of them, the alert fills the daily
-  check's four messages, so that day's list of waiting posts goes to the
-  Worker's log instead of the moderator channel; past about 85, so does the
-  alert's last part.
+  right-click. The alert and the day's list of waiting posts share the daily
+  check's four messages, each split between whole lines; what does not fit
+  goes to the Worker's log, the list's last part first, then the alert's.
 - If the bot's greeting went out but its id was not saved, the next scan looks
   for it among the post's last 100 messages; a post busier than that can get
   a second greeting. The same look finds the bot's "now tracked" reply, so a
@@ -752,6 +809,28 @@ Accepted on purpose; each line says how you would notice it.
   checklist thread" comment is copied into the other, the bot can take the
   first issue's thread for the second. Never copy that comment between
   issues; delete the copy, and the issue's next event opens its own thread.
+- `/bot-check` and the daily setup check cannot see the Actions settings.
+- The setup check computes the bot's permissions from the server's roles and
+  each channel's overrides, in Discord's documented order; a rule outside
+  that order can make a line wrong.
+- A repo with 300 or more labels can leave some of the bot's labels
+  unchecked; the check says which.
+- With `MOD_CHANNEL_ID` empty, the scan's alert goes to the Worker log and
+  counts as delivered, so setting the channel later does not repeat it;
+  the setup check names the empty setting every day, but only in the
+  Worker log, so run `/bot-check` after setting up.
+- The Worker cannot see its own cron triggers. Without the setup check's
+  schedule, no Monday line arrives; without the daily list's schedule,
+  nothing says so. Wrangler's output after each deploy is the check.
+- The setup check compares `DISCORD_PUBLIC_KEY` with the public key of the
+  app the bot token belongs to. A mismatch says the two belong to different
+  apps, not which one is wrong; and a token and key that both belong to the
+  wrong app agree.
+- The moderator channel check sees only `@everyone`: a role that players
+  hold and that is allowed into the channel is not found.
+- The checks trust the fields Discord and GitHub document as always
+  present. A failed read, an empty answer or a missing optional field is
+  "could not check", never a pass.
 
 ## Tests
 
@@ -780,11 +859,18 @@ KitnEssentials) before the real ones. Roughly 45 minutes.
    Note the Application ID and Public Key from General Information.
 3. **Invite it** with OAuth2 > URL Generator: scopes `bot` + `applications.commands`,
    permissions View Channels, Read Message History, Send Messages, Send
-   Messages in Threads, Manage Threads. Send Messages lets it post queue
-   cards; in the queue channel it needs View Channel, Send Messages and Read
-   Message History. Let the bot into the staff-only queue channel before you
-   set `QUEUE_CHANNEL_ID`: a post scanned while the channel refuses the bot
-   gets no card.
+   Messages in Threads, Manage Threads. Then check each channel's own
+   permissions, since a channel can override the invite's:
+   - each player forum: View Channel, Send Messages in Threads, Manage
+     Threads and Read Message History (without Read Message History every
+     queue card says the first message was deleted);
+   - the queue channel: View Channel, Send Messages and Read Message History.
+     Let the bot into it before you set `QUEUE_CHANNEL_ID`: a post scanned
+     while the channel refuses the bot gets no card;
+   - the moderator channel, a staff-only text channel of the server (View
+     Channel denied to `@everyone`): View Channel and Send Messages. The
+     bot's setup results and alerts there name its settings.
+   `/bot-check` (step 10) checks all of these.
 4. **GitHub App.** github.com/settings/apps > New GitHub App: no webhook,
    Repository permissions **Issues: Read and write**, Metadata: Read. Create,
    generate a private key (a `.pem` downloads), note the App ID, then
@@ -799,16 +885,27 @@ KitnEssentials) before the real ones. Roughly 45 minutes.
    `QUEUE_CHANNEL_ID`.
    `FORUMS` is required: while it is empty (and the older `FORUM_CHANNEL_IDS`
    is empty too) the bot does nothing anywhere.
-   `npm run deploy` prints a URL. The first scan only starts its clock, so
+   `npm run deploy` prints a URL. Wrangler then lists the schedules it deployed: there must be three,
+   `* * * * *` (the post scan), `0 15 * * *` (the daily list) and
+   `30 15 * * *` (the daily setup check). If any of the three is missing or
+   different, copy the `[triggers]` block of the committed `wrangler.toml`,
+   its `crons = [...]` line included, into yours, compare the three
+   expressions, and deploy again; the Worker cannot see its own triggers, so
+   no check names a missing one. Then
+   run `/bot-check` after every deploy (step 10). The first scan only starts its clock, so
    posts made before it never get a message.
 6. **Point Discord at it.** Developer portal > General Information >
    Interactions Endpoint URL = that URL. Discord checks it on save.
-7. **Register the command** on the test server only:
+7. **Register the commands** (the right-click Send to GitHub and `/bot-check`)
+   on the test server only:
    `DISCORD_APP_ID=... DISCORD_BOT_TOKEN=... DISCORD_GUILD_ID=<test server id> npm run register`
 8. **Labels:** `GITHUB_TOKEN=<a token with repo access> npm run labels <you>/<test-repo>`
 9. **Status workflow in the test repo:** copy `.github/discord-bot/` and
    `.github/workflows/discord-status.yml` into it and add the repo secret
    `DISCORD_BOT_TOKEN`.
+10. **Check the setup:** in the test server, run `/bot-check`. Its result
+    goes to the moderator channel; fix each line it names, then run it again
+    until every check passes.
 
 Then walk one fake report through: post in a test forum and wait up to a
 minute for the greeting and the queue card, press **Send to GitHub** on the
