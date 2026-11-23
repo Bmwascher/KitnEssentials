@@ -245,9 +245,9 @@ Each key in `REPOS` must be made of letters and digits only. With any
 other key the bot files nothing and answers that it is not set up, naming
 the first problem it finds: the key, unless an earlier one comes first,
 such as a `GUILD_ID` that is unset or not a server id, or a setting with
-no text form. `/bot-check` names every such key; while a setting has no
-text form, it names that setting instead, and the daily setup check names
-the keys.
+no text form. The setup check writes a line for every such key, within its
+usual display limits; while a setting has no text form, `/bot-check` names
+that setting instead, and the daily setup check names the keys.
 
 When a new issue is created, the bot renames the post to the same text, cut
 to Discord's 100 characters, normally inside the title (a module of many
@@ -553,9 +553,10 @@ Accepted on purpose; each line says how you would notice it.
   channel until someone deletes it.
 - Discord allows the bot only a few renames of one post in a short time
   (reported as about two in ten minutes), and does not document the limit.
-  A filing soon after other renames of its post can be refused. The post
-  then keeps its name, and the Worker log line `post <post id> rename failed:`
-  shows Discord's 429. Rename the post by hand later.
+  A filing soon after other renames of its post still creates the issue and
+  answers the moderator, but its rename can be refused. The post then keeps
+  its name, and the Worker log line `post <post id> rename failed:` shows
+  Discord's 429. Rename the post by hand later.
 - A card whose post was deleted shows "# unknown" in place of the post's
   name, so the card no longer says which post it was.
 - If presses keep answering "press again" (GitHub slow or failing), a

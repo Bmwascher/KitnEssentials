@@ -876,7 +876,6 @@ test('filing leaves a status the post shows, also one a workflow set just before
     await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
     const [res] = await Promise.all(ctx.jobs);
     assert.deepEqual([res.created, res.notes], [17, []], why);
-    // In progress stays: the post's one write is its rename, after the filing.
     assert.deepEqual(f.find('PATCH', /\/channels\/700$/).map((c) => c.body), [{ name: '[ONE] [Retail] [Bug] [Bags] Bags overlap after resize' }], `${why}: In progress stays`);
   }
 });

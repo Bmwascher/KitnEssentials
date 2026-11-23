@@ -15,7 +15,7 @@ test('title follows [KEY] [Client] [Type] [Module] Title, each module word capit
     ['ONE', 'Retail', 'Bug', '\u{10428}bc', 'x', '[ONE] [Retail] [Bug] [\u{10400}bc] x'],
     // A capital that is not one letter would lengthen the module.
     ['ONE', 'Retail', 'Bug', '\uFB03x \u00DFx', 'x', '[ONE] [Retail] [Bug] [\uFB03x \u00DFx] x'],
-    ['ONE', 'Retail', 'Bug', 'bags] beta', 'x', '[ONE] [Retail] [Bug] [Bags Beta] x'],
+    ['ONE', 'Retail', 'Bug', '[bags] beta', 'x', '[ONE] [Retail] [Bug] [Bags Beta] x'],
     ['ONE', 'Retail', 'Bug', '  ', 'x', '[ONE] [Retail] [Bug] [General] x'],
     // The form pre-fills the title from the post's name: a direction mark there cannot reorder the issue's title.
     ['ONE', 'Retail', 'Bug', 'ba\u202Egs', 'free \u202Efix\u2066 now', '[ONE] [Retail] [Bug] [Bags] free fix now'],

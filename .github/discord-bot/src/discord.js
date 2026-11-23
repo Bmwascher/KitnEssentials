@@ -17,7 +17,6 @@ export function answeredStatus(err, method, path) {
   return m && m[1] === method && m[2] === path ? Number(m[3]) : null;
 }
 
-// Whether a thread, as Discord answered it, is archived.
 export const archivedOf = (t) => !!(t.thread_metadata && t.thread_metadata.archived);
 
 export function discordClient(token, fetchImpl = fetch) {

@@ -609,7 +609,6 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
   let locked = false;
   let keepLock = false;
   let creating = false;
-  // Set just before the create: the issue's title, and the post's name once cut to fit.
   let issueTitle = '';
   let thread = null;
   let rec = null;
@@ -634,7 +633,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
   // The post's queue card: the form's, else the scan's record of the post.
   const cardOf = (r) => cardId || (r && r.card) || '';
   // The card to mark Filed as, once the lock is released: optional work
-  // never holds the lock. After a create, the post is renamed then too.
+  // never holds the lock.
   let cardAfter = null;
   let renameAfter = false;
   // The template check's result, for the moderator on either create path.
