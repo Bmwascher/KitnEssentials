@@ -23,7 +23,7 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
     ['a lower-case REPOS key', { REPOS: '{"ke":"me/one"}' }, /^REPOS key "ke" does not fit the form: write it in upper case, at most 10 characters\.$/],
     ['a REPOS key longer than the form field', { REPOS: '{"ELEVENCHARS":"me/one"}' }, /^REPOS key "ELEVENCHARS" does not fit the form/],
     // A key is letters and digits only: both names carry it.
-    ['a REPOS key holding a line break', { REPOS: '{"K\\nE":"me/one"}' }, /^REPOS key "K E" is not made of letters and digits: write each key in letters and digits only, like KE\.$/],
+    ['a REPOS key holding a line break', { REPOS: '{"K\\nE":"me/one"}' }, /^REPOS key "K E" is not made of letters and digits: write each key in A to Z, a to z and 0 to 9 only, like KE\.$/],
     ['a REPOS key holding a space', { REPOS: '{"AB CD":"me/one"}' }, /^REPOS key "AB CD" is not made of letters and digits/],
     ['a REPOS key holding a bracket', { REPOS: '{"U]I":"me/one"}' }, /^REPOS key "U\]I" is not made of letters and digits/],
     ['an empty REPOS key', { REPOS: '{"":"me/one"}' }, /^REPOS key "" is not made of letters and digits/],
@@ -61,8 +61,8 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
   }
   // One call names every bad key and still checks the rest of the map.
   assert.deepEqual(configProblems({ ...CLEAN, REPOS: JSON.stringify({ 'a b': 'me/one', '||KE||': 'broken' }) }), [
-    'REPOS key "a b" is not made of letters and digits: write each key in letters and digits only, like KE.',
-    'REPOS key "||KE||" is not made of letters and digits: write each key in letters and digits only, like KE.',
+    'REPOS key "a b" is not made of letters and digits: write each key in A to Z, a to z and 0 to 9 only, like KE.',
+    'REPOS key "||KE||" is not made of letters and digits: write each key in A to Z, a to z and 0 to 9 only, like KE.',
     'REPOS entry ||KE|| is not owner/repo.',
     "LOCK_REPO is empty while REPOS names more than one repo: set it to the repo that holds every filing's lock.",
   ]);

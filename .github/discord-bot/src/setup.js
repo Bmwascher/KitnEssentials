@@ -70,7 +70,7 @@ export function configProblems(raw, { bindings = true } = {}) {
     repos = e.repos || null;
     badKeys = e.badKeys || [];
     if (!badKeys.length) out.push('REPOS is not set or not valid JSON: set it to JSON like {"KE":"owner/repo"}.');
-    for (const k of badKeys) out.push(`REPOS key "${shown(k)}" is not made of letters and digits: write each key in letters and digits only, like KE.`);
+    for (const k of badKeys) out.push(`REPOS key "${shown(k)}" is not made of letters and digits: write each key in A to Z, a to z and 0 to 9 only, like KE.`);
   }
   if (repos) {
     for (const [k, r] of Object.entries(repos)) {

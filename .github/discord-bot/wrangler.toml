@@ -23,8 +23,9 @@ crons = ["* * * * *", "0 15 * * *", "30 15 * * *"]
 
 [vars]
 # Which repo each form choice files into, by a short key the form shows: in
-# letters and digits only, upper case, at most 10 characters. The issue's
-# title and the post's name start with it, as in "[KE] [Retail] [Bug] ...".
+# upper-case letters A to Z and digits 0 to 9 only, at most 10 characters.
+# The issue's title and the post's name start with it, as in
+# "[KE] [Retail] [Bug] ...".
 # Several repos: {"KE":"owner/one","UI":"owner/two"}.
 REPOS = '{"KE":"Bmwascher/KitnEssentials"}'
 # The forums the bot works in, keyed by channel id, each with the client and

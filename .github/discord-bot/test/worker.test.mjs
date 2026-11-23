@@ -318,6 +318,8 @@ test('a new filing renames the post to the issue title after the report and the 
     ['no time left for the write', (late) => { if (late) clock.at(29500); return POST; }, {}, null, [], [/^post 700 rename failed: out of time before PATCH /]],
     ['refused (403)', () => POST, {}, () => new Response('{"message":"Missing Permissions"}', { status: 403 }), [{ name: NAME }],
       [/^post 700 rename failed: Discord PATCH \/channels\/700 -> 403 /]],
+    // Discord answered 200 and only its body could not be read: the post has its name.
+    ['taken with an answer that is not JSON: no failure logged', () => POST, {}, () => new Response('<html>', { status: 200 }), [{ name: NAME }], []],
   ]) {
     clock.at(0);
     let created;
@@ -1425,7 +1427,7 @@ test("WT4: the not-set-up reply names the first broken setting only to a caller 
   const GUILD_LINE = "The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).";
   const FORUMS_LINE = 'The bot is not set up yet: FORUMS is not valid JSON: set it to JSON keyed by forum channel id, like {"111":{}}.';
   const REPOS_LINE = 'The bot is not set up yet: REPOS is not set or not valid JSON: set it to JSON like {"KE":"owner/repo"}.';
-  const KEY_LINE = 'The bot is not set up yet: REPOS key "O NE" is not made of letters and digits: write each key in letters and digits only, like KE.';
+  const KEY_LINE = 'The bot is not set up yet: REPOS key "O NE" is not made of letters and digits: write each key in A to Z, a to z and 0 to 9 only, like KE.';
   const TEXTLESS_LINE = 'The bot is not set up yet: FORUMS entry 900: "client", "type" and "template" must each be text, like "template":"https://discord.com/channels/...".';
   const badForums = { FORUM_CHANNEL_IDS: '', FORUMS: '{not json' };
   const badRepos = { ...badForums, REPOS: '' };

@@ -341,11 +341,15 @@ async function markCard(discord, cfg, log, { cardId, guildId, postId, head, key,
 // The post named as its issue, last, beside the card: a failure is logged,
 // since the moderator's reply has gone. The post is read just before the
 // write, so a name changed during the filing is seen. Discord changes no
-// name on an archived thread unless the same request opens it.
+// name on an archived thread unless the same request opens it. A write
+// Discord answered 2xx is done, even when its body could not be read.
 async function renamePost(discord, log, threadId, name) {
   try {
     const post = await discord.getChannel(threadId);
-    if (post.name !== name) await discord.call('PATCH', `/channels/${threadId}`, archivedOf(post) ? { name, archived: false } : { name });
+    if (post.name !== name) {
+      await discord.call('PATCH', `/channels/${threadId}`, archivedOf(post) ? { name, archived: false } : { name })
+        .catch((e) => { if (!taken(e)) throw e; });
+    }
   } catch (e) {
     log(`post ${threadId} rename failed: ${e.message.slice(0, 200)}`);
   }

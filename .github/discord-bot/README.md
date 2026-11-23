@@ -241,30 +241,37 @@ then the title. Each word of the module gets an upper-case first letter
 (`General` when nothing is left of it once direction marks and control
 characters are removed), and brackets typed in the module are dropped. A
 letter whose capital is more than one letter, such as ß, stays as typed.
-Each key in `REPOS` must be made of letters and digits only. With any
-other key the bot files nothing and answers that it is not set up, naming
-the first problem it finds: the key, unless an earlier one comes first,
-such as a `GUILD_ID` that is unset or not a server id, or a setting with
-no text form. The setup check writes a line for every such key, within its
-usual display limits; while a setting has no text form, `/bot-check` names
-that setting instead, and the daily setup check names the keys.
+Each key in `REPOS` must be made of letters and digits only: A to Z, a to
+z and 0 to 9. With any other key the bot files nothing and answers that it
+is not set up, naming the first problem it finds: the key, unless an
+earlier one comes first, such as a `GUILD_ID` that is unset or not a server
+id, or a setting with no text form. The setup check writes a line for every
+such key, within its usual display limits; while a setting has no text
+form, `/bot-check` names that setting instead, and the daily setup check
+names the keys. A `DISCORD_PUBLIC_KEY` with no text form fails the
+signature check of every request, so the bot answers nothing, `/bot-check`
+included, and only the daily setup check names it and the keys.
 
 When a new issue is created, the bot renames the post to the same text, cut
 to Discord's 100 characters, normally inside the title (a module of many
-emoji can make the cut fall in the prefix). The rename comes last, after
-the reply to the moderator and the lock's release, beside the queue card's
-update, so it never delays or stops the filing. It reads the post just
-before the rename: a post that already has that name is not written, and an
-archived one whose name changes is opened by the same request (one that
-already has the name stays as it is). A rename that fails goes to the
-Worker log as `post <post id> rename failed:` with Discord's answer or the
-timeout; the moderator's reply does not mention it.
+emoji can make the cut fall in the prefix). The rename comes last, once the
+reply to the moderator and the lock's release have been tried, beside the
+queue card's update, so it never delays or stops the filing. A reply or a
+release that fails is logged and the rename still runs, so a renamed post
+does not prove the moderator got the reply or the lock was cleared. It reads
+the post just before the rename: a post that already has that name is not
+written, and an archived one whose name changes is opened by the same
+request (one that already has the name stays as it is). A rename that fails
+goes to the Worker log as `post <post id> rename failed:` with Discord's
+answer or the timeout; the moderator's reply does not mention it.
 
 A post found already tracked is not renamed, and a later change to the
 issue's title does not rename the post. Opening the form again on a renamed
 post pre-fills the title without the bot's prefix, as it drops any leading
-bracket groups from a post's name. Set `RENAME_POSTS` to `0`
-to leave post names alone; the issue's title keeps this shape.
+bracket groups from a post's name. When the cut fell inside the module, the
+rest of the module is pre-filled instead, and the moderator types the title
+again. Set `RENAME_POSTS` to `0` to leave post names alone; the issue's
+title keeps this shape.
 
 One post gets one issue, across every repo in `REPOS`. Before filing, the bot
 reads the issue the post's saved filing record names, then searches every
