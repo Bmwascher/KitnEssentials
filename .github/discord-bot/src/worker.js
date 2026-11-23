@@ -339,7 +339,7 @@ async function markCard(discord, cfg, log, { cardId, guildId, postId, head, key,
 }
 
 // The post named as its issue, last, beside the card: a failure is logged,
-// since the moderator's reply has gone. The post is read just before the
+// since the moderator's reply has already been tried. The post is read just before the
 // write, so a name changed during the filing is seen. Discord changes no
 // name on an archived thread unless the same request opens it. A write
 // Discord answered 2xx is done, even when its body could not be read.
