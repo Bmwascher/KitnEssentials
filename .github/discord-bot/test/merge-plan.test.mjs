@@ -119,7 +119,7 @@ const clean = (line) => assert.ok(!line.startsWith('merge plan comment not updat
 // The event's own PR state, as GitHub sends it, from the fake's PR.
 const event = (w, number) => {
   const p = w.prs.get(number);
-  return { number, state: p && p.state === 'OPEN' ? 'open' : 'closed', merged: !!p && p.state === 'MERGED' };
+  return { number, state: p.state === 'OPEN' ? 'open' : 'closed', merged: p.state === 'MERGED' };
 };
 const plan = (w, number, action = 'opened', over = {}, log = clean) => planRun({
   payload: { repository, action, pull_request: event(w, number) }, env: { ...env, ...over }, fetchImpl: w.fetch, log,
@@ -171,7 +171,7 @@ test('MP3: one merge-plan comment per PR, found on any page, edited in place, ne
   await plan(w, 5, 'closed');
   const merged = `${MARKER}\n\n${CLOSED17}\n\n${REVERT}`;
   assert.equal(plans(w, 5)[0].body, merged);
-  await plan(w, 5, 'opened');
+  await planRun({ payload: { repository, action: 'opened', pull_request: { number: 5, state: 'open', merged: false } }, env: { ...env, GITHUB_RUN_ATTEMPT: '2' }, fetchImpl: w.fetch, log: clean });
   assert.equal(plans(w, 5)[0].body, merged, 'a re-run of the old opened event leaves the merged text');
   // A second marked copy on the first page, the plan on the second.
   const copy = w.record(5, `${MARKER}\nan older copy`);

@@ -119,12 +119,13 @@ const CALL_MS = 15000;
 // whole run, so a slow run must end here, logged and green.
 const PLAN_MS = 60 * 1000;
 // The PR as it is now, the repo's default branch and the issues the PR will
-// close, from one read, so no part of the plan comes from an older snapshot.
+// close, from one read. Only a first attempt's open, closed or merged state
+// comes from the event instead.
 const PLAN_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     defaultBranchRef { name }
     pullRequest(number: $number) {
-      body baseRefName isDraft authorAssociation
+      body baseRefName isDraft state authorAssociation
       closingIssuesReferences(first: 100) {
         pageInfo { hasNextPage }
         nodes { number state body repository { nameWithOwner } labels(first: 100) { nodes { name } } } } } } }`;
@@ -143,6 +144,7 @@ function mergePlanRunner({ gh, repo }) {
     if (conn.pageInfo.hasNextPage) throw new Error('more than 100 closing references: the merge plan is not updated');
     const filed = conn.nodes.filter((x) => eligible({ labels: x.labels.nodes, body: x.body }));
     return {
+      state: pr.state === 'MERGED' ? 'merged' : pr.state === 'CLOSED' ? 'closedUnmerged' : 'open',
       body: pr.body, base: pr.baseRefName, draft: pr.isDraft, trusted: TRUSTED.has(pr.authorAssociation), defaultBranch: defaultBranchRef.name,
       closing: filed.filter(sameRepo).map((x) => ({ n: x.number, open: x.state === 'OPEN' })),
       listed: conn.nodes.filter(sameRepo).map((x) => x.number),
@@ -185,10 +187,11 @@ function mergePlanRunner({ gh, repo }) {
     }
   }
 
-  // `state` comes from the event: a read just after a close can still show
-  // the PR open.
+  // A read just after a close can still show the PR open, so a first attempt
+  // passes the event's state; a re-run replays an old event and passes none.
   async function update(number, state) {
-    const pr = { ...(await read(number)), state };
+    const current = await read(number);
+    const pr = { ...current, state: state || current.state };
     let { closing } = pr;
     const unlisted = [];
     const refs = [];
@@ -245,7 +248,8 @@ export async function planRun({ payload, env, fetchImpl = fetch, log = console.l
   const runner = mergePlanRunner({ gh: githubClient(env.GITHUB_TOKEN, f), repo: payload.repository.full_name });
   try {
     const p = payload.pull_request;
-    const id = await runner.update(p.number, p.merged ? 'merged' : p.state === 'closed' ? 'closedUnmerged' : 'open');
+    const first = (Number(env.GITHUB_RUN_ATTEMPT) || 1) === 1;
+    const id = await runner.update(p.number, first ? (p.merged ? 'merged' : p.state === 'closed' ? 'closedUnmerged' : 'open') : null);
     log(id ? `merge plan comment ${id} is up to date` : 'this PR needs no merge plan comment');
   } catch (e) {
     log(`merge plan comment not updated: ${e.message.slice(0, 300)}`);
