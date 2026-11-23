@@ -124,7 +124,7 @@ const PLAN_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     defaultBranchRef { name }
     pullRequest(number: $number) {
-      body baseRefName isDraft state authorAssociation
+      body baseRefName isDraft authorAssociation
       closingIssuesReferences(first: 100) {
         pageInfo { hasNextPage }
         nodes { number state body repository { nameWithOwner } labels(first: 100) { nodes { name } } } } } } }`;
@@ -144,7 +144,6 @@ function mergePlanRunner({ gh, repo }) {
     const filed = conn.nodes.filter((x) => eligible({ labels: x.labels.nodes, body: x.body }));
     return {
       body: pr.body, base: pr.baseRefName, draft: pr.isDraft, trusted: TRUSTED.has(pr.authorAssociation), defaultBranch: defaultBranchRef.name,
-      state: pr.state === 'MERGED' ? 'merged' : pr.state === 'CLOSED' ? 'closedUnmerged' : 'open',
       closing: filed.filter(sameRepo).map((x) => ({ n: x.number, open: x.state === 'OPEN' })),
       listed: conn.nodes.filter(sameRepo).map((x) => x.number),
       crossRepo: filed.filter((x) => !sameRepo(x)).map((x) => ({ repo: x.repository.nameWithOwner, n: x.number, open: x.state === 'OPEN' })),
@@ -186,8 +185,10 @@ function mergePlanRunner({ gh, repo }) {
     }
   }
 
-  async function update(number) {
-    const pr = await read(number);
+  // `state` comes from the event: a read just after a close can still show
+  // the PR open.
+  async function update(number, state) {
+    const pr = { ...(await read(number)), state };
     let { closing } = pr;
     const unlisted = [];
     const refs = [];
@@ -243,7 +244,8 @@ export async function planRun({ payload, env, fetchImpl = fetch, log = console.l
   const f = timedFetch(fetchImpl, CALL_MS, Date.now() + PLAN_MS);
   const runner = mergePlanRunner({ gh: githubClient(env.GITHUB_TOKEN, f), repo: payload.repository.full_name });
   try {
-    const id = await runner.update(payload.pull_request.number);
+    const p = payload.pull_request;
+    const id = await runner.update(p.number, p.merged ? 'merged' : p.state === 'closed' ? 'closedUnmerged' : 'open');
     log(id ? `merge plan comment ${id} is up to date` : 'this PR needs no merge plan comment');
   } catch (e) {
     log(`merge plan comment not updated: ${e.message.slice(0, 300)}`);

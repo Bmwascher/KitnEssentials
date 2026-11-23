@@ -116,8 +116,13 @@ const repository = { full_name: 'me/one', default_branch: 'dev' };
 const quiet = () => {};
 // A run that logs a failure fails the test, unless the test reads the log.
 const clean = (line) => assert.ok(!line.startsWith('merge plan comment not updated'), line);
+// The event's own PR state, as GitHub sends it, from the fake's PR.
+const event = (w, number) => {
+  const p = w.prs.get(number);
+  return { number, state: p && p.state === 'OPEN' ? 'open' : 'closed', merged: !!p && p.state === 'MERGED' };
+};
 const plan = (w, number, action = 'opened', over = {}, log = clean) => planRun({
-  payload: { repository, action, pull_request: { number } }, env: { ...env, ...over }, fetchImpl: w.fetch, log,
+  payload: { repository, action, pull_request: event(w, number) }, env: { ...env, ...over }, fetchImpl: w.fetch, log,
 });
 // One PR event as the workflow runs it: the status job, then the merge-plan job.
 const both = async (w, number, action = 'opened', over = {}) => {
@@ -125,6 +130,18 @@ const both = async (w, number, action = 'opened', over = {}) => {
   await plan(w, number, action, over);
 };
 const plans = (w, n) => w.holder(n).comments.filter((c) => c.user.login === 'github-actions[bot]' && c.body.includes(MARKER));
+
+test('MP3b: the PR state comes from the event, so a read that still shows the PR open after its close leaves no open-PR text', async () => {
+  const w = world();
+  w.issue(17);
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [], body: 'https://discord.com/channels/800/717' });
+  await plan(w, 5);
+  assert.match(plans(w, 5)[0].body, /links the Discord post/);
+  await planRun({ payload: { repository, action: 'closed', pull_request: { number: 5, state: 'closed', merged: false } }, env, fetchImpl: w.fetch, log: clean });
+  assert.equal(plans(w, 5)[0].body, `${MARKER}
+
+Closed without merging, so this PR closes no issue.`);
+});
 
 test('MP3: one merge-plan comment per PR, found on any page, edited in place, never deleted; a marked comment by anyone else, and an unmarked bot comment, are ignored', async () => {
   const w = world();
