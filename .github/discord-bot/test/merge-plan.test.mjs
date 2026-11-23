@@ -19,6 +19,7 @@ test('MP1: the description parsers', () => {
     ['a repo whose name ends in this one', 'Fixes other-me/one#19', [], []],
     ['a number inside a word', 'Fixes abc#20 and Refs x/y#21', [], []],
     ['an issue URL is not a documented form, whatever follows its number', 'Fixes https://github.com/me/one/issues/23\nRefs https://github.com/me/one/issues/24?path=docs/setup\nFixes https://github.com/me/one/issues/25-old\nRefs https://github.com/me/one/issues/26/../27', [], []],
+    ['an issue URL after Refs is not read either', 'Refs https://github.com/me/one/issues/28\nRefs https://github.com/me/one/issues/29-old', [], []],
   ]) {
     assert.deepEqual(closingKeywordRefs(body, repo), closing, why);
     assert.deepEqual(refsKeywordRefs(body, repo), refs, why);
