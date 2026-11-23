@@ -1159,3 +1159,4 @@ for tags like `v5.0.120`, `tags: ['v*']` and `^v\d+\.\d+\.\d+$`; for tags like
 beta, rc or pre, not inside a longer word, never counts, whatever the pattern
 says. The guard misses `preview` and `1.0b1`, so a looser pattern must refuse
 those itself.
+
