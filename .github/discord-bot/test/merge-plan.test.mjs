@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MARKER, closingKeywordRefs, refsKeywordRefs, threadLinks, renderPlan } from '../status/merge-plan.mjs';
+import { MARKER, closingKeywordRefs, refsKeywordRefs, threadLinks, renderPlan, planRun } from '../status/merge-plan.mjs';
+import { run } from '../status/status.mjs';
+import { world } from './fake-world.mjs';
 
 // The merged texts, as a merge into `dev` naming #17 as closing, or naming
 // none, writes them.
@@ -104,4 +106,203 @@ test('MP2: renderPlan shows each line only when its case holds', () => {
   }
   assert.equal(renderPlan({ ...base, state: 'closedUnmerged' }), `${MARKER}\n\nClosed without merging, so this PR closes no issue.`);
   assert.equal(renderPlan({ ...base, closing: [] }), `${MARKER}\n\nThis PR no longer closes, references or links a Discord-filed issue.`);
+});
+
+// ---- The comment on a PR, in the fake world ----------------------------------
+
+const env = { GITHUB_TOKEN: 'gh', DISCORD_BOT_TOKEN: 'bot' };
+const repository = { full_name: 'me/one', default_branch: 'dev' };
+const quiet = () => {};
+// The merge-plan job of one PR event.
+const plan = (w, number, action = 'opened', over = {}, log = quiet) => planRun({
+  payload: { repository, action, pull_request: { number } }, env: { ...env, ...over }, fetchImpl: w.fetch, log,
+});
+// One PR event as the workflow runs it: the status job, then the merge-plan job.
+const both = async (w, number, action = 'opened', over = {}) => {
+  await run({ eventName: 'pull_request_target', payload: { repository, action, pull_request: { number } }, env: { ...env, ...over }, fetchImpl: w.fetch, log: quiet });
+  await plan(w, number, action, over);
+};
+const plans = (w, n) => w.holder(n).comments.filter((c) => c.user.login === 'github-actions[bot]' && c.body.includes(MARKER));
+
+test('MP3: one merge-plan comment per PR, found on any page, edited in place, never deleted; a marked comment by anyone else, and an unmarked bot comment, are ignored', async () => {
+  const w = world();
+  w.issue(17, { body: '## Report\n\n> zebra-sentinel\n\n<!-- discord-thread: 717 reporter: 42 -->' });
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17], body: 'Fixes #17' });
+  const spoof = w.record(5, `${MARKER}\nnot the bot`, 'someone');
+  const ordinary = w.record(5, 'an ordinary bot comment');
+  for (let i = 0; i < 98; i++) w.record(5, 'a comment', 'someone');
+  await plan(w, 5);
+  assert.equal(plans(w, 5).length, 1);
+  const { id } = plans(w, 5)[0];
+  assert.match(plans(w, 5)[0].body, /\*\*#17\*\* closes when this PR merges\./);
+  assert.doesNotMatch(plans(w, 5)[0].body, /zebra-sentinel|\b42\b|\b717\b|discord\.com/, 'no report text, reporter id, post id or Discord link');
+  const creates = () => w.find('POST', /issues\/5\/comments$/).length;
+  const writes = () => w.find('PATCH', new RegExp(`issues/comments/${id}$`)).length + creates();
+  const before = writes();
+  await plan(w, 5, 'edited');
+  assert.equal(writes(), before, 'nothing changed: no write, though the plan is on the second page');
+  Object.assign(w.prs.get(5), { closes: [], body: 'Refs #17' });
+  await plan(w, 5, 'edited');
+  assert.equal(plans(w, 5)[0].id, id, 'the same comment');
+  assert.match(plans(w, 5)[0].body, /#17 is referenced, not closed/);
+  w.prs.get(5).body = 'nothing here';
+  await plan(w, 5, 'edited');
+  assert.match(plans(w, 5)[0].body, /no longer closes, references or links/);
+  Object.assign(w.prs.get(5), { closes: [17], body: 'Fixes #17', state: 'MERGED' });
+  await plan(w, 5, 'closed');
+  const merged = `${MARKER}\n\n${CLOSED17}\n\n${REVERT}`;
+  assert.equal(plans(w, 5)[0].body, merged);
+  await plan(w, 5, 'opened');
+  assert.equal(plans(w, 5)[0].body, merged, 'a re-run of the old opened event leaves the merged text');
+  // A second marked copy on the first page, the plan on the second.
+  const copy = w.record(5, `${MARKER}\nan older copy`);
+  const list = w.holder(5).comments;
+  list.unshift(list.pop());
+  // The plan changes after both copies exist, so each page's copy must be edited.
+  w.issue(18);
+  w.prs.get(5).closes.push(18);
+  await plan(w, 5, 'closed');
+  const copies = plans(w, 5);
+  assert.deepEqual(copies.map((c) => c.id).sort(), [copy.id, id].sort());
+  for (const c of copies) assert.match(c.body, /naming #17, #18 as closing/, `copy ${c.id}, on either page, gets the new plan`);
+  assert.equal(creates(), 1, 'no comment created twice');
+  assert.equal(spoof.body, `${MARKER}\nnot the bot`, "the other account's comment is left alone");
+  assert.equal(ordinary.body, 'an ordinary bot comment', 'a bot comment without the marker is left alone');
+});
+
+test('MP4: the previews are the messages a new note sends', async () => {
+  const w = world();
+  w.issue(17);
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17], body: 'Fixes #17' });
+  const over = { RELEASE_TAG_PATTERN: '^v?\\d' };
+  await both(w, 5, 'opened', over);
+  const quoted = [...plans(w, 5)[0].body.matchAll(/^ {2}> (.*)$/gm)].map((m) => m[1]);
+  assert.equal(quoted.length, 3);
+  w.prs.get(5).state = 'MERGED';
+  w.close(17, 'completed', null, { pr: 'aaaaaaa1' });
+  await run({ eventName: 'issues', payload: { repository, action: 'closed', issue: { number: 17 } }, env: { ...env, ...over }, fetchImpl: w.fetch, log: quiet });
+  w.tags.unshift({ name: '1.3', commit: { sha: 'c-1.3' } });
+  w.contains.set('aaaaaaa1...c-1.3', 'ahead');
+  await run({
+    eventName: 'push', payload: { repository, ref: 'refs/tags/1.3', created: true, after: 'obj-1.3', head_commit: { id: 'c-1.3' } },
+    env: { ...env, ...over }, fetchImpl: w.fetch, log: quiet,
+  });
+  assert.deepEqual(w.said('717'), [quoted[0], quoted[1], quoted[2].replace('(release tag)', 'v1.3')], 'a tag that starts with a digit is shown with a v');
+});
+
+test('MP5: a merge-plan failure is logged, never thrown, and writes nothing', async () => {
+  for (const [why, setup, reason] of [
+    ['the comment write is refused', (w) => w.fail.push(['POST', /issues\/5\/comments$/, new Response('{"message":"Resource not accessible by integration"}', { status: 403 }), 1]),
+      /-> 403 .*Resource not accessible by integration/],
+    ['the plan query answers an error', (w) => w.fail.push(['POST', /graphql$/, new Response(JSON.stringify({ errors: [{ message: 'boom' }] })), 1]),
+      /GitHub GraphQL: boom/],
+    ['a Refs lookup is refused', (w) => {
+      w.prs.get(5).body = 'Fixes #17\nRefs #18';
+      w.fail.push(['GET', /\/repos\/me\/one\/issues\/18$/, new Response('{"message":"Forbidden"}', { status: 403 }), 1]);
+    }, /issues\/18 -> 403/],
+    ['more than one page of closing references', (w) => {
+      w.pageSize = 1;
+      w.issue(18);
+      w.prs.get(5).closes.push(18);
+    }, /more than 100 closing references: the merge plan is not updated/],
+  ]) {
+    const w = world();
+    w.issue(17);
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17], body: 'Fixes #17' });
+    setup(w);
+    const out = [];
+    await plan(w, 5, 'opened', {}, (s) => out.push(s));
+    assert.deepEqual(plans(w, 5), [], why);
+    assert.ok(out.some((l) => l.startsWith('merge plan comment not updated: ') && reason.test(l)), `${why}: ${out.join(' | ')}`);
+  }
+  const w = world();
+  w.issue(17);
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17], body: 'Fixes #17' });
+  const out = [];
+  await plan(w, 5, 'opened', { DISCORD_BOT_TOKEN: '' }, (s) => out.push(s));
+  assert.deepEqual(out, ['DISCORD_BOT_TOKEN is not set: skipping the merge plan']);
+  assert.deepEqual(w.calls, [], 'no call without the bot token');
+});
+
+test('MP6: which PRs get a comment, and what it names', async () => {
+  const other = (over = {}) => ({
+    number: 12, state: 'OPEN', repository: { nameWithOwner: 'me/two' },
+    labels: { nodes: [{ name: 'from-discord' }] }, body: '<!-- discord-thread: 912 reporter: 42 -->', ...over,
+  });
+  const open = (over) => (w) => w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [], ...over });
+  const none = (w, why) => assert.deepEqual(plans(w, 5), [], why);
+  const says = (re, not = []) => (w, why) => {
+    assert.equal(plans(w, 5).length, 1, why);
+    assert.match(plans(w, 5)[0].body, re, why);
+    for (const n of not) assert.doesNotMatch(plans(w, 5)[0].body, n, why);
+  };
+  for (const [why, setup, check] of [
+    ['a ready member PR closing #17', open({ closes: [17], body: 'Fixes #17' }),
+      says(/\*\*#17\*\* closes when this PR merges\./, [/Heads-up/])],
+    ['a draft closing #17', open({ closes: [17], body: 'Fixes #17', draft: true }),
+      says(/This PR is a draft: it counts toward In progress only once it is ready for review\./, [/has no role/])],
+    ['an author with no role closing #17', open({ closes: [17], body: 'Fixes #17', author_association: 'NONE' }),
+      says(/This PR's author has no role on this repo/, [/This PR is a draft/])],
+    ['a cross-repo report: the label and the marker', open({ closes: [other()], body: 'Fixes me/two#12' }),
+      says(/This PR closes me\/two#12, a Discord report in another repo\. That repo's status workflow, if it runs, cannot see this repo's fix or its releases\./)],
+    ['a cross-repo report already closed', open({ closes: [other({ state: 'CLOSED' })], body: 'Fixes me/two#12' }),
+      says(/^- me\/two#12 is already closed\.$/m, [/Transfer the issue/])],
+    ['a cross-repo issue with the label and no marker', open({ closes: [other({ body: 'no marker' })], body: 'Fixes me/two#12' }), none],
+    ['a cross-repo issue without the label', open({ closes: [other({ labels: { nodes: [] } })], body: 'Fixes me/two#12' }), none],
+    ['a link to the post of #17', open({ body: 'See https://discord.com/channels/800/717\nThanks.' }),
+      says(/This PR links the Discord post tracked as #17 but does not close it, unless a commit message does\./)],
+    ['a link to the post of #17, its label in another letter case', (w) => {
+      const { labels } = w.issues.get(17);
+      labels.delete('from-discord');
+      labels.add('From-Discord');
+      open({ body: 'See https://discord.com/channels/800/717' })(w);
+    }, none],
+    ['a link to a post with no issue', open({ body: 'See https://discord.com/channels/800/12345' }), none],
+    ['a plain mention', open({ body: 'See #17' }), none],
+    ['Refs to a PR with the label and a copied marker', (w) => {
+      w.issue(30, { pull_request: {} });
+      open({ body: 'Refs #30' })(w);
+    }, none],
+    ['ten Refs to numbers that are no issue, one of them deleted (410), then Refs #17', (w) => {
+      w.fail.push(['GET', /\/repos\/me\/one\/issues\/101$/, new Response('{"message":"This issue was deleted"}', { status: 410 }), 1]);
+      open({ body: `${Array.from({ length: 10 }, (_, i) => `Refs #${101 + i}`).join('\n')}\nRefs #17` })(w);
+    }, says(/#17 is referenced, not closed/)],
+    ['Fixes #17 into another branch', open({ body: 'Fixes #17', base: 'feature' }),
+      says(/This PR targets `feature`, not `dev`: GitHub will not close #17 when it merges/, [/^ {2}> /m])],
+    ['Fixes #17 on the default base, which GitHub does not list (the base was changed)', open({ body: 'Fixes #17' }),
+      says(/The description says it closes #17, but GitHub does not list #17 as closing/, [/^ {2}> /m])],
+    ['Fixes, Refs and the link of #17', open({ closes: [17], body: 'Fixes #17\nRefs #17\nhttps://discord.com/channels/800/717' }),
+      says(/\*\*#17\*\* closes when this PR merges\./, [/is referenced, not closed/, /links the Discord post/])],
+    ['Refs and the link of #17, no close', open({ body: 'Refs #17\nhttps://discord.com/channels/800/717' }),
+      says(/#17 is referenced, not closed/, [/links the Discord post/])],
+    ['first seen at its merge, closing #17', (w) => w.prs.set(5, { author_association: 'MEMBER', state: 'MERGED', closes: [17], body: 'Fixes #17' }),
+      says(/^<!-- discord-merge-plan -->\n\nMerged into `dev`, naming #17 as closing\./)],
+    ['first seen at its merge, naming #17 that was closed before it', (w) => {
+      w.close(17, 'completed', 'aaaaaaa1');
+      w.prs.set(5, { author_association: 'MEMBER', state: 'MERGED', closes: [17], body: 'Fixes #17' });
+    }, says(/^<!-- discord-merge-plan -->\n\nMerged into `dev`, naming #17 as closing\. GitHub closes each of these issues that was still open;/)],
+    ['first seen at its close, unmerged', (w) => w.prs.set(5, { author_association: 'MEMBER', state: 'CLOSED', closes: [17], body: 'Fixes #17' }), none],
+    ['first seen at its merge, closing no bot issue', (w) => w.prs.set(5, { author_association: 'MEMBER', state: 'MERGED', closes: [], body: 'Refs #17' }), none],
+    ['first seen at its merge, closing only another repo\'s report', (w) => w.prs.set(5, { author_association: 'MEMBER', state: 'MERGED', closes: [other()], body: 'Fixes me/two#12' }), none],
+    ['closed after its last closing reference went', async (w) => {
+      open({ closes: [17], body: '' })(w);
+      await plan(w, 5);
+      Object.assign(w.prs.get(5), { closes: [], state: 'CLOSED' });
+    }, says(/^<!-- discord-merge-plan -->\n\nClosed without merging, so this PR closes no issue\.$/)],
+  ]) {
+    const w = world();
+    w.issue(17);
+    await setup(w);
+    await plan(w, 5);
+    check(w, why);
+  }
+  const w = world();
+  w.issue(17);
+  // #50 is an ordinary issue of this repo that GitHub lists as closing.
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [other({ number: 50, repository: { nameWithOwner: 'me/one' }, labels: { nodes: [] } })], body: 'Fixes #50' });
+  await plan(w, 5);
+  assert.deepEqual(plans(w, 5), [], 'a PR closing only an ordinary issue gets no comment');
+  assert.equal(w.find('POST', /graphql$/).length, 1, 'one GraphQL read');
+  assert.equal(w.find('GET', /issues\/5\/comments/).length, 1, 'one comment-list page');
+  assert.equal(w.calls.length, 2, 'no other call, and no write');
 });

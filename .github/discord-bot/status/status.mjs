@@ -21,11 +21,11 @@ import { checklistRunner, parseChecklist } from './checklist.mjs';
 
 const hasLabel = (issue, name) => (issue.labels || []).some((l) => (l.name || l) === name);
 // The bot's own issues: the label and the marker it writes last.
-const eligible = (issue) => hasLabel(issue, LABELS.fromDiscord) && parseMarker(issue.body) !== null;
+export const eligible = (issue) => hasLabel(issue, LABELS.fromDiscord) && parseMarker(issue.body) !== null;
 const NO_ACCEPTED_SLOT = 'no free tag slot for Accepted on the post';
 const NO_ACCEPTED_TAG = 'the forum has no Accepted tag';
 // Only PRs from people with a role on the repo move a post to In progress.
-const TRUSTED = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
+export const TRUSTED = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 const PR_EVENTS = new Set(['pull_request', 'pull_request_target']);
 const CALL_MS = 15000;
 const SETTLE_TRIES = 3;
@@ -34,7 +34,7 @@ const SETTLE_TRIES = 3;
 const RECENT_MS = 24 * 60 * 60 * 1000;
 // The account this workflow comments as (GITHUB_TOKEN). Only its records
 // count: anyone can comment on a public issue.
-const BOT_LOGIN = 'github-actions[bot]';
+export const BOT_LOGIN = 'github-actions[bot]';
 const RELEASE = [LABELS.pendingRelease, LABELS.shipped];
 // Lists are followed this many pages (100 each) at most.
 const MAX_PAGES = 10;
