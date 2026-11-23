@@ -62,16 +62,21 @@ export function configProblems(raw, { bindings = true } = {}) {
   const env = readable(raw, bad);
   const out = bad.map((k) => `${k} is not text: set it as text. The checks below read it as unset.`);
   let repos = null;
+  let badKeys = [];
   try {
     repos = parseRepos(env.REPOS);
-  } catch {
-    out.push('REPOS is not set or not valid JSON: set it to JSON like {"KE":"owner/repo"}.');
+  } catch (e) {
+    // A bad key stops filing; the rest of the map is still checked here.
+    repos = e.repos || null;
+    badKeys = e.badKeys || [];
+    if (!badKeys.length) out.push('REPOS is not set or not valid JSON: set it to JSON like {"KE":"owner/repo"}.');
+    for (const k of badKeys) out.push(`REPOS key "${shown(k)}" is not made of letters and digits: write each key in letters and digits only, like KE.`);
   }
   if (repos) {
     for (const [k, r] of Object.entries(repos)) {
-      // The form's answer is read trimmed and in upper case.
-      // The field is one line, so a key holding a line break cannot be typed.
-      if (!k || k !== k.trim().toUpperCase() || k.length > REPO_KEY_MAX || /[\u0000-\u001f]/.test(k)) out.push(`REPOS key "${shown(k)}" can never be chosen in the form: write it in upper case, at most ${REPO_KEY_MAX} characters, on one line, with no space at either end.`);
+      // The form's answer is read trimmed and in upper case, from a field of
+      // REPO_KEY_MAX characters.
+      if (!badKeys.includes(k) && (k !== k.toUpperCase() || k.length > REPO_KEY_MAX)) out.push(`REPOS key "${shown(k)}" does not fit the form: write it in upper case, at most ${REPO_KEY_MAX} characters.`);
       if (typeof r !== 'string' || !REPO.test(r)) out.push(`REPOS entry ${shown(k)} is not owner/repo.`);
     }
     if (Object.keys(repos).length > 1 && !present(env.LOCK_REPO)) out.push("LOCK_REPO is empty while REPOS names more than one repo: set it to the repo that holds every filing's lock.");
@@ -267,7 +272,8 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
       : !token ? 'the moderator channel could not be checked (DISCORD_BOT_TOKEN is not set)' : 'the moderator channel could not be checked';
   let probed = null;
   let repos = null;
-  try { repos = parseRepos(env.REPOS); } catch { /* named by configProblems */ }
+  // Named by configProblems; a map with a bad key is still checked on GitHub.
+  try { repos = parseRepos(env.REPOS); } catch (e) { repos = e.repos || null; }
   let forums = {};
   try { forums = Object.fromEntries(Object.entries(parseForums(env)).filter(([id]) => digits(id))); } catch { /* named by configProblems */ }
   // configProblems says why no player forum is left; this says what it hides.

@@ -595,6 +595,8 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
   let locked = false;
   let keepLock = false;
   let creating = false;
+  // Set just before the create: the issue's title, and the post's name once cut to fit.
+  let issueTitle = '';
   let thread = null;
   let rec = null;
   let saved = null;
@@ -783,9 +785,10 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     const check = template.fields.length ? templateCheck(message.content, template.fields, (message.attachments || []).length) : [];
     gaps = templateGaps(check, template.optional);
     tmplNote = template.note;
+    issueTitle = buildTitle({ repoKey, client, type, module: v.module, title: v.title });
     creating = true;
     const issue = await gh.createIssue(repo, {
-      title: buildTitle({ repoKey, client, module: v.module, title: v.title }),
+      title: issueTitle,
       body: buildBody({
         content: message.content,
         reporter: { name: personName(author, member), username: author.username, id: reporterId },

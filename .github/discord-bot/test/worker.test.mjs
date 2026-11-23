@@ -108,7 +108,7 @@ test('submitting files the issue, tags the post Triaged and tells the player', a
   assert.deepEqual(await Promise.all(ctx.jobs), [{ created: 17, notes: [] }]);
   assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 1, 'the lock is released');
 
-  assert.equal(created.title, '[ONE][Retail][Bags] Bags overlap after resize');
+  assert.equal(created.title, '[ONE] [Retail] [Bug] [Bags] Bags overlap after resize');
   assert.match(created.body, /> My bags overlap\n> after resize/);
   assert.match(created.body, /^\| Reporter \| \[Pat\]\(https:\/\/discord\.com\/users\/42\) \|\n/);
   assert.match(created.body, /\n\| Filed by \| \[moddy\]\(https:\/\/discord\.com\/users\/5\) \(`moddy`\) \|\n/);
@@ -1298,6 +1298,7 @@ test("WT4: the not-set-up reply names the first broken setting only to a caller 
   const GUILD_LINE = "The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).";
   const FORUMS_LINE = 'The bot is not set up yet: FORUMS is not valid JSON: set it to JSON keyed by forum channel id, like {"111":{}}.';
   const REPOS_LINE = 'The bot is not set up yet: REPOS is not set or not valid JSON: set it to JSON like {"KE":"owner/repo"}.';
+  const KEY_LINE = 'The bot is not set up yet: REPOS key "O NE" is not made of letters and digits: write each key in letters and digits only, like KE.';
   const TEXTLESS_LINE = 'The bot is not set up yet: FORUMS entry 900: "client", "type" and "template" must each be text, like "template":"https://discord.com/channels/...".';
   const badForums = { FORUM_CHANNEL_IDS: '', FORUMS: '{not json' };
   const badRepos = { ...badForums, REPOS: '' };
@@ -1314,6 +1315,7 @@ test("WT4: the not-set-up reply names the first broken setting only to a caller 
     ['an approved role press, broken REPOS', badRepos, press(HELPER), REPOS_LINE],
     ['a player press, broken REPOS', badRepos, press(PLAYER), ROLES],
     ['a player submit, broken REPOS', badRepos, sub(PLAYER), ROLES],
+    ['a moderator submit, a REPOS key that is not letters and digits', { REPOS: '{"O NE":"me/test-one"}' }, sub(MOD), KEY_LINE],
     ['a moderator submit, a FORUMS value with no text form', textless, sub(MOD), TEXTLESS_LINE],
     ['a moderator right-click, no forums and a STALE_DAYS of no text form', { FORUMS: '', FORUM_CHANNEL_IDS: '', STALE_DAYS: { toString: null } }, rightClick(MOD),
       'The bot is not set up yet: STALE_DAYS is not text: set it as text. The checks below read it as unset.'],
