@@ -13,8 +13,9 @@ named as plain text, and a poster who has left the server shows as
 moderator) presses the button, checks a short form, and the bot files the
 issue in the repo the form names. The bot then replies to the filed message
 with "tracked as KE #17", which pings its author, tags the post **Triaged**
-when it shows no status yet, and changes the card to "Filed as KE #17 by
-<name>". Moderators can still right-click any post or message > **Apps > Send
+when it shows no status yet, renames the post to the issue's title (see The
+issue), and changes the card to "Filed as KE #17 by <name>". Moderators can
+still right-click any post or message > **Apps > Send
 to GitHub** for the same form; the reply then goes to that message, and the
 post's card is marked filed too. A greeting from an earlier version that still
 shows its own button keeps working; once the reply exists, the bot deletes it,
@@ -233,6 +234,44 @@ quoted report follows, then the attachment count and the template check. The
 issue keeps those names, usernames and Discord ids as they were at filing; a
 maintainer removes them by editing the issue. Two hidden lines at the end name
 the filed message and the post; leave them in place.
+
+The issue's title is built from the form: `[KE] [Retail] [Bug] [Bags] Bank tab
+icons overlap`. That is the repo key, the client, the type, the module, and
+then the title. Each word of the module gets an upper-case first letter
+(`General` when nothing is left of it once direction marks and control
+characters are removed), and brackets typed in the module are dropped. A
+letter whose capital is more than one letter, such as ß, stays as typed.
+Each key in `REPOS` must be made of letters and digits only: A to Z, a to
+z and 0 to 9. With any other key the bot files nothing and answers that it
+is not set up, naming the first problem it finds: the key, unless an
+earlier one comes first, such as a `GUILD_ID` that is unset or not a server
+id, or a setting with no text form. The setup check writes a line for every
+such key, within its usual display limits; while a setting has no text
+form, `/bot-check` names that setting instead, and the daily setup check
+names the keys. A `DISCORD_PUBLIC_KEY` with no text form fails the
+signature check of every request, so the bot answers nothing, `/bot-check`
+included, and only the daily setup check names it and the keys.
+
+When a new issue is created, the bot renames the post to the same text, cut
+to Discord's 100 characters, normally inside the title (a module of many
+emoji can make the cut fall in the prefix). The rename comes last, once the
+reply to the moderator and the lock's release have been tried, beside the
+queue card's update, so it never delays or stops the filing. A reply or a
+release that fails is logged and the rename still runs, so a renamed post
+does not prove the moderator got the reply or the lock was cleared. It reads
+the post just before the rename: a post that already has that name is not
+written, and an archived one whose name changes is opened by the same
+request (one that already has the name stays as it is). A rename that fails
+goes to the Worker log as `post <post id> rename failed:` with Discord's
+answer or the timeout; the moderator's reply does not mention it.
+
+A post found already tracked is not renamed, and a later change to the
+issue's title does not rename the post. Opening the form again on a renamed
+post pre-fills the title without the bot's prefix, as it drops any leading
+bracket groups from a post's name. When the cut fell inside the module, the
+rest of the module is pre-filled instead, and the moderator types the title
+again. Set `RENAME_POSTS` to `0` to leave post names alone; the issue's
+title keeps this shape.
 
 One post gets one issue, across every repo in `REPOS`. Before filing, the bot
 reads the issue the post's saved filing record names, then searches every
@@ -519,6 +558,12 @@ Accepted on purpose; each line says how you would notice it.
   only that one, and the other is marked when someone presses it.
 - A queue card for a post that never needs an issue stays in the queue
   channel until someone deletes it.
+- Discord allows the bot only a few renames of one post in a short time
+  (reported as about two in ten minutes), and does not document the limit.
+  A filing soon after other renames of its post still creates the issue and
+  answers the moderator, but its rename can be refused. The post then keeps
+  its name, and the Worker log line `post <post id> rename failed:` shows
+  Discord's 429. Rename the post by hand later.
 - A card whose post was deleted shows "# unknown" in place of the post's
   name, so the card no longer says which post it was.
 - If presses keep answering "press again" (GitHub slow or failing), a
@@ -635,11 +680,13 @@ Accepted on purpose; each line says how you would notice it.
   both searches and its place in GitHub's issue list shifts between two pages
   each time. Each search takes a second or two.
 - On Workers' free plan a run may make 50 outgoing calls. A filing whose
-  repos together hold more than about 2,000 `from-discord` issues updated
-  since the post was made can use them all before it answers the moderator
-  and releases its lock: the moderator may see no result, and until the
-  lock label is cleared the post's next send says another send is running.
-  Repos that large need Workers Paid.
+  repos together hold more than about 1,600 `from-discord` issues updated
+  since the post was made (about 1,700 with `RENAME_POSTS` at `0`) can use
+  them all. The post's rename and the card update come last and go unmade
+  first; with more issues the filing can run out before it answers the
+  moderator and releases its lock: the moderator may see no result, and
+  until the lock label is cleared the post's next send says another send
+  is running. Repos that large need Workers Paid.
 - A queue card still owed looks for the bot's "now tracked" reply among the
   post's last 100 messages. A post filed after its greeting, whose filing
   record was not saved (or not yet seen) and whose reply is further back
@@ -931,7 +978,9 @@ KitnEssentials) before the real ones. Roughly 45 minutes.
 
 Then walk one fake report through: post in a test forum and wait up to a
 minute for the greeting and the queue card, press **Send to GitHub** on the
-card with the test role,
+card with the test role, submit the form, and a minute later check that the
+post's name is now the issue's title (cut at 100 characters when the title
+is longer; the rename comes last, after the reply),
 open a PR with `Fixes #N` into the default branch (from an account with a
 role on the repo), merge it, and push a tag. **In this KitnEssentials test
 copy, use a `discord-test-1` style tag: its own `v*` tags publish real

@@ -17,6 +17,8 @@ export function answeredStatus(err, method, path) {
   return m && m[1] === method && m[2] === path ? Number(m[3]) : null;
 }
 
+export const archivedOf = (t) => !!(t.thread_metadata && t.thread_metadata.archived);
+
 export function discordClient(token, fetchImpl = fetch) {
   async function call(method, path, body) {
     const res = await fetchImpl(`${API}${path}`, {
@@ -48,7 +50,6 @@ export function discordClient(token, fetchImpl = fetch) {
     const forum = await call('GET', `/channels/${thread.parent_id}`);
     return { thread, forum };
   }
-  const archivedOf = (t) => !!(t.thread_metadata && t.thread_metadata.archived);
 
   // One forum's archived threads, newest first, back to those archived at
   // `since` (epoch ms), up to a few pages. `cut` is the archive time it

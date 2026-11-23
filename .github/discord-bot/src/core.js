@@ -125,13 +125,19 @@ const TYPES = { bug: 'Bug', feature: 'Feature', feedback: 'Feature', request: 'F
 const own = (obj, k) => (Object.prototype.hasOwnProperty.call(obj, k) ? obj[k] : null);
 
 // REPOS is required config: {"KE":"owner/repo", ...}. A missing or broken value
-// stops the bot instead of filing into a default repo.
+// stops the bot instead of filing into a default repo. A key is letters and
+// digits only: it starts the issue's title and the post's name, as a
+// bracket group the form's pre-fill removes. `badKeys` names every other
+// key, in order, and `repos` keeps the map for the setup check's other
+// checks.
 export function parseRepos(raw) {
   let repos;
   try { repos = JSON.parse(String(raw || '')); } catch { repos = null; }
   if (!repos || typeof repos !== 'object' || Array.isArray(repos) || !Object.keys(repos).length) {
     throw new Error('REPOS is not set: expected JSON like {"KE":"owner/repo"}');
   }
+  const bad = Object.keys(repos).filter((k) => !/^[A-Za-z0-9]+$/.test(k));
+  if (bad.length) throw Object.assign(new Error(`REPOS keys not made of letters and digits: ${bad.join(', ')}`), { badKeys: bad, repos });
   return repos;
 }
 
@@ -147,12 +153,22 @@ export function normRepoKey(s, repos) {
   return Object.prototype.hasOwnProperty.call(repos, k) ? k : null;
 }
 
-// "[KE][Retail][Bags] Bank tab icons overlap" -- the shape already used by hand.
-// The form pre-fills the title from the post's name, which a player typed,
-// so control and direction marks go, as in names.
-export function buildTitle({ repoKey, client, module, title }) {
-  const mod = oneLine(module).trim() || 'General';
-  return `[${repoKey}][${client}][${mod}] ${titleText(title)}`;
+// Each word's first character in upper case and the rest as typed, so "UI"
+// stays "UI". A letter whose capital has another length (ß, a ligature)
+// stays as typed, so the module keeps its length and the post's prefix fits.
+const capWords = (s) => s.replace(/(^|\s)(\S)/gu, (m, space, first) => {
+  const up = first.toUpperCase();
+  return space + (up.length === first.length ? up : first);
+});
+
+// "[KE] [Retail] [Bug] [Bags] Bank tab icons overlap": the issue's title, and
+// the post's name once cut to fit (fitName). The form pre-fills the title
+// from the post's name, which a player typed, so control and direction marks
+// go, as in names. The module loses its brackets, so each bracket group of
+// the name stays whole.
+export function buildTitle({ repoKey, client, type, module, title }) {
+  const mod = capWords(oneLine(module).replace(/[[\]]/g, '').trim()) || 'General';
+  return `[${repoKey}] [${client}] [${type}] [${mod}] ${titleText(title)}`;
 }
 
 // The title as the issue gets it. The form's check uses it too, so a title
@@ -463,13 +479,20 @@ export function planTags(current, available, statusName, { names = STATUS_NAMES,
   return { tags: a.tags, missing: false, full, noRoom: a.noRoom, noAccepted: a.noAccepted };
 }
 
-// A checklist thread's name, `#<n> <title>`, cut to Discord's 100
-// characters, never between the two halves of a surrogate pair.
-export function threadName(n, title) {
-  const s = `#${n} ${titleText(title)}`;
+// A thread name cut to Discord's 100 characters, never between the two
+// halves of a surrogate pair: a checklist thread's, and a filed post's
+// (its issue's title, where the form's limits keep the prefix under 100
+// while Discord counts them in UTF-16 units, so the cut normally falls
+// inside the title).
+export function fitName(s) {
   if (s.length <= 100) return s;
   const high = s.charCodeAt(99) >= 0xd800 && s.charCodeAt(99) <= 0xdbff;
   return s.slice(0, high ? 99 : 100);
+}
+
+// A checklist thread's name, `#<n> <title>`, cut to fit.
+export function threadName(n, title) {
+  return fitName(`#${n} ${titleText(title)}`);
 }
 
 // "owner/SomeAddon" + "v5.0.120" -> "SomeAddon v5.0.120"; a tag that does not

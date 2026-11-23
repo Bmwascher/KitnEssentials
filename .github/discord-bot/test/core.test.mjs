@@ -4,12 +4,34 @@ import * as C from '../src/core.js';
 import { discordClient, answeredStatus } from '../src/discord.js';
 import { stall, fakeFetch } from './fake-fetch.mjs';
 
-test('title follows [ONE][Client][Module] Title', () => {
-  assert.equal(C.buildTitle({ repoKey: 'ONE', client: 'Retail', module: 'Bags', title: ' Icons overlap ' }),
-    '[ONE][Retail][Bags] Icons overlap');
-  assert.equal(C.buildTitle({ repoKey: 'TWO', client: 'All', module: '', title: 'x' }), '[TWO][All][General] x');
-  // The form pre-fills the title from the post's name: a direction mark there cannot reorder the issue's title.
-  assert.equal(C.buildTitle({ repoKey: 'ONE', client: 'Retail', module: 'Ba\u202Egs', title: 'free \u202Efix\u2066 now' }), '[ONE][Retail][Bags] free fix now');
+test('title follows [KEY] [Client] [Type] [Module] Title, each module word capitalized', () => {
+  for (const [repoKey, client, type, module, title, want] of [
+    ['ONE', 'Retail', 'Bug', 'Bags', ' Icons overlap ', '[ONE] [Retail] [Bug] [Bags] Icons overlap'],
+    ['TWO', 'All', 'Feature', '', 'x', '[TWO] [All] [Feature] [General] x'],
+    ['ONE', 'Forever', 'Bug', 'damage meter', 'x', '[ONE] [Forever] [Bug] [Damage Meter] x'],
+    ['ONE', 'Retail', 'Bug', 'UI', 'x', '[ONE] [Retail] [Bug] [UI] x'],
+    ['ONE', 'Retail', 'Bug', 'bAGS', 'x', '[ONE] [Retail] [Bug] [BAGS] x'],
+    // A letter outside the Basic Multilingual Plane is one character.
+    ['ONE', 'Retail', 'Bug', '\u{10428}bc', 'x', '[ONE] [Retail] [Bug] [\u{10400}bc] x'],
+    // A capital that is not one letter would lengthen the module.
+    ['ONE', 'Retail', 'Bug', '\uFB03x \u00DFx', 'x', '[ONE] [Retail] [Bug] [\uFB03x \u00DFx] x'],
+    ['ONE', 'Retail', 'Bug', '[bags] beta', 'x', '[ONE] [Retail] [Bug] [Bags Beta] x'],
+    ['ONE', 'Retail', 'Bug', '  ', 'x', '[ONE] [Retail] [Bug] [General] x'],
+    // The form pre-fills the title from the post's name: a direction mark there cannot reorder the issue's title.
+    ['ONE', 'Retail', 'Bug', 'ba\u202Egs', 'free \u202Efix\u2066 now', '[ONE] [Retail] [Bug] [Bags] free fix now'],
+  ]) assert.equal(C.buildTitle({ repoKey, client, type, module, title }), want, module);
+});
+
+test('the issue gets the whole title; the post name is cut to 100 characters inside the title, never splitting a surrogate pair', () => {
+  const issueTitle = (title) => C.buildTitle({ repoKey: 'ONE', client: 'Retail', type: 'Bug', module: 'Bags', title });
+  const prefix = '[ONE] [Retail] [Bug] [Bags] ';
+  assert.equal(C.fitName(issueTitle('short')), `${prefix}short`);
+  const long = 'y'.repeat(200);
+  assert.equal(issueTitle(long), `${prefix}${long}`);
+  assert.equal(C.fitName(issueTitle(long)), `${prefix}${'y'.repeat(100 - prefix.length)}`);
+  // An emoji whose first half is the 100th unit is left out whole.
+  const ys = 'y'.repeat(99 - prefix.length);
+  assert.equal(C.fitName(issueTitle(`${ys}\u{1F600}z`)), `${prefix}${ys}`);
 });
 
 test('form values normalize, junk is refused', () => {
@@ -29,7 +51,8 @@ test('existing forum tags pre-fill client and type', () => {
   assert.deepEqual(C.guessFromTags([]), { client: null, type: null });
 });
 
-test('post title loses typed [..] prefixes', () => {
+test('post title loses typed [..] prefixes, and a renamed post the bot\'s prefix', () => {
+  assert.equal(C.cleanPostTitle('[ONE] [Retail] [Bug] [Damage Meter] Bags broken'), 'Bags broken');
   assert.equal(C.cleanPostTitle('[Bug][Retail] Bags broken'), 'Bags broken');
   assert.equal(C.cleanPostTitle('[Bug] Bags \u202Ebroken'), 'Bags broken');
 });
@@ -129,9 +152,15 @@ test('only the listed choices pass, never inherited names', () => {
   }
 });
 
-test('REPOS is required', () => {
+test('REPOS is required, and each key is letters and digits only', () => {
   for (const raw of [undefined, '', '{}', '[]', 'not json']) assert.throws(() => C.parseRepos(raw), /REPOS is not set/);
-  assert.deepEqual(C.parseRepos('{"ONE":"me/a"}'), { ONE: 'me/a' });
+  assert.deepEqual(C.parseRepos('{"ONE":"me/a","v2":"me/b"}'), { ONE: 'me/a', v2: 'me/b' });
+  // The key starts the issue's title and the post's name, where the form finds it again.
+  for (const key of ['', 'A B', 'U]I', 'K-E', `U${String.fromCharCode(0x202e)}I`]) {
+    assert.throws(() => C.parseRepos(JSON.stringify({ ONE: 'me/a', [key]: 'me/b' })), (e) => JSON.stringify(e.badKeys) === JSON.stringify([key]), JSON.stringify(key));
+  }
+  // Every bad key is named, not only the first.
+  assert.throws(() => C.parseRepos('{"AB CD":"me/a","ONE":"me/b","K-E":"me/c"}'), (e) => JSON.stringify(e.badKeys) === '["AB CD","K-E"]');
 });
 
 test('a timed fetch gives up on a stalled call and refuses past its deadline', async () => {

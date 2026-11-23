@@ -17,13 +17,16 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
   assert.deepEqual(configProblems({ ...CLEAN, FORUMS: false, FORUM_CHANNEL_IDS: '900' }), [], 'a false FORUMS is unset, as the reader reads it');
   assert.deepEqual(configProblems({ ...CLEAN, STALE_DAYS: '  ', TEMPLATES: ' ', CHECKLIST_FORUM_ID: '  ' }), [], 'settings read as unset when blank stay unset');
   assert.deepEqual(configProblems({ ...CLEAN, CHECKLIST_FORUM_ID: ' 950 ' }), [], 'the checklist id is read trimmed, as the code reads it');
-  assert.deepEqual(configProblems({ ...CLEAN, REPOS: '{"AB CD":"me/one"}' }), [], 'an inner space is a key the form can choose');
   for (const [why, over, re] of [
     ['no REPOS', { REPOS: '' }, /^REPOS is not set or not valid JSON/],
     ['a REPOS entry that is not owner/repo', { REPOS: '{"KE":"one"}' }, /^REPOS entry KE is not owner\/repo\.$/],
-    ['a REPOS key the form can never choose', { REPOS: '{"ke":"me/one"}' }, /^REPOS key "ke" can never be chosen in the form/],
-    ['a REPOS key longer than the form field', { REPOS: '{"ELEVENCHARS":"me/one"}' }, /^REPOS key "ELEVENCHARS" can never be chosen in the form/],
-    ['a short upper-case REPOS key holding a line break, which a one-line field cannot hold', { REPOS: '{"K\\nE":"me/one"}' }, /^REPOS key "K\sE" can never be chosen in the form/],
+    ['a lower-case REPOS key', { REPOS: '{"ke":"me/one"}' }, /^REPOS key "ke" does not fit the form: write it in upper case, at most 10 characters\.$/],
+    ['a REPOS key longer than the form field', { REPOS: '{"ELEVENCHARS":"me/one"}' }, /^REPOS key "ELEVENCHARS" does not fit the form/],
+    // A key is letters and digits only: both names carry it.
+    ['a REPOS key holding a line break', { REPOS: '{"K\\nE":"me/one"}' }, /^REPOS key "K E" is not made of letters and digits: write each key in A to Z, a to z and 0 to 9 only, like KE\.$/],
+    ['a REPOS key holding a space', { REPOS: '{"AB CD":"me/one"}' }, /^REPOS key "AB CD" is not made of letters and digits/],
+    ['a REPOS key holding a bracket', { REPOS: '{"U]I":"me/one"}' }, /^REPOS key "U\]I" is not made of letters and digits/],
+    ['an empty REPOS key', { REPOS: '{"":"me/one"}' }, /^REPOS key "" is not made of letters and digits/],
     ['a FORUMS value with no text form, which the reader would throw on', { FORUMS: '{"900":{"template":{"toString":null}}}' }, /^FORUMS entry 900: "client", "type" and "template" must each be text/],
     ['a broken template beside a forum field that is an object the reader still reads', { FORUMS: '{"900":{"client":{}},"901":{"template":"typo"}}' }, /^FORUMS entry 901: its "template" is not a message link/],
     ['a REPOS entry past GitHub name limits', { REPOS: `{"KE":"me/${'r'.repeat(101)}"}` }, /^REPOS entry KE is not owner\/repo\.$/],
@@ -56,9 +59,16 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
     const lines = configProblems({ ...CLEAN, ...over });
     assert.ok(lines.some((l) => re.test(l)), `${why}: ${lines.join(' | ')}`);
   }
+  // One call names every bad key and still checks the rest of the map.
+  assert.deepEqual(configProblems({ ...CLEAN, REPOS: JSON.stringify({ 'a b': 'me/one', '||KE||': 'broken' }) }), [
+    'REPOS key "a b" is not made of letters and digits: write each key in A to Z, a to z and 0 to 9 only, like KE.',
+    'REPOS key "||KE||" is not made of letters and digits: write each key in A to Z, a to z and 0 to 9 only, like KE.',
+    'REPOS entry ||KE|| is not owner/repo.',
+    "LOCK_REPO is empty while REPOS names more than one repo: set it to the repo that holds every filing's lock.",
+  ]);
   // A JSON variable with no text form throws wherever it is turned into
   // text. The list is written here, not taken from the checker.
-  for (const k of ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID', 'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS']) {
+  for (const k of ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID', 'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'RENAME_POSTS']) {
     const lines = configProblems({ ...CLEAN, [k]: { toString: null } });
     assert.ok(lines.includes(`${k} is not text: set it as text. The checks below read it as unset.`), `${k} with no text form: ${lines.join(' | ')}`);
   }
@@ -193,6 +203,7 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
     ['a private key that is no key file', (s) => { s.env = { GITHUB_APP_PRIVATE_KEY: 'secret' }; }, /^GITHUB_APP_PRIVATE_KEY is not the text of a private key file/],
     ['a broken GUILD_ID, the GitHub checks still run', (s) => { s.env = { GUILD_ID: 'x' }; s.installs['me/one'] = refusal(404); }, /^me\/one: the GitHub App is not installed there \(404\)\./],
     ['a broken REPOS, LOCK_REPO still checked', (s) => { s.env = { REPOS: '', LOCK_REPO: 'me/lock' }; s.installs['me/lock'] = refusal(404); }, /^me\/lock: the GitHub App is not installed there \(404\)\./],
+    ['a REPOS key that is not letters and digits: its repo is still checked', (s) => { s.env = { REPOS: '{"O NE":"me/one"}' }; s.installs['me/one'] = refusal(404); }, /^me\/one: the GitHub App is not installed there \(404\)\./],
     ['a lock-only repo with read-only issue access', (s) => { s.env = { LOCK_REPO: 'me/lock' }; s.installs['me/lock'] = { id: 2 }; s.tokens['2'] = { token: 't2', permissions: { issues: 'read' } }; },
       /^me\/lock: the GitHub App lacks Issues: Read and write\./],
     ['a listed channel of the wrong kind', (s) => { s.channels[0].type = 0; }, /^Forum <#900>: it is the wrong kind of channel \(a forum is needed\)\. Check the id\.$/],

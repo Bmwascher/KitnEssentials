@@ -108,7 +108,7 @@ test('submitting files the issue, tags the post Triaged and tells the player', a
   assert.deepEqual(await Promise.all(ctx.jobs), [{ created: 17, notes: [] }]);
   assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 1, 'the lock is released');
 
-  assert.equal(created.title, '[ONE][Retail][Bags] Bags overlap after resize');
+  assert.equal(created.title, '[ONE] [Retail] [Bug] [Bags] Bags overlap after resize');
   assert.match(created.body, /> My bags overlap\n> after resize/);
   assert.match(created.body, /^\| Reporter \| \[Pat\]\(https:\/\/discord\.com\/users\/42\) \|\n/);
   assert.match(created.body, /\n\| Filed by \| \[moddy\]\(https:\/\/discord\.com\/users\/5\) \(`moddy`\) \|\n/);
@@ -134,6 +134,7 @@ test('sending the same post twice points at the first issue', async () => {
   assert.deepEqual(await Promise.all(ctx.jobs), [{ duplicate: 17 }]);
   assert.equal(f.find('POST', /\/issues$/).length, 0);
   assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /Already tracked: ONE #17/);
+  assert.equal(f.find('PATCH', /\/channels\/700$/).length, 0, 'a post already tracked is not renamed');
 });
 
 test('the issue names the reporter and the moderator by server name, profile link and username', async () => {
@@ -290,11 +291,137 @@ test('once the issue exists, a failed tag or post note is reported, never as a f
     ['POST', /\/channels\/700\/messages$/, () => new Response('{"message":"Thread is locked"}', { status: 403 })],
   ])));
   const ctx = ctxFor();
-  await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
+  // Its 403 route refuses the rename too, which is logged.
+  await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst', log: () => {} });
   const [res] = await Promise.all(ctx.jobs);
   assert.equal(res.created, 17);
   const told = f.find('PATCH', /\/webhooks\//)[0].body.content;
   assert.match(told, /^Created ONE #17: .*tag not set: .*403.*note in the post not sent: .*403/);
+});
+
+test('a new filing renames the post to the issue title after the report and the lock\'s release; a failure goes to the log, never the reply', async () => {
+  const NAME = '[ONE] [Retail] [Bug] [Bags] Bags overlap after resize';
+  const POST = { id: '700', parent_id: '900', name: '[Bug] Bags overlap after resize', applied_tags: ['t-retail', 't-bug'] };
+  const ARCHIVED = { ...POST, thread_metadata: { archived: true } };
+  const clock = shiftClock();
+  // `read(late)` answers a read of the post; `late` is whether the lock's
+  // release has run, so only the rename's read is late.
+  try { for (const [why, read, envOver, write, renames, logged] of [
+    ['renamed', () => POST, {}, null, [{ name: NAME }], []],
+    ['archived when the rename reads it: the same write opens it', (late) => (late ? ARCHIVED : POST), {}, null, [{ name: NAME, archived: false }], []],
+    ['already so named, and archived, when the rename reads it: not written, so it stays archived', (late) => ({ ...(late ? ARCHIVED : POST), name: NAME }), {}, null, [], []],
+    ['so named when the filing began, renamed by hand since: written', (late) => ({ ...POST, name: late ? 'renamed by hand' : NAME }), {}, null, [{ name: NAME }], []],
+    ['RENAME_POSTS is 0: the post is not read or written', () => POST, { RENAME_POSTS: ' 0 ' }, null, [], []],
+    ['the rename\'s read is refused (404): nothing written', (late) => (late ? new Response('{"message":"Unknown Channel"}', { status: 404 }) : POST), {}, null, [],
+      [/^post 700 rename failed: Discord GET \/channels\/700 -> 404 /]],
+    // The release's end (29 s) passes during the read: the write is never sent.
+    ['no time left for the write', (late) => { if (late) clock.at(29500); return POST; }, {}, null, [], [/^post 700 rename failed: out of time before PATCH /]],
+    ['refused (403)', () => POST, {}, () => new Response('{"message":"Missing Permissions"}', { status: 403 }), [{ name: NAME }],
+      [/^post 700 rename failed: Discord PATCH \/channels\/700 -> 403 /]],
+    // Discord answered 200 and only its body could not be read: the post has its name.
+    ['taken with an answer that is not JSON: no failure logged', () => POST, {}, () => new Response('<html>', { status: 200 }), [{ name: NAME }], []],
+  ]) {
+    clock.at(0);
+    let created;
+    // The release answers late: a call to the post while it is pending
+    // would be a rename that did not wait for it.
+    let releasing = false;
+    let released = false;
+    let early = false;
+    const logs = [];
+    const base = fakeFetch(discordRoutes(githubRoutes([], [
+      ['DELETE', /labels\/discord-lock-700$/, async () => {
+        releasing = true;
+        await new Promise((r) => setTimeout(r, 20));
+        released = true;
+        return null;
+      }],
+      ['GET', /\/channels\/700$/, () => { if (releasing && !released) early = true; return read(released); }],
+      ['PATCH', /\/channels\/700$/, (b) => { if (releasing && !released) early = true; return b.name && write ? write() : {}; }],
+      ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, (b) => { created = b; return { number: 17, html_url: 'u/17' }; }],
+    ])));
+    const ctx = ctxFor();
+    await handle(await signed(submit()), { ...env, ...envOver }, ctx, { fetch: base, installationToken: async () => 'inst', log: (s) => logs.push(s) });
+    const [res] = await Promise.all(ctx.jobs);
+    assert.deepEqual(res, { created: 17, notes: [] }, why);
+    assert.equal(created.title, NAME, `${why}: the issue's title`);
+    const writes = base.find('PATCH', /\/channels\/700$/).map((c) => c.body);
+    assert.deepEqual(writes.filter((b) => 'name' in b), renames, `${why}: the rename`);
+    assert.equal(writes.filter((b) => 'applied_tags' in b).length, 1, `${why}: the tag write`);
+    // The report, then the release, then the rename's own calls.
+    const release = at(base, 'DELETE', /labels\/discord-lock-700$/);
+    assert.ok(at(base, 'PATCH', /\/webhooks\//) < release, `${why}: the report before the release`);
+    const after = base.calls.slice(release + 1).filter((c) => /\/channels\/700$/.test(c.url)).map((c) => c.method);
+    assert.deepEqual(after, envOver.RENAME_POSTS ? [] : renames.length ? ['GET', 'PATCH'] : ['GET'], `${why}: the rename's calls`);
+    assert.equal(early, false, `${why}: the rename waits for the release's answer`);
+    assert.doesNotMatch(base.find('PATCH', /\/webhooks\//)[0].body.content, /renam/, `${why}: the reply says nothing of the rename`);
+    const renameLogs = logs.filter((l) => /^post 700 rename/.test(l));
+    assert.equal(renameLogs.length, logged.length, `${why}: ${renameLogs.join(' | ')}`);
+    logged.forEach((re, i) => assert.match(renameLogs[i], re, why));
+  } } finally { clock.restore(); }
+});
+
+test('after the lock\'s release, the card (its record lookup included) and the rename run side by side', async () => {
+  const POST = { id: '700', parent_id: '900', name: '[Bug] Bags overlap after resize', applied_tags: ['t-retail', 't-bug'] };
+  const slow = (ms) => new Promise((r) => setTimeout(r, ms));
+  let released = false;
+  let gets = 0;
+  let looking = false;
+  let renaming = false;
+  // Whether the card's record lookup and the rename's read were pending at
+  // the same time, in whichever order they start; and whether the card's
+  // write started while the rename's read (the slower) was still pending.
+  let overlap = false;
+  let markedDuringRename = false;
+  // A right-click filing: the card comes from the record, read under the
+  // lock (the first two reads) and looked up again, slowly, after the release.
+  const kv = {
+    get: async (k) => {
+      if (++gets > 2) {
+        looking = true;
+        overlap = overlap || renaming;
+        await slow(30);
+        looking = false;
+      }
+      return k === 'thread:700' ? JSON.stringify({ card: '96' }) : null;
+    },
+    put: async () => {},
+  };
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['DELETE', /labels\/discord-lock-700$/, () => { released = true; return null; }],
+    ['GET', /\/channels\/700$/, async () => {
+      if (!released) return POST;
+      renaming = true;
+      overlap = overlap || looking;
+      await slow(90);
+      renaming = false;
+      return POST;
+    }],
+    ['PATCH', /\/channels\/556\/messages\/96$/, () => { markedDuringRename = renaming; return {}; }],
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), { ...env, QUEUE_CHANNEL_ID: '556', STATE: kv }, ctx, { fetch: f, installationToken: async () => 'inst', log: () => {} });
+  const [res] = await Promise.all(ctx.jobs);
+  assert.equal(res.created, 17);
+  assert.equal(f.find('PATCH', /\/channels\/556\/messages\/96$/).length, 1, 'the card is marked');
+  assert.equal(f.find('PATCH', /\/channels\/700$/).filter((c) => 'name' in c.body).length, 1, 'the post is renamed');
+  assert.ok(overlap, 'the rename did not wait for the card\'s lookup, nor the lookup for the rename');
+  assert.ok(markedDuringRename, 'the card\'s write did not wait for the rename');
+});
+
+test('a long title: the issue gets it whole, the post its first 100 characters', async () => {
+  const title = 'z'.repeat(100);
+  const whole = `[ONE] [Retail] [Bug] [Bags] ${title}`;
+  let created;
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, (b) => { created = b; return { number: 17, html_url: 'u/17' }; }],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(submit({ title })), env, ctx, { fetch: f, installationToken: async () => 'inst' });
+  await Promise.all(ctx.jobs);
+  assert.equal(created.title, whole);
+  assert.deepEqual(f.find('PATCH', /\/channels\/700$/).map((c) => c.body).filter((b) => 'name' in b), [{ name: whole.slice(0, 100) }]);
 });
 
 test('a stalled call ends the send with a report to the mod', async () => {
@@ -372,6 +499,8 @@ test('a create that answered late is found again: the player gets the reply, the
   const marked = pos('PATCH', /\/channels\/556\/messages\/96$/);
   assert.ok(pos('PATCH', /\/webhooks\//) < marked && pos('POST', /\/channels\/700\/messages$/) < marked, 'the card last');
   assert.equal(base.find('DELETE', /labels\/discord-lock-700$/).length, 1);
+  assert.deepEqual(base.find('PATCH', /\/channels\/700$/).map((c) => c.body), [{ name: '[ONE] [Retail] [Bug] [Bags] Bags overlap after resize' }], 'the post is renamed, and no tag is written');
+  assert.ok(pos('DELETE', /labels\/discord-lock-700$/) < pos('PATCH', /\/channels\/700$/), 'the rename after the lock\'s release');
 });
 
 test('a late create whose record save never answers still reports in time', async () => {
@@ -749,7 +878,7 @@ test('filing leaves a status the post shows, also one a workflow set just before
     await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
     const [res] = await Promise.all(ctx.jobs);
     assert.deepEqual([res.created, res.notes], [17, []], why);
-    assert.equal(f.find('PATCH', /\/channels\/700$/).length, 0, `${why}: In progress stays`);
+    assert.deepEqual(f.find('PATCH', /\/channels\/700$/).map((c) => c.body), [{ name: '[ONE] [Retail] [Bug] [Bags] Bags overlap after resize' }], `${why}: In progress stays`);
   }
 });
 
@@ -1173,7 +1302,7 @@ const SAME = { APPROVED_ROLE_IDS: Array(30).fill('777').join(',') };
 const quiet = (deps) => ({ ...deps, log: () => {} });
 // Every setting the Worker reads, written here, not taken from the code.
 const ALL_SETTINGS = ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID',
-  'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'DISCORD_PUBLIC_KEY', 'DISCORD_BOT_TOKEN', 'GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY'];
+  'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'RENAME_POSTS', 'DISCORD_PUBLIC_KEY', 'DISCORD_BOT_TOKEN', 'GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY'];
 const NO_TEXT = { toString: null };
 // Every value the entry points must stop on: each setting with no text form,
 // and the two keys read with string methods bound to null.
@@ -1304,6 +1433,7 @@ test("WT4: the not-set-up reply names the first broken setting only to a caller 
   const GUILD_LINE = "The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).";
   const FORUMS_LINE = 'The bot is not set up yet: FORUMS is not valid JSON: set it to JSON keyed by forum channel id, like {"111":{}}.';
   const REPOS_LINE = 'The bot is not set up yet: REPOS is not set or not valid JSON: set it to JSON like {"KE":"owner/repo"}.';
+  const KEY_LINE = 'The bot is not set up yet: REPOS key "O NE" is not made of letters and digits: write each key in A to Z, a to z and 0 to 9 only, like KE.';
   const TEXTLESS_LINE = 'The bot is not set up yet: FORUMS entry 900: "client", "type" and "template" must each be text, like "template":"https://discord.com/channels/...".';
   const badForums = { FORUM_CHANNEL_IDS: '', FORUMS: '{not json' };
   const badRepos = { ...badForums, REPOS: '' };
@@ -1320,6 +1450,7 @@ test("WT4: the not-set-up reply names the first broken setting only to a caller 
     ['an approved role press, broken REPOS', badRepos, press(HELPER), REPOS_LINE],
     ['a player press, broken REPOS', badRepos, press(PLAYER), ROLES],
     ['a player submit, broken REPOS', badRepos, sub(PLAYER), ROLES],
+    ['a moderator submit, a REPOS key that is not letters and digits', { REPOS: '{"O NE":"me/test-one"}' }, sub(MOD), KEY_LINE],
     ['a moderator submit, a FORUMS value with no text form', textless, sub(MOD), TEXTLESS_LINE],
     ['a moderator right-click, no forums and a STALE_DAYS of no text form', { FORUMS: '', FORUM_CHANNEL_IDS: '', STALE_DAYS: { toString: null } }, rightClick(MOD),
       'The bot is not set up yet: STALE_DAYS is not text: set it as text. The checks below read it as unset.'],
