@@ -203,9 +203,11 @@ export function world() {
       // where the plan query lists them, and node fields from the rest.
       if (/defaultBranchRef/.test(body.query)) {
         const p = w.prs.get(v.number);
-        const at = body.query.indexOf('closingIssuesReferences');
-        const prSel = body.query.slice(0, at);
-        const nodeSel = body.query.slice(at);
+        // A field named only in a GraphQL comment is not selected.
+        const query = body.query.replace(/#[^\n]*/g, '');
+        const at = query.indexOf('closingIssuesReferences');
+        const prSel = query.slice(0, at);
+        const nodeSel = query.slice(at);
         const picked = (sel, all) => Object.fromEntries(Object.entries(all).filter(([k]) => new RegExp(`\\b${k}\\b`).test(sel)));
         const node = (c) => {
           const i = typeof c === 'number' && w.issues.get(c);

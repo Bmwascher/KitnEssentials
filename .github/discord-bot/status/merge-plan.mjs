@@ -12,9 +12,11 @@ const RELEASE_PLACEHOLDER = '(release tag)';
 const KEYWORD = '(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)';
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // `#N`, `owner/repo#N` for this repo, or this repo's issue URL, right after a
-// keyword's whitespace; the only capturing group is the number.
-const refIn = (repo) => `(?:#|${esc(repo)}#|https://github\\.com/${esc(repo)}/issues/)(\\d+)\\b`;
-const numbers = (body, re) => [...new Set([...body.matchAll(re)].map((m) => Number(m[1])))];
+// keyword's whitespace; one of the two groups holds the number. A URL whose
+// path goes on after the number (`/../18`, `\..\18`, `./../18`) can name
+// another issue, so it names none.
+const refIn = (repo) => `(?:(?:#|${esc(repo)}#)(\\d+)\\b|https://github\\.com/${esc(repo)}/issues/(\\d+)(?!\\w|\\S*[/\\\\]))`;
+const numbers = (body, re) => [...new Set([...body.matchAll(re)].map((m) => Number(m[1] || m[2])))];
 
 // This repo's issues a closing keyword names: for a PR into another branch,
 // where GitHub lists none, and for one GitHub does not list on the default
@@ -129,7 +131,7 @@ const PLAN_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
 
 // The one comment, kept by merge-plan runs alone, one at a time per PR.
 // `update` returns the comment's id, or null when the PR needs none.
-export function mergePlanRunner({ gh, repo }) {
+function mergePlanRunner({ gh, repo }) {
   const [owner, name] = repo.split('/');
   const sameRepo = (x) => x.repository.nameWithOwner.toLowerCase() === repo.toLowerCase();
 
@@ -163,7 +165,9 @@ export function mergePlanRunner({ gh, repo }) {
         if (e.github && (e.github.status === 404 || e.github.status === 410)) continue;
         throw e;
       }
-      if (issue.pull_request || !eligible(issue)) continue;
+      // Reading a transferred issue follows GitHub's redirect, so the answer
+      // is the issue in its new repo, no longer this repo's #n.
+      if (issue.pull_request || !eligible(issue) || issue.html_url.toLowerCase() !== `https://github.com/${repo}/issues/${n}`.toLowerCase()) continue;
       taken.add(n);
       out.push({ n, open: issue.state === 'open' });
     }

@@ -83,10 +83,11 @@ and go.
 A PR counts from the moment its description says `Fixes #N`: while the work
 is unfinished, write `Refs #N`, and editing it to `Fixes #N` makes the PR
 count toward In progress for an open issue, once the PR is ready for review
-and its author has a repo role (the table above). An edit of the title alone starts nothing. GitHub does not read
-the description again when only a PR's base branch changes, so after changing
-the base, edit and save the description once. A PR into a branch other than
-the default branch lists no closing issues, so it moves nothing.
+and its author has a repo role (the table above). An edit of the title alone
+starts nothing. GitHub does not read the description again when only a PR's
+base branch changes, so after changing the base, edit and save the
+description once. A PR into a branch other than the default branch lists no
+closing issues, so it moves nothing.
 
 How the release state is kept: the fix is the commit that last closed the
 issue (reopening drops it). When a release tag holds that commit, the workflow
@@ -171,10 +172,12 @@ older run keeps the words it was written with. The comment reads no Discord
 post. Below that, a Heads-up list says when merging will not do what the
 author expects: the PR targets a branch other than the default one, GitHub
 does not list an issue the description closes (the PR was opened into another
-branch and then moved to the default one, the description not saved since), it is a draft, its author has no role on the repo, an issue is already closed, it closes a Discord
-report in another repo, it links a report's post without closing its issue,
-or it says `Refs #N`. The comment links the issue and copies none of the
-report. It reads the description and the PR's links, not commit messages.
+branch and then moved to the default one, the description not saved since),
+it is a draft, its author has no role on the repo, an issue is already
+closed, it closes a Discord report in another repo, it links a report's post
+without closing its issue, or it says `Refs #N`. The comment links the issue
+and copies none of the report. It reads the description and the PR's links,
+not commit messages.
 
 The comment is rebuilt at each PR event (opened, description or base edited,
 ready for review, converted to draft, reopened, closed) by its own job, which
@@ -197,9 +200,10 @@ The job takes about a minute and ends its own calls within 60 seconds; its
   (`Closes #N` and `Resolves #N` work the same), with the default branch as
   the base. N is the number the post's "tracked as" reply names.
 - **`Refs #N` while unfinished, `Fixes #N` when ready.** With `Refs #N` the
-  PR does not close the issue, unless a commit message does. Editing it to
-  `Fixes #N` makes the PR count toward In progress once it is ready for
-  review and its author has a role on the repo.
+  PR does not close the issue, unless a commit message or a link in the PR's
+  Development sidebar does. Editing it to `Fixes #N` makes the PR count
+  toward In progress once it is ready for review and its author has a role
+  on the repo.
   Write one Refs per issue. Any wording with fix, close or resolve right
   before the number closes the issue on merge, in the description or in a
   commit message, "partly fixes #12" included.
@@ -620,7 +624,8 @@ Accepted on purpose; each line says how you would notice it.
   sweep.
 - A Discord link in a PR to a post whose issue is in another repo, or that
   was never filed, makes no merge-plan comment: the workflow knows only its
-  own repo's issues.
+  own repo's issues. A `Refs #N`, or a closing keyword GitHub does not list,
+  whose issue has since been transferred to another repo gets no line either.
 - The merge plan sees a Discord link only when it stands alone: at the start
   of a line or after a space, and ending at a space or the end of a line. A
   link that something touches (`[post](...)`, `<...>`, another URL holding
@@ -654,9 +659,10 @@ Accepted on purpose; each line says how you would notice it.
   PR's last event they stay until someone edits or deletes the extra comment.
 - A fix-mode sweep that runs while a PR's merge-plan job is queued (behind
   that PR's previous merge-plan job, or for a free runner) or running, after
-  that PR's status job failed to move a post and the PR went back to draft, keeps that run's In progress message owed. The PR's next ready
-  event then sends nothing; the sweep lists the message, and re-running the
-  failed run sends it.
+  that PR's status job failed to move a post and the PR went back to draft,
+  keeps that run's In progress message owed. The PR's next ready event then
+  sends nothing; the sweep lists the message, and re-running the failed run
+  sends it.
 - A merge-plan job whose checkout or Node setup GitHub stalls past its
   5-minute limit is canceled, and that shows the Discord status run as canceled
   rather than green or red, whatever the status job did. Open that run and

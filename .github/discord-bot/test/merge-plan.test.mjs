@@ -4,8 +4,6 @@ import { MARKER, closingKeywordRefs, refsKeywordRefs, threadLinks, renderPlan, p
 import { run } from '../status/status.mjs';
 import { world } from './fake-world.mjs';
 
-// The merged texts, as a merge into `dev` naming #17 as closing, or naming
-// none, writes them.
 const CLOSED17 = 'Merged into `dev`, naming #17 as closing. GitHub closes each of these issues that was still open; what the bot then does is in `.github/discord-bot/README.md`.';
 const NONE = 'Merged into `dev`. It closed no Discord-filed issue of this repo through its description or links; closing keywords in commit messages are not read here.';
 const REVERT = 'If this merge is reverted before a release, reopen each issue it closed the same day; otherwise the release announces the fix as out.';
@@ -20,6 +18,8 @@ test('MP1: the description parsers', () => {
     ['another repo is not this repo', 'Fixes other/repo#17\nRefs other/repo#18', [], []],
     ['a repo whose name ends in this one', 'Fixes other-me/one#19', [], []],
     ['a number inside a word', 'Fixes abc#20 and Refs x/y#21', [], []],
+    ['an issue URL ending a sentence, or with a fragment', 'Fixes https://github.com/me/one/issues/23.\nRefs https://github.com/me/one/issues/24#issuecomment-1', [23], [24]],
+    ['an issue URL whose path goes on after the number', 'Fixes https://github.com/me/one/issues/25/../26\nRefs https://github.com/me/one/issues/27./../28\nFixes https://github.com/me/one/issues/29\\..\\30', [], []],
   ]) {
     assert.deepEqual(closingKeywordRefs(body, repo), closing, why);
     assert.deepEqual(refsKeywordRefs(body, repo), refs, why);
@@ -46,7 +46,8 @@ test('MP1: the description parsers', () => {
     threadLinks('[a]: https://discord.com/channels/1/91\n[b]( https://discord.com/channels/1/92 "t")'),
     ['91', '92'],
     'a reference definition and a spaced Markdown link name the post their URL names',
-  );});
+  );
+});
 
 test('MP2: renderPlan shows each line only when its case holds', () => {
   const base = {
@@ -92,7 +93,7 @@ test('MP2: renderPlan shows each line only when its case holds', () => {
     assert.doesNotMatch(renderPlan({ ...base, ...over, base: 'feature' }), /This PR is a draft|has no role/, `a wrong base: no draft or no-role line (${JSON.stringify(over)})`);
   }
   const two = renderPlan({ ...base, closing: [{ n: 17, open: true }, { n: 18, open: true }] });
-  assert.equal([...two.matchAll(/^\*\*#\d+\*\* closes when this PR merges\./gm)].length, 2, 'two sections');
+  assert.deepEqual([...two.matchAll(/^\*\*#(\d+)\*\* closes when this PR merges\./gm)].map((m) => Number(m[1])), [17, 18], 'one section per issue, in order');
   assert.ok(renderPlan({ ...base, base: 'a`@b`c' }).includes('This PR targets ``a`@b`c``, not `dev`'), 'a backtick in a branch name never ends its code span');
   assert.ok(renderPlan({ ...base, base: '`edge' }).includes('This PR targets `` `edge ``, not `dev`'), 'a branch name that starts with a backtick is padded');
   assert.ok(renderPlan({ ...base, base: 'edge`' }).includes('This PR targets `` edge` ``, not `dev`'), 'a branch name that ends with a backtick is padded');
@@ -113,8 +114,9 @@ test('MP2: renderPlan shows each line only when its case holds', () => {
 const env = { GITHUB_TOKEN: 'gh', DISCORD_BOT_TOKEN: 'bot' };
 const repository = { full_name: 'me/one', default_branch: 'dev' };
 const quiet = () => {};
-// The merge-plan job of one PR event.
-const plan = (w, number, action = 'opened', over = {}, log = quiet) => planRun({
+// A run that logs a failure fails the test, unless the test reads the log.
+const clean = (line) => assert.ok(!line.startsWith('merge plan comment not updated'), line);
+const plan = (w, number, action = 'opened', over = {}, log = clean) => planRun({
   payload: { repository, action, pull_request: { number } }, env: { ...env, ...over }, fetchImpl: w.fetch, log,
 });
 // One PR event as the workflow runs it: the status job, then the merge-plan job.
@@ -166,6 +168,7 @@ test('MP3: one merge-plan comment per PR, found on any page, edited in place, ne
   assert.deepEqual(copies.map((c) => c.id).sort(), [copy.id, id].sort());
   for (const c of copies) assert.match(c.body, /naming #17, #18 as closing/, `copy ${c.id}, on either page, gets the new plan`);
   assert.equal(creates(), 1, 'no comment created twice');
+  assert.deepEqual(w.find('DELETE', /issues\/comments/), [], 'no comment deleted');
   assert.equal(spoof.body, `${MARKER}\nnot the bot`, "the other account's comment is left alone");
   assert.equal(ordinary.body, 'an ordinary bot comment', 'a bot comment without the marker is left alone');
 });
@@ -258,6 +261,11 @@ test('MP6: which PRs get a comment, and what it names', async () => {
       open({ body: 'See https://discord.com/channels/800/717' })(w);
     }, none],
     ['a link to a post with no issue', open({ body: 'See https://discord.com/channels/800/12345' }), none],
+    ['Refs #17 after #17 moved to another repo', (w) => {
+      // Reading a transferred issue follows GitHub's redirect to its new repo.
+      w.issues.get(17).html_url = 'https://github.com/me/two/issues/9';
+      open({ body: 'Refs #17' })(w);
+    }, none],
     ['a plain mention', open({ body: 'See #17' }), none],
     ['Refs to a PR with the label and a copied marker', (w) => {
       w.issue(30, { pull_request: {} });
