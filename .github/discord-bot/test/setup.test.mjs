@@ -60,8 +60,8 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
     assert.ok(lines.some((l) => re.test(l)), `${why}: ${lines.join(' | ')}`);
   }
   // One call names every bad key and still checks the rest of the map.
-  assert.deepEqual(configProblems({ ...CLEAN, REPOS: JSON.stringify({ 'A B': 'me/one', '||KE||': 'broken' }) }), [
-    'REPOS key "A B" is not made of letters and digits: write each key in letters and digits only, like KE.',
+  assert.deepEqual(configProblems({ ...CLEAN, REPOS: JSON.stringify({ 'a b': 'me/one', '||KE||': 'broken' }) }), [
+    'REPOS key "a b" is not made of letters and digits: write each key in letters and digits only, like KE.',
     'REPOS key "||KE||" is not made of letters and digits: write each key in letters and digits only, like KE.',
     'REPOS entry ||KE|| is not owner/repo.',
     "LOCK_REPO is empty while REPOS names more than one repo: set it to the repo that holds every filing's lock.",

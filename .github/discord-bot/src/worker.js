@@ -105,7 +105,6 @@ export function config(env) {
     repos, forums: Object.keys(forumInfo), forumInfo,
     roles: parseRoleIds(env.APPROVED_ROLE_IDS), templates: parseTemplates(env.TEMPLATES),
     queue: env.QUEUE_CHANNEL_ID || '',
-    // A filing renames its post unless RENAME_POSTS is 0.
     rename: String(env.RENAME_POSTS ?? '').trim() !== '0',
     // Every filing of a post takes its lock in this one repo, whichever repo
     // it goes to. It is named, never taken from the order of REPOS, so
