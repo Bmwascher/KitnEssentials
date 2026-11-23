@@ -94,6 +94,12 @@ jobs:
       ${{ !cancelled() && github.event_name == 'pull_request_target' &&
       (github.event.action != 'edited' || github.event.changes.body || github.event.changes.base) }}
     continue-on-error: true
+    # GitHub refuses a comment on a PR without pull-requests: write, so this
+    # job alone gets it; the status job keeps the workflow's read access.
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     concurrency:
       group: discord-plan-pr-${{ github.event.pull_request.number }}
     runs-on: ubuntu-latest
