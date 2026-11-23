@@ -184,14 +184,17 @@ export function world() {
     }],
     ['POST', /api\.github\.com\/graphql$/, (m, url, body) => {
       const v = body.variables;
-      if (/refs\(refPrefix/.test(body.query)) {
+      // A field named only in a GraphQL comment is not selected: it picks no
+      // route and gets no answer.
+      const query = body.query.replace(/#[^\n]*/g, '');
+      if (/refs\(refPrefix/.test(query)) {
         const all = w.tags.map((t) => ({
           name: t.name,
           target: t.annotated ? { __typename: 'Tag', oid: `tag-${t.name}`, target: { oid: t.commit.sha } } : { __typename: 'Commit', oid: t.commit.sha },
         }));
         return json({ data: { repository: { refs: gqlPage(all, v.after) } } });
       }
-      if (/closedByPullRequestsReferences/.test(body.query)) {
+      if (/closedByPullRequestsReferences/.test(query)) {
         const all = [...w.prs.values()].filter((p) => p.closes.includes(v.number) && p.state === 'OPEN')
           .map((p) => ({ isDraft: !!p.draft, state: p.state, authorAssociation: p.author_association }));
         return json({ data: { repository: { issue: { closedByPullRequestsReferences: gqlPage(all, v.after) } } } });
@@ -201,10 +204,8 @@ export function world() {
       // in the answer only when the query names it, one level deep: PR
       // fields are read from the text before `closingIssuesReferences`,
       // where the plan query lists them, and node fields from the rest.
-      if (/defaultBranchRef/.test(body.query)) {
+      if (/defaultBranchRef/.test(query)) {
         const p = w.prs.get(v.number);
-        // A field named only in a GraphQL comment is not selected.
-        const query = body.query.replace(/#[^\n]*/g, '');
         const at = query.indexOf('closingIssuesReferences');
         const prSel = query.slice(0, at);
         const nodeSel = query.slice(at);
@@ -223,12 +224,12 @@ export function world() {
           closingIssuesReferences: { nodes: conn.nodes, ...picked(nodeSel, { pageInfo: picked(nodeSel, { hasNextPage: conn.pageInfo.hasNextPage }) }) },
         } } } });
       }
-      if (/closingIssuesReferences/.test(body.query)) {
+      if (/closingIssuesReferences/.test(query)) {
         const p = w.prs.get(v.number);
         const all = (p ? p.closes : []).map((c) => (typeof c === 'number' ? { number: c, repository: { nameWithOwner: 'me/one' } } : c));
         return json({ data: { repository: { pullRequest: p ? { closingIssuesReferences: gqlPage(all, v.after) } : null } } });
       }
-      if (/ClosedEvent/.test(body.query)) {
+      if (/ClosedEvent/.test(query)) {
         const last = w.issues.get(v.number).events.filter((e) => e.event === 'closed').at(-1);
         const c = last && last.closer;
         const repository = { nameWithOwner: (c && c.repo) || 'me/one' };

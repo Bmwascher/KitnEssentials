@@ -626,6 +626,10 @@ Accepted on purpose; each line says how you would notice it.
   was never filed, makes no merge-plan comment: the workflow knows only its
   own repo's issues. A `Refs #N`, or a closing keyword GitHub does not list,
   whose issue has since been transferred to another repo gets no line either.
+- The merge plan reads `#N` and `owner/repo#N` after a keyword, the forms
+  GitHub documents, not an issue's URL: a `Refs` or closing keyword followed
+  by a URL gets no line of its own. GitHub's own list of closing issues still
+  counts, whatever form GitHub read.
 - The merge plan sees a Discord link only when it stands alone: at the start
   of a line or after a space, and ending at a space or the end of a line. A
   link that something touches (`[post](...)`, `<...>`, another URL holding

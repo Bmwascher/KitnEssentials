@@ -14,12 +14,11 @@ test('MP1: the description parsers', () => {
     ['every closing keyword, any case, with or without a colon', 'Fixes #1\ncloses: #2\nRESOLVED #3\nfix #4\nClose #5\nresolves: #6\nclosed #7\nFIXED: #8\nresolve #9', [1, 2, 3, 4, 5, 6, 7, 8, 9], []],
     ['Refs and Ref, with or without a colon', 'Refs #10\nref: #11\nREFS #12', [], [10, 11, 12]],
     ['a bare number and a plain mention', '#13 and see #14', [], []],
-    ['this repo by name and by URL', 'Fixes me/one#15 and refs https://github.com/me/one/issues/16', [15], [16]],
+    ['this repo by name', 'Fixes me/one#15 and refs me/one#16', [15], [16]],
     ['another repo is not this repo', 'Fixes other/repo#17\nRefs other/repo#18', [], []],
     ['a repo whose name ends in this one', 'Fixes other-me/one#19', [], []],
     ['a number inside a word', 'Fixes abc#20 and Refs x/y#21', [], []],
-    ['an issue URL ending a sentence, or with a fragment', 'Fixes https://github.com/me/one/issues/23.\nRefs https://github.com/me/one/issues/24#issuecomment-1', [23], [24]],
-    ['an issue URL whose path goes on after the number', 'Fixes https://github.com/me/one/issues/25/../26\nRefs https://github.com/me/one/issues/27./../28\nFixes https://github.com/me/one/issues/29\\..\\30', [], []],
+    ['an issue URL is not a documented form, whatever follows its number', 'Fixes https://github.com/me/one/issues/23\nRefs https://github.com/me/one/issues/24?path=docs/setup\nFixes https://github.com/me/one/issues/25-old\nRefs https://github.com/me/one/issues/26/../27', [], []],
   ]) {
     assert.deepEqual(closingKeywordRefs(body, repo), closing, why);
     assert.deepEqual(refsKeywordRefs(body, repo), refs, why);

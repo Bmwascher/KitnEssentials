@@ -11,12 +11,12 @@ export const MARKER = '<!-- discord-merge-plan -->';
 const RELEASE_PLACEHOLDER = '(release tag)';
 const KEYWORD = '(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)';
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-// `#N`, `owner/repo#N` for this repo, or this repo's issue URL, right after a
-// keyword's whitespace; one of the two groups holds the number. A URL whose
-// path goes on after the number (`/../18`, `\..\18`, `./../18`) can name
-// another issue, so it names none.
-const refIn = (repo) => `(?:(?:#|${esc(repo)}#)(\\d+)\\b|https://github\\.com/${esc(repo)}/issues/(\\d+)(?!\\w|\\S*[/\\\\]))`;
-const numbers = (body, re) => [...new Set([...body.matchAll(re)].map((m) => Number(m[1] || m[2])))];
+// `#N` or `owner/repo#N` for this repo, the forms GitHub documents for
+// closing keywords, right after a keyword's whitespace; the only capturing
+// group is the number. An issue URL is not read: what follows its number can
+// make it name another issue.
+const refIn = (repo) => `(?:#|${esc(repo)}#)(\\d+)\\b`;
+const numbers = (body, re) => [...new Set([...body.matchAll(re)].map((m) => Number(m[1])))];
 
 // This repo's issues a closing keyword names: for a PR into another branch,
 // where GitHub lists none, and for one GitHub does not list on the default
