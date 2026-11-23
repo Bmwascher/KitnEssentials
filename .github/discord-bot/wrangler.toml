@@ -22,7 +22,9 @@ crons = ["* * * * *", "0 15 * * *", "30 15 * * *"]
 # id = "<the namespace id>"
 
 [vars]
-# Which repo each form choice files into, by a short key the form shows.
+# Which repo each form choice files into, by a short key the form shows: in
+# letters and digits only, upper case, at most 10 characters. The issue's
+# title and the post's name start with it, as in "[KE] [Retail] [Bug] ...".
 # Several repos: {"KE":"owner/one","UI":"owner/two"}.
 REPOS = '{"KE":"Bmwascher/KitnEssentials"}'
 # The forums the bot works in, keyed by channel id, each with the client and
@@ -55,6 +57,8 @@ CHECKLIST_FORUM_ID = ""
 LOCK_REPO = ""
 # How old a post with no status must be before the daily list names it.
 STALE_DAYS = "3"
+# A filing renames its post to the issue's title. "0" leaves post names alone.
+# RENAME_POSTS = "0"
 # Optional: the template fields each type of post should fill, checked as
 # advice for moderators only, in a forum with no readable pinned template.
 # List every label of the template: a label left out reads as part of the
