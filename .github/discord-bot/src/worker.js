@@ -5,12 +5,12 @@
 // filed answers "Already tracked" instead of opening the form. Submitting the
 // form files the issue and replies to the filed message in the post.
 import {
-  STATUS, MESSAGES, PERMS, packGroups, postLines, taken, oneHop, isDiscordId, THREAD_TYPES, buildTitle, buildBody, labelsFor, cleanPostTitle, personName, titleText,
+  STATUS, MESSAGES, PERMS, packGroups, postLines, taken, oneHop, isDiscordId, THREAD_TYPES, buildTitle, fitName, buildBody, labelsFor, cleanPostTitle, personName, titleText,
   guessFromTags, normClient, normType, normRepoKey, parseRepos, timedFetch,
   parseForums, parseRoleIds, parseTemplates, templateCheck, templateGaps,
   templateNote, parseCustomId, templateLabels, filedCard, cardHead, BY_RIGHT_CLICK,
 } from './core.js';
-import { discordClient, postGone } from './discord.js';
+import { discordClient, postGone, archivedOf } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
 import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch } from './scan.js';
 import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems, unreadableSettings } from './setup.js';
@@ -105,6 +105,8 @@ export function config(env) {
     repos, forums: Object.keys(forumInfo), forumInfo,
     roles: parseRoleIds(env.APPROVED_ROLE_IDS), templates: parseTemplates(env.TEMPLATES),
     queue: env.QUEUE_CHANNEL_ID || '',
+    // A filing renames its post unless RENAME_POSTS is 0.
+    rename: String(env.RENAME_POSTS ?? '').trim() !== '0',
     // Every filing of a post takes its lock in this one repo, whichever repo
     // it goes to. It is named, never taken from the order of REPOS, so
     // reordering REPOS cannot move it; with one repo it is that repo.
@@ -335,6 +337,19 @@ async function markCard(discord, cfg, log, { cardId, guildId, postId, head, key,
   if (!cardId || !cfg.queue) return;
   await discord.call('PATCH', `/channels/${cfg.queue}/messages/${cardId}`, filedCard({ guildId, postId, head, key, number, by }))
     .catch((e) => log(`queue card ${cardId} not updated: ${e.message.slice(0, 200)}`));
+}
+
+// The post named as its issue, last, beside the card: a failure is logged,
+// since the moderator's reply has gone. The post is read just before the
+// write, so a name changed during the filing is seen. Discord changes no
+// name on an archived thread unless the same request opens it.
+async function renamePost(discord, log, threadId, name) {
+  try {
+    const post = await discord.getChannel(threadId);
+    if (post.name !== name) await discord.call('PATCH', `/channels/${threadId}`, archivedOf(post) ? { name, archived: false } : { name });
+  } catch (e) {
+    log(`post ${threadId} rename failed: ${e.message.slice(0, 200)}`);
+  }
 }
 
 // A send ends within 30 s, and GitHub times out a request after 10 s. GitHub
@@ -620,8 +635,9 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
   // The post's queue card: the form's, else the scan's record of the post.
   const cardOf = (r) => cardId || (r && r.card) || '';
   // The card to mark Filed as, once the lock is released: optional work
-  // never holds the lock.
+  // never holds the lock. After a create, the post is renamed then too.
   let cardAfter = null;
+  let renameAfter = false;
   // The template check's result, for the moderator on either create path.
   let gaps = [];
   let tmplNote = '';
@@ -827,6 +843,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     }));
     await followup(`Created ${repoKey} #${issue.number}: ${issue.html_url}${notes.length ? ` (${notes.join('; ')})` : ''}${gapText()}`);
     cardAfter = { cardId, head, key: repoKey, number: issue.number, by: modName };
+    renameAfter = cfg.rename;
     return { created: issue.number, notes };
   } catch (e) {
     // A create that got no answer may still have happened on GitHub's side:
@@ -848,6 +865,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
         }));
         await followup(`Created ${repoKey} #${found.number}: ${found.html_url} (GitHub answered late; the post's status tag comes from the issue's first workflow run${late.length ? `; ${late.join('; ')}` : ''})${gapText()}`);
         cardAfter = { cardId, head: thread ? cardHead(thread.parent_id, threadId) : '', key: repoKey, number: found.number, by: modName };
+        renameAfter = cfg.rename;
         return { created: found.number, late: true };
       }
       keepLock = true;
@@ -860,17 +878,26 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     if (locked && !keepLock) {
       try { await ghRelease.releaseThread(cfg.lockRepo, threadId); } catch (e) { log(`lock ${lockLabel(threadId)} not released: ${e.message}`); }
     }
-    // Last, and after the release, the card. With no card id from the form,
-    // the scan's record is read again: a scan may have posted the card while
-    // this filing ran. The read and the edit both end by the release's end.
-    if (cardAfter && cfg.queue) {
-      const kvLeft = Math.min(kvMs, t0 + RELEASE_BY_MS - Date.now());
-      const latest = cardAfter.cardId ? null
-        : kvLeft > 0 ? await within(kvLeft, readStrict(env.STATE, `thread:${threadId}`))
-          .catch((e) => { log(`card lookup failed, so the record read earlier is used: ${e.message.slice(0, 200)}`); return rec; }) : rec;
-      await markCard(discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, TAIL_MS, t0 + RELEASE_BY_MS)), cfg, log, {
-        ...cardAfter, cardId: cardAfter.cardId || cardOf(latest), guildId: interaction.guild_id, postId: threadId,
-      });
+    // Last, and after the release, the card and the post's rename, side by
+    // side, on one client whose every call ends by the release's end. With
+    // no card id from the form, the scan's record is read again: a scan may
+    // have posted the card while this filing ran.
+    const marking = cardAfter && cfg.queue;
+    if (marking || renameAfter) {
+      const closing = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, TAIL_MS, t0 + RELEASE_BY_MS));
+      const card = async () => {
+        const kvLeft = Math.min(kvMs, t0 + RELEASE_BY_MS - Date.now());
+        const latest = cardAfter.cardId ? null
+          : kvLeft > 0 ? await within(kvLeft, readStrict(env.STATE, `thread:${threadId}`))
+            .catch((e) => { log(`card lookup failed, so the record read earlier is used: ${e.message.slice(0, 200)}`); return rec; }) : rec;
+        await markCard(closing, cfg, log, {
+          ...cardAfter, cardId: cardAfter.cardId || cardOf(latest), guildId: interaction.guild_id, postId: threadId,
+        });
+      };
+      await Promise.all([
+        marking ? card() : null,
+        renameAfter ? renamePost(closing, log, threadId, fitName(issueTitle)) : null,
+      ]);
     }
   }
 }

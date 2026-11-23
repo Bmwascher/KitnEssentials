@@ -18,7 +18,7 @@ const blank = (v) => String(v ?? '').trim() === '';
 const forumSetting = (env) => (blank(env.FORUMS) && !blank(env.FORUM_CHANNEL_IDS) ? 'FORUM_CHANNEL_IDS' : 'FORUMS');
 // Every setting the Worker reads.
 const SETTINGS = ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID',
-  'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'DISCORD_PUBLIC_KEY', 'DISCORD_BOT_TOKEN', 'GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY'];
+  'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'RENAME_POSTS', 'DISCORD_PUBLIC_KEY', 'DISCORD_BOT_TOKEN', 'GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY'];
 // Their readers call string methods on these two, so only a string is read.
 const STRINGS = ['DISCORD_PUBLIC_KEY', 'GITHUB_APP_PRIVATE_KEY'];
 // The settings no reader can read: a JSON variable such as {"toString":null}

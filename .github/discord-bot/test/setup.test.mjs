@@ -68,7 +68,7 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
   ]);
   // A JSON variable with no text form throws wherever it is turned into
   // text. The list is written here, not taken from the checker.
-  for (const k of ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID', 'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS']) {
+  for (const k of ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID', 'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'RENAME_POSTS']) {
     const lines = configProblems({ ...CLEAN, [k]: { toString: null } });
     assert.ok(lines.includes(`${k} is not text: set it as text. The checks below read it as unset.`), `${k} with no text form: ${lines.join(' | ')}`);
   }
