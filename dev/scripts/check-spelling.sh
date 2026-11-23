@@ -58,9 +58,11 @@ fi
 # British substring, the search alias on the Dark Theme page that lets a
 # player type the British word, scoped to that file alone, and the game's
 # own spell names in the derived Forever combat data file, scoped to it,
-# and the game's own texture path the step icons map, scoped to that file.
+# the game's own texture path the step icons map, scoped to that file, and
+# GitHub Actions' built-in cancelled() in the Discord status workflow,
+# scoped to that file.
 scrub() {
-    sed -E 's/GameFontNormalLeftGrey|Draught of|[Gg]reyhound|GREYHOUND|Greymist/ALLOWED/g; /^GUI\/GUIMain\/GUI-MainFrame\.lua:/ s/"colour"|"maximised"/ALLOWED/g; /^Modules\/Combat\/CombatDataForever\.lua:/ s/Judgement/ALLOWED/g; /^Modules\/Skinning\/RestedXP\/RestedXPIcons\.lua:/ s/chatbubble_64grey/ALLOWED/g'
+    sed -E 's/GameFontNormalLeftGrey|Draught of|[Gg]reyhound|GREYHOUND|Greymist/ALLOWED/g; /^GUI\/GUIMain\/GUI-MainFrame\.lua:/ s/"colour"|"maximised"/ALLOWED/g; /^Modules\/Combat\/CombatDataForever\.lua:/ s/Judgement/ALLOWED/g; /^Modules\/Skinning\/RestedXP\/RestedXPIcons\.lua:/ s/chatbubble_64grey/ALLOWED/g; /^\.github\/workflows\/discord-status\.yml:/ s/cancelled\(\)/ALLOWED/g'
 }
 
 # Third-party trees are not ours to spell; everything else tracked and
