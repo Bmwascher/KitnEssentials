@@ -82,11 +82,13 @@ The In progress message is said once while the issue stays open, however many PR
 and go.
 
 A PR counts from the moment its description says `Fixes #N`: while the work
-is unfinished, write `Refs #N`, and editing it to `Fixes #N` moves the post to
-In progress. An edit of the title alone starts nothing. GitHub does not read
-the description again when only a PR's base branch changes, so after changing
-the base, edit and save the description once. A PR into a branch other than
-the default branch lists no closing issues, so it moves nothing.
+is unfinished, write `Refs #N`, and editing it to `Fixes #N` makes the PR
+count toward In progress for an open issue, once the PR is ready for review
+and its author has a repo role (the table above). An edit of the title alone
+starts nothing. GitHub does not read the description again when only a PR's
+base branch changes, so after changing the base, edit and save the
+description once. A PR into a branch other than the default branch lists no
+closing issues, so it moves nothing.
 
 How the release state is kept: the fix is the commit that last closed the
 issue (reopening drops it). When a release tag holds that commit, the workflow
@@ -152,10 +154,76 @@ Two halves, no always-on server:
   with thousands of bot issues, see Known limits): it answers the button, the
   right-click command and the form, and runs the post scan and the daily check
   on cron triggers.
-- `status/status.mjs` runs in **GitHub Actions** (`.github/workflows/discord-status.yml`).
-  It does nothing until the `DISCORD_BOT_TOKEN` secret exists, so it is safe to merge early.
+- `status/status.mjs` runs in **GitHub Actions** (`.github/workflows/discord-status.yml`),
+  and `status/merge-plan.mjs` beside it, in its own job after it, for pull requests.
+  Both do nothing until the `DISCORD_BOT_TOKEN` secret exists, so they are safe to merge early.
 
 None of this ships to players: `.github` is excluded from sync and builds.
+
+## Pull requests: the merge plan
+
+A pull request that closes an issue the bot filed, says `Refs #N` for one,
+links one's Discord post, or closes a Discord report in another repo gets one
+comment from the workflow, the merge plan. For each open issue the PR will
+close, it quotes the bot's current message for each step: the PR ready for
+review (In progress), merged (Fixed) and a release that holds it (Shipped).
+That is the wording a new message gets; when a message goes out, and when it
+does not, is described at the top of this README, and a message owed from an
+older run keeps the words it was written with. The comment reads no Discord
+post. Below that, a Heads-up list says when merging will not do what the
+author expects: the PR targets a branch other than the default one, GitHub
+does not list an issue the description closes (the PR was opened into another
+branch and then moved to the default one, the description not saved since),
+it is a draft, its author has no role on the repo, an issue is already
+closed, it closes a Discord report in another repo, it links a report's post
+without closing its issue, or it says `Refs #N`. The comment links the issue
+and copies none of the report. It reads the description and the PR's links,
+not commit messages.
+
+The comment is rebuilt at each PR event (opened, description or base edited,
+ready for review, converted to draft, reopened, closed) by its own job, which
+runs after the status job, and edited in place; it is never deleted. Keep
+its hidden first line: without it the bot no longer finds the comment and
+posts a new one. A PR that merges with no merge plan yet (one opened before
+the bot was set up, say) gets the merged one then, if GitHub lists an issue
+the bot filed here as one it closes. The merged comment names those issues
+and says GitHub closes each one still open; it does not tell apart one
+closed before the merge, and leaves what the bot then does to this README.
+The merge-plan job never delays its own run's status job. It shares two
+things with every other status run (Known limits): the GitHub allowance,
+whose exhaustion can make a status job fail, and the account's hosted
+runners, whose being full can make another run's status job wait. A comment
+it cannot write is named in its log, never as a failed run.
+The job takes about a minute and ends its own calls within 60 seconds; its
+5-minute limit is reached only when GitHub stalls its setup (Known limits).
+
+- **One line does it.** Put `Fixes #N` on its own line in the description
+  (`Closes #N` and `Resolves #N` work the same), with the default branch as
+  the base. N is the number the post's "tracked as" reply names.
+- **`Refs #N` while unfinished, `Fixes #N` when ready.** With `Refs #N` the
+  PR does not close the issue, unless a commit message or a link in the PR's
+  Development sidebar does. Editing it to `Fixes #N` makes the PR count
+  toward In progress once it is ready for review and its author has a role
+  on the repo.
+  Write one Refs per issue. Any wording with fix, close or resolve right
+  before the number closes the issue on merge, in the description or in a
+  commit message, "partly fixes #12" included.
+- **Never `Fixes` across repos.** That repo's status workflow, if it runs,
+  cannot see a fix or a release made here, so it treats the issue as closed
+  by hand and never moves its post to Fixed or Shipped. Transfer the issue
+  to the repo that holds the fix first.
+- **A thread link alone moves nothing.** Linking the Discord post is fine,
+  but only a closing keyword (`Fixes #N`, `Closes #N` or `Resolves #N`) in
+  the description or in a commit message, or a link in the PR's
+  Development sidebar, closes the issue. To keep an unfinished PR from
+  closing it, change the description's word to `Refs`, remove the sidebar
+  link, and keep those words out of commit messages.
+- **A fix reverted before its release:** reopen its issue the same day.
+  Reopening drops the fix; otherwise the release announces the fix as out.
+- **A fix merged without `Fixes #N`:** put `Fixes #N` in the message of the
+  next commit on the default branch, before the release tag. Do not close
+  the issue by hand: the bot treats a hand close as Closed, not Fixed, and
+  never as shipped.
 
 ## Checking the setup
 
@@ -599,6 +667,64 @@ Accepted on purpose; each line says how you would notice it.
 - A link made only in a PR's Development sidebar, or a `Fixes #N` removed from
   a description, moves nothing until the issue's next event or a fix-mode
   sweep.
+- A Discord link in a PR to a post whose issue is in another repo, or that
+  was never filed, makes no merge-plan comment: the workflow knows only its
+  own repo's issues. A `Refs #N`, or a closing keyword GitHub does not list,
+  whose issue has since been transferred to another repo gets no line either.
+- The merge plan reads `#N` and `owner/repo#N` after a keyword, the forms
+  GitHub documents, not an issue's URL: a `Refs` or closing keyword followed
+  by a URL gets no line of its own. GitHub's own list of closing issues still
+  counts, whatever form GitHub read.
+- The merge plan sees a Discord link only when it stands alone: at the start
+  of a line or after a space, and ending at a space or the end of a line. A
+  link that something touches (`[post](...)`, `<...>`, another URL holding
+  it, or a sentence's period) gets no thread-link warning. A link inside
+  Markdown may or may not count: a reference definition or a link with
+  spaces inside its parentheses stands alone, so it counts. An unused reference
+  definition is not shown on the PR page but still counts. A link that counts
+  always names the post its URL names.
+- The merge plan's GitHub reads share the workflow token's hourly allowance
+  with the status job. A status job that GitHub refuses for the limit fails
+  like any failed run, and re-running it recovers what any re-run recovers
+  (above).
+- The merge-plan job also takes a hosted runner for about a minute per PR
+  event. When the account's runners are all busy (GitHub's per-account
+  concurrent-job limit), GitHub queues new jobs, so another run's status job
+  can wait for one. Its In progress message then goes out late, or is
+  skipped if the PR turns draft first, as whenever GitHub is slow to start
+  a job: the status job reads the PR as it is when it runs.
+- The merge plan's cross-repo warning needs the other repo's issue to be
+  readable with the workflow's token. A closing reference the token cannot
+  read can stop the merge plan of that PR; the merge-plan job's log says why.
+- The merge plan follows the PR's own events: a Development sidebar link, or
+  an issue closed or relabeled, shows at the PR's next event. A closing
+  keyword in a commit message is not shown, and neither is a post's status.
+- The merge plan of a PR with more than 100 closing references is not
+  updated; the merge-plan job's log says why.
+- A merge-plan comment write that times out may still be applied by GitHub
+  after the job has moved on, and a job stopped partway (an error, or its time
+  limit) may have edited one copy and not another. The PR can then show an
+  older plan, or two copies, until a later event's job edits them; after the
+  PR's last event they stay until someone edits or deletes the extra comment.
+- A fix-mode sweep that runs while a PR's merge-plan job is queued (behind
+  that PR's previous merge-plan job, or for a free runner) or running, after
+  that PR's status job failed to move a post and the PR went back to draft,
+  keeps that run's In progress message owed. The PR's next ready event then
+  sends nothing; the sweep lists the message, and re-running the failed run
+  sends it.
+- A merge-plan job whose checkout or Node setup GitHub stalls past its
+  5-minute limit is canceled, and that shows the Discord status run as canceled
+  rather than green or red, whatever the status job did. Open that run and
+  use Re-run all jobs, whether its status job passed or failed. Its status
+  job then does what any re-run does (above: a message still owed and still
+  true goes out; a failed send stays listed by the sweep for a person). The
+  re-run also rebuilds the comment, which matters when the run was the PR's
+  last event (a merge, or a close).
+- A run also shows as canceled when GitHub drops its waiting merge-plan job:
+  each PR keeps one merge-plan job running and one waiting, so a third PR
+  event in quick succession drops the one that waits. Nothing is lost, since
+  the newest run rebuilds the comment. Re-run that run only if its status job
+  failed, as for any failed run.
 - An owed message goes out only when someone re-runs the run that owes it, even
   if another run has moved the post since; until then the sweep lists it with
   that run's link. GitHub allows re-runs for 30 days from the run's first

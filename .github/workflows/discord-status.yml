@@ -17,6 +17,9 @@ name: Discord status
 # Only a PR whose author has a role on the repo shows as In progress. An edit
 # counts when it changed the description or the base, which is how a
 # `Refs #N` turned into `Fixes #N` moves the post.
+# PR runs also keep one merge-plan comment on each PR that closes, references
+# or links a Discord-filed issue, in their own job after the status job; a
+# failed comment is logged and never fails the run.
 on:
   pull_request_target:
     types: [opened, edited, reopened, ready_for_review, converted_to_draft, closed]
@@ -78,6 +81,36 @@ jobs:
           RELEASE_TAG_PATTERN: ${{ vars.RELEASE_TAG_PATTERN || '^discord-test-' }}
           SWEEP_MODE: ${{ vars.SWEEP_MODE || 'report' }}
           CHECKLIST_FORUM_ID: ${{ vars.CHECKLIST_FORUM_ID }}
+
+  merge-plan:
+    # After the status job, so the comment reads the issues as that job left
+    # them, and in its own group, so it never holds the status job's PR slot or
+    # time. Skipped, like the status job, for an edit of the title alone. A
+    # failure here, setup included, never fails the run. A timeout would
+    # cancel the whole run, so the limit sits far past a normal run of about
+    # a minute: the script ends its own calls within 60 seconds.
+    needs: status
+    if: >-
+      ${{ !cancelled() && github.event_name == 'pull_request_target' &&
+      (github.event.action != 'edited' || github.event.changes.body || github.event.changes.base) }}
+    continue-on-error: true
+    concurrency:
+      group: discord-plan-pr-${{ github.event.pull_request.number }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/discord-bot
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Update the merge-plan comment
+        run: node .github/discord-bot/status/merge-plan.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
 
   checklist:
     # The staff checklist thread: opened, and kept in step, only at the

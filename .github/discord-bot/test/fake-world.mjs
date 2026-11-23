@@ -26,7 +26,9 @@ export function world() {
   const w = {
     repo: 'me/one',
     issues: new Map(),
-    prs: new Map(), // number -> { draft, author_association, state, closes: [issue numbers] }
+    // number -> { draft, author_association, state, closes, body, base, comments }; a
+    // `closes` entry is an issue number, or another repo's issue as GraphQL shows it.
+    prs: new Map(),
     contains: new Map(), // `${sha}...${target}` -> 'ahead' | 'identical' | 'behind' | 'diverged'
     threads: new Map(), // id -> { id, parent_id, applied_tags, archived, messages: [] }
     calls: [],
@@ -73,10 +75,17 @@ export function world() {
     w.threads.set(id, t);
     return t;
   };
+  // Comments sit on an issue or a PR, as GitHub keeps them on both.
+  w.holder = (n) => {
+    if (w.issues.has(n)) return w.issues.get(n);
+    const p = w.prs.get(n);
+    if (!p.comments) p.comments = [];
+    return p;
+  };
   w.record = (n, body, login = BOT) => {
     const id = w.nextId++;
     const c = { id, user: { login }, body, created_at: new Date(w.clock).toISOString(), html_url: `https://github.com/${w.repo}/issues/${n}#issuecomment-${id}` };
-    w.issues.get(n).comments.push(c);
+    w.holder(n).comments.push(c);
     return c;
   };
   // `closer` is what GraphQL names as the closer: { pr: sha } for a merged PR
@@ -99,6 +108,8 @@ export function world() {
   const view = (i) => ({
     number: i.number, state: i.state, state_reason: i.state_reason, body: i.body, title: i.title, html_url: i.html_url, closed_at: i.closed_at || null,
     labels: [...i.labels].map((name) => ({ name })),
+    // A PR read through the issues API carries this field.
+    ...(i.pull_request ? { pull_request: i.pull_request } : {}),
   });
   const json = (obj, status = 200) => new Response(obj === null ? null : JSON.stringify(obj), { status: obj === null ? 204 : status });
   const page = (url) => Number((/[?&]page=(\d+)/.exec(url) || [0, 1])[1]);
@@ -126,11 +137,12 @@ export function world() {
       const state = (/[?&]state=(\w+)/.exec(url) || [0, 'open'])[1];
       const since = (/[?&]since=([^&]+)/.exec(url) || [0, ''])[1];
       const all = [...w.issues.values()]
-        .filter((i) => i.labels.has(label) && (state === 'all' || i.state === state) && (!since || i.updated_at >= decodeURIComponent(since)))
+        // GitHub's label filter matches a name in any letter case.
+        .filter((i) => [...i.labels].some((l) => l.toLowerCase() === label.toLowerCase()) && (state === 'all' || i.state === state) && (!since || i.updated_at >= decodeURIComponent(since)))
         .map(view);
       return json(slice(all, url));
     }],
-    ['GET', /\/repos\/me\/one\/issues\/(\d+)\/comments/, (m, url) => json(slice(w.issues.get(Number(m[1])).comments, url))],
+    ['GET', /\/repos\/me\/one\/issues\/(\d+)\/comments/, (m, url) => json(slice(w.holder(Number(m[1])).comments, url))],
     ['POST', /\/repos\/me\/one\/issues\/(\d+)\/comments$/, (m, url, body) => {
       const c = w.record(Number(m[1]), body.body);
       return json({ id: c.id, html_url: c.html_url, created_at: c.created_at });
@@ -164,32 +176,60 @@ export function world() {
       return json({ message: 'nf' }, 404);
     }],
     ['PATCH', /\/repos\/me\/one\/issues\/comments\/(\d+)$/, (m, url, body) => {
-      for (const i of w.issues.values()) {
-        const c = i.comments.find((x) => x.id === Number(m[1]));
+      for (const i of [...w.issues.values(), ...w.prs.values()]) {
+        const c = (i.comments || []).find((x) => x.id === Number(m[1]));
         if (c) { c.body = body.body; return json({ id: c.id }); }
       }
       return json({ message: 'nf' }, 404);
     }],
     ['POST', /api\.github\.com\/graphql$/, (m, url, body) => {
       const v = body.variables;
-      if (/refs\(refPrefix/.test(body.query)) {
+      // A field named only in a GraphQL comment is not selected: it picks no
+      // route and gets no answer.
+      const query = body.query.replace(/#[^\n]*/g, '');
+      if (/refs\(refPrefix/.test(query)) {
         const all = w.tags.map((t) => ({
           name: t.name,
           target: t.annotated ? { __typename: 'Tag', oid: `tag-${t.name}`, target: { oid: t.commit.sha } } : { __typename: 'Commit', oid: t.commit.sha },
         }));
         return json({ data: { repository: { refs: gqlPage(all, v.after) } } });
       }
-      if (/closedByPullRequestsReferences/.test(body.query)) {
+      if (/closedByPullRequestsReferences/.test(query)) {
         const all = [...w.prs.values()].filter((p) => p.closes.includes(v.number) && p.state === 'OPEN')
           .map((p) => ({ isDraft: !!p.draft, state: p.state, authorAssociation: p.author_association }));
         return json({ data: { repository: { issue: { closedByPullRequestsReferences: gqlPage(all, v.after) } } } });
       }
-      if (/closingIssuesReferences/.test(body.query)) {
+      // The merge plan's read: the PR, the repo's default branch and its
+      // closing references. Each PR field, node field and `hasNextPage` is
+      // in the answer only when the query names it, one level deep: PR
+      // fields are read from the text before `closingIssuesReferences`,
+      // where the plan query lists them, and node fields from the rest.
+      if (/defaultBranchRef/.test(query)) {
+        const p = w.prs.get(v.number);
+        const at = query.indexOf('closingIssuesReferences');
+        const prSel = query.slice(0, at);
+        const nodeSel = query.slice(at);
+        const picked = (sel, all) => Object.fromEntries(Object.entries(all).filter(([k]) => new RegExp(`\\b${k}\\b`).test(sel)));
+        const node = (c) => {
+          const i = typeof c === 'number' && w.issues.get(c);
+          return picked(nodeSel, i
+            ? { number: c, state: i.state.toUpperCase(), repository: { nameWithOwner: 'me/one' }, labels: { nodes: [...i.labels].map((name) => ({ name })) }, body: i.body }
+            : c);
+        };
+        const conn = gqlPage(p.closes.map(node), null);
+        return json({ data: { repository: { defaultBranchRef: { name: 'dev' }, pullRequest: {
+          ...picked(prSel, {
+            body: p.body || '', baseRefName: p.base || 'dev', isDraft: !!p.draft, state: p.state, authorAssociation: p.author_association,
+          }),
+          closingIssuesReferences: { nodes: conn.nodes, ...picked(nodeSel, { pageInfo: picked(nodeSel, { hasNextPage: conn.pageInfo.hasNextPage }) }) },
+        } } } });
+      }
+      if (/closingIssuesReferences/.test(query)) {
         const p = w.prs.get(v.number);
         const all = (p ? p.closes : []).map((c) => (typeof c === 'number' ? { number: c, repository: { nameWithOwner: 'me/one' } } : c));
         return json({ data: { repository: { pullRequest: p ? { closingIssuesReferences: gqlPage(all, v.after) } : null } } });
       }
-      if (/ClosedEvent/.test(body.query)) {
+      if (/ClosedEvent/.test(query)) {
         const last = w.issues.get(v.number).events.filter((e) => e.event === 'closed').at(-1);
         const c = last && last.closer;
         const repository = { nameWithOwner: (c && c.repo) || 'me/one' };
