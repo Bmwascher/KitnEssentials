@@ -161,9 +161,6 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   };
   // The sweep's report, written after the setup section at the run's end.
   let sweepSummary = null;
-  // The forums whose Accepted tag the sweep's own reads showed: one the
-  // Accepted repair then finds without it lost the tag in between.
-  const acceptedSeen = new Set();
   // A Discord refusal of the bot, named by the request it refused, which the
   // client keeps apart from the answer's text; a scrubbed checklist error
   // also carries its kept causes' requests.
@@ -680,7 +677,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
 
   // The sweep's Accepted-only repair, on an open issue GitHub wants at
   // Triaged only. It reads no records, claims no note and moves no status.
-  async function repairAccepted(n) {
+  // `readIn` is the forum the sweep's own read of this post showed, with
+  // Accepted.
+  async function repairAccepted(n, readIn) {
     const issue = await gh.getIssue(repo, n);
     if (!eligible(issue)) return;
     if (issue.state !== 'open' || wantedStatus({ issue }, await prsFor(n)) !== STATUS.triaged) {
@@ -691,13 +690,14 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const want = wantedAccepted(issue);
     let r;
     try {
-      // An Accepted tag deleted since the sweep's own read of this forum is
-      // logged below and left to the next sweep's read; any other gap
-      // this read finds is named, the post archived or not.
+      // An Accepted tag deleted since the sweep's own read of this post's
+      // forum is left to the next sweep's read, which names it; any other
+      // gap this read finds (the post changed meanwhile to one in another
+      // forum) is named, the post archived or not.
       r = await discord.fixAccepted(threadId, want, {
         onForum: (forumId, tags) => {
           checkStatusTags(forumId, tags, STATUS_NAMES);
-          if (want && !hasTag(tags, ACCEPTED) && !acceptedSeen.has(forumId)) setupProblem(noAcceptedLine(forumId));
+          if (want && !hasTag(tags, ACCEPTED) && forumId !== readIn) setupProblem(noAcceptedLine(forumId));
         },
       });
     } catch (e) {
@@ -960,8 +960,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const checkForum = (read, issue) => {
       if (!read.tags) return;
       checkStatusTags(read.parentId, read.tags, STATUS_NAMES);
-      if (hasTag(read.tags, ACCEPTED)) acceptedSeen.add(read.parentId);
-      else if (wantedAccepted(issue)) setupProblem(noAcceptedLine(read.parentId));
+      if (wantedAccepted(issue) && !hasTag(read.tags, ACCEPTED)) setupProblem(noAcceptedLine(read.parentId));
     };
     let wrong = 0;
     let ckSpent = 0;
@@ -1162,7 +1161,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       }
       if (fix && accFix && !unread && !playerStop) {
         try {
-          await repairAccepted(n);
+          await repairAccepted(n, post.parentId);
         } catch (e) {
           errors.push(e.message);
           noteRefusal(e);

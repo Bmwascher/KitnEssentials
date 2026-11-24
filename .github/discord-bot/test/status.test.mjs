@@ -2143,3 +2143,27 @@ test('PT6: with no bot token, a repo with issues the bot filed fails with the fi
     assert.equal(w.said('717').length, 1, 'with the token, main runs the status run');
   }
 });
+
+test("PT5: the Accepted repair judges its read against the sweep's read of its own post, not another post in that forum", async () => {
+  // #18, listed first, reads forum 902 with Accepted. #17's post then
+  // changes to one in 902, which loses the tag: #17's own read showed 900,
+  // so the repair's read names the gap.
+  const w = world();
+  w.issue(18);
+  w.issue(17);
+  w.issues.get(17).labels.add('accepted');
+  w.threads.get('717').archived = false;
+  const forum = { ...structuredClone(FORUM), id: '902' };
+  w.extraForums.set('902', forum);
+  w.threads.get('718').parent_id = '902';
+  w.thread('719', { parent_id: '902' });
+  let moved = false;
+  w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/900$/, async () => {
+    if (moved) return;
+    moved = true;
+    const i = w.issues.get(17);
+    i.body = i.body.replace('discord-thread: 717', 'discord-thread: 719');
+    forum.available_tags = forum.available_tags.filter((t) => t.name !== 'Accepted');
+  }]);
+  await assert.rejects(sweepRun(w, 'fix'), /setup problems: forum 902 has no "Accepted" tag, which issues with the accepted label need/);
+});
