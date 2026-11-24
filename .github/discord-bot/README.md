@@ -14,8 +14,8 @@ moderator) presses the button, checks a short form, and the bot files the
 issue in the repo the form names. The bot then replies to the filed message
 with "tracked as KE #17", which pings its author, tags the post **Triaged**
 when it shows no status yet, renames the post to the issue's title (see The
-issue), and changes the card to "Filed as KE #17 by <name>". Moderators can
-still right-click any post or message > **Apps > Send
+issue), and changes the card to "Filed as KE #17 by @moderator" (a mention
+that pings no one). Moderators can still right-click any post or message > **Apps > Send
 to GitHub** for the same form; the reply then goes to that message, and the
 post's card is marked filed too. A greeting from an earlier version that still
 shows its own button keeps working; once the reply exists, the bot deletes it,
@@ -467,13 +467,13 @@ after; one someone deletes is made again at the next move. The player sees:
 - the new post, with the old post's name, its first message's text and
   files, under their server name and avatar with Discord's APP badge. Only
   the first message is copied, not the conversation;
-- the bot's message in it, "Moved here from <old post> by <mover>. First
+- the bot's message in it, "Moved here from <old post> by @mover. First
   posted by @player.", which pings them;
-- the old post: "This post moved to <new post> (moved by <mover>).", then
+- the old post: "This post moved to <new post> (moved by @mover).", then
   locked and archived. It stays readable.
 
 The new post gets no greeting. The old post's queue card is edited to show
-the new post, with its buttons and "Moved by <mover>"; a post with no card
+the new post, with its buttons and "Moved by @mover"; a post with no card
 yet, or whose card Discord will not edit, gets a new card for the new post.
 A `QUEUE_CHANNEL_ID` that is not a channel of this server gets no card.
 

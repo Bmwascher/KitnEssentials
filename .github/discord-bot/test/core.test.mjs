@@ -941,6 +941,18 @@ test('a moved post\'s card names the mover as text, and the moved messages link 
   assert.equal(C.MESSAGES.movedTo({ to: 'https://discord.com/channels/1/990', by: 'Mod' }), 'This post moved to https://discord.com/channels/1/990 (moved by Mod).');
 });
 
+test('a staff member shows as their mention; a name an older record saved stays text', () => {
+  assert.equal(C.staffRef({ id: '5', username: 'moddy' }), '<@5>');
+  for (const [why, by, want] of [
+    ['a mention', '<@5>', '<@5>'],
+    ['an older record\'s name', 'Mod_x', 'Mod\\_x'],
+    ['a name that only starts like a mention', '<@5> hi', '\\<@5\\> hi'],
+  ]) assert.equal(C.shownStaff(by), want, why);
+  const card = C.filedCard({ guildId: '1', postId: '700', head: 'h', key: 'KE', number: 3, by: '<@5>' });
+  assert.equal(card.content, '~~h~~\n**Filed as KE #3** by <@5>');
+  assert.deepEqual(card.allowed_mentions, { parse: [] }, 'shown, never pinged');
+});
+
 test('a forum\'s webhook is the bot\'s own when listed, else a new one named Post mover', async () => {
   for (const [why, list, made] of [
     ['its own, after another app\'s and a non-incoming one', [{ id: '60', type: 1, application_id: 'other', token: 'x' }, { id: '61', type: 2, application_id: 'app' }, { id: '62', type: 1, application_id: 'app', token: 't' }], false],

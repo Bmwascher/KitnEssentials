@@ -5,7 +5,7 @@
 // filed answers "Already tracked" instead of opening the form. Submitting the
 // form files the issue and replies to the filed message in the post.
 import {
-  STATUS, MESSAGES, PERMS, packGroups, postLines, taken, oneHop, isDiscordId, THREAD_TYPES, buildTitle, fitName, buildBody, labelsFor, cleanPostTitle, personName, titleText, statusOf,
+  STATUS, MESSAGES, PERMS, packGroups, postLines, taken, oneHop, isDiscordId, THREAD_TYPES, buildTitle, fitName, buildBody, labelsFor, cleanPostTitle, personName, staffRef, titleText, statusOf,
   guessFromTags, normClient, normType, normRepoKey, parseRepos, timedFetch,
   parseForums, parseRoleIds, parseTemplates, templateCheck, templateGaps,
   templateNote, parseCustomId, templateLabels, filedCard, cardHead, BY_RIGHT_CLICK,
@@ -761,7 +761,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
   const cfg = config(env);
   const { threadId, messageId, greetingId, cardId } = parseCustomId(interaction.data.custom_id);
   // The moderator who sent the form, as the card and the filing record name them.
-  const modName = interaction.member && interaction.member.user ? personName(interaction.member.user, interaction.member) : null;
+  const modName = interaction.member && interaction.member.user ? staffRef(interaction.member.user) : null;
   const v = modalValues(interaction.data);
   const repoKey = normRepoKey(v.repo, cfg.repos);
   const client = normClient(v.client);
@@ -1130,7 +1130,7 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
   const client = target.client || normClient(v.client);
   const guildId = interaction.guild_id;
   const link = (id) => `https://discord.com/channels/${guildId}/${id}`;
-  const mover = personName(interaction.member.user, interaction.member);
+  const mover = staffRef(interaction.member.user);
   const log = deps.log || console.error;
   const { callMs = CALL_MS, kvMs = KV_MS } = deps; // tests shorten these
   const until = (by) => timedFetch(deps.fetch, callMs, t0 + by);

@@ -681,12 +681,12 @@ export const MESSAGES = {
   // The bot's message in a moved post's new post. Only the reporter is
   // pinged (allowed_mentions); every name is text.
   movedHere: ({ from, by, reporter, left, cut }) => [
-    `Moved here from ${from} by ${discordText(by)}.`,
+    `Moved here from ${from} by ${shownStaff(by)}.`,
     `First posted by ${reporter.id ? `<@${reporter.id}>` : discordText(reporter.name)}.`,
     left ? `${left} file(s) could not be copied (too large, or not downloaded); they are on the original post.` : '',
     cut ? 'The first message was too long to copy whole; the full text is on the original post.' : '',
   ].filter(Boolean).join(' '),
-  movedTo: ({ to, by }) => `This post moved to ${to} (moved by ${discordText(by)}).`,
+  movedTo: ({ to, by }) => `This post moved to ${to} (moved by ${shownStaff(by)}).`,
 };
 
 // A fetch whose every call gives up after `ms`, and that refuses to start once
@@ -816,6 +816,12 @@ export function discordText(s) {
   return noLinks(oneLine(s).replace(/[\\*_~|>`<[\]]/g, '\\$&'));
 }
 
+// A staff member in the bot's own messages: their mention, which shows their
+// server name and pings no one (each message's allowed_mentions), or a name
+// an older filing record saved, as text.
+export const staffRef = (user) => `<@${user.id}>`;
+export const shownStaff = (by) => (/^<@\d+>$/.test(String(by)) ? by : discordText(by));
+
 // The message flag that shows no link previews: a card stays text whatever a
 // name holds.
 const SUPPRESS_EMBEDS = 1 << 2;
@@ -843,7 +849,7 @@ export function queueCard({ guildId, forumId, postId, author, client, type, star
   const by = author ? `by ${who}${author.username ? ` (\`${oneLine(author.username).replace(/`/g, '')}\`)` : ''}` : '';
   const second = [by, type, client].filter(Boolean).join(' · ');
   const lines = [cardHead(forumId, postId), second,
-    starterGone ? `Its first message was deleted: ${BY_RIGHT_CLICK}` : '', moved ? `Moved by ${discordText(moved)}` : ''].filter(Boolean);
+    starterGone ? `Its first message was deleted: ${BY_RIGHT_CLICK}` : '', moved ? `Moved by ${shownStaff(moved)}` : ''].filter(Boolean);
   return {
     content: lines.join('\n'),
     allowed_mentions: { parse: [] },
@@ -863,7 +869,7 @@ export function queueCard({ guildId, forumId, postId, author, client, type, star
 // filer, is left out when unknown.
 export function filedCard({ guildId, postId, head, key, number, by }) {
   return {
-    content: `~~${noLinks(oneLine(head))}~~\n**Filed as ${key} #${number}**${by ? ` by ${discordText(by)}` : ''}`,
+    content: `~~${noLinks(oneLine(head))}~~\n**Filed as ${key} #${number}**${by ? ` by ${shownStaff(by)}` : ''}`,
     allowed_mentions: { parse: [] },
     flags: SUPPRESS_EMBEDS,
     components: [{ type: 1, components: [openPost(guildId, postId)] }],
