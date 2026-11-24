@@ -491,9 +491,43 @@ export function planTags(current, available, statusName, { names = STATUS_NAMES,
 // while Discord counts them in UTF-16 units, so the cut normally falls
 // inside the title).
 export function fitName(s) {
-  if (s.length <= 100) return s;
-  const high = s.charCodeAt(99) >= 0xd800 && s.charCodeAt(99) <= 0xdbff;
-  return s.slice(0, high ? 99 : 100);
+  return cutUnits(s, 100);
+}
+
+// `s` cut to `max` UTF-16 units, never between the two halves of a
+// surrogate pair.
+export function cutUnits(s, max) {
+  if (s.length <= max) return s;
+  const c = s.charCodeAt(max - 1);
+  return s.slice(0, c >= 0xd800 && c <= 0xdbff ? max - 1 : max);
+}
+
+// A webhook's name as Discord takes it: one line, at most 80 units, without
+// "discord" or "clyde" in any letter case. The words are removed until none
+// is left, since one removal can join two halves into the word. A name empty
+// after that falls back to the username, then to Player.
+export function webhookName(name, username) {
+  const clean = (s) => {
+    let t = oneLine(s);
+    for (let was = null; was !== t;) {
+      was = t;
+      t = t.replace(/discord|clyde/gi, '');
+    }
+    return cutUnits(t.trim(), 80).trim();
+  };
+  return clean(name) || clean(username) || 'Player';
+}
+
+// The avatar Discord shows for a member: the server avatar, else the user's,
+// else the default one. A user id is past 2^53, so the default's index is
+// computed on BigInt; a user still on the old name system has a discriminator
+// other than "0".
+export function avatarUrl({ guildId, user, member }) {
+  const cdn = 'https://cdn.discordapp.com';
+  if (member && member.avatar) return `${cdn}/guilds/${guildId}/users/${user.id}/avatars/${member.avatar}.png`;
+  if (user.avatar) return `${cdn}/avatars/${user.id}/${user.avatar}.png`;
+  const index = user.discriminator !== '0' ? Number(user.discriminator) % 5 : Number((BigInt(user.id) >> 22n) % 6n);
+  return `${cdn}/embed/avatars/${index}.png`;
 }
 
 // A checklist thread's name, `#<n> <title>`, cut to fit.

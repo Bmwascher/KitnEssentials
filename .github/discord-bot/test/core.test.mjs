@@ -806,3 +806,28 @@ test('REPO_TAGS reads as tag name to key in any letter case, and a post\'s tags 
   assert.deepEqual(C.parseRepoTags('{"UI":"ONE","ui":"TWO","Kitn":"KE"}'), { kitn: 'KE' }, 'one name in two letter cases for two keys gives neither');
   for (const raw of ['', '  ', '{"UI":', '["UI"]', '{"UI":1}', 'null', undefined, { toString: null }]) assert.deepEqual(C.parseRepoTags(raw), {}, String(typeof raw));
 });
+
+test('a webhook name drops discord and clyde until none is left, keeps other marks, and cuts at 80 units without splitting a character', () => {
+  for (const [why, name, username, want] of [
+    ['discord removed', 'Discord Fan', 'u', 'Fan'],
+    ['Clyde removed, so the username stands in', 'Clyde', 'pat', 'pat'],
+    ['a removal that joins the word again', 'Xdisdiscordcord', 'u', 'X'],
+    ['the other word joined again', 'Ydiscclydeord', 'u', 'Y'],
+    ['@, # and : kept', '@pat #1: hi', 'u', '@pat #1: hi'],
+    ['81 units cut to 80', 'a'.repeat(81), 'u', 'a'.repeat(80)],
+    ['an emoji across unit 80 not split', `${'a'.repeat(79)}\u{1F600}`, 'u', 'a'.repeat(79)],
+    ['one line', 'two\nlines', 'u', 'two lines'],
+    ['nothing left anywhere', 'discord', 'clyde', 'Player'],
+  ]) assert.equal(C.webhookName(name, username), want, why);
+});
+
+test('an avatar address is the server avatar, else the user avatar, else the default by id or old discriminator', () => {
+  const id = String((2n ** 40n + 5n) << 22n);
+  for (const [why, user, member, want] of [
+    ['a server avatar', { id: '42', avatar: 'u1', discriminator: '0' }, { avatar: 'm1' }, 'https://cdn.discordapp.com/guilds/1/users/42/avatars/m1.png'],
+    ['a user avatar', { id: '42', avatar: 'u1', discriminator: '0' }, null, 'https://cdn.discordapp.com/avatars/42/u1.png'],
+    // A 32-bit shift of this id gives index 5.
+    ['the default for an id past 2^53', { id, avatar: null, discriminator: '0' }, {}, 'https://cdn.discordapp.com/embed/avatars/3.png'],
+    ['the default for an old discriminator', { id, avatar: null, discriminator: '1234' }, null, 'https://cdn.discordapp.com/embed/avatars/4.png'],
+  ]) assert.equal(C.avatarUrl({ guildId: '1', user, member }), want, why);
+});
