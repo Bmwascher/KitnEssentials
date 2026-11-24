@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { discordClient } from '../src/discord.js';
-import { describe, listForum } from '../scripts/trial-check.mjs';
+import { describe, listForum, parseArgs } from '../scripts/trial-check.mjs';
 import { fakeFetch, FORUM } from './fake-fetch.mjs';
 
 const FORUM_CH = { ...FORUM, name: 'bugs', type: 15, guild_id: '1' };
@@ -22,7 +22,7 @@ const world = () => fakeFetch([
   ['GET', /\/channels\/50$/, () => POST],
   ['GET', /\/channels\/900$/, () => FORUM_CH],
   ['GET', /\/guilds\/1\/threads\/active$/, () => ({ threads: [POST, { ...POST, id: '51', parent_id: '901' }] })],
-  ['GET', /\/channels\/900\/threads\/archived\/public/, () => ({ threads: [{ ...POST, id: '49', applied_tags: [], thread_metadata: { archived: true } }] })],
+  ['GET', /\/channels\/900\/threads\/archived\/public/, () => ({ threads: [{ ...POST, id: '49', applied_tags: [], thread_metadata: { archived: true } }], has_more: true })],
 ]);
 
 test('a post shows its name, forum, tag names, state and messages oldest first', async () => {
@@ -45,8 +45,17 @@ test('a post shows its name, forum, tag names, state and messages oldest first',
 test('a forum lists only its own open posts, then archived ones', async () => {
   const text = await listForum(discordClient('t', world()), '900');
   assert.equal(text, [
-    'Forum bugs (900): 1 open, 1 recently archived',
+    'Forum bugs (900): 1 open, 1 newest archived',
     '  50 "Bars vanish" [Bug, Triaged]',
     '  49 "Bars vanish" [no tags] archived',
+    '  older archived posts are not listed',
   ].join('\n'));
+});
+
+test('arguments are ids and options with their values, and anything else is refused', () => {
+  assert.deepEqual(parseArgs(['50', '--limit', '3', '51']), { ids: ['50', '51'], limit: 3, forum: null });
+  assert.deepEqual(parseArgs(['--forum', '900']), { ids: [], limit: 10, forum: '900' });
+  for (const bad of [[], ['--limt', '5'], ['--forum'], ['--limit', '2.5', '50'], ['--limit', '0', '50'], ['--forum', 'abc']]) {
+    assert.equal(parseArgs(bad), null, bad.join(' '));
+  }
 });

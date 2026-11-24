@@ -74,29 +74,46 @@ export async function listForum(api, forumId) {
   if (forum.type !== FORUM_TYPE) throw new Error(`${forumId} is not a forum`);
   const active = (await api.call('GET', `/guilds/${forum.guild_id}/threads/active`)).threads
     .filter((t) => t.parent_id === forumId);
-  const archived = (await api.call('GET', `/channels/${forumId}/threads/archived/public?limit=25`)).threads;
-  const out = [`Forum ${forum.name} (${forum.id}): ${active.length} open, ${archived.length} recently archived`];
-  for (const t of [...active, ...archived]) {
+  const page = await api.call('GET', `/channels/${forumId}/threads/archived/public?limit=50`);
+  const out = [`Forum ${forum.name} (${forum.id}): ${active.length} open, ${page.threads.length} newest archived`];
+  for (const t of [...active, ...page.threads]) {
     out.push(`  ${t.id} "${t.name}" [${tagNames(t.applied_tags, forum).join(', ') || 'no tags'}]${t.thread_metadata.archived ? ' archived' : ''}`);
   }
+  if (page.has_more) out.push('  older archived posts are not listed');
   return out.join('\n');
 }
 
+const USAGE = 'Usage: node scripts/trial-check.mjs <id>... [--limit 1-100] | --forum <forum id>';
+const isId = (a) => /^\d+$/.test(a || '');
+
+// Every argument must be an id or an option with its value, so a typo is an
+// error instead of a request for the wrong channel.
+export function parseArgs(argv) {
+  const out = { ids: [], limit: 10, forum: null };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--limit' && isId(argv[i + 1]) && +argv[i + 1] >= 1 && +argv[i + 1] <= 100) out.limit = +argv[++i];
+    else if (a === '--forum' && isId(argv[i + 1])) out.forum = argv[++i];
+    else if (isId(a)) out.ids.push(a);
+    else return null;
+  }
+  return out.forum || out.ids.length ? out : null;
+}
+
 async function main(argv) {
+  const args = parseArgs(argv);
+  if (!args) {
+    console.error(USAGE);
+    process.exit(1);
+  }
   const token = readToken();
   if (!token) {
     console.error('No usable token: set TRIAL_READER_TOKEN or save the token alone, on one line, in ~/.discord-trial-reader/token');
     process.exit(1);
   }
   const api = discordClient(token);
-  const li = argv.indexOf('--limit');
-  const limit = li >= 0 ? Math.min(100, Math.max(1, Number(argv[li + 1]) || 10)) : 10;
-  const fi = argv.indexOf('--forum');
-  const values = new Set([li, fi].filter((i) => i >= 0).map((i) => i + 1));
-  const ids = argv.filter((a, i) => /^\d+$/.test(a) && !values.has(i));
-  if (fi >= 0) console.log(await listForum(api, argv[fi + 1]));
-  for (const id of ids) console.log(`${await describe(api, id, limit)}\n`);
-  if (fi < 0 && !ids.length) console.error('Usage: node scripts/trial-check.mjs <id>... [--limit N] | --forum <forum id>');
+  if (args.forum) console.log(await listForum(api, args.forum));
+  for (const id of args.ids) console.log(`${await describe(api, id, args.limit)}\n`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {

@@ -1121,8 +1121,10 @@ messages (a text channel id prints its last messages; `--limit N`, default
 10); `--forum <id>` lists a forum's posts with their tags. It only reads.
 Give it its own bot, never the trial bot: a new application whose bot has
 the **Message Content** intent on and is invited with View Channels and Read
-Message History only. Its token goes in `TRIAL_READER_TOKEN` or in the file
-`~/.discord-trial-reader/token`, outside every repo.
+Message History only. It also gets whatever `@everyone` may do in each
+channel, so use it on a test server only. Its token goes in
+`TRIAL_READER_TOKEN` or in the file `~/.discord-trial-reader/token`, alone on
+one line, outside every repo.
 
 ## Stage 3: live
 
