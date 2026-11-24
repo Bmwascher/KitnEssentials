@@ -26,7 +26,7 @@ function readToken() {
 }
 
 const tagNames = (ids, forum) => (ids || [])
-  .map((id) => ((forum && forum.available_tags) || []).find((t) => t.id === id)?.name || `?${id}`);
+  .map((id) => forum.available_tags.find((t) => t.id === id)?.name || `?${id}`);
 
 const oneLine = (s, max = 300) => {
   const t = String(s || '').replace(/\s+/g, ' ').trim();
@@ -34,12 +34,12 @@ const oneLine = (s, max = 300) => {
 };
 
 function messageLines(m) {
-  const who = `${m.author?.username || '?'}${m.author?.bot ? ' [bot]' : ''}`;
-  const out = [`  ${m.timestamp?.slice(0, 19).replace('T', ' ')} ${who}${m.edited_timestamp ? ' (edited)' : ''}: ${oneLine(m.content)}`];
+  const who = `${m.author.username}${m.author.bot ? ' [bot]' : ''}`;
+  const out = [`  ${m.timestamp.slice(0, 19).replace('T', ' ')} ${who}${m.edited_timestamp ? ' (edited)' : ''}: ${oneLine(m.content)}`];
   for (const e of m.embeds || []) {
     out.push(`    embed: ${oneLine([e.title, e.description].filter(Boolean).join(' / '))}`);
   }
-  const buttons = (m.components || []).flatMap((row) => row.components || [])
+  const buttons = (m.components || []).flatMap((row) => row.components)
     .map((c) => `${c.label || c.custom_id || '?'}${c.disabled ? ' (disabled)' : ''}`);
   if (buttons.length) out.push(`    buttons: ${buttons.join(', ')}`);
   return out;
@@ -72,7 +72,7 @@ export async function listForum(api, forumId) {
   const archived = (await api.call('GET', `/channels/${forumId}/threads/archived/public?limit=25`)).threads;
   const out = [`Forum ${forum.name} (${forum.id}): ${active.length} open, ${archived.length} recently archived`];
   for (const t of [...active, ...archived]) {
-    out.push(`  ${t.id} "${t.name}" [${tagNames(t.applied_tags, forum).join(', ') || 'no tags'}]${t.thread_metadata?.archived ? ' archived' : ''}`);
+    out.push(`  ${t.id} "${t.name}" [${tagNames(t.applied_tags, forum).join(', ') || 'no tags'}]${t.thread_metadata.archived ? ' archived' : ''}`);
   }
   return out.join('\n');
 }
