@@ -100,9 +100,11 @@ export function wantedStatus(st, prs) {
   return working ? STATUS.inProgress : STATUS.triaged;
 }
 
+// A scheduled run's payload names no repository; Actions sets GITHUB_REPOSITORY.
+const repoOf = (payload, env) => (payload.repository && payload.repository.full_name) || env.GITHUB_REPOSITORY;
+
 export async function run({ eventName, payload, env, fetchImpl = fetch, log = console.log, now = Date.now }) {
-  // A scheduled run's payload names no repository; Actions sets GITHUB_REPOSITORY.
-  const repo = (payload.repository && payload.repository.full_name) || env.GITHUB_REPOSITORY;
+  const repo = repoOf(payload, env);
   const [owner, name] = repo.split('/');
   // Every run needs the pattern, and a repository variable can hold anything:
   // one that does not compile is a setup problem, reported before any call.
@@ -1249,14 +1251,32 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   return done;
 }
 
+// With no bot token, a repo with no issue the bot filed is skipped, so the
+// workflow can be merged before the bot is set up; a labeled PR or a
+// hand-labeled issue does not count. A repo with one fails, with the fix in
+// the job summary.
+export async function main({ eventName, payload, env, fetchImpl = fetch, log = console.log }) {
+  if (env.DISCORD_BOT_TOKEN) return run({ eventName, payload, env, fetchImpl, log });
+  let line = null;
+  try {
+    // issuesWithLabel leaves PRs out; `eligible` needs the bot's marker too.
+    const labeled = await githubClient(env.GITHUB_TOKEN, timedFetch(fetchImpl, CALL_MS)).issuesWithLabel(repoOf(payload, env), LABELS.fromDiscord);
+    if (labeled.some(eligible)) line = 'DISCORD_BOT_TOKEN is not set, but this repo has issues the bot filed: add the repository secret DISCORD_BOT_TOKEN';
+  } catch (e) {
+    line = `DISCORD_BOT_TOKEN is not set, and the bot's issues could not be checked (${quoted(e.message, 200)}): add the repository secret DISCORD_BOT_TOKEN, or re-run this run`;
+  }
+  if (!line) {
+    log('DISCORD_BOT_TOKEN is not set: skipping Discord updates');
+    return [];
+  }
+  writeSetup(env.GITHUB_STEP_SUMMARY, [line]);
+  throw new Error(`setup problems: ${line}`);
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const payload = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
-  if (!process.env.DISCORD_BOT_TOKEN) {
-    console.log('DISCORD_BOT_TOKEN is not set: skipping Discord updates');
-  } else {
-    run({ eventName: process.env.GITHUB_EVENT_NAME, payload, env: process.env }).catch((e) => {
-      console.error(e);
-      process.exit(1);
-    });
-  }
+  main({ eventName: process.env.GITHUB_EVENT_NAME, payload, env: process.env }).catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
 }

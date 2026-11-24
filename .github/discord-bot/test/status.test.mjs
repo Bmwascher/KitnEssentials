@@ -1,6 +1,6 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { run } from '../status/status.mjs';
+import { run, main } from '../status/status.mjs';
 import { world, shippedIn } from './fake-world.mjs';
 import { FORUM } from './fake-fetch.mjs';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -2093,4 +2093,47 @@ test('PT5: the Accepted repair names a forum without Accepted that the sweep did
     i.body = i.body.replace('discord-thread: 717', 'discord-thread: 718');
   }]);
   await assert.rejects(sweepRun(w, 'fix'), /setup problems: forum 902 has no "Accepted" tag, which issues with the accepted label need/);
+});
+
+test('PT6: with no bot token, a repo with issues the bot filed fails with the fix in the summary; one without skips green; a failed list fails', async () => {
+  const noToken = { ...env, DISCORD_BOT_TOKEN: '' };
+  const payload = { repository, action: 'closed', issue: { number: 17 } };
+  {
+    const w = world();
+    w.issue(17);
+    const summary = tmpSummary();
+    await assert.rejects(main({ eventName: 'issues', payload, env: { ...noToken, GITHUB_STEP_SUMMARY: summary }, fetchImpl: w.fetch, log: quiet }),
+      /^Error: setup problems: DISCORD_BOT_TOKEN is not set, but this repo has issues the bot filed: add the repository secret DISCORD_BOT_TOKEN$/);
+    assert.deepEqual(setupBullets(summary), ['- DISCORD_BOT_TOKEN is not set, but this repo has issues the bot filed: add the repository secret DISCORD_BOT_TOKEN']);
+    assert.deepEqual(w.calls.filter((c) => /discord\.com/.test(c.url)), [], 'no Discord call, of any method');
+  }
+  for (const [why, setup] of [
+    ['no labeled item', () => {}],
+    ['a labeled PR with the marker', (w) => w.issue(5, { pull_request: { url: 'https://api.github.com/repos/me/one/pulls/5' } })],
+    ['a hand-labeled issue without the marker', (w) => w.issue(17, { body: 'filed on GitHub' })],
+  ]) {
+    const w = world();
+    setup(w);
+    const out = [];
+    assert.deepEqual(await main({ eventName: 'issues', payload, env: noToken, fetchImpl: w.fetch, log: (s) => out.push(s) }), [], why);
+    assert.deepEqual(out, ['DISCORD_BOT_TOKEN is not set: skipping Discord updates'], why);
+  }
+  {
+    const w = world();
+    w.fail.push(['GET', /\/repos\/me\/one\/issues\?/, new Response('{}', { status: 500 }), 1]);
+    const summary = tmpSummary();
+    const line = /^DISCORD_BOT_TOKEN is not set, and the bot's issues could not be checked \(`GitHub GET \/repos\/me\/one\/issues\?[^`]* -> 500 \{\}`\): add the repository secret DISCORD_BOT_TOKEN, or re-run this run$/;
+    await assert.rejects(main({ eventName: 'issues', payload, env: { ...noToken, GITHUB_STEP_SUMMARY: summary }, fetchImpl: w.fetch, log: quiet }),
+      (e) => line.test(e.message.replace(/^setup problems: /, '')));
+    const bullets = setupBullets(summary);
+    assert.equal(bullets.length, 1);
+    assert.match(bullets[0].replace(/^- /, ''), line);
+  }
+  {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    await main({ eventName: 'issues', payload, env, fetchImpl: w.fetch, log: quiet });
+    assert.equal(w.said('717').length, 1, 'with the token, main runs the status run');
+  }
 });
