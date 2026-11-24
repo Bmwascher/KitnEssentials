@@ -317,13 +317,20 @@ const nameText = (s) => plain(oneLine(s).replace(/[\\`*_~|[\]]/g, '\\$&').replac
   .replace(/\b(GH)-(?=\d)/gi, `$1-${ZWSP}`).replace(/[0-9a-f]{6}(?=[0-9a-f])/gi, `$&${ZWSP}`)
   .replace(/:\/\//g, `:${ZWSP}//`).replace(/\b(www)\./gi, `$1${ZWSP}.`));
 
-// A username as typed: a code span longer than any backtick run in it, and
-// \| for a pipe, which a table cell needs even inside code.
+// A code span no backtick inside `s` can end early, so the text shows as
+// written: never a link, a mention or Markdown. Markdown needs a space
+// between a fence and a backtick, and drops one space from each end of a
+// span that starts and ends with one: the padding keeps both as written.
+export function inlineCode(s) {
+  const fence = '`'.repeat(longestRun([s]) + 1);
+  const pad = /^`|`$|^ .* $/.test(s) ? ' ' : '';
+  return `${fence}${pad}${s}${pad}${fence}`;
+}
+
+// A username as typed, with \| for a pipe, which a table cell needs even
+// inside code.
 function codeSpan(s) {
-  const t = oneLine(s).replace(/\|/g, '\\|');
-  const fence = '`'.repeat(longestRun([t]) + 1);
-  const pad = /^`|`$/.test(t) ? ' ' : '';
-  return `${fence}${pad}${t}${pad}${fence}`;
+  return inlineCode(oneLine(s).replace(/\|/g, '\\|'));
 }
 
 // A person as the issue shows them: the name linked to the Discord profile,

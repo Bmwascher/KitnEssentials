@@ -807,3 +807,11 @@ test('setStatus and fixAccepted report each forum read to onForum, as that read 
     assert.deepEqual(seen, seenWant.map((n) => ['900', n]), why);
   }
 });
+
+import { inlineCode } from '../src/core.js';
+
+test('inlineCode shows its text as written: no backtick inside ends the span, and spaces at both ends stay', () => {
+  for (const [s, out] of [['fix', '`fix`'], ['a`b', '``a`b``'], ['`a', '`` `a ``'], [' fix ', '`  fix  `'], [' fix', '` fix`']]) {
+    assert.equal(inlineCode(s), out, JSON.stringify(s));
+  }
+});
