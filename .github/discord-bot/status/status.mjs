@@ -814,6 +814,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     ? checklistRunner({
       gh, discord, repo, forumId: checklistForum, wanted, records: recordsOf, botIssue, log, now, settleTries: SETTLE_TRIES, owedMs: OWED_MS,
       noteRefusal: checklistOnly ? () => {} : noteRefusal,
+      setupProblem: checklistOnly ? () => {} : setupProblem,
+      sweeping,
     })
     : null;
 
@@ -1129,6 +1131,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         }
       }
       if (ck.unread) noteRefusal(ck.unread);
+      if (ck.seen) checklist.checkSeen(ck.seen);
       // An Accepted line alone never starts the status repair: its quiet move
       // could leave a run that is about to tell the player nothing to send.
       const accFix = accRepairable && !owed.length;

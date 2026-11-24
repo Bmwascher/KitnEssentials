@@ -219,13 +219,17 @@ export function discordClient(token, fetchImpl = fetch) {
     // changed nothing. Any other failure may have opened the thread before
     // its answer was lost, so the re-archive is still sent; when it cannot
     // be made, the error is thrown marked `rearchive`.
-    async setTags(threadId, forumId, plan, { open = false } = {}) {
+    // `onForum(forumId, tags)` sees the forum read once the thread is
+    // confirmed in that forum, before any write can fail: a forum the thread
+    // is not in has nothing to fix for it.
+    async setTags(threadId, forumId, plan, { open = false, onForum = () => {} } = {}) {
       const path = `/channels/${threadId}`;
       const forum = await call('GET', `/channels/${forumId}`);
       const thread = await call('GET', path);
       if (String(thread.parent_id) !== String(forumId)) {
         throw new Error(`staff checklist thread is in channel ${thread.parent_id}, not the checklist forum`);
       }
+      seeForum(onForum, String(forum.id), forum);
       const applied = thread.applied_tags || [];
       const p = plan(applied, forum.available_tags || []);
       const archived = archivedOf(thread);

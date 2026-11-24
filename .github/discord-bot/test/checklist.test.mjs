@@ -1261,7 +1261,8 @@ test('CH8: report mode lists each checklist problem with its link and what staff
   v.record(21, checklistBody({ state: 'pending', guildId: '', since: v.clock, issueUrl: 'https://github.com/me/one/issues/21' })
     .replace('discord-checklist: pending', `discord-checklist: ${u21.id}`));
   const vout = [];
-  await sweep(v, 'report', vout);
+  await assert.rejects(sweep(v, 'report', vout),
+    (e) => e.message.includes('checklist forum 950 has no "Won\'t fix" tag: add it') && e.message.includes('checklist forum 950 has no "Accepted" tag, which'));
   for (const [n, re] of [
     [17, new RegExp(`checklist forum has no Accepted tag \\(${discordLink(u17.id)}\\)`)],
     [18, new RegExp(`checklist forum has no "Won't fix" tag \\(${discordLink(u18.id)}\\): add it, spelled as the README lists it`)],
@@ -1557,5 +1558,77 @@ test('CH9: a refused checklist call in a PR run or a sweep is named as a setup p
     const out = [];
     await assert.rejects(job(w, 'closed', { out }), (e) => /checklist thread not updated for #17/.test(e.message) && !/setup problems/.test(e.message), 'the checklist job');
     assert.deepEqual(logged(out), [], 'the checklist job logs no setup line');
+  }
+});
+
+test('CH10: a tag the checklist forum lacks is a setup problem in a status run and a sweep, whatever fails after the forum read; the checklist job fails as before', async () => {
+  const noTagLine = (name) => `checklist forum 950 has no "${name}" tag: add it, spelled as the README lists it`;
+  const noAccepted = 'checklist forum 950 has no "Accepted" tag, which issues with the accepted label need: add it, spelled as the README lists it';
+  const notUpdated = 'checklist thread(s) not updated for #17';
+  const drop = (w, ...names) => { w.ckForum.available_tags = w.ckForum.available_tags.filter((x) => !names.includes(x.name)); };
+  const accept = (w) => w.issues.get(17).labels.add('accepted');
+  for (const [why, setup, event, lines, after = () => {}] of [
+    // Shipped, which the thread does not need, goes too: a status run names
+    // only the tag the thread needs.
+    ["a PR run's mirror, its status tag missing", (w) => drop(w, 'In progress', 'Shipped'), (w) => pr(w, 5), [noTagLine('In progress'), notUpdated]],
+    ["a PR run's mirror, Accepted missing for an accepted issue", (w) => { accept(w); drop(w, 'Accepted'); }, (w) => pr(w, 5), [noAccepted]],
+    ["the thread's write fails", (w, t) => { accept(w); drop(w, 'Accepted'); failPatch(w, t.id, (b) => !!b.applied_tags); }, (w) => pr(w, 5), [noAccepted, notUpdated]],
+    ['the thread is deleted before its write (404)', (w, t) => { accept(w); drop(w, 'Accepted'); failPatch(w, t.id, (b) => !!b.applied_tags, 404); },
+      (w) => pr(w, 5), [noAccepted, notUpdated]],
+    // A closed issue a PR names is still taken up for its checklist mirror.
+    ["the archive fails before the missing tag's own error", (w, t) => { w.close(17, 'not_planned'); drop(w, "Won't fix"); failPatch(w, t.id, (b) => b.archived === true); },
+      (w) => pr(w, 5), [noTagLine("Won't fix"), notUpdated],
+      (w, t) => assert.ok(w.find('PATCH', threadUrl(t.id)).some((c) => c.body.archived === true), 'the archive was tried')],
+    ['a report sweep: every status tag the forum lacks, not only the one wanted, and Accepted', (w) => { accept(w); drop(w, 'Shipped', 'Accepted'); }, (w) => sweep(w, 'report'),
+      [noTagLine('Shipped'), noAccepted]],
+  ]) {
+    const w = world();
+    w.issue(17);
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    const t = seed(w, 17, { applied_tags: ['c-tri'] });
+    setup(w, t);
+    // Every expected line, and no other tag line.
+    const tagLines = (s) => (s.match(/ has no "/g) || []).length;
+    await assert.rejects(event(w), (e) => /setup problems: /.test(e.message) && lines.every((l) => e.message.includes(l))
+      && tagLines(e.message) === lines.filter((l) => tagLines(l)).length, why);
+    after(w, t);
+  }
+  {
+    // A tag gone between the sweep's read of the checklist forum and its
+    // repair: the repair, inside the sweep's timed checklist work, names
+    // nothing, and the next sweep's read names it (CC2).
+    const w = world();
+    w.issue(17);
+    w.close(17, 'not_planned');
+    seed(w, 17, { applied_tags: ['c-tri'] });
+    let reads = 0;
+    w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/950$/, async () => { if (++reads === 2) drop(w, 'Shipped'); }]);
+    const out = [];
+    await sweep(w, 'fix', out);
+    assert.deepEqual(out.filter((l) => l.startsWith('setup problem: ')), [], "the sweep's repair names nothing");
+  }
+  // CHECKLIST_FORUM_ID naming a channel the thread is not in gets no tag
+  // line: the thread check names the wrong channel, as today.
+  for (const [why, answer] of [
+    ['a text channel', { id: '960', type: 0 }],
+    ['another forum, without the status tag and Accepted', { id: '960', type: 15, available_tags: [{ id: 'n-tri', name: 'Triaged' }] }],
+  ]) {
+    const w = world();
+    w.issue(17);
+    accept(w);
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    seed(w, 17, { applied_tags: ['c-tri'] });
+    w.extraForums.set('960', answer);
+    await assert.rejects(go(w, 'pull_request_target', { action: 'opened', pull_request: { number: 5 } }, { CHECKLIST_FORUM_ID: '960' }),
+      (e) => e.message.includes(notUpdated) && !/has no "/.test(e.message), why);
+  }
+  {
+    const w = world();
+    w.issue(17);
+    seed(w, 17, { applied_tags: ['c-tri'] });
+    w.ckForum.available_tags = w.ckForum.available_tags.filter((x) => x.name !== 'Triaged');
+    const out = [];
+    await assert.rejects(job(w, 'reopened', { out }), /^Error: checklist thread not updated for #17: checklist forum has no "Triaged" tag$/);
+    assert.deepEqual(out.filter((l) => l.startsWith('setup problem: ')), [], 'the checklist job collects no setup line');
   }
 });
