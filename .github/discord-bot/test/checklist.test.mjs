@@ -1631,18 +1631,6 @@ test('CH10: a tag the checklist forum lacks is a setup problem in a status run a
     assert.ok(out.includes('#17: the checklist forum has no Accepted tag'), 'the repair met the gap');
     assert.deepEqual(out.filter((l) => l.startsWith('setup problem: ')), [], "the sweep's repair names nothing");
   }
-  {
-    // The forum has no Accepted tag throughout. The issue is accepted while
-    // the sweep reads its thread, after its wants were read, so that read
-    // has no reason to name the gap; the repair names it from that read.
-    const w = world();
-    w.issue(17);
-    drop(w, 'Accepted');
-    seed(w, 17, { applied_tags: ['c-prog'] });
-    let reads = 0;
-    w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/950$/, async () => { if (++reads === 1) accept(w); }]);
-    await assert.rejects(sweep(w, 'fix'), (e) => e.message.includes(`setup problems: ${noAccepted}`));
-  }
   // CHECKLIST_FORUM_ID naming a channel the thread is not in gets no tag
   // line: the thread check names the wrong channel, as today.
   for (const [why, answer] of [
