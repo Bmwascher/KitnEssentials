@@ -1009,6 +1009,10 @@ Accepted on purpose; each line says how you would notice it.
   the issue loses its `from-discord` label in that minute and the post is
   sent again. A move of such a post is refused while the bot's "now
   tracked" reply is among the post's last 100 messages; a send is not.
+- With no `STATE` namespace bound, Send to GitHub knows a moved post only
+  from Discord, so two cases are filed: an old post someone unlocked whose
+  note "This post moved to ..." is no longer among its last 100 messages,
+  and a reply in the bot's copy once the copy's first message was deleted.
 - With no saved filing record, the bot searches every configured repo twice
   before filing. An issue moved between two configured repos while it
   searches can still be missed, and a second issue made. So can one in a repo

@@ -1340,6 +1340,17 @@ test('filing a moved post names its player, ends with the copy line and pings th
   assert.equal(unboundReply.find('POST', /\/issues$/).length, 0);
 });
 
+test('with no STATE bound, a player\'s message with the "now tracked" text costs a filing no read of the bot\'s user', async () => {
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /\/channels\/700\/messages\?limit=100$/, () => [{ id: 'q1', author: { id: '42' }, content: MESSAGES.tracked('ONE', 40) }]],
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 18, html_url: 'u/18' })],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(ctx.jobs), [{ created: 18, notes: [] }]);
+  assert.equal(f.find('GET', /\/users\/@me$/).length, 0);
+});
+
 test('a message deleted before its filing files nothing and says how to file the post', async () => {
   const f = fakeFetch(discordRoutes(githubRoutes([], [
     ['GET', /\/channels\/700\/messages\/800$/, () => new Response('{"message":"Unknown Message"}', { status: 404 })],
@@ -2112,23 +2123,45 @@ test('files over 20 MiB, past the 24 MiB left, or that fail to download stay beh
   assert.equal(blank.f.find('POST', /\?wait=true$/)[0].body.payload.content, '(The first message had nothing the bot can copy.)');
 });
 
-test('the downloads end a call\'s time before the prep phase, so the first message is read again and the post moves', async () => {
+test('with the default call time, a move whose reads before the files end at 4.1 s still copies them', async () => {
   const clock = shiftClock();
   try {
     clock.at(0);
-    // With a call's time of 2 s the downloads end at 10 s. The first ends at
-    // 10.5 s; the second would end at 12.1 s, past the prep phase.
+    const w = moveWorld((s) => {
+      s.first.attachments = [{ id: 'a1', filename: 'one.png', size: 5, url: 'https://cdn.example/a1' }];
+      s.files['https://cdn.example/a1'] = new Response('1');
+      s.hooks = () => { clock.at(4100); return [{ id: '61', type: 1, application_id: 'app', token: 'wtok' }]; };
+    });
+    const { told } = await runMove(w);
+    assert.equal(told, MOVED);
+    assert.deepEqual(w.f.find('POST', /\?wait=true$/)[0].body.files, ['one.png']);
+  } finally { clock.restore(); }
+});
+
+test('a download still running when the downloads end is stopped, so the first message is read again and the post moves with the files done before it', async () => {
+  const clock = shiftClock();
+  try {
+    clock.at(0);
+    // The downloads end at 10 s. The first ends at 9.5 s; the second never
+    // answers, so only its signal, at 10 s, ends it.
     const w = moveWorld((s) => {
       s.first.attachments = [
         { id: 'a1', filename: 'one.png', size: 5, url: 'https://cdn.example/a1' },
         { id: 'a2', filename: 'two.png', size: 5, url: 'https://cdn.example/a2' },
       ];
-      s.files['https://cdn.example/a1'] = () => { clock.at(10500); return new Response('1'); };
-      s.files['https://cdn.example/a2'] = () => { clock.at(12100); return new Response('2'); };
+      s.files['https://cdn.example/a1'] = () => { clock.at(9500); return new Response('1'); };
     });
-    const { told } = await runMove(w, moveSubmit(), {}, { callMs: 2000 });
+    let started = 0;
+    let stopped = false;
+    const fetch = (url, init = {}) => {
+      if (!/cdn\.example\/a2$/.test(url)) return w.f(url, init);
+      started++;
+      return stall(init, () => { stopped = true; });
+    };
+    const { told } = await runMove(w, moveSubmit(), {}, { fetch });
     assert.equal(told, MOVED);
-    assert.equal(w.f.find('GET', /cdn\.example\/a2$/).length, 0, 'the second download is not started');
+    assert.equal(started, 1, 'the second download is started');
+    assert.ok(stopped, 'and stopped by its signal');
     assert.deepEqual(w.f.find('POST', /\?wait=true$/)[0].body.files, ['one.png']);
   } finally { clock.restore(); }
 });

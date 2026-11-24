@@ -66,6 +66,8 @@ const TEMPLATE_MS = 2000;
 const MOVE_PREP_BY_MS = 12000;
 const MOVE_CREATE_BY_MS = 18000;
 const MOVE_REST_BY_MS = 23000;
+// The downloads end this long before the prep phase: the re-read's time.
+const MOVE_REREAD_MS = 2000;
 // Discord takes 20 MiB per file and 25 MiB per request; 1 MiB of the request
 // is left for the message and the multipart framing.
 const COPY_FILE_MAX = 20 * 1024 * 1024;
@@ -499,18 +501,22 @@ const damagedFix = (key) => (/^movedfrom:/.test(key)
     : 'A bot admin can delete that KV key');
 
 // This bot's own messages among a post's last 100 that say what became of
-// it: `away`, the new post's link in its move note, and `receipt`, its "now
-// tracked" reply, each null when absent. The move posts its note before it
-// locks the post, so the note holds while KV does not show the movedto:
-// record (not yet, or never, when its save failed); the reply says the post
-// was filed when neither its filing record nor the from-discord label finds
-// its issue. Another bot's text proves nothing.
-async function ownNotes(discord, threadId) {
+// it: `away`, the new post's link in its move note, and, with `receipts`,
+// `receipt`, its "now tracked" reply; each null when absent. The bot's user
+// is read only when a message starts as one asked for: the filing asks for
+// the note alone, so a player's message with the reply's text adds no call
+// that could fail it. The move posts its note before it locks the post, so
+// the note holds while KV does not show the movedto: record (not yet, or
+// never, when its save failed); the reply says the post was filed when
+// neither its filing record nor the from-discord label finds its issue.
+// Another bot's text proves nothing.
+async function ownNotes(discord, threadId, { receipts = false } = {}) {
+  const isAway = (m) => String(m.content || '').startsWith(AWAY_START);
   const said = (await discord.call('GET', `/channels/${threadId}/messages?limit=100`))
-    .filter((m) => String(m.content || '').startsWith(AWAY_START) || isReceipt(m));
+    .filter((m) => isAway(m) || (receipts && isReceipt(m)));
   const me = said.length ? (await discord.me()).id : null;
   const mine = said.filter((m) => m.author.id === me);
-  const note = mine.find((m) => String(m.content || '').startsWith(AWAY_START));
+  const note = mine.find(isAway);
   return { away: note ? note.content.slice(AWAY_START.length).split(' ')[0] : null, receipt: mine.find(isReceipt) || null };
 }
 
@@ -1178,7 +1184,7 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     // unlike KV's records: a move repeated within KV's minute stops here. The
     // bot's note there says where it went when its record was not saved. An
     // unlocked post's note refuses nothing: someone unlocked it to move it.
-    const own = await ownNotes(discord, oldId);
+    const own = await ownNotes(discord, oldId, { receipts: true });
     if (old.thread_metadata.locked && own.away) return await refuse(`this post was already moved to ${own.away}`, 'moved');
     // A filed post is refused before a locked one's advice: unlocking it
     // would not let it move.
@@ -1263,11 +1269,11 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     }
 
     // Each file in order that fits Discord's limits is downloaded; the rest,
-    // and any whose download fails or cannot start in time, stay on the old
-    // post. The downloads end a call's time before the prep phase, so a slow
-    // file cannot take the time of the first message's read below, which the
-    // create needs.
-    const download = timedFetch(deps.fetch, callMs, t0 + MOVE_PREP_BY_MS - callMs);
+    // and any whose download fails, is stopped or cannot start in time, stay
+    // on the old post. The downloads end MOVE_REREAD_MS before the prep
+    // phase, so a slow file cannot take the time of the first message's read
+    // below, which the create needs.
+    const download = timedFetch(deps.fetch, callMs, t0 + MOVE_PREP_BY_MS - MOVE_REREAD_MS);
     const files = [];
     let room = COPY_MAX_BYTES;
     for (const a of first.attachments) {
