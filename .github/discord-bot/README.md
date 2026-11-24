@@ -160,6 +160,8 @@ Two halves, no always-on server:
   Without the `DISCORD_BOT_TOKEN` secret both do nothing while the repo has no
   issue the bot filed, so they are safe to merge early; once it has one, the
   status job fails until the secret is added, and the merge plan still skips.
+  A status run whose issues could not be listed to check fails too, saying
+  so; re-run it.
 
 None of this ships to players: `.github` is excluded from sync and builds.
 
@@ -300,7 +302,8 @@ below).
   Discord refusing the bot; a bad `RELEASE_TAG_PATTERN` or `SWEEP_MODE`; a
   `CHECKLIST_FORUM_ID` that is not a plain channel id, digits only, which
   also stops all staff checklist work in that run; no
-  `DISCORD_BOT_TOKEN` in a repo with issues the bot filed) finishes every
+  `DISCORD_BOT_TOKEN` in a repo with issues the bot filed, or whose issues
+  could not be listed to check) finishes every
   other issue, then fails (a needs-info event stops at its first failure,
   as it always has), with each problem and its fix under "Discord
   status: setup problems" in the job summary, for example
