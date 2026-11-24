@@ -1647,6 +1647,18 @@ test('CH10: a tag the checklist forum lacks is a setup problem in a status run a
       (e) => e.message.includes(notUpdated) && !/has no "/.test(e.message), why);
   }
   {
+    // A media channel carries tags too, but is no forum: its thread is kept
+    // in step as on main, and no read of it names a tag.
+    const w = world();
+    w.issue(17);
+    accept(w);
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    const t = seed(w, 17, { applied_tags: ['c-tri'], parent_id: '960' });
+    w.extraForums.set('960', { ...structuredClone(w.ckForum), id: '960', type: 16 });
+    await go(w, 'pull_request_target', { action: 'opened', pull_request: { number: 5 } }, { CHECKLIST_FORUM_ID: '960' });
+    assert.deepEqual(ckName(w, t).sort(), ['Accepted', 'In progress']);
+  }
+  {
     const w = world();
     w.issue(17);
     seed(w, 17, { applied_tags: ['c-tri'] });
