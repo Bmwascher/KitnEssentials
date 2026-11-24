@@ -71,7 +71,7 @@ test('body: a table names both people, then the quoted report, with the hidden l
     '', '<!-- discord-message: 800 -->', '<!-- discord-thread: 2 reporter: 42 -->',
   ].join('\n'));
   assert.deepEqual(C.parseMarker(body), { threadId: '2', reporterId: '42' });
-  assert.equal(C.parseFiledMessage(body), '800');
+  assert.deepEqual(C.parseFiledMessage(body), { id: '800', copy: false });
   assert.equal(C.parseMarker('no marker'), null);
   // Only the bot's footer line, just before the thread marker, counts: an
   // older issue may quote such a line in its report.
@@ -335,7 +335,11 @@ test('button and form ids parse only when every id part is digits', () => {
   for (const [id, greetingId, cardId] of [
     ['gh:700:800', '', ''], ['gh:700:800:950', '950', ''], ['gh:700:800:950:96', '950', '96'], ['gh:700:800:0:96', '', '96'],
   ]) assert.deepEqual(C.parseCustomId(id), { kind: 'form', threadId: '700', messageId: '800', greetingId, cardId }, id);
-  for (const bad of ['send:7a', 'send:', 'gh:700', 'gh:700:800:950:1:2', 'gh:700:800:0:96x', 'gh:7/0:800', 'xx:700:800', '', undefined]) {
+  assert.deepEqual(C.parseCustomId('move:700'), { kind: 'move', threadId: '700' });
+  assert.deepEqual(C.parseCustomId('mv:700'), { kind: 'moveForm', threadId: '700', cardId: '' });
+  assert.deepEqual(C.parseCustomId('mv:700:96'), { kind: 'moveForm', threadId: '700', cardId: '96' });
+  for (const bad of ['send:7a', 'send:', 'gh:700', 'gh:700:800:950:1:2', 'gh:700:800:0:96x', 'gh:7/0:800', 'xx:700:800', '', undefined,
+    'move:7a', 'move:', 'mv:', 'mv:700:', 'mv:700:96:1', 'mv:7/0']) {
     assert.equal(C.parseCustomId(bad), null, String(bad));
   }
 });
@@ -347,7 +351,7 @@ test('a queue card names the post and its poster by Discord mention, pinging no 
   assert.equal(card.content, '**New post in <#900>:** <#700>\nby <@42> (`kira_99`) · Bug · Retail');
   assert.deepEqual([card.allowed_mentions, card.flags], [{ parse: [] }, 4], 'no ping and no link preview');
   assert.deepEqual(card.components[0].components.map((b) => [b.label, b.custom_id, b.url]), [
-    ['Send to GitHub', 'send:700', undefined], ['Open post', undefined, 'https://discord.com/channels/1/700'],
+    ['Send to GitHub', 'send:700', undefined], ['Move', 'move:700', undefined], ['Open post', undefined, 'https://discord.com/channels/1/700'],
   ]);
   // A poster with no user id (a webhook) is named as text: it cannot format, mention, link, invite, preview, or reorder or break its line.
   for (const [name, want] of [
@@ -449,11 +453,12 @@ test('a reply pings its target; a refused reply goes once more plain, and any ot
     ['a pinged reply', [200], { replyTo: '800' }, [reply], 'sent'],
     ['a refused reply goes once more, plain', [400, 200], { replyTo: '800' }, [reply, plainBody], 'refused'],
     ['a server error is thrown, with no second send', [500], { replyTo: '800' }, [reply], 'thrown'],
+    ['a server error whose answer quotes " -> 400 " is thrown, with no second send', [[500, 'upstream said -> 400 x']], { replyTo: '800' }, [reply], 'thrown'],
   ]) {
     const queue = [...answers];
     const f = fakeFetch([['POST', /\/channels\/700\/messages$/, () => {
-      const status = queue.shift();
-      return status === 200 ? { id: '1' } : new Response('{"message":"x"}', { status });
+      const [status, text = '{"message":"x"}'] = [].concat(queue.shift());
+      return status === 200 ? { id: '1' } : new Response(text, { status });
     }]]);
     const send = discordClient('t', f).send('700', 'hi', [], opts);
     if (outcome === 'thrown') await assert.rejects(send, / -> 500 /, why);
@@ -768,6 +773,222 @@ test('AT3: the Accepted-only write changes only Accepted, and only on an active 
   }
 });
 
+test('a failed call\'s status is the one its client kept, never one its answer quotes', () => {
+  const kept = (side, status) => Object.assign(new Error(`X GET /x -> ${status} upstream said -> 404 x`), { [side]: { method: 'GET', path: '/x', status } });
+  assert.equal(C.statusOf(kept('discord', 500)), 500);
+  assert.equal(C.statusOf(kept('github', 502)), 502);
+  assert.equal(C.statusOf(new Error('out of time before GET https://x/ -> 404 ')), undefined);
+});
+
+test('a message read takes only its own 404 for a deleted message', async () => {
+  for (const [why, answer, deleted] of [
+    ['the message was deleted', () => new Response('{"message":"Unknown Message"}', { status: 404 }), true],
+    ['a server error whose answer quotes " -> 404 "', () => new Response('upstream said -> 404 x', { status: 500 }), false],
+  ]) {
+    const f = fakeFetch([['GET', /\/channels\/700\/messages\/800$/, answer], ['GET', /\/channels\/700$/, () => ({ id: '700' })]]);
+    const read = discordClient('t', f).readMessage('700', '800');
+    if (deleted) assert.deepEqual(await read, { message: null, channel: { id: '700' } }, why);
+    else await assert.rejects(read, { message: /^Discord GET \/channels\/700\/messages\/800 -> 500 / }, why);
+  }
+});
+
+test('REPO_TAGS reads as tag name to key in any letter case, and a post\'s tags give a key only when they give one', () => {
+  const tags = C.parseRepoTags('{"UI":"UI","Kitn":" ke ","Core":"KE"}');
+  assert.deepEqual(tags, { ui: 'UI', kitn: 'KE', core: 'KE' }, 'keys read as normRepoKey reads them: trimmed, in upper case');
+  assert.deepEqual(C.parseRepoTags('{"Triaged":"UI","accepted":"UI","UI":"UI"}'), { ui: 'UI' }, 'a status or Accepted tag is never a repo tag');
+  for (const [why, names, want] of [
+    ['one repo tag', ['Bug', 'ui'], 'UI'],
+    ['two tags naming one key', ['KITN', 'core'], 'KE'],
+    ['two tags naming two keys', ['UI', 'Kitn'], null],
+    ['no repo tag', ['Bug'], null],
+  ]) assert.equal(C.repoFromTags(names, tags), want, why);
+  assert.deepEqual(C.plainTags(['Bug', 'UI', 'kitn', 'Retail'], tags), ['Bug', 'Retail'], 'repo tags left out in any letter case');
+  assert.deepEqual(C.parseRepoTags('{"UI":"ONE","ui":"TWO","Kitn":"KE"}'), { kitn: 'KE' }, 'one name in two letter cases for two keys gives neither');
+  for (const raw of ['', '  ', '{"UI":', '["UI"]', '{"UI":1}', 'null', undefined, { toString: null }]) assert.deepEqual(C.parseRepoTags(raw), {}, String(typeof raw));
+});
+
+test('a webhook name drops discord and clyde until none is left, keeps other marks, and cuts at 80 units without splitting a character', () => {
+  for (const [why, name, username, want] of [
+    ['discord removed', 'Discord Fan', 'u', 'Fan'],
+    ['Clyde removed, so the username stands in', 'Clyde', 'pat', 'pat'],
+    ['a removal that joins the word again', 'Xdisdiscordcord', 'u', 'X'],
+    ['the other word joined again', 'Ydiscclydeord', 'u', 'Y'],
+    ['@, # and : kept', '@pat #1: hi', 'u', '@pat #1: hi'],
+    ['81 units cut to 80', 'a'.repeat(81), 'u', 'a'.repeat(80)],
+    ['an emoji across unit 80 not split', `${'a'.repeat(79)}\u{1F600}`, 'u', 'a'.repeat(79)],
+    ['one line', 'two\nlines', 'u', 'two lines'],
+    ['nothing left anywhere', 'discord', 'clyde', 'Player'],
+  ]) assert.equal(C.webhookName(name, username), want, why);
+});
+
+test('an avatar address is the server avatar, else the user avatar, else the default by id or old discriminator', () => {
+  const id = String((2n ** 40n + 5n) << 22n);
+  for (const [why, user, member, want] of [
+    ['a server avatar', { id: '42', avatar: 'u1', discriminator: '0' }, { avatar: 'm1' }, 'https://cdn.discordapp.com/guilds/1/users/42/avatars/m1.png'],
+    ['a user avatar', { id: '42', avatar: 'u1', discriminator: '0' }, null, 'https://cdn.discordapp.com/avatars/42/u1.png'],
+    // A 32-bit shift of this id gives index 5.
+    ['the default for an id past 2^53', { id, avatar: null, discriminator: '0' }, {}, 'https://cdn.discordapp.com/embed/avatars/3.png'],
+    ['the default for an old discriminator', { id, avatar: null, discriminator: '1234' }, null, 'https://cdn.discordapp.com/embed/avatars/4.png'],
+  ]) assert.equal(C.avatarUrl({ guildId: '1', user, member }), want, why);
+});
+
+test('an issue filed from a moved post\'s copy ends with the copy footer, which every footer reader reads', () => {
+  const filed = C.buildBody({ content: 'hi', reporter: { name: 'Pat', id: '42' }, sender: null, threadUrl: 'u', threadId: '990', messageId: '990', copied: true });
+  assert.match(filed, /\n\n<!-- discord-copy -->\n<!-- discord-message: 990 -->\n<!-- discord-thread: 990 reporter: 42 -->$/);
+  assert.deepEqual(C.parseMarker(filed), { threadId: '990', reporterId: '42' });
+  assert.deepEqual(C.parseFiledMessage(filed), { id: '990', copy: true });
+});
+
+test('a moved post keeps the tags the new forum has and gets its client tags, five at most in order', () => {
+  const FROM = [
+    { id: 'f-retail', name: 'Retail' }, { id: 'f-bug', name: 'Bug' }, { id: 'f-tri', name: 'Triaged' }, { id: 'f-acc', name: 'Accepted' },
+    { id: 'f-mage', name: 'Mage' }, { id: 'f-one', name: 'ONE' }, { id: 'f-staff', name: 'Staff note' }, { id: 'f-extra', name: 'Extra' },
+    { id: 'f-retail2', name: 'Retail UI' }, { id: 'f-prog', name: 'In progress' }, { id: 'f-fixed', name: 'Fixed, next update' },
+  ];
+  const TO = [
+    { id: 't-retail', name: 'retail' }, { id: 't-forever', name: 'Forever' }, { id: 't-bug', name: 'Bug' }, { id: 't-tri', name: 'TRIAGED' },
+    { id: 't-acc', name: 'Accepted' }, { id: 't-staff', name: 'Staff note' }, { id: 't-extra', name: 'Extra' }, { id: 't-one', name: 'ONE' }, { id: 't-two', name: 'TWO' },
+    { id: 't-two2', name: 'Two alias' }, { id: 't-retail2', name: 'Retail UI' }, { id: 't-prog', name: 'In progress' }, { id: 't-fixed', name: 'Fixed, next update' },
+  ];
+  const base = { from: FROM, to: TO, client: 'Retail', fixedClient: 'Retail', fixedType: null, repoTags: C.parseRepoTags('{"ONE":"ONE","TWO":"TWO"}') };
+  const BOTH_FROM = [...FROM, { id: 'f-both', name: 'Retail Forever' }];
+  const BOTH_TO = [...TO, { id: 't-both', name: 'Retail Forever' }];
+  for (const [why, applied, over, want] of [
+    ['a name kept in any letter case', ['f-tri', 'f-staff'], {}, ['t-tri', 't-staff']],
+    ['a name the new forum lacks dropped', ['f-mage', 'f-staff'], {}, ['t-staff']],
+    ['no client of its own: its Retail tag added', ['f-staff'], { fixedClient: null }, ['t-retail', 't-staff']],
+    ['no client of its own: Forever, the Retail tag dropped', ['f-retail'], { fixedClient: null, client: 'Forever' }, ['t-forever']],
+    ['no client of its own: All gives both', [], { fixedClient: null, client: 'All' }, ['t-retail', 't-forever']],
+    ['a client of its own: an agreeing client tag kept', ['f-retail'], {}, ['t-retail']],
+    ['a client of its own: a disagreeing client tag dropped', ['f-retail', 'f-staff'], { client: 'Forever', fixedClient: 'Forever' }, ['t-staff']],
+    ['a type of its own: a disagreeing type tag dropped', ['f-bug', 'f-staff'], { fixedType: 'Feature' }, ['t-staff']],
+    ['no type of its own: the type tag kept', ['f-bug'], {}, ['t-bug']],
+    ['a repo tag the new forum has is kept, by name like any tag', ['f-one', 'f-staff'], {}, ['t-one', 't-staff']],
+    ['six cut to five: status, repo, client, Accepted, then the post\'s order', ['f-staff', 'f-extra', 'f-acc', 'f-tri', 'f-one'], { fixedClient: null },
+      ['t-tri', 't-one', 't-retail', 't-acc', 't-staff']],
+    ['a status tag named in REPO_TAGS stays a status tag', ['f-tri', 'f-one'], { repoTags: C.parseRepoTags('{"Triaged":"TWO","ONE":"ONE"}') }, ['t-tri', 't-one']],
+    ['All: a second Retail alias ranks with the rest, so Forever stays', ['f-retail', 'f-retail2', 'f-staff', 'f-acc', 'f-tri'], { fixedClient: null, client: 'All' },
+      ['t-tri', 't-retail', 't-forever', 't-acc', 't-retail2']],
+    ['three status tags: the first ranks first, the others with the rest, so both clients, the repo and Accepted stay',
+      ['f-tri', 'f-prog', 'f-fixed', 'f-acc', 'f-one'], { fixedClient: null, client: 'All' },
+      ['t-tri', 't-one', 't-retail', 't-forever', 't-acc']],
+    ['a client-named tag that REPO_TAGS maps is not the client tag', [], {
+      to: [{ id: 'x-ui', name: 'Retail UI' }, { id: 'x-retail', name: 'Retail' }],
+      fixedClient: null, repoTags: C.parseRepoTags('{"Retail UI":"ONE"}'),
+    }, ['x-retail']],
+    ['a client tag that also names a type the forum refuses is not added', [], {
+      to: [{ id: 'x-rbug', name: 'Retail Bug' }, { id: 'x-retail', name: 'Retail' }], fixedClient: null, fixedType: 'Feature',
+    }, ['x-retail']],
+    // With no type of the forum's own, the post's type is the one its kept
+    // tags name, and an added client tag names that type or none.
+    ['no type of its own: a Feature post gets Retail, not the Retail Bug listed first', ['f-feat'], {
+      from: [...FROM, { id: 'f-feat', name: 'Feature' }],
+      to: [{ id: 'u-feat', name: 'Feature' }, { id: 'u-rbug', name: 'Retail Bug' }, { id: 'u-retail', name: 'Retail' }], fixedClient: null,
+    }, ['u-retail', 'u-feat']],
+    ['no type known: a client tag that names one is not added', ['f-staff'], {
+      to: [{ id: 's-rbug', name: 'Retail Bug' }, { id: 's-staff', name: 'Staff note' }], fixedClient: null,
+    }, ['s-staff']],
+    ['All: a combined tag that names another type is not added, the single ones are', ['f-feat'], {
+      from: [...FROM, { id: 'f-feat', name: 'Feature' }],
+      to: [{ id: 'q-feat', name: 'Feature' }, { id: 'q-both', name: 'Retail Forever Bug' }, { id: 'q-retail', name: 'Retail' }, { id: 'q-forever', name: 'Forever' }],
+      fixedClient: null, client: 'All',
+    }, ['q-retail', 'q-forever', 'q-feat']],
+    ['All: a combined client tag covers both clients, so Accepted stays', ['f-tri', 'f-one', 'f-both', 'f-acc', 'f-staff'], { from: BOTH_FROM, to: BOTH_TO, fixedClient: null, client: 'All' },
+      ['t-tri', 't-one', 't-both', 't-acc', 't-staff']],
+    ['All: the combined tag added when the forum has it', [], {
+      to: [{ id: 'y-both', name: 'Retail Forever' }, { id: 'y-staff', name: 'Staff note' }], fixedClient: null, client: 'All',
+    }, ['y-both']],
+    ['a post read with no tag list keeps none', undefined, { fixedClient: null }, ['t-retail']],
+    ['All: one client kept, the other only in a combined tag: that tag added', ['f-retail'], {
+      to: [{ id: 'z-retail', name: 'Retail' }, { id: 'z-both', name: 'Retail Forever' }], fixedClient: null, client: 'All',
+    }, ['z-both', 'z-retail']],
+    // The combined tag counts first, so the kept Retail ranks with the rest
+    // and Accepted keeps its place in the five.
+    ['All: a kept Retail tag and an added combined one: Accepted stays', ['f-tri', 'f-one', 'f-two', 'f-retail', 'f-acc'], {
+      from: [...FROM, { id: 'f-two', name: 'TWO' }],
+      to: [{ id: 'w-tri', name: 'Triaged' }, { id: 'w-one', name: 'ONE' }, { id: 'w-two', name: 'TWO' }, { id: 'w-retail', name: 'Retail' }, { id: 'w-acc', name: 'Accepted' }, { id: 'w-both', name: 'Retail Forever' }],
+      fixedClient: null, client: 'All',
+    }, ['w-tri', 'w-one', 'w-two', 'w-both', 'w-acc']],
+    // A forum with both a Forever tag and a combined one: the combined tag is
+    // added, so the status, three repos and both clients fit in five.
+    ['All: the combined tag is preferred to a single one', ['f-tri', 'f-one', 'f-two', 'f-three', 'f-retail'], {
+      from: [...FROM, { id: 'f-two', name: 'TWO' }, { id: 'f-three', name: 'THREE' }],
+      to: [{ id: 'v-tri', name: 'Triaged' }, { id: 'v-one', name: 'ONE' }, { id: 'v-two', name: 'TWO' }, { id: 'v-three', name: 'THREE' },
+        { id: 'v-retail', name: 'Retail' }, { id: 'v-forever', name: 'Forever' }, { id: 'v-both', name: 'Retail Forever' }],
+      fixedClient: null, client: 'All', repoTags: C.parseRepoTags('{"ONE":"ONE","TWO":"TWO","THREE":"THREE"}'),
+    }, ['v-tri', 'v-one', 'v-two', 'v-three', 'v-both']],
+    ['Retail: a combined tag is not added for one client', [], {
+      to: [{ id: 'v-both', name: 'Retail Forever' }, { id: 'v-staff', name: 'Staff note' }], fixedClient: null, client: 'Retail',
+    }, []],
+    ['a repo tag whose name reads as a type is kept in a forum of another type', ['f-rbug'], {
+      from: [...FROM, { id: 'f-rbug', name: 'Retail UI Bug' }], to: [{ id: 'x-rbug', name: 'Retail UI Bug' }], fixedType: 'Feature', repoTags: C.parseRepoTags('{"Retail UI Bug":"ONE"}'),
+    }, ['x-rbug']],
+    ['three tags of one repo: only the first ranks as the repo, so both clients and Accepted stay', ['f-tri', 'f-one', 'f-one2', 'f-one3', 'f-acc'], {
+      from: [...FROM, { id: 'f-one2', name: 'One alias' }, { id: 'f-one3', name: 'One third' }],
+      to: [...TO, { id: 't-one2', name: 'One alias' }, { id: 't-one3', name: 'One third' }],
+      fixedClient: null, client: 'All', repoTags: C.parseRepoTags('{"ONE":"ONE","One alias":"ONE","One third":"ONE"}'),
+    }, ['t-tri', 't-one', 't-retail', 't-forever', 't-acc']],
+  ]) assert.deepEqual(C.movedTags({ ...base, ...over, applied }), want, why);
+});
+
+test('a moved post\'s card names the mover as text, and the moved messages link both posts and ping only the reporter', () => {
+  const post = { guildId: '1', forumId: '900', postId: '700' };
+  assert.equal(C.queueCard({ ...post, author: { name: 'k', username: 'kira', id: '42' }, moved: 'Mod_x' }).content, '**New post in <#900>:** <#700>\nby <@42> (`kira`)\nMoved by Mod\\_x');
+  assert.equal(C.MESSAGES.movedHere({ from: 'https://discord.com/channels/1/700', by: 'Mod_x', reporter: { name: 'Pat', id: '42' } }),
+    'Moved here from https://discord.com/channels/1/700 by Mod\\_x. First posted by <@42>.');
+  assert.equal(C.MESSAGES.movedHere({ from: 'L', by: 'M', reporter: { name: '**Hook**' }, left: 2, cut: true }),
+    'Moved here from L by M. First posted by \\*\\*Hook\\*\\*. 2 file(s) could not be copied (too large, or not downloaded); they are on the original post. The first message was too long to copy whole; the full text is on the original post.');
+  assert.equal(C.MESSAGES.movedTo({ to: 'https://discord.com/channels/1/990', by: 'Mod' }), 'This post moved to https://discord.com/channels/1/990 (moved by Mod).');
+});
+
+test('a forum\'s webhook is the bot\'s own when listed, else a new one named Post mover', async () => {
+  for (const [why, list, made] of [
+    ['its own, after another app\'s and a non-incoming one', [{ id: '60', type: 1, application_id: 'other', token: 'x' }, { id: '61', type: 2, application_id: 'app' }, { id: '62', type: 1, application_id: 'app', token: 't' }], false],
+    ['none of its own', [{ id: '60', type: 1, application_id: 'other', token: 'x' }], true],
+  ]) {
+    const f = fakeFetch([['GET', /\/channels\/901\/webhooks$/, () => list], ['POST', /\/channels\/901\/webhooks$/, () => ({ id: '63', token: 'n' })]]);
+    const hook = await discordClient('bot', f).forumWebhook('901', 'app');
+    assert.equal(hook.id, made ? '63' : '62', why);
+    assert.deepEqual(f.find('POST', /webhooks$/).map((c) => c.body), made ? [{ name: 'Post mover' }] : [], why);
+  }
+});
+
+test('a webhook post is multipart with no bot token, and its errors never show the webhook token', async () => {
+  const seen = [];
+  const ok = async (url, init) => { seen.push({ url, init }); return new Response(JSON.stringify({ id: '990', channel_id: '990' }), { status: 200 }); };
+  const files = [{ name: 'a.png', blob: new Blob(['x']) }];
+  const msg = await discordClient('bot', ok).executeWebhook({ id: '61', token: 'secret-token' }, { content: 'hi' }, files);
+  assert.equal(msg.channel_id, '990');
+  assert.equal(seen[0].url, 'https://discord.com/api/v10/webhooks/61/secret-token?wait=true');
+  assert.equal(seen[0].init.headers.Authorization, undefined);
+  assert.deepEqual(JSON.parse(seen[0].init.body.get('payload_json')), { content: 'hi' });
+  assert.equal(seen[0].init.body.get('files[0]').name, 'a.png');
+  // The recording fake reads the same body.
+  const f = fakeFetch([['POST', /\/webhooks\/61\/wtok\?wait=true$/, () => ({ id: '990', channel_id: '990' })]]);
+  await discordClient('bot', f).executeWebhook({ id: '61', token: 'wtok' }, { content: 'hi' }, files);
+  assert.deepEqual(f.calls[0].body, { payload: { content: 'hi' }, files: ['a.png'] });
+  for (const [why, fetchImpl, said] of [
+    ['a refusal that echoes the address', async () => new Response('{"message":"no","url":"https://discord.com/api/v10/webhooks/61/secret-token"}', { status: 400 }),
+      /^Discord POST \/webhooks\/61\/<token> -> 400 .*webhooks\/61\/<token>/],
+    ['out of time before the call', C.timedFetch(ok, 1, Date.now() - 1), /^out of time before POST https:\/\/discord\.com\/api\/v10\/webhooks\/61\/<token>\?wait=true$/],
+    ['a 2xx whose body cannot be read', async () => new Response('{"id":', { status: 200 }), /^Discord POST \/webhooks\/61\/<token> answered 200 with a body that could not be read$/],
+  ]) {
+    const e = await discordClient('bot', fetchImpl).executeWebhook({ id: '61', token: 'secret-token' }, {}, []).then(() => null, (x) => x);
+    assert.ok(e, why);
+    assert.match(e.message, said, why);
+    assert.ok(!e.message.includes('secret-token'), why);
+  }
+});
+
+test('isBotCopy: only a message the bot\'s own webhook posted', () => {
+  for (const [why, m, want] of [
+    ['the bot\'s copy', { webhook_id: '61', application_id: 'app' }, true],
+    ['another app\'s webhook', { webhook_id: '61', application_id: 'other' }, false],
+    ['a server\'s own webhook, owned by no app', { webhook_id: '61' }, false],
+    ['a player\'s message', { author: { id: '42' } }, false],
+    ['a deleted message', null, false],
+  ]) assert.equal(C.isBotCopy(m, 'app'), want, why);
+});
 test('setStatus and fixAccepted report each forum read to onForum, as that read answered, before anything after it can fail, and only a forum', async () => {
   const base = [{ id: 'r', name: 'Retail' }, { id: 't', name: 'Triaged' }, { id: 'p', name: 'In progress' }];
   // The fresh read answers with one more tag, so the test tells the two reads apart.

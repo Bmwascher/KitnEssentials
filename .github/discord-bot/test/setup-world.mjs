@@ -18,7 +18,7 @@ const APP_KEY = await (async () => {
 // `s.token`). `publicKey` is the app's key, in the env and in the
 // application's answer alike.
 export function setupWorld(edit = () => {}, publicKey = 'a'.repeat(64)) {
-  const allowed = String(PERMS.viewChannel | PERMS.sendMessages | PERMS.readMessageHistory | PERMS.manageThreads | PERMS.sendMessagesInThreads);
+  const allowed = String(PERMS.viewChannel | PERMS.sendMessages | PERMS.readMessageHistory | PERMS.manageThreads | PERMS.sendMessagesInThreads | PERMS.manageWebhooks);
   const tags = (names) => names.map((name, i) => ({ id: String(700 + i), name }));
   const view = String(PERMS.viewChannel);
   const s = {

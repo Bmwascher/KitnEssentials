@@ -3,7 +3,7 @@
 // yet" replies use them.
 import {
   parseRepos, parseForums, parseRoleIds, isTemplates, PERMS, packGroups, clipLine, isDiscordId as digits, STATUS_NAMES, CHECKLIST_NAMES, ACCEPTED,
-  LABELS, LABEL_DEFS, TEXT_TYPES, THREAD_TYPES, FORUM_TYPE, timedFetch, oneHop,
+  LABELS, LABEL_DEFS, TEXT_TYPES, THREAD_TYPES, FORUM_TYPE, timedFetch, oneHop, isRepoTags, normRepoKey, OWN_TAG_NAMES, REPO_KEY_MAX, usableRepoKeys, SELECT_MAX,
 } from './core.js';
 import { discordClient } from './discord.js';
 import { installationAccess, githubClient, appJwt, importAppKey } from './github.js';
@@ -43,8 +43,6 @@ const readable = (env, bad) => {
 };
 // owner/repo within GitHub's name limits.
 const REPO = /^[\w.-]{1,39}\/[\w.-]{1,100}$/;
-// The form's repo field takes at most this many characters.
-const REPO_KEY_MAX = 10;
 // Every permission, which an administrator has.
 const ALL = (1n << 64n) - 1n;
 
@@ -74,12 +72,14 @@ export function configProblems(raw, { bindings = true } = {}) {
   }
   if (repos) {
     for (const [k, r] of Object.entries(repos)) {
-      // The form's answer is read trimmed and in upper case, from a field of
-      // REPO_KEY_MAX characters.
-      if (!badKeys.includes(k) && (k !== k.toUpperCase() || k.length > REPO_KEY_MAX)) out.push(`REPOS key "${shown(k)}" does not fit the form: write it in upper case, at most ${REPO_KEY_MAX} characters.`);
+      if (!badKeys.includes(k) && (k !== k.toUpperCase() || k.length > REPO_KEY_MAX)) out.push(`REPOS key "${shown(k)}" is not usable: write it in upper case (the form reads it so), at most ${REPO_KEY_MAX} characters (it starts every filed title).`);
       if (typeof r !== 'string' || !REPO.test(r)) out.push(`REPOS entry ${shown(k)} is not owner/repo.`);
     }
     if (Object.keys(repos).length > 1 && !present(env.LOCK_REPO)) out.push("LOCK_REPO is empty while REPOS names more than one repo: set it to the repo that holds every filing's lock.");
+    // Send to GitHub lists the usable repos in one select; an unusable key is
+    // named above and never offered.
+    const usable = usableRepoKeys(repos).length;
+    if (usable > SELECT_MAX) out.push(`REPOS names ${usable} usable repos, and Send to GitHub's repo dropdown holds at most ${SELECT_MAX}: remove some.`);
   }
   if (present(env.LOCK_REPO) && !REPO.test(String(env.LOCK_REPO))) out.push('LOCK_REPO is not owner/repo (no spaces).');
   let forumsRead = true;
@@ -112,11 +112,40 @@ export function configProblems(raw, { bindings = true } = {}) {
   }
   // What the bot will use: the checklist forum is never a player forum.
   if (forumsRead && !Object.keys(parseForums(env)).length) out.push(`${forumSetting(env)} names no player forum (the checklist forum does not count).`);
+  // The Move form lists every player forum of this server but the post's own
+  // in one select. This check reads no channel, so it counts every entry;
+  // the channel checks below name an entry that is not a forum of this
+  // server, which the form leaves out.
+  if (forumsRead && Object.keys(parseForums(env)).length > SELECT_MAX + 1) out.push(`${forumSetting(env)} names ${Object.keys(parseForums(env)).length} player forums, and the Move form lists at most ${SELECT_MAX} others, counting only forums of this server: remove first any entry /bot-check calls not a channel of this server or the wrong kind of channel, then others if ${SELECT_MAX + 2} or more are left.`);
   if (!digits(env.GUILD_ID)) out.push("GUILD_ID is not set to the server's id (digits only, no spaces).");
   if (!blank(env.TEMPLATES)) {
     let t = null;
     try { t = JSON.parse(String(env.TEMPLATES)); } catch { /* named below */ }
     if (!isTemplates(t)) out.push('TEMPLATES is not valid: set it to JSON like {"Bug":["Addon version"]}, or leave it unset for the defaults.');
+  }
+  // REPO_TAGS is not among SETTINGS: one with no text form only loses Send to
+  // GitHub's pre-fill, so it stops nothing, and is named here. It is read
+  // from the raw settings, which `readable` leaves it in.
+  let repoTagsText = '';
+  try { repoTagsText = String(raw.REPO_TAGS ?? ''); } catch { out.push('REPO_TAGS is not text: set it as text. The checks below read it as unset.'); }
+  if (repoTagsText.trim()) {
+    let t = null;
+    try { t = JSON.parse(repoTagsText); } catch { /* named below */ }
+    if (!isRepoTags(t)) out.push('REPO_TAGS is not valid: set it to JSON like {"UI":"UI"} (tag name to REPOS key).');
+    else {
+      const first = new Map();
+      for (const [name, key] of Object.entries(t)) {
+        // The bot reads each name in lower case and each key as normRepoKey
+        // does, trimmed and in upper case, and never takes one of its own
+        // tags as a repo tag.
+        const n = name.toLowerCase();
+        const other = first.get(n);
+        if (!other) first.set(n, [name, key.trim().toUpperCase()]);
+        if (OWN_TAG_NAMES.has(n)) out.push(`REPO_TAGS tag "${shown(name)}" is one of the bot's own tags (a status or Accepted), so it is not read as a repo tag: remove it.`);
+        else if (other && other[1] !== key.trim().toUpperCase()) out.push(`REPO_TAGS names "${shown(other[0])}" and "${shown(name)}", one tag in any letter case, for two keys, so neither is read: keep one.`);
+        else if (repos && !normRepoKey(key, repos)) out.push(`REPO_TAGS tag "${shown(name)}" names "${shown(key)}", which is not a REPOS key.`);
+      }
+    }
   }
   for (const r of String(env.APPROVED_ROLE_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean)) {
     if (!digits(r)) out.push(`APPROVED_ROLE_IDS entry ${shown(r)} is not a role id.`);
@@ -189,11 +218,13 @@ const CALL_MS = 5000;
 const LABEL_PAGES = 3;
 // The Message Content intent: the first bit for a bot in 100 or more
 // servers, the second for one in fewer.
-const MESSAGE_CONTENT = (1n << 18n) | (1n << 19n);
+export const MESSAGE_CONTENT = (1n << 18n) | (1n << 19n);
 const NEEDS = {
   forum: {
     'View Channel': PERMS.viewChannel, 'Send Messages in Threads': PERMS.sendMessagesInThreads,
     'Manage Threads': PERMS.manageThreads, 'Read Message History': PERMS.readMessageHistory,
+    // A move posts its copy through the bot's own webhook in the forum.
+    'Manage Webhooks': PERMS.manageWebhooks,
   },
   queue: { 'View Channel': PERMS.viewChannel, 'Send Messages': PERMS.sendMessages, 'Read Message History': PERMS.readMessageHistory },
   mod: { 'View Channel': PERMS.viewChannel, 'Send Messages': PERMS.sendMessages },

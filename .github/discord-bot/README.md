@@ -19,7 +19,9 @@ still right-click any post or message > **Apps > Send
 to GitHub** for the same form; the reply then goes to that message, and the
 post's card is marked filed too. A greeting from an earlier version that still
 shows its own button keeps working; once the reply exists, the bot deletes it,
-or removes its button if it may not delete it.
+or removes its button if it may not delete it. The card also has a **Move**
+button, and moderators can right-click > **Apps > Move post**, to move a post
+to another player forum (see Moving a post).
 
 The greeting and the card go out in the same scan: new posts are greeted
 first, then cards still owed by older posts go out, then the new posts'
@@ -61,6 +63,10 @@ it along:
 | Closed as not planned / duplicate | Closed | "**Not planned.** ..." or "**Duplicate.** ..."; a duplicate links the other report's post when it came from Discord |
 | `needs-info` label added | (unchanged) | Pings the reporter for details |
 | `accepted` label on an open issue | Accepted, beside the status (see The Accepted tag) | none |
+
+On a post the bot moved (see Moving a post), "now tracked" and every status
+message also start with an @mention of the reporter, who is pinged: the
+copied message was posted by the bot's webhook, so a reply to it pings no one.
 
 "Now tracked" and every status message are replies to the reporter's message,
 the one the issue was filed from, so Discord pings the reporter even when
@@ -240,9 +246,10 @@ below).
 - **`/bot-check`.** A moderator (Manage Threads) runs it in the server the
   bot is set up for; in any other server, or while `GUILD_ID` is not set, it
   is refused. It checks:
-  - the Worker's settings, as the bot reads them;
-  - the bot's permissions in each player forum, the queue channel, the
-    moderator channel and the checklist forum;
+  - the Worker's settings, as the bot reads them, `REPO_TAGS` included;
+  - the bot's permissions in each player forum (Manage Webhooks among them,
+    for moves), the queue channel, the moderator channel and the checklist
+    forum;
   - each forum's tags and template message;
   - the Message Content setting and the approved roles;
   - that the moderator channel is hidden from `@everyone`;
@@ -348,7 +355,9 @@ username (a webhook's post shows its name alone), and a link to the post. The
 quoted report follows, then the attachment count and the template check. The
 issue keeps those names, usernames and Discord ids as they were at filing; a
 maintainer removes them by editing the issue. Two hidden lines at the end name
-the filed message and the post; leave them in place.
+the filed message and the post; leave them in place. An issue filed from a
+moved post's copy ends with three: the first marks the copy, so status
+messages @mention the reporter (see Moving a post).
 
 The issue's title is built from the form: `[KE] [Retail] [Bug] [Bags] Bank tab
 icons overlap`. That is the repo key, the client, the type, the module, and
@@ -412,6 +421,173 @@ event does nothing (no message, no tag change, no checklist thread). Its
 post is settled by its next status event (a close, a reopen, a PR or a
 release) or the sweep, and its checklist thread by its next checklist event.
 
+## Moving a post
+
+A post in the wrong player forum can be moved to another one in `FORUMS`: a
+bug report to the feedback forum and back, or a Retail post to the Forever
+forum. Whoever can file can move: a member of an approved role (or a
+moderator) presses **Move** on the post's queue card, and a moderator can
+right-click any message in the post > **Apps > Move post**. A player gets
+"Only moderators and admins can move posts.". A forum outside `FORUMS`, the
+checklist forum included, is never a source or a target, and neither is a
+`FORUMS` entry that is not a forum of this server (`/bot-check` names it).
+Every forum in `FORUMS` must be open to the same players: a move into a
+forum a player cannot see archives the post they can read and leaves them
+a link and a mention they cannot open. The bot cannot tell who can see a
+forum, so it does not check this.
+
+Queue cards posted before this version have no Move button: a member of
+an approved role asks a moderator, who right-clicks the post.
+
+Only a post not yet sent to GitHub moves. A filed post answers "This post is
+already tracked as KEY #n (link); moving filed posts comes in a later
+update." and nothing changes. A post that holds the bot's "now tracked"
+reply among its last 100 messages is refused too when the bot cannot find
+its issue (its filing record was never saved or was deleted, and the issue
+lost its `from-discord` label or left `REPOS`); the answer links that reply.
+If that issue was deleted, delete the reply, then move the post again.
+
+The form has two dropdowns:
+
+- **Move to**: the other forums in `FORUMS` that are forums of this server,
+  chosen already when there is only one.
+- **Client**: optional, read only for a forum with no client of its own.
+  Moving into such a forum with no client chosen answers "Nothing was moved.
+  Pick a client: ..." and changes nothing.
+
+It has no repo: the post has no issue yet. Send to GitHub on the new post
+picks the repo, its dropdown pre-filled from the post's one repo tag
+(`REPO_TAGS`), else empty so staff must pick; with one repo it is always
+selected.
+
+Discord cannot move a thread, so the bot makes a new post in the chosen
+forum through a webhook it makes there, named `Post mover`, and reuses
+after; one someone deletes is made again at the next move. The player sees:
+
+- the new post, with the old post's name, its first message's text and
+  files, under their server name and avatar with Discord's APP badge. Only
+  the first message is copied, not the conversation;
+- the bot's message in it, "Moved here from <old post> by <mover>. First
+  posted by @player.", which pings them;
+- the old post: "This post moved to <new post> (moved by <mover>).", then
+  locked and archived. It stays readable.
+
+The new post gets no greeting. The old post's queue card is edited to show
+the new post, with its buttons and "Moved by <mover>"; a post with no card
+yet, or whose card Discord will not edit, gets a new card for the new post.
+A `QUEUE_CHANNEL_ID` that is not a channel of this server gets no card.
+
+**Tags.** The new post keeps every tag of the old post whose name, in any
+letter case, the new forum has, a repo tag included; none is added for a
+repo. A client tag that disagrees with the post's client is dropped, and a
+forum with no client of its own gets its tags for that client (All gives
+both, or one tag naming both when the forum has it). A tag added so names
+no type, or the post's own: the forum's, else the one its kept tags name.
+A Feature post gets "Retail", never "Retail Bug", which Send to GitHub
+would read as a bug; with no type known, only a tag naming none is added.
+A type tag that disagrees with the forum's own type is dropped. Discord
+takes five: the
+status tag, the repo tags, the client tags and Accepted come first, in that
+order, so a post with a status and four repo tags keeps no client tag; the
+queue card still names the client.
+
+**Refusals.** Each answers "Nothing was moved: ..." and changes nothing: a
+post already moved (its record, or the bot's note in the locked post, says
+where), or locked; a move into a forum `FORUMS` no longer lists, or into
+one deleted since the form opened; a post, or its first
+message, that was deleted; a post being filed or moved (the lock); a damaged
+saved record; a saved issue that cannot be checked; a forum list that cannot
+be read; the bot lacking Manage Webhooks in the target forum; no `STATE`
+namespace bound; a copy the bot made whose move record is not readable yet
+(wait a minute and move again); a first message the bot sees nothing in
+while the Message Content setting is off or cannot be read (turn it on:
+developer portal > Bot > Privileged Gateway Intents). Send to GitHub on the old post answers
+"Nothing was created: this post was moved to <link>; send that one.", and
+on such a copy it asks to wait a minute too. Every button and command, Send
+to GitHub's included, answers only in the server `GUILD_ID` names: anywhere
+else, or while `GUILD_ID` is unset, it is refused before anything is read.
+
+**Before the new post exists**, every failure answers "Nothing was moved"
+and leaves both posts as they were, and moving again finishes the job. The
+forum's `Post mover` webhook may have been made; the next move uses it.
+
+### When a move stops partway
+
+A move makes the new post, then does six things: saves the old post's
+record, moves the queue card, saves the new post's record, posts the moved
+message, posts the note in the old post, and locks the old post. While
+`QUEUE_CHANNEL_ID` is unset, the card step is skipped with no line and no
+card is touched. The reply is "Moved to <new post> from <old post>." when
+every step it ran is done. Otherwise
+it is "The move stopped partway: <new post> was made from <old post>. Not
+done:", then one line for each that failed, and the Worker log says why.
+The bot does not retry them, and there is no repair procedure: each state
+below is known and accepted. What you see in each:
+
+- **The old post's record** (`record movedto:<old post id>`). The old post
+  can be sent or moved again once someone unlocks it, and the scan may
+  greet it if its lock also failed. Leave it locked; if it is unlocked,
+  close it again.
+- **The queue card** (`queue card for the new post`). The card still shows
+  the old post; its buttons answer that the post moved. Right-click the
+  new post to send or move it. With "QUEUE_CHANNEL_ID names no channel of
+  this server", no card was sent there; `/bot-check` names the setting.
+- **The new post's record** (`record movedfrom:<new post id>`). Sending or
+  moving the new post by its first message answers that its record is not
+  readable yet, for good, and so does sending a reply in it once the scan
+  has saved the post as the bot's copy. The new post stays a readable copy.
+- **The moved message** (`moved message in the new post`). The new post has
+  no link back, and the player was not pinged.
+- **The note in the old post** (`note in the old post`). The old post does
+  not say where it went; the new post's moved message still links back.
+- **The old post's lock** (`lock on the old post`). It stays open, and its
+  lock label stays, so it can be neither sent nor moved until the busy
+  reply's hour has passed.
+- **No answer to the create** ("Nothing confirmed: Discord did not answer
+  the new post's create in <forum>, so a copy of <old post> may exist
+  there."). A copy may or may not appear in that forum. The old post was
+  not changed and its lock stays; after an hour the busy reply's advice
+  applies. A copy that appears is refused for sending and moving by its
+  first message, and for sending by a reply once the scan has seen it, and
+  is not greeted. Do not delete a post in that forum on
+  the strength of this message alone: another post can share the title and
+  the player's name.
+- **No reply at all** (the Worker was stopped, or the reply failed): any of
+  the states above may hold. Look at both posts before acting.
+
+**Files** are copied up to 20 MiB each and 24 MiB in all, Discord's limits
+less room for the message. The rest, any that fail to download, and any the
+player adds while the move runs stay on the old post, and the moved message
+says how many. A first message over
+Discord's 2,000 characters is cut, and the moved message says the full text
+is on the original.
+
+**Send to GitHub on a moved post** files the copy as the player's report:
+the issue names the player and links their profile, and "now tracked"
+starts with an @mention of them.
+
+**Calls.** Workers' free plan allows 50 `fetch` calls a run; KV calls are
+not counted here. A move with one repo, which `LOCK_REPO` also names, the
+webhook already made, a queue card to edit and a first message a player
+posted makes 19 (the GitHub token takes two, its search for an issue runs
+twice, as a filing's does, and the post's last 100 messages are read for
+the bot's own note and "now tracked" reply). A `LOCK_REPO` of another repo adds two,
+for its own token; moving a moved copy saves one, the member read. It adds one per file it
+tries to download, whether or not the download works; one the first time a
+forum's webhook is made; one when Discord refuses the card's edit and a new
+card is posted (a post with no card posts one instead of the edit, at no
+extra cost); one when the first message shows the bot nothing, to read
+the Message Content setting; and one when the post's messages hold one that
+starts as the bot's note or "now tracked" reply, to read the bot's own id.
+Each further repo searched costs four (its
+token's two and one per search), plus one per search for each further 100
+`from-discord` issues updated there since the post was made. With ten files
+and two repos, 17 calls are left: about 800 such issues past the first 100
+in each repo, in the two repos together (about 400 in each); past that,
+the last steps fail and are reported. If KV calls
+count too, the figure grows by six (four reads, two writes). The live bot
+runs on the paid plan.
+
 ## Clearing a filing record
 
 When the bot refuses a filing because the issue the post's saved record names
@@ -442,6 +618,13 @@ alert names it; a scan record that still cannot be read an hour after its
 post was made is named the same way. Deleting `thread:<post id>` loses the
 card's id, so a later filing by right-click leaves that card live; press it
 once to mark it filed.
+
+A move writes two more records, both the Worker's: `movedfrom:<new post id>`
+(the old post, the player and the queue card) and `movedto:<old post id>`
+(the new post). A damaged one is corrected by hand, not deleted: without
+`movedfrom:` the new post is refused for sending and moving for good, and
+without `movedto:` the old post can be sent or moved again once someone
+unlocks it (as in When a move stops partway).
 
 The scan's own keys are checked too. If `scan:since`, the time the bot
 started, is damaged, the scan stops rather than start again from now, which
@@ -652,6 +835,36 @@ checklist job, run alongside.
 
 Accepted on purpose; each line says how you would notice it.
 
+- A move copies the first message's text and files only: a sticker, a poll
+  or an embed is not copied, and a file over 20 MiB, or past 24 MiB in all,
+  stays on the old post.
+- A first message over Discord's 2,000 characters is cut in the copy, and so
+  in a later filing of the copy.
+- Two first moves into one forum at the same moment make two webhooks; both
+  work, and later moves use the first listed.
+- Two actions on one post within about a minute. A move can overlap a
+  filing, a scan, or a filing's late card edit or rename, and KV takes up to
+  a minute to show a move's records everywhere. The locks stop a second send
+  or move of the same post, but not these:
+  - A send of the old post already running when the move finished: an issue
+    for the old post. Close it, then send the new post.
+  - A scan that listed a post just before a move locked it, or that ran
+    before KV showed the move's record: a greeting or a queue card in or for
+    the old post. Delete the greeting; the card's buttons answer that the
+    post moved.
+  - The bot's copy whose moved message failed, whose first message the
+    player deleted, and whose move record the scan cannot read yet: a
+    greeting and a second card on the copy. Delete both.
+  - A filing's card edit or rename that lands after a move of the same post:
+    the card points back at the old post, or the old post is reopened.
+    Right-click the new post; archive the old post again.
+- On the free plan a move counts `fetch` calls only toward the 50 a run
+  allows (see Moving a post); if KV calls count too, the figure there grows
+  by six.
+- A moved post's wait for the daily list of waiting posts starts again at
+  the move: the list counts from the post's creation, the new post is new,
+  and the locked old post is not listed. A move is a staff touch.
+
 - A message whose send failed is never sent again automatically: the sweep
   lists it as unconfirmed, and a person decides.
 - A post the scan fails to greet in 30 runs in a row (server errors included),
@@ -848,7 +1061,12 @@ Accepted on purpose; each line says how you would notice it.
   label: the bot's search sees neither. For about a minute after a filing,
   its saved record may not yet be seen everywhere, so the same holds when
   the issue loses its `from-discord` label in that minute and the post is
-  sent again.
+  sent again. A move of such a post is refused while the bot's "now
+  tracked" reply is among the post's last 100 messages; a send is not.
+- With no `STATE` namespace bound, Send to GitHub knows a moved post only
+  from Discord, so two cases are filed: an old post someone unlocked whose
+  note "This post moved to ..." is no longer among its last 100 messages,
+  and a reply in the bot's copy once the copy's first message was deleted.
 - With no saved filing record, the bot searches every configured repo twice
   before filing. An issue moved between two configured repos while it
   searches can still be missed, and a second issue made. So can one in a repo
@@ -902,8 +1120,9 @@ Accepted on purpose; each line says how you would notice it.
   30th try, with a queue channel set, is named as a given-up queue card
   though no card was tried. If `daily:named` cannot be read, that day's
   alert, scan warning and list of waiting posts are not sent.
-- A new post's visit can use one of the record reads the scan keeps for older
-  posts' cards, so the eighth older card can wait a run. Cards already in the
+- An older post already done, between older posts still owed a card, spends
+  a record read outside the share the scan keeps for their cards, so the last
+  older card can wait a run. Cards already in the
   queue channel whose record writes keep failing take the scan's card slots
   every run until a write works, and newer posts' cards wait meanwhile.
 - Do not rename, swap or add the bot's tags (the status tags and `Accepted`,
@@ -1119,11 +1338,12 @@ KitnEssentials) before the real ones. Roughly 45 minutes.
    Note the Application ID and Public Key from General Information.
 3. **Invite it** with OAuth2 > URL Generator: scopes `bot` + `applications.commands`,
    permissions View Channels, Read Message History, Send Messages, Send
-   Messages in Threads, Manage Threads. Then check each channel's own
-   permissions, since a channel can override the invite's:
+   Messages in Threads, Manage Threads, Manage Webhooks. Then check each
+   channel's own permissions, since a channel can override the invite's:
    - each player forum: View Channel, Send Messages in Threads, Manage
-     Threads and Read Message History (without Read Message History every
-     queue card says the first message was deleted);
+     Threads, Read Message History (without it every queue card says the
+     first message was deleted) and Manage Webhooks (a move posts its copy
+     through the bot's webhook there);
    - the queue channel: View Channel, Send Messages and Read Message History.
      Let the bot into it before you set `QUEUE_CHANNEL_ID`: a post scanned
      while the channel refuses the bot gets no card;
@@ -1157,8 +1377,9 @@ KitnEssentials) before the real ones. Roughly 45 minutes.
    after every deploy (step 10).
 6. **Point Discord at it.** Developer portal > General Information >
    Interactions Endpoint URL = that URL. Discord checks it on save.
-7. **Register the commands** (the right-click Send to GitHub and `/bot-check`)
-   on the test server only:
+7. **Register the commands** (the right-click Send to GitHub and Move post,
+   and `/bot-check`) on the test server only, and again after updating to a
+   version that adds one (the register command sends all three):
    `DISCORD_APP_ID=... DISCORD_BOT_TOKEN=... DISCORD_GUILD_ID=<test server id> npm run register`
 8. **Labels:** `GITHUB_TOKEN=<a token with repo access> npm run labels <you>/<test-repo>`
 9. **Status workflow in the test repo:** copy `.github/discord-bot/` and

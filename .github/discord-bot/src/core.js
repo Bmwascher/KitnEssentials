@@ -65,7 +65,7 @@ export const LABEL_DEFS = [
 
 export const PERMS = {
   administrator: 1n << 3n, viewChannel: 1n << 10n, sendMessages: 1n << 11n, readMessageHistory: 1n << 16n,
-  manageThreads: 1n << 34n, sendMessagesInThreads: 1n << 38n,
+  manageWebhooks: 1n << 29n, manageThreads: 1n << 34n, sendMessagesInThreads: 1n << 38n,
 };
 
 // Messages to the moderator channel stay under Discord's 2,000 characters:
@@ -107,6 +107,12 @@ export async function postLines(post, lines) {
 // only its body could not be read.
 export const taken = (err) => !!(err && err.discord && err.discord.notJson && err.discord.status >= 200 && err.discord.status < 300);
 
+// The HTTP status a failed Discord or GitHub call answered, from the request
+// its client kept beside the error: the answer text in the message can quote
+// any status. Undefined for an error no call answered (out of time, no
+// network, KV).
+export const statusOf = (err) => (err.discord || err.github || {}).status;
+
 // Each counted call is one request: a redirect is answered, never followed,
 // so a call count bounds what a Worker run sends and a redirect cannot
 // move a post to another channel.
@@ -122,6 +128,7 @@ export const THREAD_TYPES = [10, 11, 12];
 export const FORUM_TYPE = 15;
 
 const CLIENTS = { retail: 'Retail', forever: 'Forever', all: 'All' };
+export const CLIENT_NAMES = Object.values(CLIENTS);
 const TYPES = { bug: 'Bug', feature: 'Feature', feedback: 'Feature', request: 'Feature' };
 const own = (obj, k) => (Object.prototype.hasOwnProperty.call(obj, k) ? obj[k] : null);
 
@@ -153,6 +160,20 @@ export function normRepoKey(s, repos) {
   const k = String(s || '').trim().toUpperCase();
   return Object.prototype.hasOwnProperty.call(repos, k) ? k : null;
 }
+
+// The REPOS keys Send to GitHub's dropdown offers: letters and digits, read
+// back by the submit as themselves (upper case), and short enough that the
+// filed title and renamed post they start keep their subject.
+export const REPO_KEY_MAX = 10;
+export const usableRepoKeys = (repos) => Object.keys(repos).filter((k) => /^[A-Za-z0-9]+$/.test(k) && normRepoKey(k, repos) === k && k.length <= REPO_KEY_MAX);
+// Discord's select takes 25 options, and Discord refuses a whole modal with
+// more: the forms do not open past it, and the setup checks warn first.
+export const SELECT_MAX = 25;
+
+// The bot's own moved copy: Discord marks a message a webhook posted with
+// the webhook's id and the id of the application that owns the webhook. A
+// deleted message is null.
+export const isBotCopy = (m, appId) => !!m && !!m.webhook_id && m.application_id === appId;
 
 // Each word's first character in upper case and the rest as typed, so "UI"
 // stays "UI". A letter whose capital has another length (ß, a ligature)
@@ -371,13 +392,23 @@ export function parseMarker(body) {
 // before the bot wrote it. Only the bot's footer counts: the line directly
 // before the thread marker that ends the body, since an older body may quote
 // such a line in its report.
+// The line a moved post's copy adds before the footer: the filed message was
+// posted by the bot's webhook, so a reply to it pings no one. Player text
+// cannot hold it (neutralize).
+export const COPY_MARK = '<!-- discord-copy -->';
+// The footer's filed message id, and whether the copy line sits directly
+// before the footer; null with no footer.
 export function parseFiledMessage(body) {
-  const m = /(?:^|\n)<!-- discord-message: (\d+) -->\n<!-- discord-thread: \d+ reporter: (?:\d+|unknown) -->\s*$/.exec(lf(body));
-  return m ? m[1] : null;
+  const text = lf(body);
+  const m = /(?:^|\n)<!-- discord-message: (\d+) -->\n<!-- discord-thread: \d+ reporter: (?:\d+|unknown) -->\s*$/.exec(text);
+  if (!m) return null;
+  const before = text.slice(0, m.index);
+  return { id: m[1], copy: before === COPY_MARK || before.endsWith(`\n${COPY_MARK}`) };
 }
 
-// `reporter` and `sender` are { name, username, id }, any part missing.
-export function buildBody({ content, reporter, sender, threadUrl, attachments, threadId, messageId, templateLine }) {
+// `reporter` and `sender` are { name, username, id }, any part missing;
+// `copied` marks an issue filed from a moved post's copy.
+export function buildBody({ content, reporter, sender, threadUrl, attachments, threadId, messageId, templateLine, copied = false }) {
   const lines = [
     `| Reporter | ${personCell(reporter)} |`, '| --- | --- |',
     `| Filed by | ${personCell(sender)} |`,
@@ -389,6 +420,7 @@ export function buildBody({ content, reporter, sender, threadUrl, attachments, t
   }
   if (templateLine) lines.push('', `Template check (advisory): ${templateLine}`);
   lines.push('');
+  if (copied) lines.push(COPY_MARK);
   if (messageId) lines.push(`<!-- discord-message: ${messageId} -->`);
   lines.push(marker({ threadId, reporterId: reporter && reporter.id }));
   return lines.join('\n');
@@ -495,15 +527,120 @@ export function planTags(current, available, statusName, { names = STATUS_NAMES,
   return { tags: a.tags, missing: false, full, noRoom: a.noRoom, noAccepted: a.noAccepted };
 }
 
+// A moved post's tag ids in its new forum. Each applied tag whose name, in
+// any letter case, the new forum has is kept as that forum's tag. A tag
+// REPO_TAGS maps is a repo tag only: kept by name, never read as a client or
+// a type, never added. A client tag that disagrees with the post's client
+// goes, and a forum with no client of its own gets a tag for each client no
+// kept tag names: on an All move its combined tag ("Retail Forever") when it
+// has one, else its first tag for each such client. An added tag names no
+// type, or the post's own: the forum's, else the one the kept tags name;
+// with neither known, only a tag naming none is added. A type tag that
+// disagrees with the forum's own type goes, and is never added. Discord takes
+// five: the status tag, a repo tag per key, a tag per client and Accepted come
+// first, then the rest in the post's order. `applied` is absent on a thread
+// read that carries no tag list.
+export function movedTags({ applied = [], from, to, client, fixedClient, fixedType, repoTags }) {
+  const target = new Map();
+  for (const t of to) if (!target.has(t.name.toLowerCase())) target.set(t.name.toLowerCase(), t.id);
+  const oldTags = new Map(from.map((t) => [t.id, t.name.toLowerCase()]));
+  const repoOf = (n) => own(repoTags, n) || '';
+  const kind = (n) => (repoOf(n) ? {} : guessFromTags([n]));
+  // The clients a tag names, a combined one both.
+  const covers = (n) => {
+    const c = kind(n).client;
+    return c === 'All' ? ['Retail', 'Forever'] : c ? [c] : [];
+  };
+  const typeFits = (n) => !(fixedType && kind(n).type && kind(n).type !== fixedType);
+  // The post and its forum's tags are read in separate calls, so a tag
+  // removed from the forum between them names nothing.
+  const kept = applied.map((id) => oldTags.get(id)).filter((n) => n !== undefined && target.has(n)
+    && !(covers(n).length && client !== 'All' && kind(n).client !== client) && typeFits(n));
+  const added = [];
+  if (!fixedClient) {
+    const need = (client === 'All' ? ['Retail', 'Forever'] : [client]).filter((c) => !kept.some((n) => covers(n).includes(c)));
+    // Send to GitHub guesses the type from the tags, so an added tag naming
+    // another type would change what the post is filed as.
+    const postType = fixedType || guessFromTags(kept.filter((n) => !repoOf(n))).type;
+    const pick = (want) => [...target.keys()].find((n) => !repoOf(n) && want(n) && (!kind(n).type || kind(n).type === postType));
+    const combined = pick((n) => kind(n).client === 'All');
+    // On an All move the forum's combined tag is added in place of single
+    // ones, so one tag says both clients and the five leave room for the
+    // rest. On a Retail or Forever move it would say both, so only single
+    // tags are added.
+    const picks = client === 'All' && combined && need.length ? [combined] : need.map((c) => pick((n) => kind(n).client === c));
+    added.push(...picks.filter(Boolean));
+  }
+  const statuses = new Set(STATUS_NAMES.map((s) => s.toLowerCase()));
+  const all = [...new Set([...kept, ...added])];
+  // A tag ranks as a client tag when it names a client no wider tag already
+  // names: a combined tag is counted first, so a single tag it covers ranks
+  // with the rest.
+  const fresh = new Set();
+  const covered = new Set();
+  for (const n of [...all].sort((a, b) => covers(b).length - covers(a).length)) {
+    if (covers(n).some((c) => !covered.has(c))) fresh.add(n);
+    covers(n).forEach((c) => covered.add(c));
+  }
+  // The first status tag, the first tag of each repo key, and the client tags
+  // above rank as such; a further status, repo or client alias ranks with the
+  // rest, so it cannot crowd out a client or Accepted.
+  const keys = new Set();
+  let status = false;
+  const ranked = all.map((n, i) => {
+    const firstStatus = statuses.has(n) && !status;
+    if (statuses.has(n)) status = true;
+    const firstRepo = !!repoOf(n) && !keys.has(repoOf(n));
+    if (repoOf(n)) keys.add(repoOf(n));
+    const r = firstStatus ? 0 : statuses.has(n) ? 4 : firstRepo ? 1 : fresh.has(n) ? 2 : n === ACCEPTED.toLowerCase() ? 3 : 4;
+    return { n, i, r };
+  });
+  return ranked.sort((a, b) => a.r - b.r || a.i - b.i).slice(0, 5).map(({ n }) => target.get(n));
+}
+
 // A thread name cut to Discord's 100 characters, never between the two
 // halves of a surrogate pair: a checklist thread's, and a filed post's
 // (its issue's title, where the form's limits keep the prefix under 100
 // while Discord counts them in UTF-16 units, so the cut normally falls
 // inside the title).
 export function fitName(s) {
-  if (s.length <= 100) return s;
-  const high = s.charCodeAt(99) >= 0xd800 && s.charCodeAt(99) <= 0xdbff;
-  return s.slice(0, high ? 99 : 100);
+  return cutUnits(s, 100);
+}
+
+// `s` cut to `max` UTF-16 units, never between the two halves of a
+// surrogate pair.
+export function cutUnits(s, max) {
+  if (s.length <= max) return s;
+  const c = s.charCodeAt(max - 1);
+  return s.slice(0, c >= 0xd800 && c <= 0xdbff ? max - 1 : max);
+}
+
+// A webhook's name as Discord takes it: one line, at most 80 units, without
+// "discord" or "clyde" in any letter case. The words are removed until none
+// is left, since one removal can join two halves into the word. A name empty
+// after that falls back to the username, then to Player.
+export function webhookName(name, username) {
+  const clean = (s) => {
+    let t = oneLine(s);
+    for (let was = null; was !== t;) {
+      was = t;
+      t = t.replace(/discord|clyde/gi, '');
+    }
+    return cutUnits(t.trim(), 80).trim();
+  };
+  return clean(name) || clean(username) || 'Player';
+}
+
+// The avatar Discord shows for a member: the server avatar, else the user's,
+// else the default one. A user id is past 2^53, so the default's index is
+// computed on BigInt; a user still on the old name system has a discriminator
+// other than "0".
+export function avatarUrl({ guildId, user, member }) {
+  const cdn = 'https://cdn.discordapp.com';
+  if (member && member.avatar) return `${cdn}/guilds/${guildId}/users/${user.id}/avatars/${member.avatar}.png`;
+  if (user.avatar) return `${cdn}/avatars/${user.id}/${user.avatar}.png`;
+  const index = user.discriminator !== '0' ? Number(user.discriminator) % 5 : Number((BigInt(user.id) >> 22n) % 6n);
+  return `${cdn}/embed/avatars/${index}.png`;
 }
 
 // A checklist thread's name, `#<n> <title>`, cut to fit.
@@ -541,6 +678,15 @@ export const MESSAGES = {
     return `**Duplicate.** This is the same problem as ${other}, so we'll follow it there and close this one. Thanks for reporting it!`;
   },
   needsInfo: (uid) => `${uid ? `<@${uid}> ` : ''}Could you add a bit more detail? A screenshot, your addon version and the steps to make it happen help a lot.`,
+  // The bot's message in a moved post's new post. Only the reporter is
+  // pinged (allowed_mentions); every name is text.
+  movedHere: ({ from, by, reporter, left, cut }) => [
+    `Moved here from ${from} by ${discordText(by)}.`,
+    `First posted by ${reporter.id ? `<@${reporter.id}>` : discordText(reporter.name)}.`,
+    left ? `${left} file(s) could not be copied (too large, or not downloaded); they are on the original post.` : '',
+    cut ? 'The first message was too long to copy whole; the full text is on the original post.' : '',
+  ].filter(Boolean).join(' '),
+  movedTo: ({ to, by }) => `This post moved to ${to} (moved by ${discordText(by)}).`,
 };
 
 // A fetch whose every call gives up after `ms`, and that refuses to start once
@@ -603,16 +749,59 @@ export function parseRoleIds(raw) {
   return String(raw || '').split(',').map((s) => s.trim()).filter((s) => /^\d+$/.test(s));
 }
 
-// The custom id of the send button ("send:<post>") and of the form
-// ("gh:<post>:<message>[:<button message or 0>[:<queue card>]]"). Their parts
-// go into API paths, so they are taken only when every part is digits.
+// The shape REPO_TAGS must have: tag names, each naming a REPOS key.
+export const isRepoTags = (t) => !!t && typeof t === 'object' && !Array.isArray(t) && Object.values(t).every((v) => typeof v === 'string');
+// The bot's own tag names, in lower case: a status or Accepted tag is never a
+// repo tag, since a move would drop it as one.
+export const OWN_TAG_NAMES = new Set([...STATUS_NAMES, ACCEPTED].map((s) => s.toLowerCase()));
+
+// REPO_TAGS: {"<tag name>":"<REPOS key>"}, the tag that marks a post's repo,
+// keyed here by the tag's name in lower case, its key read as normRepoKey
+// reads a key. A value that is blank, has no text form, or is not of that
+// shape gives none: Send to GitHub loses only its pre-fill, and the setup
+// check names it. The bot's own tag names are left out, and so is a name
+// that two entries, in two letter cases, give two keys: which one the map
+// meant cannot be told.
+export function parseRepoTags(raw) {
+  let t = null;
+  try { t = JSON.parse(String(raw ?? '')); } catch { /* none */ }
+  if (!isRepoTags(t)) return {};
+  const keys = new Map();
+  for (const [name, key] of Object.entries(t)) {
+    const n = name.toLowerCase();
+    const k = key.trim().toUpperCase();
+    if (!OWN_TAG_NAMES.has(n)) keys.set(n, keys.has(n) && keys.get(n) !== k ? null : k);
+  }
+  return Object.fromEntries([...keys].filter(([, k]) => k !== null));
+}
+
+// The REPOS key a post's tag names give, or null when they give none or two:
+// players choose their own tags.
+export function repoFromTags(names, repoTags) {
+  const keys = new Set(names.map((n) => own(repoTags, String(n).toLowerCase())).filter(Boolean));
+  return keys.size === 1 ? [...keys][0] : null;
+}
+
+// A post's tag names less its repo tags: a repo tag names the repo only, so
+// it gives the forms no client or type.
+export const plainTags = (names, repoTags) => names.filter((n) => !own(repoTags, String(n).toLowerCase()));
+
+// The custom ids of the send button ("send:<post>"), its form
+// ("gh:<post>:<message>[:<button message or 0>[:<queue card>]]"), the move
+// button ("move:<post>") and the move form ("mv:<post>[:<queue card>]"). Their
+// parts go into API paths, so they are taken only when every part is digits.
 export const SEND_BUTTON = 'send';
+export const MOVE_BUTTON = 'move';
 export function parseCustomId(id) {
   const s = String(id || '');
   let m = new RegExp(`^${SEND_BUTTON}:(\\d+)$`).exec(s);
   if (m) return { kind: 'send', threadId: m[1] };
   m = /^gh:(\d+):(\d+)(?::(\d+)(?::(\d+))?)?$/.exec(s);
   if (m) return { kind: 'form', threadId: m[1], messageId: m[2], greetingId: m[3] && m[3] !== '0' ? m[3] : '', cardId: m[4] || '' };
+  m = new RegExp(`^${MOVE_BUTTON}:(\\d+)$`).exec(s);
+  if (m) return { kind: 'move', threadId: m[1] };
+  m = /^mv:(\d+)(?::(\d+))?$/.exec(s);
+  if (m) return { kind: 'moveForm', threadId: m[1], cardId: m[2] || '' };
   return null;
 }
 
@@ -632,6 +821,7 @@ export function discordText(s) {
 const SUPPRESS_EMBEDS = 1 << 2;
 
 const openPost = (guildId, postId) => ({ type: 2, style: 5, label: 'Open post', url: `https://discord.com/channels/${guildId}/${postId}` });
+const moveButton = (postId) => ({ type: 2, style: 2, label: 'Move', custom_id: `${MOVE_BUTTON}:${postId}` });
 // The card's first line: the forum and the post as Discord's own mentions, so
 // Discord shows the post's current name as a link to it, and no text a player
 // chose is in the line.
@@ -646,20 +836,20 @@ export const BY_RIGHT_CLICK = 'a moderator can open the post and right-click a m
 // mention, which opens their profile and pings no one (allowed_mentions),
 // beside their username; a poster with no user id (a webhook) is named as
 // text. Unknown parts are left out. The form files the post's first message,
-// so a post whose first message is gone gets no send button, only the way to
-// file it by hand.
-export function queueCard({ guildId, forumId, postId, author, client, type, starterGone = false }) {
+// so a post whose first message is gone gets no send or Move button, only the
+// way to file it by hand. `moved` names who moved the post here.
+export function queueCard({ guildId, forumId, postId, author, client, type, starterGone = false, moved = null }) {
   const who = author && (/^\d+$/.test(String(author.id ?? '')) ? `<@${author.id}>` : discordText(author.name));
   const by = author ? `by ${who}${author.username ? ` (\`${oneLine(author.username).replace(/`/g, '')}\`)` : ''}` : '';
   const second = [by, type, client].filter(Boolean).join(' · ');
   const lines = [cardHead(forumId, postId), second,
-    starterGone ? `Its first message was deleted: ${BY_RIGHT_CLICK}` : ''].filter(Boolean);
+    starterGone ? `Its first message was deleted: ${BY_RIGHT_CLICK}` : '', moved ? `Moved by ${discordText(moved)}` : ''].filter(Boolean);
   return {
     content: lines.join('\n'),
     allowed_mentions: { parse: [] },
     flags: SUPPRESS_EMBEDS,
     components: [{ type: 1, components: [
-      ...(starterGone ? [] : [{ type: 2, style: 1, label: 'Send to GitHub', custom_id: `${SEND_BUTTON}:${postId}` }]),
+      ...(starterGone ? [] : [{ type: 2, style: 1, label: 'Send to GitHub', custom_id: `${SEND_BUTTON}:${postId}` }, moveButton(postId)]),
       openPost(guildId, postId),
     ] }],
   };

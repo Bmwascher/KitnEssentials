@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scan as runScan, daily, GREETING, CRONS } from '../src/scan.js';
+import { scan as runScan, daily, GREETING, CRONS, readStrict } from '../src/scan.js';
 import { MESSAGES } from '../src/core.js';
 
 // A scan that does not really wait out KV's one write a second per key; the
@@ -22,12 +22,14 @@ const baseEnv = (kv) => ({ DISCORD_BOT_TOKEN: 'bot', GUILD_ID: '1', FORUMS: '{"9
 // The archived list is served `pageSize` at a time; `refuse` maps a channel
 // id to the status its message calls answer with, and `postRefuse` refuses
 // only its sends; `said` holds a channel's messages, newest first. A post is
-// read from the active and archived lists. The bot's own user id is 'b'.
-function discord({ active = [], archived = [], pageSize = 50, refuse = {}, postRefuse = {}, said = {}, mod = { id: '555', type: 0, guild_id: '1' } } = {}) {
+// read from the active and archived lists. The bot's own user id is 'b', its
+// application's id 'app-1'.
+function discord({ active = [], archived = [], pageSize = 50, refuse = {}, postRefuse = {}, said = {}, mod = { id: '555', type: 0, guild_id: '1' }, app = { id: 'app-1' } } = {}) {
   let n = 0;
   const no = (status) => new Response(JSON.stringify({ message: 'no' }), { status });
   return fakeFetch([
     ['GET', /\/users\/@me$/, () => ({ id: 'b' })],
+    ['GET', /\/applications\/@me$/, () => app],
     ['GET', /\/guilds\/1\/threads\/active$/, () => ({ threads: active })],
     ['GET', /\/channels\/900\/threads\/archived\/public/, (b, url) => {
       const before = /before=([^&]+)/.exec(url);
@@ -81,7 +83,7 @@ test('each new post gets the buttonless greeting and one queue card, once', asyn
   assert.match(card.url, /\/channels\/556\/messages$/);
   // The post and its poster are Discord mentions: the scan passes the post's id and the poster's user id.
   assert.equal(card.body.content, `**New post in <#900>:** <#${post}>\nby <@42> (\`kira_99\`) · Bug · Retail`);
-  assert.deepEqual(card.body.components[0].components.map((b) => b.custom_id || b.url), [`send:${post}`, `https://discord.com/channels/1/${post}`]);
+  assert.deepEqual(card.body.components[0].components.map((b) => b.custom_id || b.url), [`send:${post}`, `move:${post}`, `https://discord.com/channels/1/${post}`]);
   assert.deepEqual(JSON.parse(kv.m.get(`thread:${post}`)), { greeting: 'm1', buttonless: true, card: 'm2' });
 });
 
@@ -408,7 +410,7 @@ test('new posts come first: older posts\' card retries and posts filed before th
   const f = discord({ active: [...older, ...filed, fresh].map((id) => ({ id, parent_id: '900', name: 'x' })) });
   let reads = 0;
   const get = kv.get;
-  kv.get = async (k) => { if (k.startsWith('thread:') || k.startsWith('issue:')) reads++; return get(k); };
+  kv.get = async (k) => { if (/^(thread|issue|moved(from|to)):/.test(k)) reads++; return get(k); };
   const r = await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
   assert.deepEqual(r.greeted, [fresh], 'the new post is greeted');
   assert.ok(reads <= 60, `within the KV reads: ${reads}`);
@@ -536,6 +538,7 @@ test('a long daily alert goes out in whole lines under 1,900 characters, and wha
   const posted = f.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content);
   assert.equal(posted.length, 4, 'the daily posting share');
   assert.match(posted[0], /^The post scan gave up on these posts: after 30 tries;/);
+  assert.match(posted[0], /except a damaged movedfrom: or movedto: record, which is corrected by hand and never deleted/);
   const entry = /^- queue card: https:\/\/discord\.com\/channels\/1\/\d+$/;
   for (const [i, msg] of posted.entries()) {
     assert.ok(msg.length <= 1900, `message ${i}: ${msg.length} characters`);
@@ -774,11 +777,12 @@ test('posts already handled are not read from KV again', async () => {
   assert.equal(stateOf(kv).through['900'], active[2].id);
   let reads = 0;
   const get = kv.get;
-  kv.get = async (k) => { if (k.startsWith('thread:') || k.startsWith('issue:')) reads++; return get(k); };
+  kv.get = async (k) => { if (/^(thread|issue|moved(from|to)):/.test(k)) reads++; return get(k); };
   active.push({ id: idAt(T0 + 9000), parent_id: '900' });
   const r = await scan(baseEnv(kv), { fetch: f, now: () => T0 + 10 * 60000, log: () => {} });
   assert.deepEqual(r.greeted, [active[3].id]);
-  assert.equal(reads, 2, 'only the new post is looked up (its record, then whether it was filed)');
+  // This world shows no first message, so the record of a move here is read too.
+  assert.equal(reads, 4, 'only the new post is looked up (its record, whether it was filed or moved away, and whether a move made it)');
 });
 
 test('a post made in the same millisecond the bot started is left alone', async () => {
@@ -1073,4 +1077,141 @@ test('NT1: a post that refuses the bot (403) is named once, only in a text chann
     assert.match(out.join('\n'), logged, why);
     assert.equal(f.find('GET', new RegExp(`/channels/${modId}$`)).length, reads, `${why}: ${reads} channel read(s)`);
   }
+});
+
+test('a greeting that fails with a 500 whose answer quotes " -> 403 " is tried again next run', async () => {
+  const kv = started(T0);
+  const a = idAt(T0 + 1000);
+  const f = discord({ active: [{ id: a, parent_id: '900' }] });
+  let fail = true;
+  const fetch = (url, init = {}) => (fail && init.method === 'POST' && url.endsWith(`/channels/${a}/messages`)
+    ? Promise.resolve(new Response('upstream said -> 403 x', { status: 500 })) : f(url, init));
+  const r = await scan(baseEnv(kv), { fetch, now: () => T0 + 5 * 60000, log: () => {} });
+  assert.deepEqual([r.greeted.length, r.left], [0, 1], 'left for the next run, not given up');
+  fail = false;
+  assert.deepEqual((await scan(baseEnv(kv), { fetch, now: () => T0 + 10 * 60000, log: () => {} })).greeted, [a]);
+});
+
+test('the move records read strictly by their shape', async () => {
+  const kv = fakeKv({
+    'movedfrom:9': JSON.stringify({ from: '7', reporter: { name: 'Pat', id: '42', username: 'pat', avatar: 'https://cdn.discordapp.com/avatars/42/a.png' }, card: '96' }),
+    'movedfrom:10': JSON.stringify({ from: '7', reporter: { name: 'Hook' } }),
+    'movedto:7': '{"to":"9"}',
+    'movedfrom:8': '{"from":"7","reporter":{}}', 'movedto:6': '{"to":"x"}',
+    'movedfrom:5': '{"from":"7","reporter":{"name":"Pat","id":"x"}}', 'movedfrom:4': '{"from":"7","reporter":{"name":"Pat"},"card":"x"}',
+    'movedfrom:3': '{"from":"7","reporter":{"name":"Pat","username":""}}',
+    'movedto:2': '{"to":1234567890123456789}',
+  });
+  assert.deepEqual(await readStrict(kv, 'movedto:7'), { to: '9' });
+  assert.equal((await readStrict(kv, 'movedfrom:9')).reporter.name, 'Pat');
+  assert.equal((await readStrict(kv, 'movedfrom:10')).reporter.name, 'Hook', 'a webhook reporter has its name alone');
+  // Each id goes into a Discord path or mention, so one that is not digits is damaged.
+  for (const key of ['movedfrom:8', 'movedto:6', 'movedfrom:5', 'movedfrom:4', 'movedfrom:3', 'movedto:2']) await assert.rejects(readStrict(kv, key), (e) => e.damaged === key, key);
+});
+
+test('a moved post is known by the move\'s message or record when its first message is not seen, a post moved away by its record, and a receipt that starts with a mention still counts', async () => {
+  for (const [why, msgs, want, records = () => ({})] of [
+    ['the first message deleted, the move\'s message there', [{ id: 'm1', author: { id: 'b' }, content: 'Moved here from https://discord.com/channels/1/7 by Mod. First posted by <@42>.' }],
+      { skipped: 'a post the bot moved here' }],
+    // A busy copy: its first message and the move's message are past the last 100.
+    ['the first message and the move\'s message out of view, the move\'s record there', [], { skipped: 'a post the bot moved here' },
+      (post) => ({ [`movedfrom:${post}`]: JSON.stringify({ from: '7', reporter: { name: 'Pat' } }) })],
+    ['a filed copy\'s receipt', [{ id: 'm2', author: { id: 'b' }, content: '<@42> Thanks! This is now tracked as ONE #9.' }], { tracked: 'm2' }],
+    // The old post of a move whose movedto: record and lock both failed.
+    ['the move\'s note in a post moved away', [{ id: 'm3', author: { id: 'b' }, content: 'This post moved to https://discord.com/channels/1/9 (moved by Mod).' }],
+      { skipped: 'a post the bot moved away' }],
+  ]) {
+    const kv = started(T0);
+    const post = idAt(T0 + 60000);
+    for (const [k, v] of Object.entries(records(post))) kv.m.set(k, v);
+    const f = discord({ active: [{ id: post, parent_id: '900', name: 'Bags' }], said: { [post]: msgs } });
+    await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+    assert.equal(f.find('POST', /\/messages$/).length, 0, why);
+    assert.deepEqual(JSON.parse(kv.m.get(`thread:${post}`)), want, why);
+  }
+  // A post moved away: its movedto: record keeps the scan off it, even when
+  // the move could leave neither its note nor its lock there.
+  const kv = started(T0);
+  const post = idAt(T0 + 60000);
+  kv.m.set(`movedto:${post}`, '{"to":"9"}');
+  const f = discord({ active: [{ id: post, parent_id: '900', name: 'Bags' }] });
+  await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+  assert.equal(f.find('POST', /\/messages$/).length, 0, 'no greeting and no card');
+});
+
+test('a busy copy whose move record was not saved is known by its first message, read on its own', async () => {
+  const kv = started(T0);
+  const post = idAt(T0 + 60000);
+  // A hundred later messages hide the first message and the move's message.
+  const chatter = Array.from({ length: 100 }, (_, i) => ({ id: String(900 + i), author: { id: '43' }, content: 'hi' }));
+  const f = discord({ active: [{ id: post, parent_id: '900', name: 'Bags' }], said: { [post]: chatter } });
+  const starter = { id: post, webhook_id: '61', application_id: 'app-1', author: { id: '61', username: 'Pat' } };
+  const fetch = (url, init = {}) => ((init.method || 'GET') === 'GET' && url.endsWith(`/channels/${post}/messages/${post}`)
+    ? Promise.resolve(new Response(JSON.stringify(starter), { status: 200 })) : f(url, init));
+  await scan(withQueue(kv), { fetch, now: () => T0 + 5 * 60000, log: () => {} });
+  assert.equal(f.find('POST', /\/messages$/).length, 0, 'no greeting and no card');
+  assert.deepEqual(JSON.parse(kv.m.get(`thread:${post}`)), { skipped: 'a post the bot moved here' });
+});
+
+test('a failed read of the bot\'s application is a try for the post, never its give-up', async () => {
+  const kv = started(T0);
+  const post = idAt(T0 + 60000);
+  const starter = { id: post, webhook_id: '61', application_id: 'app-2', author: { id: '61', username: 'Pat' } };
+  const f = discord({ active: [{ id: post, parent_id: '900', name: 'Bags' }], said: { [post]: [starter] }, app: new Response('{"message":"no"}', { status: 403 }) });
+  await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+  assert.deepEqual(JSON.parse(kv.m.get(`thread:${post}`)), { tries: 1 });
+});
+
+test('a post the bot moved here gets no greeting and no card; another app\'s webhook post is greeted', async () => {
+  for (const [why, app, greeted] of [['the bot\'s own copy', 'app-1', false], ['another app\'s webhook', 'app-2', true]]) {
+    const kv = started(T0);
+    const post = idAt(T0 + 60000);
+    const starter = { id: post, webhook_id: '61', application_id: app, author: { id: '61', username: 'Pat' } };
+    const f = discord({ active: [{ id: post, parent_id: '900', name: 'Bags' }], said: { [post]: [starter] } });
+    await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+    assert.equal(f.find('POST', /\/messages$/).length, greeted ? 2 : 0, why);
+    if (!greeted) assert.deepEqual(JSON.parse(kv.m.get(`thread:${post}`)), { skipped: 'a post the bot moved here' }, why);
+  }
+  // No webhook message among the new posts: the application is never read.
+  const kv = started(T0);
+  const post = idAt(T0 + 60000);
+  const f = discord({ active: [{ id: post, parent_id: '900' }], said: { [post]: [{ id: post, author: { id: '42', username: 'pat' } }] } });
+  await scan(baseEnv(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+  assert.equal(f.find('GET', /\/applications\/@me$/).length, 0);
+});
+
+test('a new post\'s visit starts only with room for all its reads, so the older posts\' share stays whole', async () => {
+  // Eight older posts owed cards keep 24 of the 60 reads (three each), so new
+  // posts have 36. Seventeen filed new posts spend 34 (two each). An ordinary
+  // new post reads four (its record, its filing, its move away and, its first
+  // message out of view, its move here): started at 34, it would end at 38
+  // and leave the eighth older card short, so it waits for the next run.
+  const older = Array.from({ length: 8 }, (_, i) => idAt(T0 + 1000 * (i + 1)));
+  const kv = started(T0, { greeted: { 900: older.at(-1) } });
+  for (const id of older) await kv.put(`thread:${id}`, JSON.stringify({ greeting: 'g', buttonless: true, tries: 1 }));
+  const filed = Array.from({ length: 17 }, (_, i) => idAt(T0 + 100000 + 1000 * i));
+  for (const id of filed) await kv.put(`issue:${id}`, JSON.stringify({ repo: 'me/one', number: 3, key: 'ONE', by: 'Bite' }));
+  const fresh = idAt(T0 + 200000);
+  const f = discord({ active: [...older, ...filed, fresh].map((id) => ({ id, parent_id: '900', name: 'x' })) });
+  const r = await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+  assert.deepEqual(r.greeted, [], 'the ordinary new post waits: its visit would cross into the older share');
+  assert.equal(f.find('GET', new RegExp(`/channels/${fresh}/messages`)).length, 0, 'its visit never started');
+  const carded = f.find('POST', /\/channels\/556\/messages$/).map((c) => c.body.components[0].components.at(-1).url.split('/').at(-1));
+  assert.deepEqual(carded, older, 'every older post owed a card gets it');
+});
+
+test('the older posts\' share follows how many are owed: one older card holds back no new post with reads to spare', async () => {
+  // One older post keeps three reads; thirteen filed new posts spend 26, so
+  // the ordinary new post still has room for its four.
+  const owed = idAt(T0 + 1000);
+  const kv = started(T0, { greeted: { 900: owed } });
+  await kv.put(`thread:${owed}`, JSON.stringify({ greeting: 'g', buttonless: true, tries: 1 }));
+  const filed = Array.from({ length: 13 }, (_, i) => idAt(T0 + 100000 + 1000 * i));
+  for (const id of filed) await kv.put(`issue:${id}`, JSON.stringify({ repo: 'me/one', number: 3, key: 'ONE', by: 'Bite' }));
+  const fresh = idAt(T0 + 200000);
+  const f = discord({ active: [owed, ...filed, fresh].map((id) => ({ id, parent_id: '900', name: 'x' })) });
+  const r = await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+  assert.deepEqual(r.greeted, [fresh], 'the new post is greeted this run');
+  const carded = f.find('POST', /\/channels\/556\/messages$/).map((c) => c.body.components[0].components.at(-1).url.split('/').at(-1));
+  assert.equal(carded[0], owed, 'the older post\'s card goes out first');
 });

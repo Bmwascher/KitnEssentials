@@ -34,10 +34,16 @@
 //                 one from before the filing record may hold "issue"
 //   issue:<id>   the Worker's record once the post is filed: {"repo",
 //                 "number", "key", "by"}
+//   movedfrom:<id>  the Worker's record of a post a move made: {"from": the
+//                 old post's id, "reporter": {"name", "id", "username",
+//                 "avatar"}, "card": the old post's queue card id}; the
+//                 reporter's id, username and avatar and the card optional
+//   movedto:<id>  the Worker's record of a post moved away: {"to": the new
+//                 post's id}
 //   daily:named  the posts of the give-ups a daily check has named
 // Each key has one writer: the scan writes thread: and scan:, the Worker
-// issue:, the daily check daily:named.
-import { parseForums, snowflakeMs, timedFetch, currentStatus, SEND_BUTTON, queueCard, personName, MESSAGES, discordText, postLines, taken, oneHop, isDiscordId, TEXT_TYPES } from './core.js';
+// issue:, movedfrom: and movedto:, the daily check daily:named.
+import { parseForums, snowflakeMs, timedFetch, currentStatus, SEND_BUTTON, queueCard, personName, MESSAGES, discordText, postLines, taken, oneHop, isDiscordId, TEXT_TYPES, statusOf, isBotCopy } from './core.js';
 import { discordClient } from './discord.js';
 
 export { SEND_BUTTON };
@@ -48,19 +54,25 @@ export { SEND_BUTTON };
 // and one more again when that read answers 404, to tell a deleted post;
 // a card waits when the card share is spent).
 // Greetings, cards and the scan's own reads (the active posts, the bot's id,
-// the queue channel) each have their own client, so cards can never use up
-// what the greetings need. The daily check's forum reads keep their own share.
+// its application's id, the queue channel) each have their own client, so
+// cards can never use up what the greetings need. The daily check's forum
+// reads keep their own share.
 const MAX_GREET = 8;
 const MAX_CARDS = 8;
-const READ_BUDGET = 3;
+const READ_BUDGET = 4;
 const GREET_BUDGET = 2 * MAX_GREET;
 const CARD_BUDGET = 3 * MAX_CARDS;
 const FORUM_BUDGET = 44;
 const POST_BUDGET = 4;
 const MAX_KV_READS = 60;
-// The reads older posts' card retries keep when any are owed: the new
-// posts' visits never use them, so a run of new posts cannot starve them.
-const OLDER_READS = 2 * MAX_CARDS;
+// The most records a new post's visit reads: its own, its filing, its move
+// away, and, when its first message is out of view, its move here.
+const VISIT_READS = 4;
+// The records an older post's card retry reads: its own, its filing and its
+// move away (its greeting is out, so its move here is not read). The new
+// posts' visits keep these clear for each older post owed a card, up to the
+// card share, so a run of new posts cannot starve them.
+const CARD_READS = 3;
 // A post whose pass fails this many runs in a row (not a refusal) is given
 // up on: about 30 minutes of errors at one scan a minute. Its greeting and
 // its card share the count; once the greeting is out, giving up skips only
@@ -109,6 +121,19 @@ const SCAN_FIELDS = {
   issue: isIssue,
 };
 const isScanRecord = (v) => isRecord(v) && Object.entries(SCAN_FIELDS).every(([k, ok]) => v[k] === undefined || ok(v[k]));
+// The Worker's move records: on the new post, the old post's id and its
+// reporter, named; on the old post, the new post's id. A bot admin may write
+// one back by hand, and each id goes into a Discord path or mention, so ids
+// are digit strings (a JSON number past 2^53 reads rounded) and texts are not
+// empty.
+const isId = (v) => typeof v === 'string' && isDiscordId(v);
+const isMovedFrom = (v) => isRecord(v) && isId(v.from) && isRecord(v.reporter) && isText(v.reporter.name)
+  && (v.reporter.id === undefined || isId(v.reporter.id))
+  && ['username', 'avatar'].every((k) => v.reporter[k] === undefined || isText(v.reporter[k]))
+  && (v.card === undefined || isId(v.card));
+const isMovedTo = (v) => isRecord(v) && isId(v.to);
+// Each key's shape by its prefix; any other key is the scan's record.
+const SHAPES = [['issue:', isIssue], ['movedfrom:', isMovedFrom], ['movedto:', isMovedTo]];
 // The scan's own state: marks that are post ids, and times and lists of the
 // shapes it writes.
 const isMarks = (v) => v === undefined || (isRecord(v) && Object.values(v).every((id) => /^\d+$/.test(String(id))));
@@ -140,7 +165,7 @@ export async function readStrict(kv, key) {
   if (raw === null || raw === undefined) return null;
   let v = null;
   try { v = JSON.parse(raw); } catch { /* damaged, below */ }
-  const ok = key.startsWith('issue:') ? isIssue(v) : isScanRecord(v);
+  const ok = (SHAPES.find(([prefix]) => key.startsWith(prefix)) || [null, isScanRecord])[1](v);
   if (!ok) throw Object.assign(new Error(`the KV value at ${key} is damaged (not a record the bot wrote)`), { damaged: key });
   return v;
 }
@@ -174,7 +199,7 @@ function budgetClient(env, deps, budget) {
   return discordClient(env.DISCORD_BOT_TOKEN, countedFetch(timedFetch(oneHop(deps.fetch || fetch), CALL_MS), budget));
 }
 
-const refused = (err) => / -> (403|404) /.test(String(err && err.message));
+const refused = (err) => [403, 404].includes(statusOf(err));
 
 const buttons = (m) => (m.components || []).flatMap((row) => row.components || []);
 // An old button greeting, or a queue card, holding the post's send button.
@@ -184,8 +209,17 @@ export const hasButton = (m, postId) => buttons(m).some((c) => c.custom_id === `
 const isCardFor = (m, postId, me, guildId) => !!m.author && m.author.id === me
   && (hasButton(m, postId) || buttons(m).some((c) => c.url === `https://discord.com/channels/${guildId}/${postId}`));
 
-// How the Worker's "now tracked" reply starts.
+// How the Worker's "now tracked" reply starts, its moved message in a post a
+// move made, and its note in a post a move took away.
 const TRACKED_START = MESSAGES.tracked('\u0000', 0).split('\u0000')[0];
+const MOVED_START = MESSAGES.movedHere({ from: '\u0000', by: '', reporter: { name: '' } }).split('\u0000')[0];
+export const AWAY_START = MESSAGES.movedTo({ to: '\u0000', by: '' }).split('\u0000')[0];
+// The skip a post the bot moved here is saved with; the Worker refuses to
+// file a reply in a post whose record says it.
+export const MOVED_HERE = 'a post the bot moved here';
+// The text of the Worker's "now tracked" reply, whoever wrote it. On a moved
+// post's copy it starts with the reporter's mention.
+export const isReceipt = (m) => String(m.content || '').replace(/^<@\d+> /, '').startsWith(TRACKED_START);
 
 // The bot's own messages among the post's last 100: its greeting (the
 // buttonless one, or an old one still showing its button), and its "now
@@ -196,9 +230,15 @@ async function lookIn(discord, threadId, myId) {
   const recent = (await discord.call('GET', `/channels/${threadId}/messages?limit=100`)) || [];
   const me = recent.length ? await myId() : null;
   const mine = recent.filter((m) => !!m.author && m.author.id === me);
-  const receipt = mine.find((m) => String(m.content || '').startsWith(TRACKED_START));
+  const receipt = mine.find(isReceipt);
   return {
     receipt: receipt ? receipt.id : null,
+    // The move's own message: the post is a copy the bot made, even when its
+    // first message is gone or past these 100.
+    moved: mine.some((m) => String(m.content || '').startsWith(MOVED_START)),
+    // The move's note: the post was moved away, even when its movedto:
+    // record was not saved and the move could not lock it.
+    away: mine.some((m) => String(m.content || '').startsWith(AWAY_START)),
     greeting: mine.find((m) => hasButton(m, threadId) || m.content === GREETING) || null,
     starter: recent.find((m) => m.id === threadId) || null,
     full: recent.length >= 100,
@@ -259,6 +299,15 @@ export async function scan(env, deps = {}) {
     const sleep = deps.sleep || ((ms) => new Promise((done) => setTimeout(done, ms)));
     let me = null;
     const myId = () => (me = me || discord.me().then((u) => u.id));
+    // The bot's application id, which its webhook's messages carry: read
+    // once a run, and only for a new post whose first message is an
+    // application's webhook message. A failed read is no fault of the post:
+    // it is thrown without the request's status, so it counts as a try and
+    // is never read as the post's refusal.
+    let app = null;
+    const myAppId = () => (app = app || discord.call('GET', '/applications/@me').then((a) => a.id, (e) => {
+      throw new Error(`the bot's application could not be read (${e.discord ? `status ${e.discord.status}` : e.name})`);
+    }));
     // The queue channel's last 100 messages, read once a run and only when a
     // card is due, to find a card whose id was never saved.
     let queued = null;
@@ -446,6 +495,9 @@ export async function scan(env, deps = {}) {
         // A post filed before this pass (by right-click, or from its card
         // after the greeting) gets no greeting and no card.
         if (await read(`issue:${t.id}`)) return { greeted: true, finished: true };
+        // Nor does a post a move took away, though the move could leave
+        // neither its note nor its lock there (a run past its steps' phase).
+        if (await read(`movedto:${t.id}`)) return { greeted: true, finished: true };
         if (!rec.greeting) {
           // The greeting share counts only posts that try a greeting.
           if (tried >= MAX_GREET) { left++; return { greeted: false, finished: false }; }
@@ -455,6 +507,27 @@ export async function scan(env, deps = {}) {
             // Filed and told, though its filing record is missing or not yet
             // visible here: no greeting after the receipt, and no card.
             rec = { ...rec, tracked: seen.receipt };
+            await putRecord(t.id, rec);
+            return { greeted: true, finished: true };
+          }
+          // The bot's copy of a moved post (the move's message is there, or
+          // its first message came from the bot's webhook) gets no greeting
+          // or card: the move's message and the old post's card stand in.
+          // Discord shows these before KV shows the move's records. A first
+          // message out of view is told by the record, or, past these 100
+          // with no record saved, by reading the first message on its own.
+          // The application is read only for a message that could be its copy.
+          const isCopy = async (m) => !!(m && m.webhook_id && m.application_id) && isBotCopy(m, await myAppId());
+          let copy = seen.moved || await isCopy(seen.starter);
+          if (!copy && !seen.starter) copy = !!(await read(`movedfrom:${t.id}`));
+          if (!copy && !seen.starter && seen.full) copy = await isCopy((await greeter.readMessage(t.id, t.id)).message);
+          if (copy) {
+            rec = { ...rec, skipped: MOVED_HERE };
+            await putRecord(t.id, rec);
+            return { greeted: true, finished: true };
+          }
+          if (seen.away) {
+            rec = { ...rec, skipped: 'a post the bot moved away' };
             await putRecord(t.id, rec);
             return { greeted: true, finished: true };
           }
@@ -494,11 +567,13 @@ export async function scan(env, deps = {}) {
     const outcome = new Map();
     const owed = [];
     const older = fresh.filter((x) => !isNew.has(x.id));
-    const newReads = MAX_KV_READS - (older.length ? OLDER_READS : 0);
+    const newReads = MAX_KV_READS - Math.min(older.length, MAX_CARDS) * CARD_READS;
     for (const t of fresh.filter((x) => isNew.has(x.id))) {
       // Once the greeting share is spent, a later new post could only wait:
       // it waits unread.
-      if (reads >= newReads || tried >= MAX_GREET) { left++; continue; }
+      // A visit starts only with room for its most reads: one that reads
+      // four after an even count would otherwise eat into the older share.
+      if (reads + VISIT_READS > newReads || tried >= MAX_GREET) { left++; continue; }
       const o = await greet(t);
       outcome.set(t.id, o);
       if (o.owes) owed.push(o.owes);
@@ -643,7 +718,7 @@ export async function daily(env, deps = {}) {
     const at = new Map();
     if (gaveUp.length) {
       if (prior.damaged) alert.push('The list of give-ups already named (daily:named) was damaged, so some below may have been named before.');
-      alert.push(`The post scan gave up on these posts: after ${MAX_TRIES} tries; at once when the queue channel or the post refused the bot; or because a saved record is damaged or could not be read. For a refusal, check the bot's permissions: in the queue channel, View Channel, Send Messages and Read Message History; in the post's forum, View Channel, Send Messages in Threads and Read Message History. A moderator can file each by right-click once access is fixed; for one listed with a damaged or unreadable record, a bot admin first fixes or deletes that KV key (README, "Clearing a filing record").`);
+      alert.push(`The post scan gave up on these posts: after ${MAX_TRIES} tries; at once when the queue channel or the post refused the bot; or because a saved record is damaged or could not be read. For a refusal, check the bot's permissions: in the queue channel, View Channel, Send Messages and Read Message History; in the post's forum, View Channel, Send Messages in Threads and Read Message History. A moderator can file each by right-click once access is fixed; for one listed with a damaged or unreadable record, a bot admin first fixes or deletes that KV key (README, "Clearing a filing record"), except a damaged movedfrom: or movedto: record, which is corrected by hand and never deleted: deleting it leaves its post refused, or open to a second send.`);
       for (const g of gaveUp) {
         at.set(g, alert.length);
         alert.push(lineOf(g));

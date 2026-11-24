@@ -1,7 +1,8 @@
 // Minimal Discord REST client. `fetchImpl` is injectable so tests never hit the network.
-import { nextAppliedTags, currentStatus, otherTags, sameTags, snowflakeMs, planTags, withAccepted, shownStatuses, triagedAlone, showsAccepted, forumTags } from './core.js';
+import { nextAppliedTags, currentStatus, otherTags, sameTags, snowflakeMs, planTags, withAccepted, shownStatuses, triagedAlone, showsAccepted, statusOf, forumTags } from './core.js';
 
 const API = 'https://discord.com/api/v10';
+const USER_AGENT = 'DiscordBot (https://github.com, 1.0)';
 
 // A post is gone only when a request for the post itself (its read or its
 // tag write) answers 404; a 404 from its forum, or from GitHub, says nothing
@@ -26,7 +27,7 @@ export function discordClient(token, fetchImpl = fetch) {
       headers: {
         Authorization: `Bot ${token}`,
         'Content-Type': 'application/json',
-        'User-Agent': 'DiscordBot (https://github.com, 1.0)',
+        'User-Agent': USER_AGENT,
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -100,12 +101,44 @@ export function discordClient(token, fetchImpl = fetch) {
       try {
         return { message: await call('GET', `/channels/${channelId}/messages/${messageId}`) };
       } catch (e) {
-        if (!/ -> 404 /.test(e.message)) throw e;
+        if (statusOf(e) !== 404) throw e;
         return { message: null, channel: await call('GET', `/channels/${channelId}`) };
       }
     },
     // The bot's own user: only its messages count as its greeting or card.
     me: () => call('GET', '/users/@me'),
+    // The bot's webhook in a forum, which posts a moved post's copy: the
+    // first incoming one its application made there, which carries its
+    // token, else a new one. Two first moves into one forum at once can make
+    // two; both work.
+    async forumWebhook(forumId, appId) {
+      const hooks = await call('GET', `/channels/${forumId}/webhooks`);
+      return hooks.find((h) => h.type === 1 && h.application_id === appId) || call('POST', `/channels/${forumId}/webhooks`, { name: 'Post mover' });
+    },
+    // A message through a webhook, its files with it: multipart, with no bot
+    // token. The webhook's token is in the URL, which a failed call or an
+    // answer can echo, so no error names it: `<token>` stands in its place.
+    // A 2xx whose body cannot be read may still have made the message.
+    async executeWebhook(hook, payload, files) {
+      const form = new FormData();
+      form.append('payload_json', JSON.stringify(payload));
+      files.forEach((x, i) => form.append(`files[${i}]`, x.blob, x.name));
+      const hide = (s) => String(s).split(hook.token).join('<token>');
+      const path = `/webhooks/${hook.id}/<token>`;
+      let res;
+      try {
+        res = await fetchImpl(`${API}/webhooks/${hook.id}/${hook.token}?wait=true`, { method: 'POST', headers: { 'User-Agent': USER_AGENT }, body: form });
+      } catch (e) {
+        throw Object.assign(new Error(hide(e.message)), { name: e.name });
+      }
+      const text = await res.text().catch(() => '');
+      if (!res.ok) throw Object.assign(new Error(`Discord POST ${path} -> ${res.status} ${hide(text).slice(0, 300)}`), { discord: { method: 'POST', path, status: res.status } });
+      try {
+        return JSON.parse(text);
+      } catch {
+        throw new Error(`Discord POST ${path} answered ${res.status} with a body that could not be read`);
+      }
+    },
     // Never pings anyone unless a user id is passed, or it replies, which
     // pings the target's author. A reply Discord refuses (400: a system
     // message as the target) was never posted, so it goes once more as a
@@ -120,7 +153,7 @@ export function discordClient(token, fetchImpl = fetch) {
           message_reference: { message_id: replyTo, fail_if_not_exists: false },
         });
       } catch (e) {
-        if (!/ -> 400 /.test(e.message)) throw e;
+        if (statusOf(e) !== 400) throw e;
         return { ...(await call('POST', `/channels/${channelId}/messages`, plainBody)), replyRefused: true };
       }
     },

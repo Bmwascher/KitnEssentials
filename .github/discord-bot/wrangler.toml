@@ -60,6 +60,10 @@ LOCK_REPO = ""
 STALE_DAYS = "3"
 # A filing renames its post to the issue's title. "0" leaves post names alone.
 # RENAME_POSTS = "0"
+# The tag that marks a post's repo, by REPOS key (tag names in any letter
+# case): it pre-fills the repo in the Send to GitHub form. A move carries it
+# to the new post by name, like any tag.
+# REPO_TAGS = '{"UI":"UI"}'
 # Optional: the template fields each type of post should fill, checked as
 # advice for moderators only, in a forum with no readable pinned template.
 # List every label of the template: a label left out reads as part of the

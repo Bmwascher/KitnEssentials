@@ -18,6 +18,8 @@ test('removing a label tolerates only "already gone"', async () => {
   assert.equal(await githubClient('t', gone).removeLabel('me/r', 1, 'x'), null);
   const refused = fakeFetch([['DELETE', /labels/, () => new Response('no', { status: 403 })]]);
   await assert.rejects(githubClient('t', refused).removeLabel('me/r', 1, 'x'), /403/);
+  const quoted = fakeFetch([['DELETE', /labels/, () => new Response('upstream said -> 404 x', { status: 500 })]]);
+  await assert.rejects(githubClient('t', quoted).removeLabel('me/r', 1, 'x'), { message: /^GitHub DELETE \S+ -> 500 / });
 });
 
 test('the marker search reads only issues updated since shortly before the post was made', async () => {
