@@ -148,6 +148,32 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   const reportSetup = () => {
     if (setup.length) writeSetup(env.GITHUB_STEP_SUMMARY, setup);
   };
+  // A Discord refusal of the bot, named by the request it refused, which the
+  // client keeps apart from the answer's text; a scrubbed checklist error
+  // also carries its kept causes' requests.
+  const noteRefusal = (e) => {
+    for (const d of [e.discord, ...(e.also || [])]) {
+      if (!d) continue;
+      if (d.status === 401) {
+        setupProblem("Discord refused the bot token (401): set the repository secret DISCORD_BOT_TOKEN to the bot's current token");
+        continue;
+      }
+      if (d.status !== 403) continue;
+      // A path's ids are a marker's digits, a plain CHECKLIST_FORUM_ID, or
+      // ones Discord gave: a post's `parent_id` can be null (a marker naming
+      // a channel with no parent), which puts no id in the forum read's path.
+      // Such a refusal names nothing and still fails the run.
+      const [, ch, rest = ''] = /^\/channels\/(\d+)(\/.*)?$/.exec(d.path) || [];
+      if (!ch) continue;
+      if (d.method === 'POST' && rest === '/messages') {
+        setupProblem(`Discord refused the bot's message in post ${ch} (403): give the bot View Channel, Send Messages in Threads and Read Message History (a reply needs it) in that post's forum`);
+      } else if (rest.startsWith('/messages/')) {
+        setupProblem(`Discord refused the bot reading messages in post ${ch} (403): give the bot View Channel and Read Message History in that post's forum`);
+      } else {
+        setupProblem(`Discord refused the bot on channel ${ch} (403), a post or its forum: give the bot View Channel, Manage Threads and Send Messages in Threads in that forum`);
+      }
+    }
+  };
   if (runId) log(`workflow run ${runId}, attempt ${attempt}`);
   // An issue moved in from another repo arrives as `opened`. Its post and
   // its thread already follow it, and a commit-closed one would be told
@@ -508,6 +534,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         await settleNote(note, 'dropped', 'the Discord post is gone');
         return;
       }
+      noteRefusal(e);
       await settleNote(note, 'unconfirmed').catch((err) => log(`#${n}: could not mark the note unconfirmed: ${err.message}`));
       throw e;
     }
@@ -603,7 +630,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     try {
       const first = await discord.getMessage(threadId, threadId);
       return first && first.author && first.author.id === reporterId ? { replyTo: threadId } : {};
-    } catch {
+    } catch (e) {
+      noteRefusal(e);
       return {};
     }
   }
@@ -685,6 +713,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       return ch && ch.guild_id ? `https://discord.com/channels/${ch.guild_id}/${m.threadId}` : null;
     } catch (err) {
       log(`#${n}: could not find the duplicate's post: ${err.message}`);
+      noteRefusal(err);
       return null;
     }
   }
@@ -729,6 +758,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       } catch (e) {
         log(`#${n}: ${e.message}`);
         failed.push(n);
+        noteRefusal(e);
       }
     }
   }
@@ -758,8 +788,14 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     return eligible(issue) ? issue : null;
   }
 
+  // The checklist job fails on its own error, as it always has; the other
+  // runs also name what the runner meets as setup problems.
+  const checklistOnly = !!env.CHECKLIST_ONLY;
   const checklist = checklistForum
-    ? checklistRunner({ gh, discord, repo, forumId: checklistForum, wanted, records: recordsOf, botIssue, log, now, settleTries: SETTLE_TRIES, owedMs: OWED_MS })
+    ? checklistRunner({
+      gh, discord, repo, forumId: checklistForum, wanted, records: recordsOf, botIssue, log, now, settleTries: SETTLE_TRIES, owedMs: OWED_MS,
+      noteRefusal: checklistOnly ? () => {} : noteRefusal,
+    })
     : null;
 
   // The checklist job: the issue's own events, and only its checklist
@@ -837,28 +873,38 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   } else if (eventName === 'issues') {
     const n = payload.issue.number;
     if (payload.action === 'labeled' && payload.label && payload.label.name === LABELS.needsInfo) {
-      const issue = await botIssue(n);
-      // A label taken off before this run started asks for nothing.
-      const m = issue && hasLabel(issue, LABELS.needsInfo) && parseMarker(issue.body);
-      if (m) {
-        const text = MESSAGES.needsInfo(m.reporterId);
-        // One ping per labeling: a rerun of the event finds the note, and a
-        // re-run of this run takes over its own note only if it was never
-        // marked as sending, so the ping goes out at most once.
-        handled.add(n);
-        const note = await claim(n, `needs-info-${String(payload.issue.updated_at || 'once').replace(/\W/g, '')}`, text, null, true);
-        if (note && !hasLabel(await gh.getIssue(repo, n), LABELS.needsInfo)) {
-          await dropNote(note, 'no longer true');
-        } else if (note) {
-          // A locked post does not unarchive on a new message; reopen it first.
-          // A deleted post fails here, before the send, and drops the note.
-          const gone = await discord.unarchive(m.threadId).then(() => false, (e) => {
-            if (/-> 404 /.test(e.message)) return true;
-            throw e;
-          });
-          if (gone) await dropNote(note, 'the Discord post is gone');
-          else await deliver(n, m.threadId, note, text, null, m.reporterId ? [m.reporterId] : []);
+      // A failure here ends the run at once, as it always has: caught by
+      // `each`, a failed first read would leave the ping's note to the
+      // owed-note scan, whose ordinary sync can move the post and tell its
+      // player. Its setup problems are reported before the throw.
+      try {
+        const issue = await botIssue(n);
+        // A label taken off before this run started asks for nothing.
+        const m = issue && hasLabel(issue, LABELS.needsInfo) && parseMarker(issue.body);
+        if (m) {
+          const text = MESSAGES.needsInfo(m.reporterId);
+          // One ping per labeling: a rerun of the event finds the note, and a
+          // re-run of this run takes over its own note only if it was never
+          // marked as sending, so the ping goes out at most once.
+          handled.add(n);
+          const note = await claim(n, `needs-info-${String(payload.issue.updated_at || 'once').replace(/\W/g, '')}`, text, null, true);
+          if (note && !hasLabel(await gh.getIssue(repo, n), LABELS.needsInfo)) {
+            await dropNote(note, 'no longer true');
+          } else if (note) {
+            // A locked post does not unarchive on a new message; reopen it first.
+            // A deleted post fails here, before the send, and drops the note.
+            const gone = await discord.unarchive(m.threadId).then(() => false, (e) => {
+              if (/-> 404 /.test(e.message)) return true;
+              throw e;
+            });
+            if (gone) await dropNote(note, 'the Discord post is gone');
+            else await deliver(n, m.threadId, note, text, null, m.reporterId ? [m.reporterId] : []);
+          }
         }
+      } catch (e) {
+        noteRefusal(e);
+        reportSetup();
+        throw e;
       }
     } else if (['opened', 'closed', 'reopened'].includes(payload.action)) {
       // At `opened` the Worker has tagged a post with no status Triaged and
@@ -949,6 +995,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       } catch (e) {
         // The issue's failure line at the end of the sweep logs the error.
         // Only the post's own read answering 404 says it is gone.
+        noteRefusal(e);
         if (!postGone(e, threadId)) {
           unread = e;
           parts.push('Discord post not read (see the log)');
@@ -1046,6 +1093,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           ck = { parts: [`staff checklist not read: ${e.message.slice(0, 200)}`], repair: false, unread: e };
         }
       }
+      if (ck.unread) noteRefusal(ck.unread);
       // An Accepted line alone never starts the status repair: its quiet move
       // could leave a run that is about to tell the player nothing to send.
       const accFix = accRepairable && !owed.length;
@@ -1067,6 +1115,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           // A post whose status repair failed gets no Accepted write either.
           playerStop = true;
           errors.push(e.message);
+          noteRefusal(e);
         }
       }
       if (fix && accFix && !unread && !playerStop) {
@@ -1074,6 +1123,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           await repairAccepted(n);
         } catch (e) {
           errors.push(e.message);
+          noteRefusal(e);
         }
       }
       if (fix && ck.repair && ckSpent >= CHECKLIST_SWEEP_MS) ckLeft.push(n);
@@ -1082,6 +1132,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           await ckTimed(() => checklist.mirror(n));
         } catch (e) {
           errors.push(`staff checklist: ${e.message}`);
+          noteRefusal(e);
         }
       }
       if (ck.unread) errors.push(`staff checklist thread not read (${ck.unread.message.slice(0, 200)})`);
@@ -1134,6 +1185,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       } catch (e) {
         log(`#${n}: staff checklist: ${e.message}`);
         ckFailed.push(n);
+        noteRefusal(e);
       }
     }
   }

@@ -86,11 +86,18 @@ const brief = (e) => {
   };
   return one(e) + ALSO.map(([k, what]) => (e && e[k] ? `; ${what}: ${one(e[k])}` : '')).join('');
 };
+// The request records (method, path, status) hold no answer body, so they
+// are kept, the first error's and each kept cause's: the status script names
+// a refusal from them.
+const scrub = (e) => Object.assign(new Error(brief(e)), {
+  discord: e.discord,
+  also: ALSO.map(([k]) => e[k] && e[k].discord).filter(Boolean),
+});
 const scrubbed = (fn) => async (...args) => {
   try {
     return await fn(...args);
   } catch (e) {
-    throw new Error(brief(e));
+    throw scrub(e);
   }
 };
 
@@ -100,7 +107,7 @@ const scrubbed = (fn) => async (...args) => {
 // bot still files the issue, and the issue's records; `proof` is a release
 // run's own `{ fix, tag }` when the tag list may not show that tag yet.
 // `records(n)` gives the records alone.
-export function checklistRunner({ gh, discord, repo, forumId, wanted, records, botIssue, log, now, settleTries, owedMs }) {
+export function checklistRunner({ gh, discord, repo, forumId, wanted, records, botIssue, log, now, settleTries, owedMs, noteRefusal }) {
   const plan = (w) => (applied, available) => planTags(applied, available, w.name, { names: CHECKLIST_NAMES, accepted: w.accepted, dropOther: false });
   const commentPath = (rec) => `/repos/${repo}/issues/comments/${rec.id}`;
   // The record as it is now, which must still be the one this run holds: a
@@ -150,6 +157,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       try {
         r = await onThread(() => discord.setTags(id, forumId, plan(w), { open: reopen }));
       } catch (e) {
+        noteRefusal(scrub(e));
         // A finished thread the write may have left open owes its archive
         // again. The re-archive may have landed with its answer lost, so the
         // thread is read first: one shown archived keeps its key, and a later
@@ -157,7 +165,10 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
         // Only the thread's own channel is read: its archived flag is all
         // this needs.
         if (e.rearchive && w.key && cur.archived === w.key) {
-          const seen = await discord.call('GET', `/channels/${id}`).catch(() => null);
+          const seen = await discord.call('GET', `/channels/${id}`).catch((r) => {
+            noteRefusal(r);
+            return null;
+          });
           const archived = !!(seen && seen.thread_metadata && seen.thread_metadata.archived);
           if (!archived) await write(cur, { archived: null }).catch((k) => Object.assign(e, { keyError: k }));
         }
@@ -455,7 +466,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       }
       if (keyPart) parts.push(keyPart);
       parts.push(`staff checklist thread not read (${here}): ${brief(e)}`);
-      return { parts, repair: !!keyPart, unread: new Error(brief(e)) };
+      return { parts, repair: !!keyPart, unread: scrub(e) };
     }
     if (shown.parentId !== forumId) {
       parts.push(`staff checklist thread ${here} is not in the checklist forum: if CHECKLIST_FORUM_ID changed by mistake, set it back. `

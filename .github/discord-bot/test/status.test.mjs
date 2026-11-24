@@ -1888,3 +1888,91 @@ test('PT5: a re-run whose owed-note scan fails reports the setup problems it met
     assert.equal(readFileSync(summary, 'utf8'), '');
   }
 });
+
+test('PT5: a Discord refusal is named by what it refused, and the run still finishes its other work first', async () => {
+  const refused = (status) => new Response('{"message":"Missing Access"}', { status });
+  const channel = (id) => `Discord refused the bot on channel ${id} (403), a post or its forum: give the bot View Channel, Manage Threads and Send Messages in Threads in that forum`;
+  const named = (id) => new RegExp(`setup problems: ${channel(id).replace(/[()]/g, '\\$&')}`);
+  const needsInfo = (w) => {
+    const i = w.issues.get(17);
+    i.labels.add('needs-info');
+    return go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } }, { ...RUN, GITHUB_STEP_SUMMARY: w.summary });
+  };
+  for (const [why, setup, event, line, after = () => {}] of [
+    ['a refused post, then a healthy one', (w) => {
+      w.issue(18);
+      w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17, 18] });
+      w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717$/, refused(403), 99]);
+    }, (w) => go(w, PR, { action: 'opened', pull_request: { number: 5 } }, { GITHUB_STEP_SUMMARY: w.summary }),
+    /^Error: could not update issue\(s\) #17; see above; setup problems: Discord refused the bot on channel 717 \(403\)/,
+    (w) => {
+      assert.equal(w.said('718').length, 1, 'the healthy issue after it is still told');
+      assert.deepEqual(setupBullets(w.summary), [`- ${channel(717)}`]);
+    }],
+    ['the send', (w) => { w.close(17, 'completed', 'aaaaaaa1'); w.fail.push(['POST', /discord\.com\/api\/v10\/channels\/717\/messages$/, refused(403), 99]); },
+      (w) => closed(w, 17),
+      /setup problems: Discord refused the bot's message in post 717 \(403\): give the bot View Channel, Send Messages in Threads and Read Message History \(a reply needs it\) in that post's forum/],
+    ['the token', (w) => { w.close(17, 'completed', 'aaaaaaa1'); w.fail.push(['GET', /discord\.com\/api\/v10\//, refused(401), 99]); },
+      (w) => closed(w, 17), /setup problems: Discord refused the bot token \(401\): set the repository secret DISCORD_BOT_TOKEN to the bot's current token/],
+    ["the reporter's first message", (w) => {
+      w.close(17, 'completed', 'aaaaaaa1');
+      // The starter is the reporter's, so a readable one would make the message a reply.
+      w.threads.get('717').starter = { author: { id: '42' }, content: 'hi' };
+      w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717\/messages\/717$/, refused(403), 99]);
+    }, (w) => closed(w, 17),
+    /^Error: setup problems: Discord refused the bot reading messages in post 717 \(403\): give the bot View Channel and Read Message History in that post's forum$/,
+    (w) => {
+      const [sent] = w.threads.get('717').messages;
+      assert.equal(w.threads.get('717').messages.length, 1, 'the message still went out');
+      assert.deepEqual([sent.message_reference, sent.allowed_mentions.replied_user], [undefined, undefined], 'plain: no reply, no ping');
+    }],
+    ["the duplicate's post", (w) => { w.issue(18); w.close(17, 'duplicate', null, null, 18); w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/718$/, refused(403), 99]); },
+      (w) => closed(w, 17), named(718),
+      (w) => {
+        assert.equal(w.said('717').length, 1, 'the message still went out');
+        assert.doesNotMatch(w.said('717')[0], /718/, 'without the link');
+      }],
+    ['the needs-info reopen: the event stops at once, as before, with its line in the summary', (w) => refuseTagWrite(w), needsInfo,
+      /^Error: Discord PATCH \/channels\/717 -> 403 /, (w) => assert.deepEqual(setupBullets(w.summary), [`- ${channel(717)}`])],
+    ["the sweep's post read", (w) => w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717$/, refused(403), 99]), (w) => sweepRun(w, 'report'), named(717)],
+    ["a fix-mode sweep's status repair", (w) => { w.close(17, 'completed', 'aaaaaaa1'); refuseTagWrite(w); }, (w) => sweepRun(w, 'fix'), named(717)],
+    ["a fix-mode sweep's Accepted repair", (w) => { w.issues.get(17).labels.add('accepted'); w.threads.get('717').archived = false; refuseTagWrite(w); },
+      (w) => sweepRun(w, 'fix'), named(717)],
+  ]) {
+    const w = world();
+    w.issue(17);
+    w.summary = tmpSummary();
+    setup(w);
+    await assert.rejects(event(w), line, why);
+    after(w);
+  }
+});
+
+test('PT5: a refused send is logged as a setup problem before its note is marked Unconfirmed, so a run stopped there still shows it', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  w.fail.push(['POST', /discord\.com\/api\/v10\/channels\/717\/messages$/, new Response('{"message":"Missing Access"}', { status: 403 }), 99]);
+  const out = [];
+  let atMark = null;
+  w.hooks.push(['PATCH', /\/issues\/comments\/\d+$/, async (call) => {
+    if (atMark === null && /discord-unconfirmed/.test(call.body.body)) atMark = out.filter((l) => l.startsWith('setup problem: '));
+  }]);
+  await assert.rejects(run({ eventName: 'issues', payload: { repository, action: 'closed', issue: { number: 17 } }, env, fetchImpl: w.fetch, log: (s) => out.push(s) }),
+    /setup problems: Discord refused the bot's message in post 717 \(403\)/);
+  assert.deepEqual(atMark, ["setup problem: Discord refused the bot's message in post 717 (403): give the bot View Channel, Send Messages in Threads and Read Message History (a reply needs it) in that post's forum"]);
+});
+
+test('PT5: a needs-info re-run whose issue read fails stops there, so no other step moves the post or tells the player', async () => {
+  const w = world();
+  const i = w.issue(17);
+  i.labels.add('needs-info');
+  const ev = { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } };
+  refuseTagWrite(w);
+  await assert.rejects(go(w, 'issues', ev, RUN), /-> 403/);
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  w.fail.push(['GET', /\/repos\/me\/one\/issues\/17$/, new Response('{}', { status: 500 }), 1]);
+  await assert.rejects(go(w, 'issues', ev, { ...RUN, GITHUB_RUN_ATTEMPT: '2' }), /^Error: GitHub GET \/repos\/me\/one\/issues\/17 -> 500/);
+  assert.deepEqual(w.said('717'), [], 'no message');
+  assert.equal(w.tagOf('717'), 'Triaged', 'no move');
+});

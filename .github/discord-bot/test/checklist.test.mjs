@@ -494,7 +494,7 @@ test('CH7: a release run settles the thread when its ship record fails, and name
     ['the post and the checklist both fail', (w) => {
       w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717$/, fail500(), 99]);
       w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/950$/, new Response('{"message":"Missing Access"}', { status: 403 }), 99]);
-    }, /^could not update issue\(s\) #17; see above; checklist thread\(s\) not updated for #17; see above$/, false],
+    }, /^could not update issue\(s\) #17; see above; checklist thread\(s\) not updated for #17; see above; setup problems: Discord refused the bot on channel 950 \(403\), a post or its forum: [^;]*$/, false],
   ]) {
     const w = world();
     w.issue(17, { labels: ['from-discord', 'pending-release'] });
@@ -1477,4 +1477,85 @@ test('CH11: a CHECKLIST_FORUM_ID that is not a plain Discord id is a setup probl
   w.issue(17);
   await assert.rejects(job(w, 'opened', { over: { CHECKLIST_FORUM_ID: './950' } }), (e) => e.message === line('`./950`'));
   assert.deepEqual(w.calls.filter((c) => /discord\.com/.test(c.url)), [], 'the checklist job makes no Discord call');
+});
+
+test('CH9: a refused checklist call in a PR run or a sweep is named as a setup problem, a cause kept beside the first included, before the next request; the checklist job\'s own failure is not', async () => {
+  const line = (id) => `Discord refused the bot on channel ${id} (403), a post or its forum: give the bot View Channel, Manage Threads and Send Messages in Threads in that forum`;
+  const named = (id) => new RegExp(`setup problems: Discord refused the bot on channel ${id} \\(403\\), a post or its forum`);
+  const logged = (out) => out.filter((l) => l.startsWith('setup problem: '));
+  const refusedRead = (w, id) => w.fail.push(['GET', threadUrl(id), new Response('{"message":"Missing Access"}', { status: 403 }), 1]);
+  {
+    const w = world();
+    w.issue(17);
+    const t = seed(w, 17, { applied_tags: ['c-tri'] });
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    failPatch(w, t.id, (b) => !!b.applied_tags, 403);
+    await assert.rejects(pr(w, 5), named(t.id), "a PR run's mirror");
+  }
+  {
+    // An archived thread's tag write answers 500 and its re-archive 403: the
+    // refusal is the kept cause, not the first error.
+    const w = world();
+    w.issue(17);
+    const t = seed(w, 17, { applied_tags: ['c-tri'], archived: true });
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    failPatch(w, t.id, (b) => b.archived === false, 500);
+    failPatch(w, t.id, (b) => b.archived === true, 403);
+    await assert.rejects(pr(w, 5), named(t.id), "a PR run's refused re-archive");
+  }
+  {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'not_planned');
+    const t = seed(w, 17, { applied_tags: ['c-tri'] });
+    refusedRead(w, t.id);
+    await assert.rejects(sweep(w, 'report'), named(t.id), "a sweep's thread read");
+  }
+  {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'not_planned');
+    const t = seed(w, 17, { applied_tags: ['c-tri'] });
+    failPatch(w, t.id, (b) => !!b.applied_tags, 403);
+    await assert.rejects(sweep(w, 'fix'), named(t.id), "a fix-mode sweep's thread repair");
+  }
+  // A finished thread's tag write answers 500. The runner names each refusal
+  // as it meets it, before the recovery's next request: a refused re-archive
+  // (a kept cause) before the read that checks the archive, and a refused
+  // read before the record write after it.
+  for (const [why, rearchive, readRefused, nextRe] of [
+    ['the re-archive is refused', 403, false, threadUrl],
+    ['the read after the re-archive is refused', 500, true, () => /\/repos\/me\/one\/issues\/comments\/\d+$/],
+  ]) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'not_planned');
+    const key = `Won't fix:${closeId(w)}`;
+    const t = seed(w, 17, { applied_tags: ['c-tri'], archived: true }, key);
+    failPatch(w, t.id, (b) => b.archived === false, 500);
+    failPatch(w, t.id, (b) => b.archived === true, rearchive);
+    const out = [];
+    let armed = false;
+    let atNext = null;
+    w.hooks.push(['PATCH', threadUrl(t.id), async (call) => {
+      if (armed || call.body.archived !== true) return;
+      armed = true;
+      if (readRefused) refusedRead(w, t.id);
+    }]);
+    w.hooks.push(['GET', nextRe(t.id), async () => {
+      if (armed && atNext === null) atNext = logged(out);
+    }]);
+    await assert.rejects(sweep(w, 'fix', out), named(t.id), why);
+    assert.deepEqual(atNext, [`setup problem: ${line(t.id)}`], `${why}: logged before the next request`);
+  }
+  {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'not_planned');
+    const t = seed(w, 17, { applied_tags: ['c-tri'] });
+    failPatch(w, t.id, (b) => !!b.applied_tags, 403);
+    const out = [];
+    await assert.rejects(job(w, 'closed', { out }), (e) => /checklist thread not updated for #17/.test(e.message) && !/setup problems/.test(e.message), 'the checklist job');
+    assert.deepEqual(logged(out), [], 'the checklist job logs no setup line');
+  }
 });
