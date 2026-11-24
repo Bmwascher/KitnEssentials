@@ -791,3 +791,18 @@ test('a message read takes only its own 404 for a deleted message', async () => 
     else await assert.rejects(read, { message: /^Discord GET \/channels\/700\/messages\/800 -> 500 / }, why);
   }
 });
+
+test('REPO_TAGS reads as tag name to key in any letter case, and a post\'s tags give a key only when they give one', () => {
+  const tags = C.parseRepoTags('{"UI":"UI","Kitn":" ke ","Core":"KE"}');
+  assert.deepEqual(tags, { ui: 'UI', kitn: 'KE', core: 'KE' }, 'keys read as normRepoKey reads them: trimmed, in upper case');
+  assert.deepEqual(C.parseRepoTags('{"Triaged":"UI","accepted":"UI","UI":"UI"}'), { ui: 'UI' }, 'a status or Accepted tag is never a repo tag');
+  for (const [why, names, want] of [
+    ['one repo tag', ['Bug', 'ui'], 'UI'],
+    ['two tags naming one key', ['KITN', 'core'], 'KE'],
+    ['two tags naming two keys', ['UI', 'Kitn'], null],
+    ['no repo tag', ['Bug'], null],
+  ]) assert.equal(C.repoFromTags(names, tags), want, why);
+  assert.deepEqual(C.plainTags(['Bug', 'UI', 'kitn', 'Retail'], tags), ['Bug', 'Retail'], 'repo tags left out in any letter case');
+  assert.deepEqual(C.parseRepoTags('{"UI":"ONE","ui":"TWO","Kitn":"KE"}'), { kitn: 'KE' }, 'one name in two letter cases for two keys gives neither');
+  for (const raw of ['', '  ', '{"UI":', '["UI"]', '{"UI":1}', 'null', undefined, { toString: null }]) assert.deepEqual(C.parseRepoTags(raw), {}, String(typeof raw));
+});

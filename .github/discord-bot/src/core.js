@@ -593,6 +593,43 @@ export function parseRoleIds(raw) {
   return String(raw || '').split(',').map((s) => s.trim()).filter((s) => /^\d+$/.test(s));
 }
 
+// The shape REPO_TAGS must have: tag names, each naming a REPOS key.
+export const isRepoTags = (t) => !!t && typeof t === 'object' && !Array.isArray(t) && Object.values(t).every((v) => typeof v === 'string');
+// The bot's own tag names, in lower case: a status or Accepted tag is never a
+// repo tag, since a move would drop it as one.
+export const OWN_TAG_NAMES = new Set([...STATUS_NAMES, ACCEPTED].map((s) => s.toLowerCase()));
+
+// REPO_TAGS: {"<tag name>":"<REPOS key>"}, the tag that marks a post's repo,
+// keyed here by the tag's name in lower case, its key read as normRepoKey
+// reads a key. A value that is blank, has no text form, or is not of that
+// shape gives none: Send to GitHub loses only its pre-fill, and the setup
+// check names it. The bot's own tag names are left out, and so is a name
+// that two entries, in two letter cases, give two keys: which one the map
+// meant cannot be told.
+export function parseRepoTags(raw) {
+  let t = null;
+  try { t = JSON.parse(String(raw ?? '')); } catch { /* none */ }
+  if (!isRepoTags(t)) return {};
+  const keys = new Map();
+  for (const [name, key] of Object.entries(t)) {
+    const n = name.toLowerCase();
+    const k = key.trim().toUpperCase();
+    if (!OWN_TAG_NAMES.has(n)) keys.set(n, keys.has(n) && keys.get(n) !== k ? null : k);
+  }
+  return Object.fromEntries([...keys].filter(([, k]) => k !== null));
+}
+
+// The REPOS key a post's tag names give, or null when they give none or two:
+// players choose their own tags.
+export function repoFromTags(names, repoTags) {
+  const keys = new Set(names.map((n) => own(repoTags, String(n).toLowerCase())).filter(Boolean));
+  return keys.size === 1 ? [...keys][0] : null;
+}
+
+// A post's tag names less its repo tags: a repo tag names the repo only, so
+// it gives the forms no client or type.
+export const plainTags = (names, repoTags) => names.filter((n) => !own(repoTags, String(n).toLowerCase()));
+
 // The custom ids of the send button ("send:<post>"), its form
 // ("gh:<post>:<message>[:<button message or 0>[:<queue card>]]"), the move
 // button ("move:<post>") and the move form ("mv:<post>[:<queue card>]"). Their
