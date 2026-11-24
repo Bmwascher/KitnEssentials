@@ -335,7 +335,11 @@ test('button and form ids parse only when every id part is digits', () => {
   for (const [id, greetingId, cardId] of [
     ['gh:700:800', '', ''], ['gh:700:800:950', '950', ''], ['gh:700:800:950:96', '950', '96'], ['gh:700:800:0:96', '', '96'],
   ]) assert.deepEqual(C.parseCustomId(id), { kind: 'form', threadId: '700', messageId: '800', greetingId, cardId }, id);
-  for (const bad of ['send:7a', 'send:', 'gh:700', 'gh:700:800:950:1:2', 'gh:700:800:0:96x', 'gh:7/0:800', 'xx:700:800', '', undefined]) {
+  assert.deepEqual(C.parseCustomId('move:700'), { kind: 'move', threadId: '700' });
+  assert.deepEqual(C.parseCustomId('mv:700'), { kind: 'moveForm', threadId: '700', cardId: '' });
+  assert.deepEqual(C.parseCustomId('mv:700:96'), { kind: 'moveForm', threadId: '700', cardId: '96' });
+  for (const bad of ['send:7a', 'send:', 'gh:700', 'gh:700:800:950:1:2', 'gh:700:800:0:96x', 'gh:7/0:800', 'xx:700:800', '', undefined,
+    'move:7a', 'move:', 'mv:', 'mv:700:', 'mv:700:96:1', 'mv:7/0']) {
     assert.equal(C.parseCustomId(bad), null, String(bad));
   }
 });

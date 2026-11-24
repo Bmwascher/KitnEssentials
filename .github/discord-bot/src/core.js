@@ -65,7 +65,7 @@ export const LABEL_DEFS = [
 
 export const PERMS = {
   administrator: 1n << 3n, viewChannel: 1n << 10n, sendMessages: 1n << 11n, readMessageHistory: 1n << 16n,
-  manageThreads: 1n << 34n, sendMessagesInThreads: 1n << 38n,
+  manageWebhooks: 1n << 29n, manageThreads: 1n << 34n, sendMessagesInThreads: 1n << 38n,
 };
 
 // Messages to the moderator channel stay under Discord's 2,000 characters:
@@ -593,16 +593,22 @@ export function parseRoleIds(raw) {
   return String(raw || '').split(',').map((s) => s.trim()).filter((s) => /^\d+$/.test(s));
 }
 
-// The custom id of the send button ("send:<post>") and of the form
-// ("gh:<post>:<message>[:<button message or 0>[:<queue card>]]"). Their parts
-// go into API paths, so they are taken only when every part is digits.
+// The custom ids of the send button ("send:<post>"), its form
+// ("gh:<post>:<message>[:<button message or 0>[:<queue card>]]"), the move
+// button ("move:<post>") and the move form ("mv:<post>[:<queue card>]"). Their
+// parts go into API paths, so they are taken only when every part is digits.
 export const SEND_BUTTON = 'send';
+export const MOVE_BUTTON = 'move';
 export function parseCustomId(id) {
   const s = String(id || '');
   let m = new RegExp(`^${SEND_BUTTON}:(\\d+)$`).exec(s);
   if (m) return { kind: 'send', threadId: m[1] };
   m = /^gh:(\d+):(\d+)(?::(\d+)(?::(\d+))?)?$/.exec(s);
   if (m) return { kind: 'form', threadId: m[1], messageId: m[2], greetingId: m[3] && m[3] !== '0' ? m[3] : '', cardId: m[4] || '' };
+  m = new RegExp(`^${MOVE_BUTTON}:(\\d+)$`).exec(s);
+  if (m) return { kind: 'move', threadId: m[1] };
+  m = /^mv:(\d+)(?::(\d+))?$/.exec(s);
+  if (m) return { kind: 'moveForm', threadId: m[1], cardId: m[2] || '' };
   return null;
 }
 
