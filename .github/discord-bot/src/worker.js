@@ -1254,8 +1254,13 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       reporter = { name: personName(first.author, null) };
     } else {
       // The server name and avatar are niceties: a member who left (404), or
-      // any failed read, gives the user's own.
-      const member = await discord.call('GET', `/guilds/${guildId}/members/${first.author.id}`)
+      // any failed read, gives the user's own. The read has its own short
+      // call that ends a call's time before the prep phase (by 4 s with the
+      // 8 s call), so one that stalls cannot take the time of the webhook
+      // lookup after it, which keeps a whole call, of the downloads (to 10 s)
+      // or of the re-read (to 12 s).
+      const member = await discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, t0 + MOVE_PREP_BY_MS - callMs))
+        .call('GET', `/guilds/${guildId}/members/${first.author.id}`)
         .catch((e) => { if (statusOf(e) !== 404) log(`member read failed: ${e.message.slice(0, 200)}`); return null; });
       reporter = { name: personName(first.author, member), id: first.author.id, username: first.author.username, avatar: avatarUrl({ guildId, user: first.author, member }) };
     }

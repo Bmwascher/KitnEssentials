@@ -434,8 +434,12 @@ A `QUEUE_CHANNEL_ID` that is not a channel of this server gets no card.
 letter case, the new forum has, a repo tag included; none is added for a
 repo. A client tag that disagrees with the post's client is dropped, and a
 forum with no client of its own gets its tags for that client (All gives
-both, or one tag naming both when the forum has it). A type tag that
-disagrees with the forum's own type is dropped. Discord takes five: the
+both, or one tag naming both when the forum has it). A tag added so names
+no type, or the post's own: the forum's, else the one its kept tags name.
+A Feature post gets "Retail", never "Retail Bug", which Send to GitHub
+would read as a bug; with no type known, only a tag naming none is added.
+A type tag that disagrees with the forum's own type is dropped. Discord
+takes five: the
 status tag, the repo tags, the client tags and Accepted come first, in that
 order, so a post with a status and four repo tags keeps no client tag; the
 queue card still names the client.

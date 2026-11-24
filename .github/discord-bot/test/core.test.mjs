@@ -879,6 +879,20 @@ test('a moved post keeps the tags the new forum has and gets its client tags, fi
     ['a client tag that also names a type the forum refuses is not added', [], {
       to: [{ id: 'x-rbug', name: 'Retail Bug' }, { id: 'x-retail', name: 'Retail' }], fixedClient: null, fixedType: 'Feature',
     }, ['x-retail']],
+    // With no type of the forum's own, the post's type is the one its kept
+    // tags name, and an added client tag names that type or none.
+    ['no type of its own: a Feature post gets Retail, not the Retail Bug listed first', ['f-feat'], {
+      from: [...FROM, { id: 'f-feat', name: 'Feature' }],
+      to: [{ id: 'u-feat', name: 'Feature' }, { id: 'u-rbug', name: 'Retail Bug' }, { id: 'u-retail', name: 'Retail' }], fixedClient: null,
+    }, ['u-retail', 'u-feat']],
+    ['no type known: a client tag that names one is not added', ['f-staff'], {
+      to: [{ id: 's-rbug', name: 'Retail Bug' }, { id: 's-staff', name: 'Staff note' }], fixedClient: null,
+    }, ['s-staff']],
+    ['All: a combined tag that names another type is not added, the single ones are', ['f-feat'], {
+      from: [...FROM, { id: 'f-feat', name: 'Feature' }],
+      to: [{ id: 'q-feat', name: 'Feature' }, { id: 'q-both', name: 'Retail Forever Bug' }, { id: 'q-retail', name: 'Retail' }, { id: 'q-forever', name: 'Forever' }],
+      fixedClient: null, client: 'All',
+    }, ['q-retail', 'q-forever', 'q-feat']],
     ['All: a combined client tag covers both clients, so Accepted stays', ['f-tri', 'f-one', 'f-both', 'f-acc', 'f-staff'], { from: BOTH_FROM, to: BOTH_TO, fixedClient: null, client: 'All' },
       ['t-tri', 't-one', 't-both', 't-acc', 't-staff']],
     ['All: the combined tag added when the forum has it', [], {

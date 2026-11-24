@@ -2166,6 +2166,28 @@ test('a download still running when the downloads end is stopped, so the first m
   } finally { clock.restore(); }
 });
 
+test('a member read that stalls does not hold the webhook lookup: the post moves under the user\'s own name', async () => {
+  const clock = shiftClock();
+  try {
+    clock.at(0);
+    // With a call's time of 2 s the member read ends at 10 s and is reached
+    // at 10.1 s. On the prep phase's client it would stall to 12 s, the
+    // clock set there when its signal ends it, and leave the webhook lookup
+    // no time.
+    const w = moveWorld((s) => {
+      const first = s.first;
+      s.first = () => { clock.at(10100); return first; };
+    });
+    const fetch = (url, init = {}) => (/\/guilds\/1\/members\/42$/.test(url)
+      ? stall(init, () => clock.at(12000))
+      : w.f(url, init));
+    const { told } = await runMove(w, moveSubmit(), {}, { fetch, callMs: 2000 });
+    assert.equal(told, MOVED);
+    assert.equal(w.f.find('GET', /\/channels\/901\/webhooks$/).length, 1, 'the webhook is looked up');
+    assert.equal(w.f.find('POST', /\?wait=true$/)[0].body.payload.username, 'Pat', 'the user\'s own name, not the server name');
+  } finally { clock.restore(); }
+});
+
 test('the copy takes the first message as read just before the create: an edit\'s text, without a file the player removed, counting the files that read lists', async () => {
   const twoReads = (before, after) => moveWorld((s) => {
     let reads = 0;

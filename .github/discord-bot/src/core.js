@@ -517,7 +517,9 @@ export function planTags(current, available, statusName, { names = STATUS_NAMES,
 // a type, never added. A client tag that disagrees with the post's client
 // goes, and a forum with no client of its own gets a tag for each client no
 // kept tag names: on an All move its combined tag ("Retail Forever") when it
-// has one, else its first tag for each such client. A type tag that
+// has one, else its first tag for each such client. An added tag names no
+// type, or the post's own: the forum's, else the one the kept tags name;
+// with neither known, only a tag naming none is added. A type tag that
 // disagrees with the forum's own type goes, and is never added. Discord takes
 // five: the status tag, a repo tag per key, a tag per client and Accepted come
 // first, then the rest in the post's order. `applied` is absent on a thread
@@ -541,7 +543,10 @@ export function movedTags({ applied = [], from, to, client, fixedClient, fixedTy
   const added = [];
   if (!fixedClient) {
     const need = (client === 'All' ? ['Retail', 'Forever'] : [client]).filter((c) => !kept.some((n) => covers(n).includes(c)));
-    const pick = (want) => [...target.keys()].find((n) => !repoOf(n) && want(n) && typeFits(n));
+    // Send to GitHub guesses the type from the tags, so an added tag naming
+    // another type would change what the post is filed as.
+    const postType = fixedType || guessFromTags(kept.filter((n) => !repoOf(n))).type;
+    const pick = (want) => [...target.keys()].find((n) => !repoOf(n) && want(n) && (!kind(n).type || kind(n).type === postType));
     const combined = pick((n) => kind(n).client === 'All');
     // On an All move the forum's combined tag is added in place of single
     // ones, so one tag says both clients and the five leave room for the
