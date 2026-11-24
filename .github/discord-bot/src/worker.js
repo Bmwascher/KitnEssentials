@@ -196,10 +196,6 @@ function repoChoice(keys, cfg, tagNames) {
   const tagged = normRepoKey(repoFromTags(tagNames, cfg.repoTags), cfg.repos);
   return keys.includes(tagged) ? tagged : keys.length === 1 ? keys[0] : null;
 }
-// The dropdown offers the usable keys alone (`usableRepoKeys`): the submit
-// reads a key in upper case, so one written otherwise ("ke") would file
-// under another key ("KE") or none, and a key past ten characters would
-// crowd the subject out of the filed title and the renamed post.
 const NO_KEYS = 'The form cannot open: no REPOS key is usable (upper case, at most 10 characters). /bot-check names them.';
 
 // The post a form is for: the interaction's own channel when it is the post
@@ -505,13 +501,10 @@ const damagedFix = (key) => (/^movedfrom:/.test(key)
     ? 'A bot admin can correct that KV key by hand (deleting it lets the old post be sent or moved again once someone unlocks it)'
     : 'A bot admin can delete that KV key');
 
-// The new post's link in the bot's own move note among a locked post's last
-// 100 messages, or null. The move posts that note before it locks the post,
-// and Discord shows both at once, so this holds while KV does not show the
-// post's movedto: record (not yet, or never, when its save failed). Only
-// this bot's note counts, as the scan reads its own messages: another bot's
-// text proves nothing. The bot's user is read only when such a message is
-// there. The note names the link right after its opening words.
+// The new post's link in this bot's move note among a locked post's last 100
+// messages, or null. The move posts the note before it locks the post, so
+// this holds while KV does not show the movedto: record (not yet, or never,
+// when its save failed). Another bot's text proves nothing.
 async function movedNote(discord, threadId) {
   const said = (await discord.call('GET', `/channels/${threadId}/messages?limit=100`)).filter((m) => String(m.content || '').startsWith(AWAY_START));
   const me = said.length ? (await discord.me()).id : null;
@@ -946,15 +939,12 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     const first = await readFiled(discord);
     if (first.refused) return { refused: first.refused };
     const author = first.message.author || {};
-    // The bot's own copy whose move record is not readable yet (KV shows a
-    // write elsewhere within a minute), was not saved, or never will be (a
-    // copy a move could not confirm): filing its first message would name
-    // the webhook as the player, and filing a reply would tie an issue to a
-    // copy no move record links.
-    // The first message shows it, and for a reply the scan's record of the
-    // copy does, so no filing spends a read on it. With no STATE bound there
-    // is no scan record, so a reply's filing reads the post's first message
-    // (none, when it was deleted).
+    // The bot's own copy with no readable move record (KV shows a write
+    // elsewhere within a minute, or the save failed or never ran): filing it
+    // would name the webhook as the player, or tie an issue to a copy no
+    // record links. The first message tells it, and for a reply the scan's
+    // record; with no STATE bound a reply's filing reads the first message
+    // (none when deleted).
     const isCopy = (m) => !!m && !!m.webhook_id && m.application_id === interaction.application_id;
     const botCopy = messageId === threadId ? isCopy(first.message)
       : kv ? !!rec && rec.skipped === MOVED_HERE
@@ -1320,21 +1310,18 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       if (/^out of time before /.test(e.message)) throw e;
       // Discord may still make it: the lock stays, so nothing moves or sends
       // this post meanwhile, as a filing keeps its lock after an unknown
-      // create. The reply names the forum and the old post; the README says
-      // what this state looks like.
+      // create.
       log(`move of post ${oldId}: create not confirmed: ${e.message.slice(0, 200)}`);
       keepLock = true;
       await followup(`Nothing confirmed: Discord did not answer the new post's create in <#${targetId}>, so a copy of ${link(oldId)} may exist there. The old post was not changed; its lock ${lockLabel(oldId)} in ${cfg.lockRepo} stays.`);
       return { uncertain: 'create' };
     }
 
-    // The new post exists from here on. Every step runs, and the reply names
-    // each one not done; the log says why. The README describes each
-    // half-finished state; there is no repair step.
+    // The new post exists from here on: every step runs, and the reply names
+    // each one not done. Nothing is retried or repaired.
     const newId = made.channel_id;
     const newUrl = link(newId);
     const later = discordClient(env.DISCORD_BOT_TOKEN, until(MOVE_REST_BY_MS));
-    // Whether the step was done.
     const step = async (name, fn) => {
       try {
         await fn();
@@ -1357,15 +1344,12 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     // The old post's record comes first: it refuses a later send or move of
     // the old post and keeps the scan off it.
     await put(`movedto:${oldId}`, { to: newId });
-    // The queue card shows the new post, edited before the move record so
-    // the record names the card. With no card to edit (a post moved before
-    // the scan carded it) or one Discord refuses to edit (deleted), a new
-    // card is posted: the card is how an approved role, who has no
-    // right-click command, reaches the post. The old card's buttons, if it
-    // stays, point at the locked post, whose send and move refuse. A queue
-    // channel outside this server gets nothing: its staff would see this
-    // server's post and could send it.
-    // With no queue, no card is touched, so none is recorded for the copy.
+    // The queue card shows the new post, edited before movedfrom: so the
+    // record names the card. With no card, or one Discord refuses to edit
+    // (deleted), a new card is posted: the card is how an approved role, who
+    // has no right-click command, reaches the post. A queue channel outside
+    // this server gets nothing: its staff would see this server's post and
+    // could send it.
     let card = cfg.queue ? cardId || (records.thread && records.thread.card) || (records.movedFrom && records.movedFrom.card) || '' : '';
     if (cfg.queue && !channels.some((c) => c.id === cfg.queue)) {
       card = '';

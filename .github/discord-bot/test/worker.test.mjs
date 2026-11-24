@@ -1934,7 +1934,7 @@ test('every entry point refuses another server, or a GUILD_ID that names none, b
     }
   }
   // A setup problem is for staff: a player gets the entry point's own refusal,
-  // as the base's unreadable-settings case (WT6) has it for GUILD_ID.
+  // as WT6 has it for GUILD_ID.
   const w = moveWorld();
   const j = await (await handle(await signed(movePress(PLAYER)), { ...MOVE_ENV, STATE: w.kv, GUILD_ID: '' }, ctxFor(), { fetch: w.f })).json();
   assert.equal(j.data.content, 'Only moderators and approved roles can move posts.');

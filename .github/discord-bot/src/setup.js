@@ -72,8 +72,6 @@ export function configProblems(raw, { bindings = true } = {}) {
   }
   if (repos) {
     for (const [k, r] of Object.entries(repos)) {
-      // The form's answer is read in upper case, and the key starts every
-      // filed title.
       if (!badKeys.includes(k) && (k !== k.toUpperCase() || k.length > REPO_KEY_MAX)) out.push(`REPOS key "${shown(k)}" is not usable: write it in upper case (the form reads it so), at most ${REPO_KEY_MAX} characters (it starts every filed title).`);
       if (typeof r !== 'string' || !REPO.test(r)) out.push(`REPOS entry ${shown(k)} is not owner/repo.`);
     }

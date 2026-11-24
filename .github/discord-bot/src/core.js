@@ -160,12 +160,9 @@ export function normRepoKey(s, repos) {
   return Object.prototype.hasOwnProperty.call(repos, k) ? k : null;
 }
 
-// The REPOS keys Send to GitHub's dropdown offers, and the setup check
-// counts: letters and digits only (as parseRepos requires; the setup check
-// reads a map with other keys too), read back by the submit as themselves
-// (written in upper case), and short enough that the filed title and the
-// renamed post they start keep their subject. The setup check names every
-// other key.
+// The REPOS keys Send to GitHub's dropdown offers: letters and digits, read
+// back by the submit as themselves (upper case), and short enough that the
+// filed title and renamed post they start keep their subject.
 export const REPO_KEY_MAX = 10;
 export const usableRepoKeys = (repos) => Object.keys(repos).filter((k) => /^[A-Za-z0-9]+$/.test(k) && normRepoKey(k, repos) === k && k.length <= REPO_KEY_MAX);
 
@@ -795,7 +792,6 @@ export function discordText(s) {
 const SUPPRESS_EMBEDS = 1 << 2;
 
 const openPost = (guildId, postId) => ({ type: 2, style: 5, label: 'Open post', url: `https://discord.com/channels/${guildId}/${postId}` });
-// Opens the Move form for the post.
 const moveButton = (postId) => ({ type: 2, style: 2, label: 'Move', custom_id: `${MOVE_BUTTON}:${postId}` });
 // The card's first line: the forum and the post as Discord's own mentions, so
 // Discord shows the post's current name as a link to it, and no text a player

@@ -508,15 +508,12 @@ export async function scan(env, deps = {}) {
             await putRecord(t.id, rec);
             return { greeted: true, finished: true };
           }
-          // The bot's copy of a moved post: the move's message is there, or
-          // its first message came from the bot's own webhook. The move's
-          // message stands in for the greeting, and the old post's card for
-          // its card. These read Discord, so they hold before KV shows the
-          // move's records here. A post whose first message is not in view
-          // is known by the move's record; one busier than these 100 (a post
-          // the scan reaches late), with no record (its save failed), by its
-          // first message read on its own, as its card reads it. Only such
-          // posts spend those reads.
+          // The bot's copy of a moved post (the move's message is there, or
+          // its first message came from the bot's webhook) gets no greeting
+          // or card: the move's message and the old post's card stand in.
+          // Discord shows these before KV shows the move's records. A first
+          // message out of view is told by the record, or, past these 100
+          // with no record saved, by reading the first message on its own.
           const isCopy = async (m) => !!(m && m.webhook_id && m.application_id && m.application_id === await myAppId());
           let copy = seen.moved || await isCopy(seen.starter);
           if (!copy && !seen.starter) copy = !!(await read(`movedfrom:${t.id}`));
