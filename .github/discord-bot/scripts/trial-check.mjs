@@ -15,31 +15,36 @@ import { discordClient } from '../src/discord.js';
 
 const FORUM_TYPE = 15;
 
+// A token with a character a header cannot hold would make fetch quote the
+// whole Authorization header in its error.
 function readToken() {
-  if (process.env.TRIAL_READER_TOKEN) return process.env.TRIAL_READER_TOKEN.trim();
-  const file = join(homedir(), '.discord-trial-reader', 'token');
-  try {
-    return readFileSync(file, 'utf8').trim();
-  } catch {
-    return null;
+  let token = process.env.TRIAL_READER_TOKEN;
+  if (!token) {
+    try {
+      token = readFileSync(join(homedir(), '.discord-trial-reader', 'token'), 'utf8');
+    } catch {
+      return null;
+    }
   }
+  token = token.trim();
+  return /^[!-~]+$/.test(token) ? token : null;
 }
 
 const tagNames = (ids, forum) => (ids || [])
   .map((id) => forum.available_tags.find((t) => t.id === id)?.name || `?${id}`);
 
 const oneLine = (s, max = 300) => {
-  const t = String(s || '').replace(/\s+/g, ' ').trim();
+  const t = s.replace(/\s+/g, ' ').trim();
   return t.length > max ? `${t.slice(0, max)}...` : t;
 };
 
 function messageLines(m) {
   const who = `${m.author.username}${m.author.bot ? ' [bot]' : ''}`;
   const out = [`  ${m.timestamp.slice(0, 19).replace('T', ' ')} ${who}${m.edited_timestamp ? ' (edited)' : ''}: ${oneLine(m.content)}`];
-  for (const e of m.embeds || []) {
+  for (const e of m.embeds) {
     out.push(`    embed: ${oneLine([e.title, e.description].filter(Boolean).join(' / '))}`);
   }
-  const buttons = (m.components || []).flatMap((row) => row.components)
+  const buttons = (m.components || []).flatMap((row) => row.components || [])
     .map((c) => `${c.label || c.custom_id || '?'}${c.disabled ? ' (disabled)' : ''}`);
   if (buttons.length) out.push(`    buttons: ${buttons.join(', ')}`);
   return out;
@@ -80,7 +85,7 @@ export async function listForum(api, forumId) {
 async function main(argv) {
   const token = readToken();
   if (!token) {
-    console.error('No token: set TRIAL_READER_TOKEN or write it to ~/.discord-trial-reader/token');
+    console.error('No usable token: set TRIAL_READER_TOKEN or save the token alone, on one line, in ~/.discord-trial-reader/token');
     process.exit(1);
   }
   const api = discordClient(token);
@@ -94,7 +99,7 @@ async function main(argv) {
   if (fi < 0 && !ids.length) console.error('Usage: node scripts/trial-check.mjs <id>... [--limit N] | --forum <forum id>');
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   main(process.argv.slice(2)).catch((e) => {
     console.error(e.message);
     process.exit(1);

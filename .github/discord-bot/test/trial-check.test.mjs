@@ -14,7 +14,7 @@ const MSGS = [
     timestamp: '2026-11-23T10:05:00.000Z', author: { username: 'bot', bot: true }, content: 'Filed as #12',
     embeds: [{ title: 'Status' }], components: [{ components: [{ label: 'Send to GitHub', disabled: true }] }],
   },
-  { timestamp: '2026-11-23T10:00:00.000Z', author: { username: 'player' }, content: 'Bars\nvanish' },
+  { timestamp: '2026-11-23T10:00:00.000Z', author: { username: 'player' }, content: 'Bars\nvanish', embeds: [] },
 ];
 
 const world = () => fakeFetch([
