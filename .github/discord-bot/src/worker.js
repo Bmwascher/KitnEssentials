@@ -13,7 +13,7 @@ import {
 } from './core.js';
 import { discordClient, postGone, archivedOf } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
-import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch } from './scan.js';
+import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch, AWAY_START, MOVED_HERE } from './scan.js';
 import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems, unreadableSettings } from './setup.js';
 
 export const COMMAND_NAME = 'Send to GitHub';
@@ -350,11 +350,13 @@ async function retireButton(discord, threadId, id, replaced) {
 // greeting becomes the note. After any other failure the reply may exist,
 // and a second receipt would repeat it; the same holds for that edit. A
 // buttonless greeting is never deleted, and never edited when the reply
-// works.
-async function tellTracked(discord, log, { threadId, messageId, text, old, greeting }) {
+// works. A moved post's copy was posted by the bot's webhook, so a reply to
+// it pings no one: its reporter (`ping`) is mentioned and pinged, and a plain
+// message still pings them.
+async function tellTracked(discord, log, { threadId, messageId, text, old, greeting, ping = null }) {
   try {
-    const sent = await discord.send(threadId, text, [], { replyTo: messageId });
-    if (sent && sent.replyRefused) log(`post ${threadId}: Discord refused the reply; the note went out plain, with no ping`);
+    const sent = await discord.send(threadId, ping ? `<@${ping}> ${text}` : text, ping ? [ping] : [], { replyTo: messageId });
+    if (sent && sent.replyRefused) log(`post ${threadId}: Discord refused the reply; the note went out plain, ${ping ? 'its mention still pinging the reporter' : 'with no ping'}`);
   } catch (e) {
     if (!refusal4xx(e)) return [`note in the post may not have been sent: ${e.message.slice(0, 300)}`];
     if (!greeting) return [`note in the post not sent: ${e.message.slice(0, 300)}`];
@@ -409,6 +411,39 @@ function couldNotCheck(cfg, saved, postId, why, done) {
   const key = keyOf(cfg, saved.repo);
   const what = key !== saved.repo ? `${key} #${saved.number} in ${saved.repo}` : `${saved.repo} #${saved.number}`;
   return `Could not check ${what} (${why}): it may be gone, or the app may have lost access there. ${done} If it is gone, a bot admin can clear this post's filing record (the KV key issue:${postId}, or the "issue" field of thread:${postId} for a post filed before this version), and the post can then be sent again.`;
+}
+
+// A post's four records, read side by side and waited on for at most `ms`:
+// the scan's, the filing's, and the two a move writes. `saved` is the issue
+// the post was filed as: the Worker's record, or an older scan record that
+// kept it beside the greeting.
+async function postRecords(kv, id, ms) {
+  const [thread, issue, movedFrom, movedTo] = await within(ms, Promise.all(['thread', 'issue', 'movedfrom', 'movedto'].map((p) => readStrict(kv, `${p}:${id}`))));
+  return { thread, saved: issue || (thread && thread.issue) || null, movedFrom, movedTo };
+}
+
+// What a bot admin does with a damaged record. Deleting a move record does
+// not clear the way: without `movedfrom:` the copy is refused for good, and
+// without `movedto:` the old post is open to a send or move once unlocked.
+// So the reply says that before it says delete.
+const damagedFix = (key) => (/^movedfrom:/.test(key)
+  ? 'A bot admin can correct that KV key by hand (deleting it leaves this post refused as a copy for good)'
+  : /^movedto:/.test(key)
+    ? 'A bot admin can correct that KV key by hand (deleting it lets the old post be sent or moved again once someone unlocks it)'
+    : 'A bot admin can delete that KV key');
+
+// The new post's link in the bot's own move note among a locked post's last
+// 100 messages, or null. The move posts that note before it locks the post,
+// and Discord shows both at once, so this holds while KV does not show the
+// post's movedto: record (not yet, or never, when its save failed). Only
+// this bot's note counts, as the scan reads its own messages: another bot's
+// text proves nothing. The bot's user is read only when such a message is
+// there. The note names the link right after its opening words.
+async function movedNote(discord, threadId) {
+  const said = (await discord.call('GET', `/channels/${threadId}/messages?limit=100`)).filter((m) => String(m.content || '').startsWith(AWAY_START));
+  const me = said.length ? (await discord.me()).id : null;
+  const note = said.find((m) => m.author.id === me);
+  return note ? note.content.slice(AWAY_START.length).split(' ')[0] : null;
 }
 
 // A press on a post already filed answers "Already tracked" at once, and the
@@ -657,6 +692,8 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
   let thread = null;
   let rec = null;
   let saved = null;
+  let movedFrom = null;
+  let copyId = null;
   let oldGreeting = '';
   let lockGh;
   // One token per repo this filing touches.
@@ -674,8 +711,9 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
       throw new Error(`could not get access to ${r} (${e.message.slice(0, 200)}). Try again.`);
     }
   };
-  // The post's queue card: the form's, else the scan's record of the post.
-  const cardOf = (r) => cardId || (r && r.card) || '';
+  // The post's queue card: the form's, else the scan's record of the post,
+  // else, for a moved post, the old post's card the move recorded.
+  const cardOf = (r) => cardId || (r && r.card) || (movedFrom && movedFrom.card) || '';
   // The card to mark Filed as, once the lock is released: optional work
   // never holds the lock.
   let cardAfter = null;
@@ -746,24 +784,32 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     if (!locked) {
       // The holder may be between its last search and its create, so no
       // issue shows yet: only a lock older than any send may be deleted.
-      await followup(`Nothing was created: another send of this post is running, or one stopped partway. Wait a few minutes, then send it again. If it still says this and no issue for this post appears in any repo the bot files into, ${clearAdvice(threadId, cfg.lockRepo)}`);
+      await followup(`Nothing was created: another send or move of this post is running, or one stopped partway. Wait a few minutes, then send it again. If it still says this and no issue for this post appears in any repo the bot files into, ${clearAdvice(threadId, cfg.lockRepo)}`);
       return { busy: true };
     }
-    // The post's records, read under the lock, each waited on for at most
-    // KV_MS (`kvMs`). One that cannot be read is not "none": it may name an issue the
+    // The post's records, read under the lock side by side within KV_MS
+    // (`kvMs`). One that cannot be read is not "none": it may name an issue the
     // search cannot see (one moved to a repo the bot does not file in), so
     // nothing is filed.
+    let movedTo = null;
     try {
-      rec = await within(kvMs, readStrict(kv, `thread:${threadId}`));
-      const filed = await within(kvMs, readStrict(kv, `issue:${threadId}`));
-      // The issue the post was filed as: the Worker's record, or an older
-      // record that kept it beside the greeting.
-      saved = filed || (rec && rec.issue) || null;
+      ({ thread: rec, saved, movedFrom, movedTo } = await postRecords(kv, threadId, kvMs));
     } catch (e) {
       await followup(e.damaged
-        ? `Nothing was created: this post's saved record is damaged (${e.damaged}). A bot admin can delete that KV key; then send the post again.`
+        ? `Nothing was created: this post's saved record is damaged (${e.damaged}). ${damagedFix(e.damaged)}; then send the post again.`
         : "Nothing was created: could not read this post's saved record just now. Try again.");
       return { refused: 'record' };
+    }
+    // A post moved away: its record, else, on a locked post, the move's note.
+    // While STATE is bound only a locked post is read, so other filings cost
+    // nothing more; with none bound no record can show a move, and someone
+    // may have unlocked the old post, so every post is read. The lock is read
+    // as archivedOf reads the archive flag.
+    const movedAway = movedTo ? `https://discord.com/channels/${interaction.guild_id}/${movedTo.to}`
+      : !kv || (thread.thread_metadata && thread.thread_metadata.locked) ? await movedNote(discord, threadId) : null;
+    if (movedAway) {
+      await followup(`Nothing was created: this post was moved to ${movedAway}; send that one.`);
+      return { refused: 'moved' };
     }
     // An old greeting: the one pressed in the post, or the record's when it
     // was written before greetings lost their button.
@@ -822,15 +868,38 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     const first = await readFiled(discord);
     if (first.refused) return { refused: first.refused };
     const author = first.message.author || {};
-    // A webhook's author id names no user: the issue shows its name alone.
-    const reporterId = first.message.webhook_id ? null : author.id;
+    // The bot's own copy whose move record is not readable yet (KV shows a
+    // write elsewhere within a minute), was not saved, or never will be (a
+    // copy a move could not confirm): filing its first message would name
+    // the webhook as the player, and filing a reply would tie an issue to a
+    // copy no move record links.
+    // The first message shows it, and for a reply the scan's record of the
+    // copy does, so no filing spends a read on it. With no STATE bound there
+    // is no scan record, so a reply's filing reads the post's first message
+    // (none, when it was deleted).
+    const isCopy = (m) => !!m && !!m.webhook_id && m.application_id === interaction.application_id;
+    const botCopy = messageId === threadId ? isCopy(first.message)
+      : kv ? !!rec && rec.skipped === MOVED_HERE
+        : isCopy((await discord.readMessage(threadId, threadId)).message);
+    if (!movedFrom && botCopy) {
+      await followup(kv
+        ? `Nothing was created: this post is a copy the bot moved here, and its record movedfrom:${threadId} is not readable yet. Wait a minute, then send it again.`
+        : `Nothing was created: this post is a copy the bot moved here, and its record movedfrom:${threadId} cannot be read: no STATE namespace is bound (/bot-check names it).`);
+      return { refused: 'copy-record' };
+    }
+    // A moved post's first message is the bot's copy: the move's record
+    // names its player. Otherwise a webhook's author id names no user, and
+    // the issue shows its name alone.
+    const copy = movedFrom && messageId === threadId ? movedFrom.reporter : null;
+    copyId = copy && copy.id ? copy.id : null;
+    const reporterId = copy ? copyId : first.message.webhook_id ? null : author.id;
     // The member and template reads are optional, so they end a full call's
     // time before the filing's deadline. The last read of the message and
     // the create must both run: they share what is left, in that order.
     const lookupsBy = t0 + budgetMs - callMs;
     // The server nickname is a nicety: any failure files with the display
     // name. A 404 is a member who left; any other failure is logged.
-    const member = reporterId
+    const member = reporterId && !copy
       ? await discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, lookupsBy))
         .call('GET', `/guilds/${interaction.guild_id}/members/${reporterId}`)
         .catch((e) => { if (statusOf(e) !== 404) log(`member read failed: ${e.message.slice(0, 200)}`); return null; })
@@ -849,13 +918,14 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
       title: issueTitle,
       body: buildBody({
         content: message.content,
-        reporter: { name: personName(author, member), username: author.username, id: reporterId },
+        reporter: copy ? { name: copy.name, username: copy.username, id: copyId } : { name: personName(author, member), username: author.username, id: reporterId },
         sender: by ? { name: personName(by, interaction.member), username: by.username, id: by.id } : null,
         threadId,
         messageId,
         threadUrl: `https://discord.com/channels/${interaction.guild_id}/${threadId}`,
         attachments: message.attachments,
         templateLine: check.length ? gaps.join(' · ') || 'every field present' : null,
+        copied: !!copy,
       }),
       labels: labelsFor({ type, client }),
     });
@@ -881,7 +951,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
       await within(kvMs, saveIssueRecord(kv, threadId, { repo, number: issue.number, key: repoKey, by: modName }));
     } catch (e) { notes.push(`post record not saved: ${e.message.slice(0, 200)}`); }
     notes.push(...await tellTracked(teller, log, {
-      threadId, messageId, text: MESSAGES.tracked(repoKey, issue.number), old: oldGreeting, greeting: greetingId || (rec && rec.greeting),
+      threadId, messageId, text: MESSAGES.tracked(repoKey, issue.number), old: oldGreeting, greeting: greetingId || (rec && rec.greeting), ping: copyId,
     }));
     await followup(`Created ${repoKey} #${issue.number}: ${issue.html_url}${notes.length ? ` (${notes.join('; ')})` : ''}${gapText()}`);
     cardAfter = { cardId, head, key: repoKey, number: issue.number, by: modName };
@@ -903,7 +973,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
           .catch((err) => late.push(`post record not saved: ${err.message.slice(0, 200)}`));
         const tail = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, TAIL_MS, t0 + TRACKED_BY_MS));
         late.push(...await tellTracked(tail, log, {
-          threadId, messageId, text: MESSAGES.tracked(repoKey, found.number), old: oldGreeting, greeting: greetingId || (rec && rec.greeting),
+          threadId, messageId, text: MESSAGES.tracked(repoKey, found.number), old: oldGreeting, greeting: greetingId || (rec && rec.greeting), ping: copyId,
         }));
         await followup(`Created ${repoKey} #${found.number}: ${found.html_url} (GitHub answered late; the post's status tag comes from the issue's first workflow run${late.length ? `; ${late.join('; ')}` : ''})${gapText()}`);
         cardAfter = { cardId, head: thread ? cardHead(thread.parent_id, threadId) : '', key: repoKey, number: found.number, by: modName };

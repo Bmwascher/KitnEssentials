@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, createVerify } from 'node:crypto';
 import { handle, COMMAND_NAME, CHECK_COMMAND, scheduled, privateText } from '../src/worker.js';
-import { CRONS } from '../src/scan.js';
+import { CRONS, MOVED_HERE } from '../src/scan.js';
 import { importAppKey, appJwt } from '../src/github.js';
 import { MESSAGES } from '../src/core.js';
 import { fakeFetch, fakeKv, FORUM, stall } from './fake-fetch.mjs';
@@ -40,6 +40,8 @@ function discordRoutes(extra = []) {
     ['PATCH', /\/channels\/700$/, () => ({})],
     ['POST', /\/channels\/700\/messages$/, () => ({ id: '1' })],
     ['PATCH', /\/webhooks\//, () => ({})],
+    ['GET', /\/channels\/\d+\/messages\?limit=100$/, () => []],
+    ['GET', /\/channels\/700\/messages\/700$/, () => ({ id: '700', content: 'My bags overlap', author: { id: '42', global_name: 'Pat' }, attachments: [] })],
   ];
 }
 
@@ -377,10 +379,10 @@ test('after the lock\'s release, the card (its record lookup included) and the r
   let overlap = false;
   let markedDuringRename = false;
   // A right-click filing: the card comes from the record, read under the
-  // lock (the first two reads) and looked up again, slowly, after the release.
+  // lock (the first four reads) and looked up again, slowly, after the release.
   const kv = {
     get: async (k) => {
-      if (++gets > 2) {
+      if (++gets > 4) {
         looking = true;
         overlap = overlap || renaming;
         await slow(30);
@@ -1154,7 +1156,7 @@ test('one lock per post: a filing into the second repo takes its lock in LOCK_RE
     // A filing that holds the lock may be between its last search and its create, or GitHub may still apply its create: the advice frees only a lock an hour old.
     if (held) {
       assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content,
-        /another send of this post is running, or one stopped partway\. Wait a few minutes, then send it again\. If it still says this and no issue for this post appears in any repo the bot files into, delete the label discord-lock-700 in me\/test-one, but only if the time in its description is more than an hour ago or it shows no time\. A send ends within 30 seconds and GitHub times out a request after 10 seconds, so the hour is a wide margin past both\. Then send the post again\.$/, why);
+        /another send or move of this post is running, or one stopped partway\. Wait a few minutes, then send it again\. If it still says this and no issue for this post appears in any repo the bot files into, delete the label discord-lock-700 in me\/test-one, but only if the time in its description is more than an hour ago or it shows no time\. A send ends within 30 seconds and GitHub times out a request after 10 seconds, so the hour is a wide margin past both\. Then send the post again\.$/, why);
     }
   }
 });
@@ -1196,7 +1198,7 @@ test('the card lookup after the lock\'s release keeps to the release\'s end', as
   try {
     let gets = 0;
     // The record reads under the lock answer; the lookup after the release would never answer.
-    const kv = { get: () => (++gets <= 2 ? Promise.resolve(null) : new Promise(() => {})), put: async () => {} };
+    const kv = { get: () => (++gets <= 4 ? Promise.resolve(null) : new Promise(() => {})), put: async () => {} };
     const f = fakeFetch(discordRoutes(githubRoutes([], [
       ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
       // The release ends past 29 s.
@@ -1206,14 +1208,14 @@ test('the card lookup after the lock\'s release keeps to the release\'s end', as
     await handle(await signed(submit()), { ...QUEUE, STATE: kv }, ctx, { fetch: f, installationToken: async () => 'inst', log: () => {} });
     const [res] = await Promise.all(ctx.jobs);
     assert.equal(res.created, 17);
-    assert.equal(gets, 2, 'no lookup starts past the release\'s end');
+    assert.equal(gets, 4, 'no lookup starts past the release\'s end');
   } finally { clock.restore(); }
 });
 
 test('a card lookup after the release that fails is logged, and the record read under the lock is used', async () => {
   let gets = 0;
   // The record read under the lock names card 96; the lookup after the release fails.
-  const kv = { get: async (k) => { if (++gets > 2) throw new Error('KV down'); return k === 'thread:700' ? JSON.stringify({ card: '96' }) : null; }, put: async () => {} };
+  const kv = { get: async (k) => { if (++gets > 4) throw new Error('KV down'); return k === 'thread:700' ? JSON.stringify({ card: '96' }) : null; }, put: async () => {} };
   const f = fakeFetch(discordRoutes(githubRoutes([], [
     ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
     ['PATCH', /\/channels\/556\/messages\/96$/, () => ({})],
@@ -1225,6 +1227,116 @@ test('a card lookup after the release that fails is logged, and the record read 
   assert.equal(res.created, 17);
   assert.ok(logged.some((l) => /^card lookup failed, so the record read earlier is used: KV down$/.test(l)), logged.join('\n'));
   assert.equal(f.find('PATCH', /\/channels\/556\/messages\/96$/).length, 1, 'the card the earlier read named is marked filed');
+});
+
+test('filing a moved post names its player, ends with the copy line and pings them; filing the old post is refused', async () => {
+  let created;
+  const kv = fakeKv({ 'movedfrom:700': JSON.stringify({ from: '690', reporter: { name: 'Pat', id: '42', username: 'pat' }, card: '96' }) });
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /\/channels\/700\/messages\/700$/, () => ({ id: '700', content: 'My bags overlap', webhook_id: '61', author: { id: '61', username: 'Pat' }, attachments: [] })],
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, (b) => { created = b; return { number: 17, html_url: 'u/17' }; }],
+    ['PATCH', /\/channels\/556\/messages\/96$/, () => ({})],
+  ])));
+  const form = submit();
+  form.data.custom_id = 'gh:700:700';
+  const ctx = ctxFor();
+  await handle(await signed(form), { ...QUEUE, STATE: kv }, ctx, { fetch: f, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(ctx.jobs), [{ created: 17, notes: [] }]);
+  assert.match(created.body, /^\| Reporter \| \[Pat\]\(https:\/\/discord\.com\/users\/42\) \(`pat`\) \|\n/);
+  assert.match(created.body, /\n<!-- discord-copy -->\n<!-- discord-message: 700 -->\n<!-- discord-thread: 700 reporter: 42 -->$/);
+  assert.equal(f.find('GET', /\/guilds\/1\/members\//).length, 0, 'the record names the player: no member read');
+  const receipt = f.find('POST', /\/channels\/700\/messages$/)[0].body;
+  assert.match(receipt.content, /^<@42> Thanks! This is now tracked as ONE #17\./);
+  assert.deepEqual(receipt.allowed_mentions, { parse: [], users: ['42'], replied_user: true });
+  assert.deepEqual(receipt.message_reference, { message_id: '700', fail_if_not_exists: false });
+  assert.equal(f.find('PATCH', /\/channels\/556\/messages\/96$/).length, 1, 'the card the move recorded is marked filed');
+
+  const old = fakeFetch(discordRoutes(githubRoutes()));
+  const oldCtx = ctxFor();
+  await handle(await signed(submit()), { ...env, STATE: fakeKv({ 'movedto:700': '{"to":"990"}' }) }, oldCtx, { fetch: old, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(oldCtx.jobs), [{ refused: 'moved' }]);
+  assert.equal(old.find('PATCH', /\/webhooks\//)[0].body.content, 'Nothing was created: this post was moved to https://discord.com/channels/1/990; send that one.');
+  assert.equal(old.find('POST', /\/issues$/).length, 0);
+
+  // The old post before KV shows its movedto: record here: locked, with the move's note.
+  const lockedOld = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /\/channels\/700$/, () => ({ id: '700', parent_id: '900', name: 'x', applied_tags: [], thread_metadata: { locked: true, archived: true } })],
+    ['GET', /\/channels\/700\/messages\?limit=100$/, () => [{ id: 'n1', author: { id: 'b', bot: true }, content: 'This post moved to https://discord.com/channels/1/990 (moved by Mod).' }]],
+    ['GET', /\/users\/@me$/, () => ({ id: 'b' })],
+  ])));
+  const lockedCtx = ctxFor();
+  await handle(await signed(submit()), { ...env, STATE: fakeKv() }, lockedCtx, { fetch: lockedOld, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(lockedCtx.jobs), [{ refused: 'moved' }]);
+  assert.equal(lockedOld.find('PATCH', /\/webhooks\//)[0].body.content, 'Nothing was created: this post was moved to https://discord.com/channels/1/990; send that one.');
+  assert.equal(lockedOld.find('POST', /\/issues$/).length, 0);
+
+  // The same text from another bot in a locked post refuses nothing.
+  const otherBot = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /\/channels\/700$/, () => ({ id: '700', parent_id: '900', name: 'x', applied_tags: [], thread_metadata: { locked: true, archived: false } })],
+    ['GET', /\/channels\/700\/messages\?limit=100$/, () => [{ id: 'n1', author: { id: 'other', bot: true }, content: 'This post moved to https://discord.com/channels/1/990 (moved by Mod).' }]],
+    ['GET', /\/users\/@me$/, () => ({ id: 'b' })],
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 18, html_url: 'u/18' })],
+  ])));
+  const otherCtx = ctxFor();
+  await handle(await signed(submit()), { ...env, STATE: fakeKv() }, otherCtx, { fetch: otherBot, installationToken: async () => 'inst' });
+  assert.equal((await Promise.all(otherCtx.jobs))[0].created, 18);
+
+  // The bot's copy whose record KV does not show yet: refused, not filed as the webhook.
+  const early = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /\/channels\/700\/messages\/700$/, () => ({ id: '700', content: 'My bags overlap', webhook_id: '61', application_id: 'app', author: { id: '61', username: 'Pat' }, attachments: [] })],
+  ])));
+  const earlyForm = submit();
+  earlyForm.data.custom_id = 'gh:700:700';
+  const earlyCtx = ctxFor();
+  await handle(await signed(earlyForm), { ...env, STATE: fakeKv() }, earlyCtx, { fetch: early, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(earlyCtx.jobs), [{ refused: 'copy-record' }]);
+  assert.match(early.find('PATCH', /\/webhooks\//)[0].body.content, /^Nothing was created: this post is a copy the bot moved here, and its record movedfrom:700 is not readable yet\./);
+  assert.equal(early.find('POST', /\/issues$/).length, 0);
+
+  // A reply in such a copy, which the scan marked: refused too, so no issue
+  // names a copy staff may delete. A reply in any other post files as today.
+  const orphan = fakeFetch(discordRoutes(githubRoutes()));
+  const orphanCtx = ctxFor();
+  await handle(await signed(submit()), { ...env, STATE: fakeKv({ 'thread:700': JSON.stringify({ skipped: MOVED_HERE }) }) }, orphanCtx, { fetch: orphan, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(orphanCtx.jobs), [{ refused: 'copy-record' }]);
+  assert.equal(orphan.find('POST', /\/issues$/).length, 0);
+
+  // A damaged move record: the reply says what deleting it would leave.
+  const damaged = fakeFetch(discordRoutes(githubRoutes()));
+  const damagedCtx = ctxFor();
+  await handle(await signed(submit()), { ...env, STATE: fakeKv({ 'movedfrom:700': '{"from":"x"}' }) }, damagedCtx, { fetch: damaged, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(damagedCtx.jobs), [{ refused: 'record' }]);
+  assert.equal(damaged.find('PATCH', /\/webhooks\//)[0].body.content,
+    "Nothing was created: this post's saved record is damaged (movedfrom:700). A bot admin can correct that KV key by hand (deleting it leaves this post refused as a copy for good); then send the post again.");
+
+  // No STATE bound: no record can show the move, so an old post someone
+  // unlocked is known by the bot's note, and the copy's refusal names the
+  // missing binding instead of a wait.
+  const unbound = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /\/channels\/700\/messages\?limit=100$/, () => [{ id: 'n1', author: { id: 'b', bot: true }, content: 'This post moved to https://discord.com/channels/1/990 (moved by Mod).' }]],
+    ['GET', /\/users\/@me$/, () => ({ id: 'b' })],
+  ])));
+  const unboundCtx = ctxFor();
+  await handle(await signed(submit()), env, unboundCtx, { fetch: unbound, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(unboundCtx.jobs), [{ refused: 'moved' }]);
+  assert.equal(unbound.find('POST', /\/issues$/).length, 0);
+  const unboundCopy = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /\/channels\/700\/messages\/700$/, () => ({ id: '700', content: 'My bags overlap', webhook_id: '61', application_id: 'app', author: { id: '61', username: 'Pat' }, attachments: [] })],
+  ])));
+  const unboundCopyCtx = ctxFor();
+  await handle(await signed(earlyForm), env, unboundCopyCtx, { fetch: unboundCopy, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(unboundCopyCtx.jobs), [{ refused: 'copy-record' }]);
+  assert.equal(unboundCopy.find('PATCH', /\/webhooks\//)[0].body.content,
+    'Nothing was created: this post is a copy the bot moved here, and its record movedfrom:700 cannot be read: no STATE namespace is bound (/bot-check names it).');
+  // A reply in that copy: with no scan record to read, its first message
+  // shows the copy, and the same refusal holds.
+  const unboundReply = fakeFetch(discordRoutes(githubRoutes([], [
+    ['GET', /\/channels\/700\/messages\/700$/, () => ({ id: '700', content: 'My bags overlap', webhook_id: '61', application_id: 'app', author: { id: '61', username: 'Pat' }, attachments: [] })],
+  ])));
+  const unboundReplyCtx = ctxFor();
+  await handle(await signed(submit()), env, unboundReplyCtx, { fetch: unboundReply, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(unboundReplyCtx.jobs), [{ refused: 'copy-record' }]);
+  assert.equal(unboundReply.find('POST', /\/issues$/).length, 0);
 });
 
 test('a message deleted before its filing files nothing and says how to file the post', async () => {
