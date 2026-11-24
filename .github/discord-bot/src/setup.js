@@ -3,7 +3,7 @@
 // yet" replies use them.
 import {
   parseRepos, parseForums, parseRoleIds, isTemplates, PERMS, packGroups, clipLine, isDiscordId as digits, STATUS_NAMES, CHECKLIST_NAMES, ACCEPTED,
-  LABELS, LABEL_DEFS, TEXT_TYPES, THREAD_TYPES, timedFetch, oneHop, isRepoTags, normRepoKey, OWN_TAG_NAMES, REPO_KEY_MAX, usableRepoKeys,
+  LABELS, LABEL_DEFS, TEXT_TYPES, THREAD_TYPES, timedFetch, oneHop, isRepoTags, normRepoKey, OWN_TAG_NAMES, REPO_KEY_MAX, usableRepoKeys, SELECT_MAX,
 } from './core.js';
 import { discordClient } from './discord.js';
 import { installationAccess, githubClient, appJwt, importAppKey } from './github.js';
@@ -76,10 +76,10 @@ export function configProblems(raw, { bindings = true } = {}) {
       if (typeof r !== 'string' || !REPO.test(r)) out.push(`REPOS entry ${shown(k)} is not owner/repo.`);
     }
     if (Object.keys(repos).length > 1 && !present(env.LOCK_REPO)) out.push("LOCK_REPO is empty while REPOS names more than one repo: set it to the repo that holds every filing's lock.");
-    // Discord's select takes 25 options, and Send to GitHub lists the usable
-    // repos in one; an unusable key is named above and never offered.
+    // Send to GitHub lists the usable repos in one select; an unusable key is
+    // named above and never offered.
     const usable = usableRepoKeys(repos).length;
-    if (usable > 25) out.push(`REPOS names ${usable} usable repos, and Send to GitHub's repo dropdown holds at most 25: remove some.`);
+    if (usable > SELECT_MAX) out.push(`REPOS names ${usable} usable repos, and Send to GitHub's repo dropdown holds at most ${SELECT_MAX}: remove some.`);
   }
   if (present(env.LOCK_REPO) && !REPO.test(String(env.LOCK_REPO))) out.push('LOCK_REPO is not owner/repo (no spaces).');
   let forumsRead = true;
@@ -116,7 +116,7 @@ export function configProblems(raw, { bindings = true } = {}) {
   // in one select. This check reads no channel, so it counts every entry;
   // the channel checks below name an entry that is not a forum of this
   // server, which the form leaves out.
-  if (forumsRead && Object.keys(parseForums(env)).length > 26) out.push(`${forumSetting(env)} names ${Object.keys(parseForums(env)).length} player forums, and the Move form lists at most 25 others, counting only forums of this server: remove first any entry /bot-check calls not a channel of this server or the wrong kind of channel, then others if 27 or more are left.`);
+  if (forumsRead && Object.keys(parseForums(env)).length > SELECT_MAX + 1) out.push(`${forumSetting(env)} names ${Object.keys(parseForums(env)).length} player forums, and the Move form lists at most ${SELECT_MAX} others, counting only forums of this server: remove first any entry /bot-check calls not a channel of this server or the wrong kind of channel, then others if ${SELECT_MAX + 2} or more are left.`);
   if (!digits(env.GUILD_ID)) out.push("GUILD_ID is not set to the server's id (digits only, no spaces).");
   if (!blank(env.TEMPLATES)) {
     let t = null;

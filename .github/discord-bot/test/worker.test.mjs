@@ -2112,6 +2112,27 @@ test('files over 20 MiB, past the 24 MiB left, or that fail to download stay beh
   assert.equal(blank.f.find('POST', /\?wait=true$/)[0].body.payload.content, '(The first message had nothing the bot can copy.)');
 });
 
+test('the downloads end a call\'s time before the prep phase, so the first message is read again and the post moves', async () => {
+  const clock = shiftClock();
+  try {
+    clock.at(0);
+    // With a call's time of 2 s the downloads end at 10 s. The first ends at
+    // 10.5 s; the second would end at 12.1 s, past the prep phase.
+    const w = moveWorld((s) => {
+      s.first.attachments = [
+        { id: 'a1', filename: 'one.png', size: 5, url: 'https://cdn.example/a1' },
+        { id: 'a2', filename: 'two.png', size: 5, url: 'https://cdn.example/a2' },
+      ];
+      s.files['https://cdn.example/a1'] = () => { clock.at(10500); return new Response('1'); };
+      s.files['https://cdn.example/a2'] = () => { clock.at(12100); return new Response('2'); };
+    });
+    const { told } = await runMove(w, moveSubmit(), {}, { callMs: 2000 });
+    assert.equal(told, MOVED);
+    assert.equal(w.f.find('GET', /cdn\.example\/a2$/).length, 0, 'the second download is not started');
+    assert.deepEqual(w.f.find('POST', /\?wait=true$/)[0].body.files, ['one.png']);
+  } finally { clock.restore(); }
+});
+
 test('the copy takes the first message as read just before the create: an edit\'s text, without a file the player removed, counting the files that read lists', async () => {
   const twoReads = (before, after) => moveWorld((s) => {
     let reads = 0;
@@ -2133,6 +2154,7 @@ test('the copy takes the first message as read just before the create: an edit\'
 });
 
 test('a move refused before the new post changes nothing and says why', async () => {
+  const RECEIPT = /^Nothing was moved: the bot's "now tracked" reply in this post \(https:\/\/discord\.com\/channels\/1\/700\/m8\) says it was sent to GitHub, though its issue was not found by its filing record or the from-discord label; moving filed posts comes in a later update\. If that issue was deleted, delete that reply, then move the post again\.$/;
   const FILED = (s) => {
     s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-one', number: 40, key: 'ONE' }) };
     s.extra = [['GET', /api\.github\.com\/repos\/me\/test-one\/issues\/40$/, () => ({ number: 40, html_url: 'https://github.com/me/test-one/issues/40', repository_url: 'https://api.github.com/repos/me/test-one' })]];
@@ -2178,6 +2200,19 @@ test('a move refused before the new post changes nothing and says why', async ()
     ['a filed post with no record, found by its marker', (s) => {
       s.two = [{ number: 12, html_url: 'https://github.com/me/test-two/issues/12', repository_url: 'https://api.github.com/repos/me/test-two', body: '<!-- discord-thread: 700 reporter: 42 -->' }];
     }, /^This post is already tracked as TWO #12 \(https:\/\/github\.com\/me\/test-two\/issues\/12\); moving filed posts comes in a later update\.$/],
+    // Filed with no record saved (no STATE bound then, or the save failed),
+    // its issue's from-discord label removed since: neither search finds it,
+    // and the bot's reply in the post still says it was filed.
+    ['a filed post neither its record nor the label finds, told by the bot\'s reply', (s) => {
+      s.said = [{ id: 'm8', content: MESSAGES.tracked('ONE', 40), author: { id: 'b' } }];
+    }, RECEIPT],
+    ['the bot\'s reply that starts with the player\'s mention, as on a moved copy', (s) => {
+      s.said = [{ id: 'm8', content: `<@42> ${MESSAGES.tracked('ONE', 40)}`, author: { id: 'b' } }];
+    }, RECEIPT],
+    ['a locked post with the bot\'s reply (the filed refusal, not the unlock advice)', (s) => {
+      s.post.thread_metadata.locked = true;
+      s.said = [{ id: 'm8', content: MESSAGES.tracked('ONE', 40), author: { id: 'b' } }];
+    }, RECEIPT],
     // The form offered 901; it was deleted before the submit, so the
     // server's channel list no longer holds it.
     ['the chosen forum deleted since the form opened', (s) => { s.channels = CHANNELS.filter((c) => c.id !== '901'); },
@@ -2212,6 +2247,9 @@ test('a move refused before the new post changes nothing and says why', async ()
     assert.equal(w.f.find('PATCH', /\/channels\/700$/).length, 0, `${why}: the old post is left as it is`);
     assert.equal(kv.m.has('movedfrom:990'), false, `${why}: no record`);
   }
+  // Another author's message with the reply's text proves nothing.
+  const quoted = moveWorld((s) => { s.said = [{ id: 'm8', content: MESSAGES.tracked('ONE', 40), author: { id: '42' } }]; });
+  assert.equal((await runMove(quoted)).told, MOVED);
 });
 
 test('a create with no answer says a copy may exist, keeps the lock, and writes no record and nothing to the old post', async () => {
@@ -2265,6 +2303,18 @@ test('a move past its steps\' phase still answers and releases: a slow KV or a s
     const end = await runMove(closing);
     assert.equal(end.told, MOVED);
     assert.equal(closing.f.find('DELETE', /discord-lock-700$/).length, 1, 'the lock is released');
+
+    // A record write that starts with 0.3 s of the steps' phase left waits
+    // those 0.3 s, not the whole `kvMs`.
+    clock.at(0);
+    const short = moveWorld((s) => {
+      s.putHangs = 'movedto:700';
+      s.made = () => { clock.at(22700); return { id: '990', channel_id: '990' }; };
+    });
+    const began = performance.now();
+    const cut = await runMove(short, moveSubmit(), {}, { kvMs: 5000 });
+    assert.ok(performance.now() - began < 2000, 'the write waits only what is left of the phase');
+    assert.match(cut.told, / Not done:\n- record movedto:700(\n|$)/);
   } finally { clock.restore(); }
   // A record whose write never answers is named after `kvMs`, and the steps
   // after it still run.

@@ -965,3 +965,13 @@ test('a webhook post is multipart with no bot token, and its errors never show t
     assert.ok(!e.message.includes('secret-token'), why);
   }
 });
+
+test('isBotCopy: only a message the bot\'s own webhook posted', () => {
+  for (const [why, m, want] of [
+    ['the bot\'s copy', { webhook_id: '61', application_id: 'app' }, true],
+    ['another app\'s webhook', { webhook_id: '61', application_id: 'other' }, false],
+    ['a server\'s own webhook, owned by no app', { webhook_id: '61' }, false],
+    ['a player\'s message', { author: { id: '42' } }, false],
+    ['a deleted message', null, false],
+  ]) assert.equal(C.isBotCopy(m, 'app'), want, why);
+});

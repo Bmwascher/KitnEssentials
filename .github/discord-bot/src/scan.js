@@ -43,7 +43,7 @@
 //   daily:named  the posts of the give-ups a daily check has named
 // Each key has one writer: the scan writes thread: and scan:, the Worker
 // issue:, movedfrom: and movedto:, the daily check daily:named.
-import { parseForums, snowflakeMs, timedFetch, currentStatus, SEND_BUTTON, queueCard, personName, MESSAGES, discordText, postLines, taken, oneHop, isDiscordId, TEXT_TYPES, statusOf } from './core.js';
+import { parseForums, snowflakeMs, timedFetch, currentStatus, SEND_BUTTON, queueCard, personName, MESSAGES, discordText, postLines, taken, oneHop, isDiscordId, TEXT_TYPES, statusOf, isBotCopy } from './core.js';
 import { discordClient } from './discord.js';
 
 export { SEND_BUTTON };
@@ -217,6 +217,9 @@ export const AWAY_START = MESSAGES.movedTo({ to: '\u0000', by: '' }).split('\u00
 // The skip a post the bot moved here is saved with; the Worker refuses to
 // file a reply in a post whose record says it.
 export const MOVED_HERE = 'a post the bot moved here';
+// The text of the Worker's "now tracked" reply, whoever wrote it. On a moved
+// post's copy it starts with the reporter's mention.
+export const isReceipt = (m) => String(m.content || '').replace(/^<@\d+> /, '').startsWith(TRACKED_START);
 
 // The bot's own messages among the post's last 100: its greeting (the
 // buttonless one, or an old one still showing its button), and its "now
@@ -227,8 +230,7 @@ async function lookIn(discord, threadId, myId) {
   const recent = (await discord.call('GET', `/channels/${threadId}/messages?limit=100`)) || [];
   const me = recent.length ? await myId() : null;
   const mine = recent.filter((m) => !!m.author && m.author.id === me);
-  // On a moved post's copy the receipt starts with the reporter's mention.
-  const receipt = mine.find((m) => String(m.content || '').replace(/^<@\d+> /, '').startsWith(TRACKED_START));
+  const receipt = mine.find(isReceipt);
   return {
     receipt: receipt ? receipt.id : null,
     // The move's own message: the post is a copy the bot made, even when its
@@ -514,7 +516,8 @@ export async function scan(env, deps = {}) {
           // Discord shows these before KV shows the move's records. A first
           // message out of view is told by the record, or, past these 100
           // with no record saved, by reading the first message on its own.
-          const isCopy = async (m) => !!(m && m.webhook_id && m.application_id && m.application_id === await myAppId());
+          // The application is read only for a message that could be its copy.
+          const isCopy = async (m) => !!(m && m.webhook_id && m.application_id) && isBotCopy(m, await myAppId());
           let copy = seen.moved || await isCopy(seen.starter);
           if (!copy && !seen.starter) copy = !!(await read(`movedfrom:${t.id}`));
           if (!copy && !seen.starter && seen.full) copy = await isCopy((await greeter.readMessage(t.id, t.id)).message);

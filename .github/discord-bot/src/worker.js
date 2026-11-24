@@ -11,11 +11,11 @@ import {
   templateNote, parseCustomId, templateLabels, filedCard, cardHead, BY_RIGHT_CLICK,
   parseRepoTags, repoFromTags, plainTags, usableRepoKeys,
   MOVE_BUTTON, CLIENT_NAMES, cutUnits,
-  queueCard, movedTags, webhookName, avatarUrl,
+  queueCard, movedTags, webhookName, avatarUrl, SELECT_MAX, isBotCopy,
 } from './core.js';
 import { discordClient, postGone, archivedOf } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
-import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch, AWAY_START, MOVED_HERE } from './scan.js';
+import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch, AWAY_START, MOVED_HERE, isReceipt } from './scan.js';
 import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems, unreadableSettings, MESSAGE_CONTENT } from './setup.js';
 
 export const COMMAND_NAME = 'Send to GitHub';
@@ -168,10 +168,7 @@ const input = (id, text, value, opts = {}) => label(text, {
   required: opts.required !== false, max_length: opts.max || 100,
   value: value || undefined, placeholder: opts.placeholder,
 });
-// Discord's select takes 25 options, and Discord refuses a whole modal with
-// more, so a form that would need more is not opened.
-const SELECT_MAX = 25;
-const TOO_MANY = 'The form cannot open: its dropdowns hold 25 choices, and REPOS or FORUMS names more. /bot-check names which; remove some.';
+const TOO_MANY = `The form cannot open: its dropdowns hold ${SELECT_MAX} choices, and REPOS or FORUMS names more. /bot-check names which; remove some.`;
 // A select of [value, label] choices, `chosen` pre-selected when it is one.
 const select = (id, text, choices, chosen, { required = true, description } = {}) => label(text, {
   type: 3, custom_id: id, required,
@@ -501,15 +498,20 @@ const damagedFix = (key) => (/^movedfrom:/.test(key)
     ? 'A bot admin can correct that KV key by hand (deleting it lets the old post be sent or moved again once someone unlocks it)'
     : 'A bot admin can delete that KV key');
 
-// The new post's link in this bot's move note among a locked post's last 100
-// messages, or null. The move posts the note before it locks the post, so
-// this holds while KV does not show the movedto: record (not yet, or never,
-// when its save failed). Another bot's text proves nothing.
-async function movedNote(discord, threadId) {
-  const said = (await discord.call('GET', `/channels/${threadId}/messages?limit=100`)).filter((m) => String(m.content || '').startsWith(AWAY_START));
+// This bot's own messages among a post's last 100 that say what became of
+// it: `away`, the new post's link in its move note, and `receipt`, its "now
+// tracked" reply, each null when absent. The move posts its note before it
+// locks the post, so the note holds while KV does not show the movedto:
+// record (not yet, or never, when its save failed); the reply says the post
+// was filed when neither its filing record nor the from-discord label finds
+// its issue. Another bot's text proves nothing.
+async function ownNotes(discord, threadId) {
+  const said = (await discord.call('GET', `/channels/${threadId}/messages?limit=100`))
+    .filter((m) => String(m.content || '').startsWith(AWAY_START) || isReceipt(m));
   const me = said.length ? (await discord.me()).id : null;
-  const note = said.find((m) => m.author.id === me);
-  return note ? note.content.slice(AWAY_START.length).split(' ')[0] : null;
+  const mine = said.filter((m) => m.author.id === me);
+  const note = mine.find((m) => String(m.content || '').startsWith(AWAY_START));
+  return { away: note ? note.content.slice(AWAY_START.length).split(' ')[0] : null, receipt: mine.find(isReceipt) || null };
 }
 
 // A press on a post already filed answers "Already tracked" at once, and the
@@ -877,7 +879,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     // may have unlocked the old post, so every post is read. The lock is read
     // as archivedOf reads the archive flag.
     const movedAway = movedTo ? `https://discord.com/channels/${interaction.guild_id}/${movedTo.to}`
-      : !kv || (thread.thread_metadata && thread.thread_metadata.locked) ? await movedNote(discord, threadId) : null;
+      : !kv || (thread.thread_metadata && thread.thread_metadata.locked) ? (await ownNotes(discord, threadId)).away : null;
     if (movedAway) {
       await followup(`Nothing was created: this post was moved to ${movedAway}; send that one.`);
       return { refused: 'moved' };
@@ -945,10 +947,9 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     // record links. The first message tells it, and for a reply the scan's
     // record; with no STATE bound a reply's filing reads the first message
     // (none when deleted).
-    const isCopy = (m) => !!m && !!m.webhook_id && m.application_id === interaction.application_id;
-    const botCopy = messageId === threadId ? isCopy(first.message)
+    const botCopy = messageId === threadId ? isBotCopy(first.message, interaction.application_id)
       : kv ? !!rec && rec.skipped === MOVED_HERE
-        : isCopy((await discord.readMessage(threadId, threadId)).message);
+        : isBotCopy((await discord.readMessage(threadId, threadId)).message, interaction.application_id);
     if (!movedFrom && botCopy) {
       await followup(kv
         ? `Nothing was created: this post is a copy the bot moved here, and its record movedfrom:${threadId} is not readable yet. Wait a minute, then send it again.`
@@ -1175,9 +1176,10 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     if (records.movedTo) return await refuse(`this post was already moved to ${link(records.movedTo.to)}`, 'moved');
     // The bot's move locks the old post, and Discord shows a lock at once,
     // unlike KV's records: a move repeated within KV's minute stops here. The
-    // bot's note there says where it went when its record was not saved.
-    const noted = old.thread_metadata.locked ? await movedNote(discord, oldId) : '';
-    if (noted) return await refuse(`this post was already moved to ${noted}`, 'moved');
+    // bot's note there says where it went when its record was not saved. An
+    // unlocked post's note refuses nothing: someone unlocked it to move it.
+    const own = await ownNotes(discord, oldId);
+    if (old.thread_metadata.locked && own.away) return await refuse(`this post was already moved to ${own.away}`, 'moved');
     // A filed post is refused before a locked one's advice: unlocking it
     // would not let it move.
     const found = await findIssue(cfg, records.saved, oldId, tokenFor, prep);
@@ -1188,6 +1190,12 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     if (found.issue) {
       await followup(`This post is already tracked as ${found.key} #${found.issue.number} (${found.issue.html_url}); moving filed posts comes in a later update.`);
       return { refused: 'filed' };
+    }
+    // Filed, though neither search finds its issue: a filing record never
+    // saved or deleted, and the issue's label removed or the issue moved
+    // outside REPOS. Moving it would leave that issue on the locked post.
+    if (own.receipt) {
+      return await refuse(`the bot's "now tracked" reply in this post (${link(oldId)}/${own.receipt.id}) says it was sent to GitHub, though its issue was not found by its filing record or the from-discord label; moving filed posts comes in a later update. If that issue was deleted, delete that reply, then move the post again`, 'filed');
     }
     if (old.thread_metadata.locked) return await refuse('the post is locked: a moderator can unlock it, then move it', 'locked');
 
@@ -1216,7 +1224,7 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     // The bot's own copy whose move record is not readable yet (KV shows a
     // write elsewhere within a minute) or was not saved: copying it would
     // name the webhook as the player.
-    if (!records.movedFrom && first.webhook_id && first.application_id === interaction.application_id) {
+    if (!records.movedFrom && isBotCopy(first, interaction.application_id)) {
       return await refuse(`this post is a copy the bot moved here, and its record movedfrom:${oldId} is not readable yet. Wait a minute, then move it again`, 'copy-record');
     }
     // With Message Content off the bot sees no text and no files, so a report
@@ -1255,13 +1263,17 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     }
 
     // Each file in order that fits Discord's limits is downloaded; the rest,
-    // and any whose download fails, stay on the old post.
+    // and any whose download fails or cannot start in time, stay on the old
+    // post. The downloads end a call's time before the prep phase, so a slow
+    // file cannot take the time of the first message's read below, which the
+    // create needs.
+    const download = timedFetch(deps.fetch, callMs, t0 + MOVE_PREP_BY_MS - callMs);
     const files = [];
     let room = COPY_MAX_BYTES;
     for (const a of first.attachments) {
       if (a.size > COPY_FILE_MAX || a.size > room) continue;
       try {
-        const res = await prep(a.url);
+        const res = await download(a.url);
         if (!res.ok) throw new Error(`answered ${res.status}`);
         files.push({ id: a.id, name: a.filename, description: a.description, blob: await res.blob() });
         room -= a.size;

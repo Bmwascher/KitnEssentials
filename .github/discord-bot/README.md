@@ -394,7 +394,11 @@ an approved role asks a moderator, who right-clicks the post.
 
 Only a post not yet sent to GitHub moves. A filed post answers "This post is
 already tracked as KEY #n (link); moving filed posts comes in a later
-update." and nothing changes.
+update." and nothing changes. A post that holds the bot's "now tracked"
+reply among its last 100 messages is refused too when the bot cannot find
+its issue (its filing record was never saved or was deleted, and the issue
+lost its `from-discord` label or left `REPOS`); the answer links that reply.
+If that issue was deleted, delete the reply, then move the post again.
 
 The form has two dropdowns:
 
@@ -479,7 +483,8 @@ below is known and accepted. What you see in each:
   this server", no card was sent there; `/bot-check` names the setting.
 - **The new post's record** (`record movedfrom:<new post id>`). Sending or
   moving the new post by its first message answers that its record is not
-  readable yet, for good. The new post stays a readable copy.
+  readable yet, for good, and so does sending a reply in it once the scan
+  has saved the post as the bot's copy. The new post stays a readable copy.
 - **The moved message** (`moved message in the new post`). The new post has
   no link back, and the player was not pinged.
 - **The note in the old post** (`note in the old post`). The old post does
@@ -492,7 +497,8 @@ below is known and accepted. What you see in each:
   there."). A copy may or may not appear in that forum. The old post was
   not changed and its lock stays; after an hour the busy reply's advice
   applies. A copy that appears is refused for sending and moving by its
-  first message, and is not greeted. Do not delete a post in that forum on
+  first message, and for sending by a reply once the scan has seen it, and
+  is not greeted. Do not delete a post in that forum on
   the strength of this message alone: another post can share the title and
   the player's name.
 - **No reply at all** (the Worker was stopped, or the reply failed): any of
@@ -512,18 +518,21 @@ starts with an @mention of them.
 **Calls.** Workers' free plan allows 50 `fetch` calls a run; KV calls are
 not counted here. A move with one repo, which `LOCK_REPO` also names, the
 webhook already made, a queue card to edit and a first message a player
-posted makes 18 (the GitHub token takes two, and its search for an issue
-runs twice, as a filing's does). A `LOCK_REPO` of another repo adds two,
+posted makes 19 (the GitHub token takes two, its search for an issue runs
+twice, as a filing's does, and the post's last 100 messages are read for
+the bot's own note and "now tracked" reply). A `LOCK_REPO` of another repo adds two,
 for its own token; moving a moved copy saves one, the member read. It adds one per file it
 tries to download, whether or not the download works; one the first time a
 forum's webhook is made; one when Discord refuses the card's edit and a new
 card is posted (a post with no card posts one instead of the edit, at no
-extra cost); and one when the first message shows the bot nothing, to read
-the Message Content setting. Each further repo searched costs four (its
+extra cost); one when the first message shows the bot nothing, to read
+the Message Content setting; and one when the post's messages hold one that
+starts as the bot's note or "now tracked" reply, to read the bot's own id.
+Each further repo searched costs four (its
 token's two and one per search), plus one per search for each further 100
 `from-discord` issues updated there since the post was made. With ten files
-and two repos, 18 calls are left: about 900 such issues past the first 100
-in each repo, in the two repos together (about 450 in each); past that,
+and two repos, 17 calls are left: about 800 such issues past the first 100
+in each repo, in the two repos together (about 400 in each); past that,
 the last steps fail and are reported. If KV calls
 count too, the figure grows by six (four reads, two writes). The live bot
 runs on the paid plan.
@@ -998,7 +1007,8 @@ Accepted on purpose; each line says how you would notice it.
   label: the bot's search sees neither. For about a minute after a filing,
   its saved record may not yet be seen everywhere, so the same holds when
   the issue loses its `from-discord` label in that minute and the post is
-  sent again.
+  sent again. A move of such a post is refused while the bot's "now
+  tracked" reply is among the post's last 100 messages; a send is not.
 - With no saved filing record, the bot searches every configured repo twice
   before filing. An issue moved between two configured repos while it
   searches can still be missed, and a second issue made. So can one in a repo

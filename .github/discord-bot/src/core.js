@@ -165,6 +165,14 @@ export function normRepoKey(s, repos) {
 // filed title and renamed post they start keep their subject.
 export const REPO_KEY_MAX = 10;
 export const usableRepoKeys = (repos) => Object.keys(repos).filter((k) => /^[A-Za-z0-9]+$/.test(k) && normRepoKey(k, repos) === k && k.length <= REPO_KEY_MAX);
+// Discord's select takes 25 options, and Discord refuses a whole modal with
+// more: the forms do not open past it, and the setup checks warn first.
+export const SELECT_MAX = 25;
+
+// The bot's own moved copy: Discord marks a message a webhook posted with
+// the webhook's id and the id of the application that owns the webhook. A
+// deleted message is null.
+export const isBotCopy = (m, appId) => !!m && !!m.webhook_id && m.application_id === appId;
 
 // Each word's first character in upper case and the rest as typed, so "UI"
 // stays "UI". A letter whose capital has another length (ß, a ligature)
