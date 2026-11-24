@@ -27,6 +27,9 @@ async function signed(obj, { tamper = false, ts = String(Math.floor(Date.now() /
   });
 }
 const ctxFor = () => { const jobs = []; return { jobs, waitUntil: (p) => jobs.push(p) }; };
+// A form's pre-filled values by field id: a text input's value, a select's
+// default option.
+const formValues = (j) => Object.fromEntries(j.data.components.map(({ component: c }) => [c.custom_id, c.options ? (c.options.find((o) => o.default) || {}).value : c.value]));
 
 function discordRoutes(extra = []) {
   return [
@@ -77,14 +80,14 @@ test('mod right-click opens a form pre-filled from the post', async () => {
   const j = await r.json();
   assert.equal(j.type, 9);
   assert.equal(j.data.custom_id, 'gh:700:800');
-  const val = Object.fromEntries(j.data.components.map((row) => [row.components[0].custom_id, row.components[0].value]));
-  assert.deepEqual(val, { repo: 'ONE', client: 'Retail', type: 'Bug', module: undefined, title: 'Bags overlap after resize' });
+  // Two repos and no repo tag: none is pre-selected, so staff must pick.
+  assert.deepEqual(formValues(j), { repo: undefined, client: 'Retail', type: 'Bug', module: undefined, title: 'Bags overlap after resize' });
 });
 
 const submit = (over = {}) => ({
   type: 5, member: MOD, guild_id: '1', channel_id: '700', application_id: 'app', token: 'itok',
   data: { custom_id: 'gh:700:800', components: Object.entries({ repo: 'one', client: 'retail', type: 'bug', module: 'Bags', title: 'Bags overlap after resize', ...over })
-    .map(([custom_id, value]) => ({ type: 1, components: [{ type: 4, custom_id, value }] })) },
+    .map(([custom_id, value]) => ({ type: 18, component: custom_id === 'repo' ? { type: 3, custom_id, values: [value] } : { type: 4, custom_id, value } })) },
 });
 
 test('a bad form value creates nothing and says why', async () => {
@@ -92,7 +95,7 @@ test('a bad form value creates nothing and says why', async () => {
   const ctx = ctxFor();
   const r = await handle(await signed(submit({ client: 'classic', repo: 'kitn' })), env, ctx, { fetch: f });
   const j = await r.json();
-  assert.match(j.data.content, /Nothing was created.*Repo must be ONE or TWO.*Client must be/);
+  assert.match(j.data.content, /Nothing was created\. The repo chosen is no longer in REPOS: pick it again\. Client must be/);
   assert.equal(ctx.jobs.length, 0);
   assert.equal(f.calls.length, 0);
 });
@@ -638,7 +641,7 @@ test('an approved role presses the button and gets the form, pre-filled from the
   const j = await (await handle(await signed(press(HELPER)), P3, ctxFor(), { fetch: f, ...INST })).json();
   assert.equal(j.type, 9);
   assert.equal(j.data.custom_id, 'gh:700:700:950', 'thread, its first message, the button message');
-  const val = Object.fromEntries(j.data.components.map((row) => [row.components[0].custom_id, row.components[0].value]));
+  const val = formValues(j);
   assert.deepEqual([val.client, val.type], ['Forever', 'Feature'], 'the forum map wins over the post tags');
 });
 
@@ -1602,4 +1605,73 @@ test('a failed member read at filing is logged, unless the member left (404)', a
     assert.equal(res.created, 17, why);
     assert.equal(lines.some((s) => /^member read failed: /.test(s)), logged, `${why}: ${lines.join(' | ')}`);
   }
+});
+
+test('Send to GitHub pre-selects the repo from the post\'s repo tag, else the only repo, else none', async () => {
+  const forum = { ...FORUM, available_tags: [...FORUM.available_tags, { id: 'r-one', name: 'ONE' }, { id: 'r-two', name: 'two' }] };
+  const FIXED = { FORUM_CHANNEL_IDS: '', FORUMS: '{"900":{"client":"Forever","type":"Feature"}}' };
+  for (const [why, tags, over, want] of [
+    ['one repo tag', ['t-bug', 'r-two'], {}, 'TWO'],
+    ['one repo tag, in a forum with its own client and type', ['r-two'], FIXED, 'TWO'],
+    ['two repo tags that disagree', ['r-one', 'r-two'], {}, undefined],
+    ['no repo tag', ['t-bug'], {}, undefined],
+    ['one repo in REPOS', ['t-bug'], { REPOS: '{"ONE":"me/test-one"}' }, 'ONE'],
+  ]) {
+    const f = fakeFetch(discordRoutes([
+      ['GET', /\/channels\/700$/, () => ({ id: '700', parent_id: '900', name: 'x', applied_tags: tags })],
+      ['GET', /\/channels\/900$/, () => forum],
+    ]));
+    const e = { ...env, REPO_TAGS: '{"ONE":"ONE","Two":"two"}', ...over };
+    const j = await (await handle(await signed({ type: 2, member: MOD, channel_id: '700', data: { name: COMMAND_NAME, target_id: '800' } }), e, ctxFor(), { fetch: f })).json();
+    assert.equal(formValues(j).repo, want, why);
+    assert.deepEqual(j.data.components[0].component.options.map((o) => o.value), Object.keys(JSON.parse(e.REPOS)), `${why}: every repo offered`);
+  }
+  // A repo tag names the repo only, never the client or the type.
+  const ui = { ...FORUM, available_tags: [...FORUM.available_tags, { id: 'r-ui', name: 'Retail UI Bug' }] };
+  const fu = fakeFetch(discordRoutes([
+    ['GET', /\/channels\/700$/, () => ({ id: '700', parent_id: '900', name: 'x', applied_tags: ['r-ui'] })],
+    ['GET', /\/channels\/900$/, () => ui],
+  ]));
+  const ju = await (await handle(await signed({ type: 2, member: MOD, channel_id: '700', data: { name: COMMAND_NAME, target_id: '800' } }), { ...env, REPO_TAGS: '{"Retail UI Bug":"ONE"}' }, ctxFor(), { fetch: fu })).json();
+  // A blank text input carries no value.
+  const vu = formValues(ju);
+  assert.deepEqual([vu.repo, vu.client, vu.type], ['ONE', undefined, undefined]);
+  // A mapping to a key REPOS no longer holds is no repo tag: the tag gives
+  // the client and type again.
+  const js = await (await handle(await signed({ type: 2, member: MOD, channel_id: '700', data: { name: COMMAND_NAME, target_id: '800' } }), { ...env, REPO_TAGS: '{"Retail UI Bug":"OLD"}' }, ctxFor(), { fetch: fu })).json();
+  const vs = formValues(js);
+  assert.deepEqual([vs.repo, vs.client, vs.type], [undefined, 'Retail', 'Bug']);
+});
+
+test('Send to GitHub offers only usable repo keys, and does not open with more than its dropdown holds; a REPO_TAGS of no text form stops nothing', async () => {
+  const req = { type: 2, member: MOD, channel_id: '700', data: { name: COMMAND_NAME, target_id: '800' } };
+  for (const [why, repos, want] of [
+    ['26 repos', JSON.stringify(Object.fromEntries(Array.from({ length: 26 }, (_, i) => [`K${i}`, 'me/test-one']))), /^The form cannot open: its dropdowns hold 25 choices/],
+    // The submit reads a key in upper case: "ke" would file as nothing.
+    ['only a lower-case key', '{"ke":"me/test-one"}', /^The form cannot open: no REPOS key is usable/],
+    // A key past ten characters would crowd the subject out of the title.
+    ['only an eleven-character key', '{"ELEVENCHARS":"me/test-one"}', /^The form cannot open: no REPOS key is usable/],
+  ]) {
+    const j = await (await handle(await signed(req), { ...env, REPOS: repos, LOCK_REPO: 'me/test-one' }, ctxFor(), { fetch: fakeFetch(discordRoutes()) })).json();
+    assert.match(j.data.content, want, why);
+  }
+  // "KE" beside "ke" and a 100-character key for other repos: only the key
+  // the submit reads back as itself, short enough for a title, is offered.
+  const both = await (await handle(await signed(req), { ...env, REPOS: JSON.stringify({ KE: 'me/test-one', ke: 'me/test-two', ['K'.repeat(100)]: 'me/test-two' }), LOCK_REPO: 'me/test-one' }, ctxFor(), { fetch: fakeFetch(discordRoutes()) })).json();
+  assert.deepEqual(both.data.components[0].component.options.map((o) => o.value), ['KE']);
+  // A typed or stale choice of a key the dropdown does not offer files nothing.
+  const long = 'K'.repeat(100);
+  const sub = await (await handle(await signed(submit({ repo: long })), { ...env, REPOS: JSON.stringify({ ONE: 'me/test-one', [long]: 'me/test-two' }) }, ctxFor(), { fetch: fakeFetch([]) })).json();
+  assert.match(sub.data.content, /^Nothing was created\. The repo chosen is no longer in REPOS: pick it again\./);
+  const j = await (await handle(await signed(req), { ...env, REPO_TAGS: { toString: null } }, ctxFor(), { fetch: fakeFetch(discordRoutes()) })).json();
+  assert.equal(j.type, 9, 'the form opens, with no repo pre-filled from a tag');
+});
+
+test('a Send to GitHub form in the older Action Row shape is still read', async () => {
+  const form = submit();
+  form.data.components = form.data.components.map(({ component: c }) => ({ type: 1, components: [{ type: 4, custom_id: c.custom_id, value: c.values ? c.values[0] : c.value }] }));
+  const f = fakeFetch(discordRoutes(githubRoutes([], [['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u' })]])));
+  const ctx = ctxFor();
+  await handle(await signed(form), env, ctx, { fetch: f, installationToken: async () => 'inst' });
+  assert.deepEqual(await Promise.all(ctx.jobs), [{ created: 17, notes: [] }]);
 });

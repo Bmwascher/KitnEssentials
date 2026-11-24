@@ -9,6 +9,7 @@ import {
   guessFromTags, normClient, normType, normRepoKey, parseRepos, timedFetch,
   parseForums, parseRoleIds, parseTemplates, templateCheck, templateGaps,
   templateNote, parseCustomId, templateLabels, filedCard, cardHead, BY_RIGHT_CLICK,
+  parseRepoTags, repoFromTags, plainTags, usableRepoKeys,
 } from './core.js';
 import { discordClient, postGone, archivedOf } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
@@ -106,6 +107,10 @@ export function config(env) {
     roles: parseRoleIds(env.APPROVED_ROLE_IDS), templates: parseTemplates(env.TEMPLATES),
     queue: env.QUEUE_CHANNEL_ID || '',
     rename: String(env.RENAME_POSTS ?? '').trim() !== '0',
+    // A mapping to a key REPOS no longer holds names no repo: its tag is read
+    // as a plain tag again, for the client, the type and the move, and setup
+    // names the mapping.
+    repoTags: Object.fromEntries(Object.entries(parseRepoTags(env.REPO_TAGS)).filter(([, k]) => Object.hasOwn(repos, k))),
     // Every filing of a post takes its lock in this one repo, whichever repo
     // it goes to. It is named, never taken from the order of REPOS, so
     // reordering REPOS cannot move it; with one repo it is that repo.
@@ -135,20 +140,46 @@ const allowed = (member, cfg) => canUse(member) || hasRole(member, cfg.roles);
 const NOT_ALLOWED = 'Only moderators and approved roles can send posts to GitHub.';
 const BAD_IDS = 'Nothing was created: this button or form is not valid. Press the button or right-click the post to try again.';
 
-const input = (id, label, value, opts = {}) => ({
-  type: 1,
-  components: [{
-    type: 4, custom_id: id, label, style: opts.paragraph ? 2 : 1,
-    required: opts.required !== false, max_length: opts.max || 100,
-    value: value || undefined, placeholder: opts.placeholder,
-  }],
+// A modal field: a Label (type 18) holding a text input or a select.
+const label = (text, component, description) => ({ type: 18, label: text, ...(description ? { description } : {}), component });
+const input = (id, text, value, opts = {}) => label(text, {
+  type: 4, custom_id: id, style: opts.paragraph ? 2 : 1,
+  required: opts.required !== false, max_length: opts.max || 100,
+  value: value || undefined, placeholder: opts.placeholder,
 });
+// Discord's select takes 25 options, and Discord refuses a whole modal with
+// more, so a form that would need more is not opened.
+const SELECT_MAX = 25;
+const TOO_MANY = 'The form cannot open: its dropdowns hold 25 choices, and REPOS or FORUMS names more. /bot-check names which; remove some.';
+// A select of [value, label] choices, `chosen` pre-selected when it is one.
+const select = (id, text, choices, chosen, { required = true, description } = {}) => label(text, {
+  type: 3, custom_id: id, required,
+  options: choices.map(([value, name]) => ({ value, label: name, ...(value === chosen ? { default: true } : {}) })),
+}, description);
 
+// A modal's answers by field id: a Label's text input (`value`) or select
+// (its first value, none when left empty), or an Action Row's text input, as
+// a form opened before this version sends it.
 function modalValues(data) {
   const out = {};
-  for (const row of data.components || []) for (const c of row.components || []) out[c.custom_id] = c.value;
+  for (const row of data.components || []) {
+    for (const c of row.component ? [row.component] : row.components || []) out[c.custom_id] = c.values ? c.values[0] : c.value;
+  }
   return out;
 }
+
+// The repo Send to GitHub's form pre-selects: the one key the post's repo
+// tags give, else the only repo. None otherwise, so staff must pick.
+// A tag's key the dropdown does not offer pre-selects nothing.
+function repoChoice(keys, cfg, tagNames) {
+  const tagged = normRepoKey(repoFromTags(tagNames, cfg.repoTags), cfg.repos);
+  return keys.includes(tagged) ? tagged : keys.length === 1 ? keys[0] : null;
+}
+// The dropdown offers the usable keys alone (`usableRepoKeys`): the submit
+// reads a key in upper case, so one written otherwise ("ke") would file
+// under another key ("KE") or none, and a key past ten characters would
+// crowd the subject out of the filed title and the renamed post.
+const NO_KEYS = 'The form cannot open: no REPOS key is usable (upper case, at most 10 characters). /bot-check names them.';
 
 async function openForm(interaction, env, deps, { threadId, messageId, greetingId = '', cardId = '', deadline = Date.now() + FORM_LOOKUP_MS }) {
   const cfg = configOr(env);
@@ -170,25 +201,29 @@ async function openForm(interaction, env, deps, { threadId, messageId, greetingI
   }
 
   // Pre-fill client and type from the forum's own settings, else from the
-  // post's tags; a slow or failed lookup just leaves those fields blank.
+  // post's tags, and the repo from its repo tag; a slow or failed lookup
+  // just leaves those fields blank.
   let guess = { ...cfg.forumInfo[ch.parent_id] };
-  if (!guess.client || !guess.type) {
+  let tagNames = [];
+  const keys = usableRepoKeys(cfg.repos);
+  if (!keys.length) return reply(NO_KEYS);
+  if (keys.length > SELECT_MAX) return reply(TOO_MANY);
+  if (!guess.client || !guess.type || (keys.length > 1 && Object.keys(cfg.repoTags).length)) {
     try {
       const forum = await discord.getChannel(ch.parent_id);
-      const names = (forum.available_tags || []).filter((t) => (ch.applied_tags || []).includes(t.id)).map((t) => t.name);
-      const fromTags = guessFromTags(names);
+      tagNames = (forum.available_tags || []).filter((t) => (ch.applied_tags || []).includes(t.id)).map((t) => t.name);
+      const fromTags = guessFromTags(plainTags(tagNames, cfg.repoTags));
       guess = { client: guess.client || fromTags.client, type: guess.type || fromTags.type };
     } catch { /* keep the blanks */ }
   }
 
-  const keys = Object.keys(cfg.repos);
   return json({
     type: 9,
     data: {
       custom_id: `gh:${threadId}:${messageId}${greetingId || cardId ? `:${greetingId || '0'}` : ''}${cardId ? `:${cardId}` : ''}`,
       title: 'Send to GitHub',
       components: [
-        input('repo', `Repo (${keys.join(' or ')})`, keys[0], { max: 10 }),
+        select('repo', 'Repo', keys.map((k) => [k, k]), repoChoice(keys, cfg, tagNames)),
         input('client', 'Client (Retail, Forever or All)', guess.client || '', { max: 10 }),
         input('type', 'Type (Bug or Feature)', guess.type || '', { max: 10 }),
         input('module', 'Module (e.g. Bags, Damage Meter, Installer)', '', { max: 40 }),
@@ -977,7 +1012,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     if (!cfg.forums.length) return notSetUp(env, interaction);
     const v = modalValues(interaction.data);
     const problems = [];
-    if (!normRepoKey(v.repo, cfg.repos)) problems.push(`Repo must be ${Object.keys(cfg.repos).join(' or ')}.`);
+    if (!usableRepoKeys(cfg.repos).includes(normRepoKey(v.repo, cfg.repos))) problems.push('The repo chosen is no longer in REPOS: pick it again.');
     if (!normClient(v.client)) problems.push('Client must be Retail, Forever or All.');
     if (!normType(v.type)) problems.push('Type must be Bug or Feature.');
     if (!titleText(v.title)) problems.push('Title is empty.');
