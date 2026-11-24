@@ -1,6 +1,6 @@
 // The staff checklist forum: one thread per bot issue in a staff-only forum,
 // mirroring the issue. The thread's record is one bot comment on the issue.
-import { CHECKLIST_NAMES, ACCEPTED, planTags, sameTags, threadName, discordText } from '../src/core.js';
+import { CHECKLIST_NAMES, ACCEPTED, planTags, sameTags, threadName, discordText, hasTag, tagLine, acceptedLine } from '../src/core.js';
 import { postGone, answeredStatus } from '../src/discord.js';
 
 // The search for a thread a lost create answer made: it reads threads made
@@ -86,11 +86,18 @@ const brief = (e) => {
   };
   return one(e) + ALSO.map(([k, what]) => (e && e[k] ? `; ${what}: ${one(e[k])}` : '')).join('');
 };
+// The request records (method, path, status) hold no answer body, so they
+// are kept, the first error's and each kept cause's: the status script names
+// a refusal from them.
+const scrub = (e) => Object.assign(new Error(brief(e)), {
+  discord: e.discord,
+  also: ALSO.map(([k]) => e[k] && e[k].discord).filter(Boolean),
+});
 const scrubbed = (fn) => async (...args) => {
   try {
     return await fn(...args);
   } catch (e) {
-    throw new Error(brief(e));
+    throw scrub(e);
   }
 };
 
@@ -100,8 +107,16 @@ const scrubbed = (fn) => async (...args) => {
 // bot still files the issue, and the issue's records; `proof` is a release
 // run's own `{ fix, tag }` when the tag list may not show that tag yet.
 // `records(n)` gives the records alone.
-export function checklistRunner({ gh, discord, repo, forumId, wanted, records, botIssue, log, now, settleTries, owedMs }) {
+export function checklistRunner({ gh, discord, repo, forumId, wanted, records, botIssue, log, now, settleTries, owedMs, noteRefusal, setupProblem, sweeping }) {
   const plan = (w) => (applied, available) => planTags(applied, available, w.name, { names: CHECKLIST_NAMES, accepted: w.accepted, dropOther: false });
+  // A tag the checklist forum lacks is a setup problem, named by the id the
+  // forum read answered with. A sweep checks its own read (`checkSeen`)
+  // outside its timed checklist work and its repair checks none, so the
+  // repair takes no more of that time than before.
+  const checkTags = (w, id, tags, names) => {
+    for (const s of names) if (!hasTag(tags, s)) setupProblem(tagLine(`checklist forum ${id}`, s));
+    if (w.accepted && !hasTag(tags, ACCEPTED)) setupProblem(acceptedLine(`checklist forum ${id}`));
+  };
   const commentPath = (rec) => `/repos/${repo}/issues/comments/${rec.id}`;
   // The record as it is now, which must still be the one this run holds: a
   // record staff changed meanwhile is left for the issue's next checklist
@@ -148,8 +163,9 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       const reopen = !w.key && !!cur.archived;
       let r;
       try {
-        r = await onThread(() => discord.setTags(id, forumId, plan(w), { open: reopen }));
+        r = await onThread(() => discord.setTags(id, forumId, plan(w), { open: reopen, onForum: sweeping ? undefined : (fid, tags) => checkTags(w, fid, tags, [w.name]) }));
       } catch (e) {
+        noteRefusal(scrub(e));
         // A finished thread the write may have left open owes its archive
         // again. The re-archive may have landed with its answer lost, so the
         // thread is read first: one shown archived keeps its key, and a later
@@ -157,7 +173,10 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
         // Only the thread's own channel is read: its archived flag is all
         // this needs.
         if (e.rearchive && w.key && cur.archived === w.key) {
-          const seen = await discord.call('GET', `/channels/${id}`).catch(() => null);
+          const seen = await discord.call('GET', `/channels/${id}`).catch((r) => {
+            noteRefusal(r);
+            return null;
+          });
           const archived = !!(seen && seen.thread_metadata && seen.thread_metadata.archived);
           if (!archived) await write(cur, { archived: null }).catch((k) => Object.assign(e, { keyError: k }));
         }
@@ -176,6 +195,11 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       // Settled when a write now would change nothing and GitHub still wants
       // the same; the slot and tag notes come from that same read.
       const shown = await onThread(() => discord.threadState(id));
+      // A tag renamed or deleted since the write's forum read: the status tag
+      // fails the thread below and Accepted is only logged, so this read names
+      // both. A sweep's repair names none, and a channel that is no forum
+      // (`forumTags`), such as a media channel, which has tags too, names none.
+      if (!sweeping && shown.tags) checkTags(w, shown.parentId, shown.tags, [w.name]);
       const back = plan(w)(shown.applied, shown.available);
       if (back.missing) throw new Error(noTag(w.name));
       const again = await wanted(n, proof);
@@ -455,7 +479,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       }
       if (keyPart) parts.push(keyPart);
       parts.push(`staff checklist thread not read (${here}): ${brief(e)}`);
-      return { parts, repair: !!keyPart, unread: new Error(brief(e)) };
+      return { parts, repair: !!keyPart, unread: scrub(e) };
     }
     if (shown.parentId !== forumId) {
       parts.push(`staff checklist thread ${here} is not in the checklist forum: if CHECKLIST_FORUM_ID changed by mistake, set it back. `
@@ -480,8 +504,8 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     if (p.full) parts.push(`no free tag slot for "${w.name}" on the checklist thread (${here})`);
     if (p.noRoom) parts.push(`no free tag slot for Accepted on the checklist thread (${here})`);
     if (w.accepted && p.noAccepted) parts.push(`checklist forum has no Accepted tag (${here})`);
-    return { parts, repair, unread: null };
+    return { parts, repair, unread: null, seen: shown.tags && { w, id: shown.parentId, tags: shown.tags } };
   }
 
-  return { open: scrubbed(open), mirror: scrubbed(mirror), lines: scrubbed(lines) };
+  return { open: scrubbed(open), mirror: scrubbed(mirror), lines: scrubbed(lines), checkSeen: ({ w, id, tags }) => checkTags(w, id, tags, CHECKLIST_NAMES) };
 }

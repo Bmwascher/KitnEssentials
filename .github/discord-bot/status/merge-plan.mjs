@@ -3,7 +3,7 @@
 // message for each step. It links issues and copies no report.
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { MESSAGES, STATUS, timedFetch } from '../src/core.js';
+import { MESSAGES, STATUS, timedFetch, inlineCode as code } from '../src/core.js';
 import { githubClient } from '../src/github.js';
 import { eligible, TRUSTED, BOT_LOGIN } from './status.mjs';
 
@@ -34,14 +34,6 @@ export const refsKeywordRefs = (body, repo) => numbers(body, new RegExp(`\\brefs
 const THREAD_LINK = /(?<=^|\s)https:\/\/(?:ptb\.|canary\.)?discord(?:app)?\.com\/channels\/\d+\/(\d{1,20})(?:\/\d{1,20})?(?=\s|$)/g;
 export const threadLinks = (body) => [...new Set([...body.matchAll(THREAD_LINK)].map((m) => m[1]))];
 
-// A code span no backtick inside `s` can end early, so a branch name never
-// turns into a link or a mention. Git allows no line break in a branch name.
-const code = (s) => {
-  const run = Math.max(0, ...(s.match(/`+/g) || []).map((x) => x.length));
-  const fence = '`'.repeat(run + 1);
-  const pad = /^`|`$/.test(s) ? ' ' : '';
-  return `${fence}${pad}${s}${pad}${fence}`;
-};
 const nums = (list) => list.map((x) => `#${x.n}`).join(', ');
 // Heads-up lines state what the PR closes; what the bot sends, and when, is
 // the README's to say, since a re-run of an older run can still owe a message.

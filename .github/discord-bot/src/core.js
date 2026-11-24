@@ -119,6 +119,7 @@ export const isDiscordId = (v) => /^\d{1,20}$/.test(String(v ?? ''));
 // messages; a thread (a forum post among them) takes its parent's permissions.
 export const TEXT_TYPES = [0, 5];
 export const THREAD_TYPES = [10, 11, 12];
+export const FORUM_TYPE = 15;
 
 const CLIENTS = { retail: 'Retail', forever: 'Forever', all: 'All' };
 const TYPES = { bug: 'Bug', feature: 'Feature', feedback: 'Feature', request: 'Feature' };
@@ -316,13 +317,20 @@ const nameText = (s) => plain(oneLine(s).replace(/[\\`*_~|[\]]/g, '\\$&').replac
   .replace(/\b(GH)-(?=\d)/gi, `$1-${ZWSP}`).replace(/[0-9a-f]{6}(?=[0-9a-f])/gi, `$&${ZWSP}`)
   .replace(/:\/\//g, `:${ZWSP}//`).replace(/\b(www)\./gi, `$1${ZWSP}.`));
 
-// A username as typed: a code span longer than any backtick run in it, and
-// \| for a pipe, which a table cell needs even inside code.
+// A code span no backtick inside `s` can end early, so the text shows as
+// written: never a link, a mention or Markdown. Markdown needs a space
+// between a fence and a backtick, and drops one space from each end of a
+// span that starts and ends with one: the padding keeps both as written.
+export function inlineCode(s) {
+  const fence = '`'.repeat(longestRun([s]) + 1);
+  const pad = /^`|`$|^ .* $/.test(s) ? ' ' : '';
+  return `${fence}${pad}${s}${pad}${fence}`;
+}
+
+// A username as typed, with \| for a pipe, which a table cell needs even
+// inside code.
 function codeSpan(s) {
-  const t = oneLine(s).replace(/\|/g, '\\|');
-  const fence = '`'.repeat(longestRun([t]) + 1);
-  const pad = /^`|`$/.test(t) ? ' ' : '';
-  return `${fence}${pad}${t}${pad}${fence}`;
+  return inlineCode(oneLine(s).replace(/\|/g, '\\|'));
 }
 
 // A person as the issue shows them: the name linked to the Discord profile,
@@ -437,6 +445,14 @@ export function currentStatus(applied, available, prefer = null) {
 export const triagedAlone = (statuses) => statuses.length === 1 && statuses[0] === STATUS.triaged;
 
 const tagNamed = (available, name) => (available || []).find((t) => t.name.toLowerCase() === name.toLowerCase());
+export const hasTag = (available, name) => !!tagNamed(available, name);
+// A forum read's tags, or null for a channel that is no forum, which has no
+// tags to name. A forum answer without its tag list (an optional field)
+// reads as none, as the planner reads it.
+export const forumTags = (c) => (c.type === FORUM_TYPE ? c.available_tags || [] : null);
+// A tag a forum lacks, as a setup line: `where` names the forum.
+export const tagLine = (where, name) => `${where} has no "${name}" tag: add it, spelled as the README lists it`;
+export const acceptedLine = (where) => `${where} has no "${ACCEPTED}" tag, which issues with the accepted label need: add it, spelled as the README lists it`;
 // Every tag id the forum names Accepted, in any letter case: all are the bot's.
 const acceptedIds = (available) => new Set((available || []).filter((t) => t.name.toLowerCase() === ACCEPTED.toLowerCase()).map((t) => t.id));
 

@@ -767,3 +767,51 @@ test('AT3: the Accepted-only write changes only Accepted, and only on an active 
     for (const [k, v] of Object.entries(out)) assert.equal(r[k], v, `${why}: ${k}`);
   }
 });
+
+test('setStatus and fixAccepted report each forum read to onForum, as that read answered, before anything after it can fail, and only a forum', async () => {
+  const base = [{ id: 'r', name: 'Retail' }, { id: 't', name: 'Triaged' }, { id: 'p', name: 'In progress' }];
+  // The fresh read answers with one more tag, so the test tells the two reads apart.
+  const first = () => ({ id: '900', type: 15, available_tags: base });
+  const fresh = () => ({ id: '900', type: 15, available_tags: [...base, { id: 'x', name: 'Staff note' }] });
+  const post = () => ({ id: '700', parent_id: '900', applied_tags: ['r', 't'] });
+  const answer = (status) => () => new Response('{"message":"x","code":0}', { status });
+  // fixAccepted writes only into a forum that has Accepted.
+  const withAcc = (f) => () => ({ ...f(), available_tags: [...f().available_tags, { id: 'a', name: 'Accepted' }] });
+  const setStatus = (status) => (d, onForum) => d.setStatus('700', status, undefined, { accepted: true, onForum });
+  const fixAccepted = (d, onForum) => d.fixAccepted('700', true, { onForum });
+  for (const [why, call, posts, forums, patch, seenWant, fails] of [
+    ['setStatus: the post already shows the status', setStatus('Triaged'), [post], [first], () => ({}), [3], false],
+    ['setStatus: a move reads twice', setStatus('In progress'), [post, post], [first, fresh], () => ({}), [3, 4], false],
+    ['setStatus: the forum read again is refused, the first read is kept', setStatus('In progress'), [post], [first, answer(403)], () => ({}), [3], true],
+    ['setStatus: the post read again answers 404', setStatus('In progress'), [post, answer(404)], [first, fresh], () => ({}), [3, 4], true],
+    ['setStatus: the write is refused', setStatus('In progress'), [post, post], [first, fresh], answer(403), [3, 4], true],
+    ['fixAccepted: the Accepted write reads twice', fixAccepted, [post, post], [withAcc(first), withAcc(fresh)], () => ({}), [4, 5], false],
+    ['fixAccepted: the post read again answers 404', fixAccepted, [post, answer(404)], [withAcc(first), withAcc(fresh)], () => ({}), [4, 5], true],
+    // A channel that is no forum has no tags to name; a forum with none, or
+    // whose answer leaves its list out, is reported with an empty list.
+    ['setStatus: a parent that is no forum is not reported', setStatus('In progress'), [post], [() => ({ id: '900', type: 0 })], () => ({}), [], false],
+    ['setStatus: a forum with no tags is reported', setStatus('In progress'), [post], [() => ({ id: '900', type: 15, available_tags: [] })], () => ({}), [0], false],
+    ['setStatus: a forum answer with no tag list is reported as one with none', setStatus('In progress'), [post], [() => ({ id: '900', type: 15 })], () => ({}), [0], false],
+  ]) {
+    let postReads = 0;
+    let forumReads = 0;
+    const f = fakeFetch([
+      ['GET', /\/channels\/700$/, () => posts[postReads++]()],
+      ['GET', /\/channels\/900$/, () => forums[forumReads++]()],
+      ['PATCH', /\/channels\/700$/, patch],
+    ]);
+    const seen = [];
+    const run = call(discordClient('t', f), (id, tags) => seen.push([id, tags.length]));
+    if (fails) await assert.rejects(run, why);
+    else await run;
+    assert.deepEqual(seen, seenWant.map((n) => ['900', n]), why);
+  }
+});
+
+import { inlineCode } from '../src/core.js';
+
+test('inlineCode shows its text as written: no backtick inside ends the span, and spaces at both ends stay', () => {
+  for (const [s, out] of [['fix', '`fix`'], ['a`b', '``a`b``'], ['`a', '`` `a ``'], [' fix ', '`  fix  `'], [' fix', '` fix`']]) {
+    assert.equal(inlineCode(s), out, JSON.stringify(s));
+  }
+});
