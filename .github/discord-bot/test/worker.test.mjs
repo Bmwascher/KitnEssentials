@@ -1940,3 +1940,373 @@ test('every entry point refuses another server, or a GUILD_ID that names none, b
   assert.equal(j.data.content, 'Only moderators and approved roles can move posts.');
   assert.equal(w.f.calls.length, 0);
 });
+
+const moveSubmit = (values = {}, { custom = 'mv:700:96', member = HELPER } = {}) => ({
+  type: 5, member, guild_id: '1', channel_id: '556', application_id: 'app', token: 'itok',
+  data: { custom_id: custom, components: Object.entries({ forum: '901', client: 'Retail', ...values })
+    .map(([custom_id, value]) => ({ type: 18, component: { type: 3, custom_id, values: value === null ? [] : [value] } })) },
+});
+// Submits the Move form and waits for its job: the job's result, the KV, the
+// first answer and the moderator's reply.
+async function runMove(w, form = moveSubmit(), envOver = {}, depsOver = {}) {
+  const ctx = ctxFor();
+  const r = await handle(await signed(form), { ...MOVE_ENV, STATE: w.kv, ...envOver }, ctx, { fetch: w.f, installationToken: async () => 'inst', log: () => {}, ...depsOver });
+  const [res] = await Promise.all(ctx.jobs);
+  const told = w.f.find('PATCH', /\/webhooks\/app\/itok/)[0];
+  return { res, kv: w.kv, answer: await r.json(), told: told && told.body.content };
+}
+// The move's replies for post 700 moved to 990: done, and stopped partway
+// (each step not done follows on its own line).
+const MOVED = 'Moved to https://discord.com/channels/1/990 from https://discord.com/channels/1/700.';
+const PARTWAY = 'The move stopped partway: https://discord.com/channels/1/990 was made from https://discord.com/channels/1/700. Not done:';
+
+test('a Move form with a forum or client the move cannot use, or from a player, or with no KV bound, moves nothing and calls nothing', async () => {
+  for (const [why, form, want, envOver = {}] of [
+    // FORUMS as it is now: a forum dropped while the form was open is refused here.
+    ['a forum outside FORUMS', moveSubmit({ forum: '903' }), /^Nothing was moved\. Pick a forum the bot is set up for\.$/],
+    ['no client for a forum with none of its own', moveSubmit({ client: null }), /^Nothing was moved\. Pick a client: <#901> has no client of its own\.$/],
+    ['a player', moveSubmit({}, { member: PLAYER }), /^Only moderators and approved roles can move posts\.$/],
+    ['another server', { ...moveSubmit(), guild_id: '2' }, /^This only works on posts in the forums the bot is set up for\.$/],
+    ['GUILD_ID unset', moveSubmit(), /^The bot is not set up yet: GUILD_ID is not set to the server's id/, { GUILD_ID: '' }],
+    ['no STATE namespace', moveSubmit(), /^Nothing was moved: the STATE KV namespace is not bound, so the move could not be recorded\. /, { STATE: undefined }],
+  ]) {
+    const w = moveWorld();
+    const ctx = ctxFor();
+    const j = await (await handle(await signed(form), { ...MOVE_ENV, STATE: w.kv, ...envOver }, ctx, { fetch: w.f })).json();
+    assert.match(j.data.content, want, why);
+    assert.equal(ctx.jobs.length, 0, why);
+    assert.equal(w.f.calls.length, 0, why);
+  }
+});
+
+test('an unfiled post moves: a webhook copy in the new forum, both records, the ping, the old post locked and the card moved', async () => {
+  const w = moveWorld((s) => {
+    s.first.attachments = [{ id: 'a1', filename: 'bags.png', description: 'the bags', size: 5, url: 'https://cdn.example/a1' }];
+    s.files['https://cdn.example/a1'] = new Response('12345');
+  });
+  const { res, kv, answer, told } = await runMove(w);
+  const f = w.f;
+  assert.deepEqual(answer, { type: 5, data: { flags: 64 } });
+  assert.deepEqual(res, { moved: '990', notes: [] });
+  assert.ok(at(f, 'POST', /test-one\/labels$/) < at(f, 'GET', /\/channels\/700$/), 'the lock before any read of the post');
+  assert.ok(at(f, 'POST', /\?wait=true$/) < at(f, 'POST', /\/channels\/700\/messages$/), 'the create before the old post\'s note');
+  assert.ok(at(f, 'POST', /\?wait=true$/) < at(f, 'PATCH', /\/channels\/700$/), 'the create before the old post\'s lock');
+  assert.deepEqual(f.find('POST', /test-one\/labels$/).map((c) => c.body.name), ['discord-lock-700'], 'one lock, the old post\'s');
+  assert.ok(at(f, 'PATCH', /\/channels\/556\/messages\/96$/) < at(f, 'PATCH', /\/channels\/700$/), 'the card before the old post\'s lock');
+  assert.equal(f.find('POST', /\/channels\/556\/messages$/).length, 0, 'the card edited, no second one');
+  assert.ok(at(f, 'PATCH', /\/webhooks\/app\/itok/) < at(f, 'DELETE', /discord-lock-700$/), 'the reply before the release');
+  const sent = f.find('POST', /\?wait=true$/)[0];
+  assert.match(sent.url, /\/webhooks\/61\/wtok\?wait=true$/, 'the bot\'s own webhook');
+  assert.deepEqual(sent.body, {
+    payload: {
+      thread_name: 'Bags overlap', applied_tags: ['f-retail', 'f-staff'], content: 'My bags overlap',
+      username: 'Patty', avatar_url: 'https://cdn.discordapp.com/avatars/42/abc.png', allowed_mentions: { parse: [] },
+      attachments: [{ id: 0, filename: 'bags.png', description: 'the bags' }],
+    },
+    files: ['bags.png'],
+  });
+  assert.deepEqual(JSON.parse(kv.m.get('movedfrom:990')), { from: '700', reporter: { name: 'Patty', id: '42', username: 'pat', avatar: 'https://cdn.discordapp.com/avatars/42/abc.png' }, card: '96' });
+  assert.deepEqual(JSON.parse(kv.m.get('movedto:700')), { to: '990' });
+  const here = f.find('POST', /\/channels\/990\/messages$/)[0].body;
+  assert.equal(here.content, 'Moved here from https://discord.com/channels/1/700 by helper. First posted by <@42>.');
+  assert.deepEqual(here.allowed_mentions, { parse: [], users: ['42'] });
+  assert.equal(f.find('POST', /\/channels\/700\/messages$/)[0].body.content, 'This post moved to https://discord.com/channels/1/990 (moved by helper).');
+  assert.deepEqual(f.find('PATCH', /\/channels\/700$/)[0].body, { locked: true, archived: true });
+  const card = f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body;
+  assert.equal(card.content, '**New post in <#901>:** <#990>\nby <@42> (`pat`) · Feature · Retail\nMoved by helper');
+  assert.deepEqual(card.components[0].components.map((b) => b.custom_id || b.url), ['send:990', 'move:990', 'https://discord.com/channels/1/990']);
+  assert.equal(told, MOVED);
+});
+
+test('a move with no card to edit, or whose card is gone, posts a new queue card for the new post', async () => {
+  for (const [why, form, edit, edits] of [
+    // A right-click before the scan carded the post: there is no card.
+    ['no card known', moveSubmit({}, { custom: 'mv:700', member: MOD }), null, 0],
+    ['the card deleted', moveSubmit(), (s) => { s.extra = [['PATCH', /\/channels\/556\/messages\/96$/, () => new Response('{"message":"Unknown Message"}', { status: 404 })]]; }, 1],
+  ]) {
+    const w = moveWorld(edit || (() => {}));
+    const { told, kv } = await runMove(w, form);
+    assert.equal(told, MOVED, why);
+    assert.equal(w.f.find('PATCH', /\/channels\/556\/messages\/96$/).length, edits, why);
+    const posted = w.f.find('POST', /\/channels\/556\/messages$/);
+    assert.equal(posted.length, 1, why);
+    assert.deepEqual(posted[0].body.components[0].components.map((b) => b.custom_id || b.url), ['send:990', 'move:990', 'https://discord.com/channels/1/990'], why);
+    assert.equal(JSON.parse(kv.m.get('movedfrom:990')).card, '97', `${why}: the new card is the copy's`);
+  }
+  // The edit and the new card both refused: the record names no card, not
+  // the one Discord would not edit.
+  const both = moveWorld((s) => { s.extra = [['PATCH', /\/channels\/556\/messages\/96$/, refusal], ['POST', /\/channels\/556\/messages$/, refusal]]; });
+  const bothRun = await runMove(both);
+  assert.equal(bothRun.told, `${PARTWAY}\n- queue card for the new post`);
+  assert.equal('card' in JSON.parse(bothRun.kv.m.get('movedfrom:990')), false);
+  // A queue channel outside this server is not written to: a card there
+  // would let its staff send this server's post.
+  const away = moveWorld((s) => { s.channels = CHANNELS.filter((c) => c.id !== '556'); });
+  const awayRun = await runMove(away);
+  assert.equal(awayRun.told, `${PARTWAY}\n- queue card for the new post: QUEUE_CHANNEL_ID names no channel of this server (/bot-check names it)`);
+  assert.equal(away.f.calls.filter((c) => /\/channels\/556\/messages/.test(c.url)).length, 0, 'nothing sent to that channel');
+  // No queue channel set, though the form names the old post's card: the
+  // card step is skipped with no line, no queue call is made, and the copy's
+  // record names no card, so a later filing marks none.
+  // A right-click carries no card: the old post's card comes from the scan's
+  // record, else from the move record of a post moved before, and is edited.
+  for (const [why, kv] of [
+    ['the scan\'s record', { 'thread:700': JSON.stringify({ card: '96' }) }],
+    ['the move record', { 'movedfrom:700': JSON.stringify({ from: '690', reporter: { name: 'Pat', id: '42', username: 'pat' }, card: '96' }) }],
+  ]) {
+    const w = moveWorld((s) => { s.kv = kv; });
+    const { told } = await runMove(w, moveSubmit({}, { custom: 'mv:700', member: MOD }));
+    assert.equal(told, MOVED, why);
+    assert.equal(w.f.find('PATCH', /\/channels\/556\/messages\/96$/).length, 1, `${why}: that card edited`);
+    assert.equal(w.f.find('POST', /\/channels\/556\/messages$/).length, 0, `${why}: no second card`);
+  }
+  const off = moveWorld();
+  const offRun = await runMove(off, moveSubmit(), { QUEUE_CHANNEL_ID: '' });
+  assert.equal(offRun.told, MOVED);
+  assert.equal(off.f.calls.filter((c) => /\/channels\/556\//.test(c.url)).length, 0, 'no queue request');
+  assert.equal('card' in JSON.parse(offRun.kv.m.get('movedfrom:990')), false);
+});
+
+test('the move uses the bot\'s own webhook, makes one when the forum has none, and says when it lacks Manage Webhooks', async () => {
+  for (const [why, hooks, made, said, creates] of [
+    ['its own, among others', [{ id: '60', type: 1, application_id: 'other', token: 'x' }, { id: '61', type: 1, application_id: 'app', token: 'wtok' }], 0, /^Moved to /, 1],
+    ['none of its own', [{ id: '60', type: 1, application_id: 'other', token: 'x' }], 1, /^Moved to /, 1],
+    ['no Manage Webhooks', () => new Response('{"message":"Missing Permissions"}', { status: 403 }), 0, /^Nothing was moved: the bot lacks Manage Webhooks in <#901>\.$/, 0],
+  ]) {
+    const w = moveWorld((s) => { s.hooks = hooks; });
+    const { told } = await runMove(w);
+    assert.match(told, said, why);
+    assert.equal(w.f.find('POST', /\/channels\/901\/webhooks$/).length, made, why);
+    assert.equal(w.f.find('POST', /\?wait=true$/).length, creates, why);
+  }
+});
+
+test('files over 20 MiB, past the 24 MiB left, or that fail to download stay behind and are counted; long text is cut', async () => {
+  const MiB = 1024 * 1024;
+  const w = moveWorld((s) => {
+    s.first.content = 'x'.repeat(2100);
+    s.first.attachments = [
+      { id: 'big', filename: 'big.zip', size: 21 * MiB, url: 'https://cdn.example/big' },
+      { id: 'a', filename: 'a.png', size: 15 * MiB, url: 'https://cdn.example/a' },
+      { id: 'b', filename: 'b.png', size: 10 * MiB, url: 'https://cdn.example/b' },
+      { id: 'c', filename: 'c.png', size: 5, url: 'https://cdn.example/c' },
+      { id: 'd', filename: 'd.png', size: 5, url: 'https://cdn.example/d' },
+    ];
+    s.files = { 'https://cdn.example/a': new Response('a'), 'https://cdn.example/c': new Response('c'), 'https://cdn.example/d': new Response('no', { status: 404 }) };
+  });
+  const { res } = await runMove(w);
+  assert.equal(res.moved, '990');
+  assert.deepEqual(w.f.find('GET', /cdn\.example\//).map((c) => c.url.split('/').pop()), ['a', 'c', 'd'], 'a file too large, or past what is left, is never downloaded');
+  const sent = w.f.find('POST', /\?wait=true$/)[0].body;
+  assert.deepEqual(sent.files, ['a.png', 'c.png']);
+  assert.equal(sent.payload.content, `${'x'.repeat(1999)}…`);
+  assert.equal(w.f.find('POST', /\/channels\/990\/messages$/)[0].body.content,
+    'Moved here from https://discord.com/channels/1/700 by helper. First posted by <@42>. 3 file(s) could not be copied (too large, or not downloaded); they are on the original post. The first message was too long to copy whole; the full text is on the original post.');
+  const empty = moveWorld((s) => { s.first.content = ''; s.first.attachments = [{ filename: 'big.zip', size: 21 * MiB, url: 'https://cdn.example/big' }]; });
+  await runMove(empty);
+  assert.equal(empty.f.find('POST', /\?wait=true$/)[0].body.payload.content, '(The first message had nothing the bot can copy.)');
+  assert.equal(empty.f.find('GET', /\/applications\/@me$/).length, 0, 'a message with a file shows the bot can read it');
+  // A sticker alone, with Message Content on: the placeholder is posted.
+  const blank = moveWorld((s) => { s.first.content = ''; s.extra = [['GET', /\/applications\/@me$/, () => ({ flags: 1 << 19 })]]; });
+  await runMove(blank);
+  assert.equal(blank.f.find('POST', /\?wait=true$/)[0].body.payload.content, '(The first message had nothing the bot can copy.)');
+});
+
+test('the copy takes the first message as read just before the create: an edit\'s text, without a file the player removed, counting the files that read lists', async () => {
+  const twoReads = (before, after) => moveWorld((s) => {
+    let reads = 0;
+    const [a, b] = [{ ...s.first, attachments: before }, { ...s.first, content: 'My bags overlap (edited)', attachments: after }];
+    s.first = () => (reads++ ? b : a);
+    s.files['https://cdn.example/a1'] = new Response('12345');
+  });
+  const here = (w) => w.f.find('POST', /\/channels\/990\/messages$/)[0].body.content;
+  // A downloaded file and one too large, both removed: neither is posted or counted.
+  const removed = twoReads([{ id: 'a1', filename: 'bags.png', size: 5, url: 'https://cdn.example/a1' }, { id: 'big', filename: 'big.zip', size: 21 * 1024 * 1024, url: 'https://cdn.example/big' }], []);
+  await runMove(removed);
+  const sent = removed.f.find('POST', /\?wait=true$/)[0].body;
+  assert.deepEqual([sent.files, sent.payload.content], [[], 'My bags overlap (edited)']);
+  assert.doesNotMatch(here(removed), /could not be copied/);
+  // A file added meanwhile was never downloaded: it is counted as left behind.
+  const added = twoReads([], [{ id: 'n1', filename: 'new.png', size: 5, url: 'https://cdn.example/n1' }]);
+  await runMove(added);
+  assert.match(here(added), / 1 file\(s\) could not be copied \(too large, or not downloaded\); they are on the original post\.$/);
+});
+
+test('a move refused before the new post changes nothing and says why', async () => {
+  const FILED = (s) => {
+    s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-one', number: 40, key: 'ONE' }) };
+    s.extra = [['GET', /api\.github\.com\/repos\/me\/test-one\/issues\/40$/, () => ({ number: 40, html_url: 'https://github.com/me/test-one/issues/40', repository_url: 'https://api.github.com/repos/me/test-one' })]];
+  };
+  for (const [why, edit, want, envOver = {}] of [
+    ['a locked post', (s) => { s.post.thread_metadata.locked = true; }, /^Nothing was moved: the post is locked: a moderator can unlock it, then move it\.$/],
+    // A filed post gets the filed refusal, locked or not: unlocking it would
+    // not let it move.
+    ['a locked filed post', (s) => { FILED(s); s.post.thread_metadata.locked = true; },
+      /^This post is already tracked as ONE #40 \(https:\/\/github\.com\/me\/test-one\/issues\/40\); moving filed posts comes in a later update\.$/],
+    // The key it was filed under, where two keys name its repo.
+    ['a post filed under a second key of its repo', (s) => {
+      s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-two', number: 12, key: 'DUO' }) };
+      s.extra = [['GET', /api\.github\.com\/repos\/me\/test-two\/issues\/12$/, () => ({ number: 12, html_url: 'https://github.com/me/test-two/issues/12', repository_url: 'https://api.github.com/repos/me/test-two' })]];
+    }, /^This post is already tracked as DUO #12 /, { REPOS: '{"ONE":"me/test-one","TWO":"me/test-two","DUO":"me/test-two"}' }],
+    // The saved issue deleted, another found by the marker: another filing,
+    // so not the saved key.
+    ['a saved issue deleted and another found by its marker', (s) => {
+      s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-two', number: 12, key: 'DUO' }) };
+      s.extra = [['GET', /api\.github\.com\/repos\/me\/test-two\/issues\/12$/, () => new Response('{}', { status: 410 })]];
+      s.two = [{ number: 13, html_url: 'https://github.com/me/test-two/issues/13', repository_url: 'https://api.github.com/repos/me/test-two', body: '<!-- discord-thread: 700 reporter: 42 -->' }];
+    }, /^This post is already tracked as TWO #13 /, { REPOS: '{"ONE":"me/test-one","TWO":"me/test-two","DUO":"me/test-two"}' }],
+    // The bot sees no text or files with Message Content off: an empty first
+    // message is checked against the setting before anything is copied.
+    ['Message Content off', (s) => { s.first.content = ''; s.extra = [['GET', /\/applications\/@me$/, () => ({ flags: 0 })]]; },
+      /^Nothing was moved: the bot sees no text or file in the post's first message, and the Message Content setting is off or could not be read\. Turn it on in the developer portal › Bot › Privileged Gateway Intents \(\/bot-check checks it\), then move the post again\.$/],
+    // The flags are optional in Discord's answer: an unknown setting is refused too.
+    ['Message Content not readable', (s) => { s.first.content = ''; s.extra = [['GET', /\/applications\/@me$/, () => ({ id: 'app' })]]; },
+      /^Nothing was moved: the bot sees no text or file in the post's first message, and the Message Content setting is off or could not be read\. /],
+    ['a post already moved', (s) => { s.kv = { 'movedto:700': '{"to":"990"}' }; }, /^Nothing was moved: this post was already moved to https:\/\/discord\.com\/channels\/1\/990\.$/],
+    ['a post already moved, which the move locked', (s) => { s.kv = { 'movedto:700': '{"to":"990"}' }; s.post.thread_metadata.locked = true; },
+      /^Nothing was moved: this post was already moved to https:\/\/discord\.com\/channels\/1\/990\.$/],
+    // Its movedto: record was not saved: the bot's note in the locked post says where.
+    ['a post the bot moved and locked, with no record', (s) => {
+      s.post.thread_metadata.locked = true;
+      s.said = [{ id: 'm9', content: 'This post moved to https://discord.com/channels/1/990 (moved by helper).', author: { id: 'b' } }];
+    }, /^Nothing was moved: this post was already moved to https:\/\/discord\.com\/channels\/1\/990\.$/],
+    ['a locked post whose move note someone else wrote', (s) => {
+      s.post.thread_metadata.locked = true;
+      s.said = [{ id: 'm9', content: 'This post moved to https://discord.com/channels/1/990 (moved by helper).', author: { id: '42' } }];
+    }, /^Nothing was moved: the post is locked: a moderator can unlock it, then move it\.$/],
+    ['a filed post', FILED, /^This post is already tracked as ONE #40 \(https:\/\/github\.com\/me\/test-one\/issues\/40\); moving filed posts comes in a later update\.$/],
+    ['a filed post with no record, found by its marker', (s) => {
+      s.two = [{ number: 12, html_url: 'https://github.com/me/test-two/issues/12', repository_url: 'https://api.github.com/repos/me/test-two', body: '<!-- discord-thread: 700 reporter: 42 -->' }];
+    }, /^This post is already tracked as TWO #12 \(https:\/\/github\.com\/me\/test-two\/issues\/12\); moving filed posts comes in a later update\.$/],
+    // The form offered 901; it was deleted before the submit, so the
+    // server's channel list no longer holds it.
+    ['the chosen forum deleted since the form opened', (s) => { s.channels = CHANNELS.filter((c) => c.id !== '901'); },
+      /^Nothing was moved: <#901> is not a forum of this server, so nothing is posted there\. \/bot-check names the FORUMS entry to fix\.$/],
+    ['a deleted post', (s) => { s.post = () => new Response('{"message":"Unknown Channel"}', { status: 404 }); }, /^Nothing was moved: the post was deleted\.$/],
+    ['a send or move of the post running', (s) => { s.claim = () => new Response('{"errors":[{"code":"already_exists"}]}', { status: 422 }); },
+      /^Nothing was moved: another send or move of this post is running, or one stopped partway\. .*Then move the post again\.$/],
+    ['a lock GitHub did not confirm', (s) => { s.claim = () => { throw new Error('Network connection lost.'); }; },
+      /^Nothing was moved: GitHub did not confirm the lock discord-lock-700 in me\/test-one \(Network connection lost\.\)\. Wait a few minutes, then move the post again; /],
+    ['the first message deleted', (s) => { s.first = () => new Response('{"message":"Unknown Message"}', { status: 404 }); }, /^Nothing was moved: the post's first message was deleted, so there is nothing to copy\.$/],
+    ['the first message deleted while the move ran', (s) => {
+      const m = s.first;
+      let reads = 0;
+      s.first = () => (reads++ ? new Response('{"message":"Unknown Message"}', { status: 404 }) : m);
+    }, /^Nothing was moved: the post's first message was deleted, so there is nothing to copy\.$/],
+    ['the bot\'s copy whose record is not readable yet', (s) => { s.first = { ...s.first, webhook_id: '61', application_id: 'app' }; },
+      /^Nothing was moved: this post is a copy the bot moved here, and its record movedfrom:700 is not readable yet\. /],
+    ['a damaged move record', (s) => { s.kv = { 'movedfrom:700': '{"from":"x"}' }; },
+      /^Nothing was moved: this post's saved record is damaged \(movedfrom:700\)\. A bot admin can correct that KV key by hand \(deleting it leaves this post refused as a copy for good\); then move the post again\.$/],
+    ['a damaged moved-away record', (s) => { s.kv = { 'movedto:700': '{"to":"x"}' }; },
+      /^Nothing was moved: this post's saved record is damaged \(movedto:700\)\. A bot admin can correct that KV key by hand \(deleting it lets the old post be sent or moved again once someone unlocks it\); then move the post again\.$/],
+    ['a damaged filing record', (s) => { s.kv = { 'issue:700': '{' }; }, /^Nothing was moved: this post's saved record is damaged \(issue:700\)\. A bot admin can delete that KV key; then move the post again\.$/],
+    ['a saved issue that cannot be checked', (s) => {
+      s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-one', number: 40, key: 'ONE' }) };
+      s.extra = [['GET', /api\.github\.com\/repos\/me\/test-one\/issues\/40$/, () => new Response('{}', { status: 404 })]];
+    }, /^Could not check ONE #40 in me\/test-one \(404\): .*Nothing was moved\./],
+  ]) {
+    const w = moveWorld(edit);
+    const { told, kv } = await runMove(w, moveSubmit(), envOver);
+    assert.match(told, want, why);
+    assert.equal(w.f.find('POST', /\?wait=true$/).length, 0, `${why}: no new post`);
+    assert.equal(w.f.find('PATCH', /\/channels\/700$/).length, 0, `${why}: the old post is left as it is`);
+    assert.equal(kv.m.has('movedfrom:990'), false, `${why}: no record`);
+  }
+});
+
+test('a create with no answer says a copy may exist, keeps the lock, and writes no record and nothing to the old post', async () => {
+  for (const [why, made] of [
+    ['a lost connection', () => { throw new Error('Network connection lost.'); }],
+    ['a 2xx whose body cannot be read', () => new Response('{"id":', { status: 200 })],
+    // Only the status the client kept counts, never one the answer's text quotes.
+    ['a 502 whose answer quotes a 4xx', () => new Response('upstream: POST /x -> 400 bad', { status: 502 })],
+  ]) {
+    const w = moveWorld((s) => { s.made = made; });
+    const { res, told, kv } = await runMove(w);
+    assert.deepEqual(res, { uncertain: 'create' }, why);
+    assert.equal(told, 'Nothing confirmed: Discord did not answer the new post\'s create in <#901>, so a copy of https://discord.com/channels/1/700 may exist there. The old post was not changed; its lock discord-lock-700 in me/test-one stays.', why);
+    assert.equal(kv.m.size, 0, why);
+    assert.equal(w.f.find('POST', /\/channels\/700\/messages$/).length + w.f.find('PATCH', /\/channels\/700$/).length, 0, why);
+    assert.equal(w.f.find('DELETE', /discord-lock-700$/).length, 0, `${why}: the lock stays`);
+  }
+});
+
+test('a create Discord refuses moves nothing and releases the lock', async () => {
+  const w = moveWorld((s) => { s.made = () => new Response('{"message":"Invalid Form Body"}', { status: 400 }); });
+  const { res, told, kv } = await runMove(w);
+  assert.deepEqual(res, { refused: 'create' });
+  assert.match(told, /^Nothing was moved: Discord refused the new post \([^)]*-> 400 [^)]*\)\.$/);
+  assert.equal(kv.m.size, 0);
+  assert.equal(w.f.find('DELETE', /discord-lock-700$/).length, 1, 'the lock is released');
+});
+
+test('a move past its steps\' phase still answers and releases: a slow KV or a stalled step cannot use up the reply\'s time', async () => {
+  const clock = shiftClock();
+  try {
+    // The card's edit stalls until its call's time ends, and the clock then
+    // stands at 23.5 s, past the steps' phase.
+    clock.at(0);
+    const late = moveWorld();
+    const stalled = (url, init = {}) => (init.method === 'PATCH' && /\/channels\/556\/messages\/96$/.test(url)
+      ? stall(init, () => clock.at(23500))
+      : late.f(url, init));
+    const { res, told, kv } = await runMove(late, moveSubmit(), {}, { fetch: stalled, callMs: 50 });
+    assert.equal(res.moved, '990');
+    // The old post's record went first, so it is saved despite the stall.
+    assert.deepEqual(JSON.parse(kv.m.get('movedto:700')), { to: '990' });
+    assert.equal(told, `${PARTWAY}\n- queue card for the new post\n- record movedfrom:990\n- moved message in the new post\n- note in the old post\n- lock on the old post`);
+    // The old post was not locked in Discord, so its lock label stays.
+    assert.equal(late.f.find('DELETE', /discord-lock-700$/).length, 0, 'the old post\'s lock stays');
+
+    // Every step in time, the last one (the old post's lock) ending at
+    // 24.5 s: the reply still goes by 25 s, and the release after it.
+    clock.at(0);
+    const closing = moveWorld((s) => { s.lock = () => { clock.at(24500); return {}; }; });
+    const end = await runMove(closing);
+    assert.equal(end.told, MOVED);
+    assert.equal(closing.f.find('DELETE', /discord-lock-700$/).length, 1, 'the lock is released');
+  } finally { clock.restore(); }
+  // A record whose write never answers is named after `kvMs`, and the steps
+  // after it still run.
+  const hang = moveWorld((s) => { s.putHangs = 'movedto:700'; });
+  const { told } = await runMove(hang, moveSubmit(), {}, { kvMs: 30 });
+  assert.equal(told, `${PARTWAY}\n- record movedto:700`);
+  assert.equal(hang.f.find('PATCH', /\/channels\/700$/).length, 1, 'the steps after it still run');
+});
+
+test('a step after the new post that fails is named, and the later steps still run', async () => {
+  for (const [why, edit, line, kept = false] of [
+    ['the old post\'s record not saved', (s) => { s.putFails = 'movedto:700'; }, 'record movedto:700'],
+    ['the new post\'s record not saved', (s) => { s.putFails = 'movedfrom:990'; }, 'record movedfrom:990'],
+    ['the moved message refused', (s) => { s.extra = [['POST', /\/channels\/990\/messages$/, refusal]]; }, 'moved message in the new post'],
+    ['the old post\'s note refused', (s) => { s.extra = [['POST', /\/channels\/700\/messages$/, refusal]]; }, 'note in the old post'],
+    // An old post left open keeps its lock label, so nothing sends or moves it.
+    ['the old post\'s lock refused', (s) => { s.lock = refusal; }, 'lock on the old post', true],
+  ]) {
+    const w = moveWorld(edit);
+    const { res, told } = await runMove(w);
+    assert.equal(res.moved, '990', why);
+    assert.equal(told, `${PARTWAY}\n- ${line}`, why);
+    assert.equal(w.f.find('PATCH', /\/channels\/700$/).length, 1, `${why}: the lock is still tried`);
+    assert.equal(w.f.find('PATCH', /\/channels\/556\/messages\/96$/).length, 1, `${why}: the card still moves`);
+    assert.equal(w.f.find('DELETE', /discord-lock-700$/).length, kept ? 0 : 1, `${why}: the old post's lock label`);
+  }
+  // A 2xx whose body the client could not read is a write that was done.
+  const odd = moveWorld((s) => { s.lock = () => new Response('not json', { status: 200 }); });
+  assert.equal((await runMove(odd)).told, MOVED);
+});
+
+test('a moved post moved again is copied under the original player, whose record carries on', async () => {
+  const reporter = { name: 'Pat', id: '42', username: 'pat', avatar: 'https://cdn.discordapp.com/avatars/42/abc.png' };
+  const w = moveWorld((s) => {
+    s.kv = { 'movedfrom:700': JSON.stringify({ from: '690', reporter, card: '95' }) };
+    s.first = { id: '700', content: 'My bags overlap', webhook_id: '61', application_id: 'app', author: { id: '61', username: 'Pat' }, attachments: [] };
+  });
+  const { res, kv } = await runMove(w);
+  assert.equal(res.moved, '990');
+  const sent = w.f.find('POST', /\?wait=true$/)[0].body.payload;
+  assert.deepEqual([sent.username, sent.avatar_url], ['Pat', reporter.avatar]);
+  assert.deepEqual(w.f.find('POST', /\/channels\/990\/messages$/)[0].body.allowed_mentions, { parse: [], users: ['42'] });
+  assert.deepEqual(JSON.parse(kv.m.get('movedfrom:990')), { from: '700', reporter, card: '96' });
+  assert.equal(w.f.find('GET', /\/guilds\/1\/members\//).length, 0, 'no member read for a copy');
+});

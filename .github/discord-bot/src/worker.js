@@ -11,11 +11,12 @@ import {
   templateNote, parseCustomId, templateLabels, filedCard, cardHead, BY_RIGHT_CLICK,
   parseRepoTags, repoFromTags, plainTags, usableRepoKeys,
   MOVE_BUTTON, CLIENT_NAMES, cutUnits,
+  queueCard, movedTags, webhookName, avatarUrl,
 } from './core.js';
 import { discordClient, postGone, archivedOf } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
 import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch, AWAY_START, MOVED_HERE } from './scan.js';
-import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems, unreadableSettings } from './setup.js';
+import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems, unreadableSettings, MESSAGE_CONTENT } from './setup.js';
 
 export const COMMAND_NAME = 'Send to GitHub';
 export const CHECK_COMMAND = 'bot-check';
@@ -58,6 +59,18 @@ const TRACKED_BY_MS = 23000;
 // The forum's pinned template is advice only: its read gets at most 2 s, and
 // fileIssue ends it a full call's time before the filing's deadline.
 const TEMPLATE_MS = 2000;
+// A move's phases, counted from the request's arrival: every call before the
+// new post ends by 12 s (one still running then is stopped), the new post's
+// create by 18 s, and each step after it by 23 s; the reply and the lock's
+// release keep the filing's ends.
+const MOVE_PREP_BY_MS = 12000;
+const MOVE_CREATE_BY_MS = 18000;
+const MOVE_REST_BY_MS = 23000;
+// Discord takes 20 MiB per file and 25 MiB per request; 1 MiB of the request
+// is left for the message and the multipart framing.
+const COPY_FILE_MAX = 20 * 1024 * 1024;
+const COPY_MAX_BYTES = 24 * 1024 * 1024;
+const NOTHING_TO_COPY = '(The first message had nothing the bot can copy.)';
 // Signed requests older than this are refused (a captured one cannot be replayed later).
 const MAX_AGE_S = 300;
 
@@ -461,7 +474,7 @@ async function renamePost(discord, log, threadId, name) {
 // does not say whether a create it timed out can still be applied later, so
 // the hour is a wide margin past both, not a proof. A newer lock may belong
 // to a running send, so the advice never frees it.
-const clearAdvice = (threadId, lockRepo) => `delete the label ${lockLabel(threadId)} in ${lockRepo}, but only if the time in its description is more than an hour ago or it shows no time. A send ends within 30 seconds and GitHub times out a request after 10 seconds, so the hour is a wide margin past both. Then send the post again.`;
+const clearAdvice = (threadId, lockRepo, again = 'send') => `delete the label ${lockLabel(threadId)} in ${lockRepo}, but only if the time in its description is more than an hour ago or it shows no time. A send ends within 30 seconds and GitHub times out a request after 10 seconds, so the hour is a wide margin past both. Then ${again} the post again.`;
 
 // A saved issue that answers 404 cannot be told from one the app can no
 // longer see (a transfer out of reach, lost access), so nothing goes ahead.
@@ -721,6 +734,25 @@ export async function setupDaily(env, deps) {
   await postLines(modPost(discord, String(env.MOD_CHANNEL_ID), (e, text) => log(`could not post to the moderator channel: ${e.message}\n${text}`)), lines);
 }
 
+// One installation token per repo a run touches, each asked for once.
+// `access(repo)` is a token the run cannot start without: its failure names
+// the repo to try again for.
+function githubAccess(env, deps, f) {
+  const tokens = new Map();
+  const tokenFor = (r) => {
+    if (!tokens.has(r)) tokens.set(r, (deps.installationToken || installationToken)({ appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY, repo: r }, f));
+    return tokens.get(r);
+  };
+  const access = async (r) => {
+    try {
+      return await tokenFor(r);
+    } catch (e) {
+      throw new Error(`could not get access to ${r} (${e.message.slice(0, 200)}). Try again.`);
+    }
+  };
+  return { tokenFor, access };
+}
+
 // Runs after Discord already has its "thinking..." answer. Every call is timed,
 // and every outcome, partial ones included, is reported back to the moderator.
 // `t0` is the moment the request arrived; every phase's end counts from it.
@@ -756,21 +788,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
   let copyId = null;
   let oldGreeting = '';
   let lockGh;
-  // One token per repo this filing touches.
-  const tokens = new Map();
-  const tokenFor = (r) => {
-    if (!tokens.has(r)) tokens.set(r, (deps.installationToken || installationToken)({ appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY, repo: r }, f));
-    return tokens.get(r);
-  };
-  // A token the filing cannot start without: its failure files nothing and
-  // names the repo to try again for.
-  const access = async (r) => {
-    try {
-      return await tokenFor(r);
-    } catch (e) {
-      throw new Error(`could not get access to ${r} (${e.message.slice(0, 200)}). Try again.`);
-    }
-  };
+  const { tokenFor, access } = githubAccess(env, deps, f);
   // The post's queue card: the form's, else the scan's record of the post,
   // else, for a moved post, the old post's card the move recorded.
   const cardOf = (r) => cardId || (r && r.card) || (movedFrom && movedFrom.card) || '';
@@ -1074,6 +1092,324 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
   }
 }
 
+// The issue a post was filed as, for a move: the saved one when it is live,
+// else every configured repo searched. A search that finds nothing runs once
+// more, as the filing's does: an issue that shifted between two pages of a
+// list while it was read is found the second time. A saved issue that
+// cannot be checked is `unclear`, with why. `key` is the one the saved
+// issue was filed under while REPOS still maps it to the issue's repo, else
+// the repo's first key.
+async function findIssue(cfg, saved, postId, tokenFor, f) {
+  // The saved key names only the saved issue: one a search finds after the
+  // saved issue is gone is another filing.
+  const found = (issue, from, own = false) => {
+    const { repo } = whereIs(issue, from);
+    const key = own && sameRepo(cfg.repos[saved.key], repo) ? saved.key : keyOf(cfg, repo);
+    return { issue, key };
+  };
+  if (saved) {
+    const r = await readSaved(saved, tokenFor, f);
+    if (r.issue) return found(r.issue, saved.repo, true);
+    if (!r.gone) return { unclear: r.unclear };
+  }
+  const search = () => searchRepos(Object.values(cfg.repos), postId, tokenFor, f);
+  const hit = (await search()) || (await search());
+  return hit ? found(hit.issue, hit.repo) : {};
+}
+
+// The Move form's job, after Discord has its "thinking..." answer, under the
+// post's filing lock. It moves a post not yet filed; a filed one is refused
+// with no change. Before the new post exists nothing a player sees changes,
+// so every failure there moves nothing and moving again finishes the job.
+// After it exists, every step runs and the reply names each one not done,
+// with both posts' links: the old post is locked, so a second move cannot
+// redo it.
+export async function movePost(interaction, env, deps, t0 = Date.now()) {
+  const cfg = config(env);
+  const { threadId: oldId, cardId } = parseCustomId(interaction.data.custom_id);
+  const v = modalValues(interaction.data);
+  const targetId = v.forum;
+  const target = cfg.forumInfo[targetId];
+  const client = target.client || normClient(v.client);
+  const guildId = interaction.guild_id;
+  const link = (id) => `https://discord.com/channels/${guildId}/${id}`;
+  const mover = personName(interaction.member.user, interaction.member);
+  const log = deps.log || console.error;
+  const { callMs = CALL_MS, kvMs = KV_MS } = deps; // tests shorten these
+  const until = (by) => timedFetch(deps.fetch, callMs, t0 + by);
+  const prep = until(MOVE_PREP_BY_MS);
+  const discord = discordClient(env.DISCORD_BOT_TOKEN, prep);
+  const { tokenFor, access } = githubAccess(env, deps, prep);
+  const followup = followupFor(interaction, deps, log, t0);
+  const kv = env.STATE;
+  const notes = [];
+  const refuse = async (why, kind) => {
+    await followup(`Nothing was moved: ${why}.`);
+    return { refused: kind };
+  };
+  let lockToken = '';
+  let locked = false;
+  let keepLock = false;
+  try {
+    if (!cfg.lockRepo) return await refuse("the bot is not set up yet. REPOS names more than one repo, so LOCK_REPO must name the repo that holds every filing's lock", 'setup');
+    lockToken = await access(cfg.lockRepo);
+    try {
+      locked = await githubClient(lockToken, prep).claimThread(cfg.lockRepo, oldId);
+    } catch (e) {
+      if (!unknownOutcome(e)) throw e;
+      await followup(`Nothing was moved: GitHub did not confirm the lock ${lockLabel(oldId)} in ${cfg.lockRepo} (${e.message.slice(0, 200)}). Wait a few minutes, then move the post again; if that says another send or move is running, follow its advice.`);
+      return { uncertain: 'lock' };
+    }
+    if (!locked) {
+      await followup(`Nothing was moved: another send or move of this post is running, or one stopped partway. Wait a few minutes, then move it again. If it still says this, ${clearAdvice(oldId, cfg.lockRepo, 'move')}`);
+      return { busy: true };
+    }
+
+    let old;
+    try {
+      old = await discord.getChannel(oldId);
+    } catch (e) {
+      if (!postGone(e, oldId)) throw e;
+      return await refuse('the post was deleted', 'post');
+    }
+    if (!cfg.forums.includes(old.parent_id)) return await refuse('this post is not in a forum the bot is set up for', 'forum');
+
+    let records;
+    try {
+      records = await postRecords(kv, oldId, kvMs);
+    } catch (e) {
+      return await refuse(e.damaged
+        ? `this post's saved record is damaged (${e.damaged}). ${damagedFix(e.damaged)}; then move the post again`
+        : "could not read this post's saved record just now. Try again", 'record');
+    }
+    if (records.movedTo) return await refuse(`this post was already moved to ${link(records.movedTo.to)}`, 'moved');
+    // The bot's move locks the old post, and Discord shows a lock at once,
+    // unlike KV's records: a move repeated within KV's minute stops here. The
+    // bot's note there says where it went when its record was not saved.
+    const noted = old.thread_metadata.locked ? await movedNote(discord, oldId) : '';
+    if (noted) return await refuse(`this post was already moved to ${noted}`, 'moved');
+    // A filed post is refused before a locked one's advice: unlocking it
+    // would not let it move.
+    const found = await findIssue(cfg, records.saved, oldId, tokenFor, prep);
+    if (found.unclear) {
+      await followup(couldNotCheck(cfg, records.saved, oldId, found.unclear, 'Nothing was moved.'));
+      return { refused: 'saved-issue' };
+    }
+    if (found.issue) {
+      await followup(`This post is already tracked as ${found.key} #${found.issue.number} (${found.issue.html_url}); moving filed posts comes in a later update.`);
+      return { refused: 'filed' };
+    }
+    if (old.thread_metadata.locked) return await refuse('the post is locked: a moderator can unlock it, then move it', 'locked');
+
+    let channels;
+    try {
+      channels = await discord.call('GET', `/guilds/${guildId}/channels`);
+    } catch (e) {
+      return await refuse(`could not read the forums just now (${e.message.slice(0, 200)}). Try again`, 'forums');
+    }
+    // The form offered only this server's forums, and the submit checks
+    // FORUMS alone: a forum deleted since the form opened is no longer in
+    // the channel list.
+    if (!moveTargets(cfg, channels, old.parent_id).includes(targetId)) {
+      return await refuse(`<#${targetId}> is not a forum of this server, so nothing is posted there. /bot-check names the FORUMS entry to fix`, 'forum');
+    }
+
+    let read;
+    try {
+      read = await discord.readMessage(oldId, oldId);
+    } catch (e) {
+      if (!postGone(e, oldId)) throw e;
+      return await refuse('the post was deleted', 'post');
+    }
+    const first = read.message;
+    if (!first) return await refuse("the post's first message was deleted, so there is nothing to copy", 'message');
+    // The bot's own copy whose move record is not readable yet (KV shows a
+    // write elsewhere within a minute) or was not saved: copying it would
+    // name the webhook as the player.
+    if (!records.movedFrom && first.webhook_id && first.application_id === interaction.application_id) {
+      return await refuse(`this post is a copy the bot moved here, and its record movedfrom:${oldId} is not readable yet. Wait a minute, then move it again`, 'copy-record');
+    }
+    // With Message Content off the bot sees no text and no files, so a report
+    // would be copied as an empty one. A first message the bot sees nothing
+    // in is checked against the setting; one with a sticker alone moves.
+    if (!first.content && !first.attachments.length) {
+      const app = await discord.call('GET', '/applications/@me');
+      // Discord documents the flags as optional. With none the setting is
+      // unknown, and a report copied empty would be archived: refused too.
+      const raw = app.flags_new ?? app.flags;
+      if (raw == null || (BigInt(raw) & MESSAGE_CONTENT) === 0n) {
+        return await refuse("the bot sees no text or file in the post's first message, and the Message Content setting is off or could not be read. Turn it on in the developer portal › Bot › Privileged Gateway Intents (/bot-check checks it), then move the post again", 'message-content');
+      }
+    }
+    let reporter;
+    if (records.movedFrom) {
+      // The old post is itself a moved copy: its record names the player.
+      reporter = records.movedFrom.reporter;
+    } else if (first.webhook_id) {
+      // A webhook's author id names no user: its name alone, as filing names it.
+      reporter = { name: personName(first.author, null) };
+    } else {
+      // The server name and avatar are niceties: a member who left (404), or
+      // any failed read, gives the user's own.
+      const member = await discord.call('GET', `/guilds/${guildId}/members/${first.author.id}`)
+        .catch((e) => { if (statusOf(e) !== 404) log(`member read failed: ${e.message.slice(0, 200)}`); return null; });
+      reporter = { name: personName(first.author, member), id: first.author.id, username: first.author.username, avatar: avatarUrl({ guildId, user: first.author, member }) };
+    }
+
+    let hook;
+    try {
+      hook = await discord.forumWebhook(targetId, interaction.application_id);
+    } catch (e) {
+      if (statusOf(e) === 403) return await refuse(`the bot lacks Manage Webhooks in <#${targetId}>`, 'webhook');
+      throw e;
+    }
+
+    // Each file in order that fits Discord's limits is downloaded; the rest,
+    // and any whose download fails, stay on the old post.
+    const files = [];
+    let room = COPY_MAX_BYTES;
+    for (const a of first.attachments) {
+      if (a.size > COPY_FILE_MAX || a.size > room) continue;
+      try {
+        const res = await prep(a.url);
+        if (!res.ok) throw new Error(`answered ${res.status}`);
+        files.push({ id: a.id, name: a.filename, description: a.description, blob: await res.blob() });
+        room -= a.size;
+      } catch (e) {
+        log(`file ${a.filename} of post ${oldId} not copied: ${e.message.slice(0, 200)}`);
+      }
+    }
+
+    // The first message is read again just before the create, as a filing
+    // reads its message: one deleted while the move prepared (its reads and
+    // the file downloads) is not posted again.
+    let last;
+    try {
+      last = (await discord.readMessage(oldId, oldId)).message;
+    } catch (e) {
+      if (!postGone(e, oldId)) throw e;
+      return await refuse('the post was deleted', 'post');
+    }
+    if (!last) return await refuse("the post's first message was deleted, so there is nothing to copy", 'message');
+    // The copy takes the downloaded files this read still lists, so a file
+    // the player removed meanwhile is not posted; every other file it lists,
+    // one added meanwhile included, is counted as left on the old post.
+    const copied = files.filter((x) => last.attachments.some((a) => a.id === x.id));
+    const left = last.attachments.length - copied.length;
+
+    const type = target.type;
+    const text = last.content;
+    const cut = text.length > MAX_REPLY;
+    // Built before the create, so the catch below sees only the create's own
+    // failure. A thread read may carry no tag list (movedTags' default).
+    const payload = {
+      thread_name: old.name,
+      applied_tags: movedTags({ applied: old.applied_tags, from: tagsIn(channels, old.parent_id), to: tagsIn(channels, targetId), client, fixedClient: target.client, fixedType: target.type, repoTags: cfg.repoTags }),
+      content: cut ? `${cutUnits(text, MAX_REPLY - 1)}…` : text || (copied.length ? '' : NOTHING_TO_COPY),
+      username: webhookName(reporter.name, reporter.username),
+      // A webhook's reporter has no avatar.
+      ...(reporter.avatar ? { avatar_url: reporter.avatar } : {}),
+      allowed_mentions: { parse: [] },
+      attachments: copied.map((x, i) => ({ id: i, filename: x.name, ...(x.description ? { description: x.description } : {}) })),
+    };
+    let made;
+    try {
+      made = await discordClient(env.DISCORD_BOT_TOKEN, until(MOVE_CREATE_BY_MS)).executeWebhook(hook, payload, copied);
+    } catch (e) {
+      if (refusal4xx(e)) return await refuse(`Discord refused the new post (${e.message.slice(0, 300)})`, 'create');
+      if (/^out of time before /.test(e.message)) throw e;
+      // Discord may still make it: the lock stays, so nothing moves or sends
+      // this post meanwhile, as a filing keeps its lock after an unknown
+      // create. The reply names the forum and the old post; the README says
+      // what this state looks like.
+      log(`move of post ${oldId}: create not confirmed: ${e.message.slice(0, 200)}`);
+      keepLock = true;
+      await followup(`Nothing confirmed: Discord did not answer the new post's create in <#${targetId}>, so a copy of ${link(oldId)} may exist there. The old post was not changed; its lock ${lockLabel(oldId)} in ${cfg.lockRepo} stays.`);
+      return { uncertain: 'create' };
+    }
+
+    // The new post exists from here on. Every step runs, and the reply names
+    // each one not done; the log says why. The README describes each
+    // half-finished state; there is no repair step.
+    const newId = made.channel_id;
+    const newUrl = link(newId);
+    const later = discordClient(env.DISCORD_BOT_TOKEN, until(MOVE_REST_BY_MS));
+    // Whether the step was done.
+    const step = async (name, fn) => {
+      try {
+        await fn();
+        return true;
+      } catch (e) {
+        // A write answered 2xx is done, even when its body could not be read.
+        if (taken(e)) return true;
+        log(`move of post ${oldId} to ${newId}: ${name} not done: ${e.message.slice(0, 200)}`);
+        notes.push(name);
+        return false;
+      }
+    };
+    // Each record's wait ends with the steps' phase, so a slow KV cannot use
+    // up the reply's or the release's time.
+    const put = (key, value) => step(`record ${key}`, () => {
+      const ms = Math.min(kvMs, t0 + MOVE_REST_BY_MS - Date.now());
+      if (ms <= 0) throw new Error(`out of time before KV ${key}`);
+      return within(ms, kv.put(key, JSON.stringify(value)));
+    });
+    // The old post's record comes first: it refuses a later send or move of
+    // the old post and keeps the scan off it.
+    await put(`movedto:${oldId}`, { to: newId });
+    // The queue card shows the new post, edited before the move record so
+    // the record names the card. With no card to edit (a post moved before
+    // the scan carded it) or one Discord refuses to edit (deleted), a new
+    // card is posted: the card is how an approved role, who has no
+    // right-click command, reaches the post. The old card's buttons, if it
+    // stays, point at the locked post, whose send and move refuse. A queue
+    // channel outside this server gets nothing: its staff would see this
+    // server's post and could send it.
+    // With no queue, no card is touched, so none is recorded for the copy.
+    let card = cfg.queue ? cardId || (records.thread && records.thread.card) || (records.movedFrom && records.movedFrom.card) || '' : '';
+    if (cfg.queue && !channels.some((c) => c.id === cfg.queue)) {
+      card = '';
+      notes.push('queue card for the new post: QUEUE_CHANNEL_ID names no channel of this server (/bot-check names it)');
+    } else if (cfg.queue) {
+      const body = queueCard({ guildId, forumId: targetId, postId: newId, author: reporter, client, type, moved: mover });
+      await step('queue card for the new post', async () => {
+        if (card) {
+          try {
+            await later.call('PATCH', `/channels/${cfg.queue}/messages/${card}`, body);
+            return;
+          } catch (e) {
+            if (!refusal4xx(e)) throw e;
+            card = '';
+          }
+        }
+        card = (await later.call('POST', `/channels/${cfg.queue}/messages`, body)).id;
+      });
+    }
+    await put(`movedfrom:${newId}`, { from: oldId, reporter, ...(card ? { card } : {}) });
+    const here = MESSAGES.movedHere({ from: link(oldId), by: mover, reporter, left, cut });
+    await step('moved message in the new post', () => later.send(newId, here, reporter.id ? [reporter.id] : []));
+    await step('note in the old post', () => later.send(oldId, MESSAGES.movedTo({ to: newUrl, by: mover })));
+    // An old post left open keeps its lock label, so nothing moves or sends
+    // it again until the busy reply's hour has passed.
+    if (!await step('lock on the old post', () => later.call('PATCH', `/channels/${oldId}`, { locked: true, archived: true }))) keepLock = true;
+    // At most six short lines: the reply never nears Discord's length.
+    await followup(notes.length
+      ? `The move stopped partway: ${newUrl} was made from ${link(oldId)}. Not done:\n${notes.map((n) => `- ${n}`).join('\n')}`
+      : `Moved to ${newUrl} from ${link(oldId)}.`);
+    return { moved: newId, notes };
+  } catch (e) {
+    await followup(`Nothing was moved: ${e.message.slice(0, 1500)}`);
+    return { error: e.message };
+  } finally {
+    // A lock kept stays; a release that fails is logged. The next send's or
+    // move's busy reply says how to clear either, as after a filing.
+    if (locked && !keepLock) {
+      await githubClient(lockToken, timedFetch(deps.fetch, TAIL_MS, t0 + RELEASE_BY_MS))
+        .releaseThread(cfg.lockRepo, oldId).catch((e) => log(`lock ${lockLabel(oldId)} not released: ${e.message}`));
+    }
+  }
+}
+
 // The bot serves the one server GUILD_ID names. Its commands are registered
 // for every server it is in, and FORUMS or QUEUE_CHANNEL_ID can name another
 // server's channel, so each entry point refuses any other server, or a
@@ -1188,6 +1524,25 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     if (problems.length) return reply(`Nothing was created. ${problems.join(' ')} Press the button or right-click the post to try again.`);
 
     ctx.waitUntil(fileIssue(interaction, env, deps, t0));
+    return json({ type: 5, data: { flags: EPHEMERAL } });
+  }
+
+  if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('mv:')) {
+    const { answer, cfg } = gate(interaction, env, bad, roles, { no: NOT_ALLOWED_MOVE, badIds: BAD_MOVE_IDS, forums: true });
+    if (answer) return answer;
+    // A filing works with no namespace bound, but a move's records are what
+    // link the two posts: without them nothing refuses the old one.
+    if (!env.STATE) return reply('Nothing was moved: the STATE KV namespace is not bound, so the move could not be recorded. Bind it (README, Stage 2 step 5), then move the post.');
+    const v = modalValues(interaction.data);
+    const problems = [];
+    // The forum is read against FORUMS as it is now, not as the form saw it.
+    const known = cfg.forums.includes(v.forum);
+    if (!known) problems.push('Pick a forum the bot is set up for.');
+    // The client dropdown offers only CLIENT_NAMES, which normClient reads:
+    // a client chosen is always valid, and only its absence is checked.
+    if (!v.client && known && !cfg.forumInfo[v.forum].client) problems.push(`Pick a client: <#${v.forum}> has no client of its own.`);
+    if (problems.length) return reply(`Nothing was moved. ${problems.join(' ')}`);
+    ctx.waitUntil(movePost(interaction, env, deps, t0));
     return json({ type: 5, data: { flags: EPHEMERAL } });
   }
 
