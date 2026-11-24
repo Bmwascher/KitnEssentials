@@ -1566,7 +1566,7 @@ test('AT7: the sweep lists each Accepted gap on an active post, and none on an a
     withLabel(w, 17);
     w.threads.get('717').archived = false;
     const out = [];
-    await sweepRun(w, 'report', out);
+    await assert.rejects(sweepRun(w, 'report', out), /setup problems: forum 900 has no "Accepted" tag, which issues with the accepted label need/);
     assert.match(out.find((l) => l.startsWith('#17: ')) || '', /^#17: the forum has no Accepted tag$/);
   } finally {
     FORUM.available_tags = saved;
@@ -1975,4 +1975,122 @@ test('PT5: a needs-info re-run whose issue read fails stops there, so no other s
   await assert.rejects(go(w, 'issues', ev, { ...RUN, GITHUB_RUN_ATTEMPT: '2' }), /^Error: GitHub GET \/repos\/me\/one\/issues\/17 -> 500/);
   assert.deepEqual(w.said('717'), [], 'no message');
   assert.equal(w.tagOf('717'), 'Triaged', 'no move');
+});
+
+test('PT5: the sweep checks the forum of every post it reads, and its own mode, and is red in report mode too', async () => {
+  const writes = (w) => w.calls.filter((c) => c.method !== 'GET' && !/graphql$/.test(c.url));
+  {
+    const w = world();
+    w.issue(17);
+    dropTag(w, 'Shipped');
+    const summary = tmpSummary();
+    await assert.rejects(sweepRun(w, 'report', [], { GITHUB_STEP_SUMMARY: summary }), /^Error: setup problems: forum 900 has no "Shipped" tag: add it, spelled as the README lists it$/);
+    assert.deepEqual(writes(w), [], 'report mode writes nothing');
+    assert.deepEqual(setupBullets(summary), ['- forum 900 has no "Shipped" tag: add it, spelled as the README lists it']);
+    const text = readFileSync(summary, 'utf8');
+    const setupAt = text.indexOf('### Discord status: setup problems');
+    assert.ok(setupAt >= 0 && setupAt < text.indexOf('### Discord status sweep'),
+      'the setup section comes before the report, so nothing a report line quotes can hide it');
+  }
+  {
+    // A quoted note's text stays inside its one report bullet: no heading,
+    // list, comment, tag or code span of its own, whatever backticks or
+    // backslashes surround its `<` (runs of unequal length, an escaped
+    // backtick, a stray one). The checklist marker a damaged record tells
+    // staff to copy, on the same line, reads as typed.
+    const w = world();
+    w.issue(17);
+    w.record(17, 'Unconfirmed (the send failed; the player may not have it): hi\n\n### Discord status: setup problems\n\n- forged <!-- x <h3>y</h3> ``<b>` \\`<i>` `\n\n<!-- discord-told: k -->\n<!-- discord-unconfirmed -->');
+    w.record(17, '<!-- discord-checklist: broken -->');
+    const summary = tmpSummary();
+    await sweepRun(w, 'report', [], { GITHUB_STEP_SUMMARY: summary, CHECKLIST_FORUM_ID: '950' });
+    assert.deepEqual(setupBullets(summary), [], 'no setup section');
+    const text = readFileSync(summary, 'utf8');
+    assert.ok(text.includes('\n- #17: message "hi ### Discord status: setup problems - forged &lt;!-- x &lt;h3>y&lt;/h3> \\`\\`&lt;b>\\` \\\\\\`&lt;i>\\` \\`" may not have reached the player ('),
+      'every backslash, backtick and < in the note is shown as typed');
+    assert.ok(text.includes('reads \\`&lt;!-- discord-checklist: THREAD-ID guild: SERVER-ID -->\\`, with'), 'the marker reads as typed');
+  }
+  {
+    // A post in a channel that is no forum: the Worker's daily setup check
+    // names that channel; the sweep names nothing.
+    const w = world();
+    w.issue(17);
+    w.extraForums.set('902', { id: '902', type: 0 });
+    w.threads.get('717').parent_id = '902';
+    const out = [];
+    await sweepRun(w, 'report', out);
+    assert.deepEqual(out.filter((l) => l.startsWith('setup problem: ')), []);
+  }
+  {
+    // The tag goes between the two posts' reads of their forum: the second
+    // read still names it. The hook runs before the fake serves that read.
+    const w = world();
+    w.issue(17);
+    w.issue(18);
+    const forum = { ...structuredClone(FORUM), id: '901' };
+    w.extraForums.set('901', forum);
+    for (const id of ['717', '718']) w.threads.get(id).parent_id = '901';
+    let reads = 0;
+    w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/901$/, async () => {
+      if (++reads === 2) forum.available_tags = forum.available_tags.filter((t) => t.name !== 'Shipped');
+    }]);
+    await assert.rejects(sweepRun(w, 'report'), /^Error: setup problems: forum 901 has no "Shipped" tag: add it, spelled as the README lists it$/);
+  }
+  {
+    // The world's posts are archived, which the Accepted report line passes over.
+    const w = world();
+    withLabel(w, 17);
+    dropTag(w, 'Accepted');
+    await assert.rejects(sweepRun(w, 'report'),
+      /^Error: setup problems: forum 900 has no "Accepted" tag, which issues with the accepted label need: add it, spelled as the README lists it$/);
+  }
+  for (const [mode, shown] of [['fixx', '`fixx`'], ['fix\nx', '`fix x`'], ['fi<!--x-->x', '`fi<!--x-->x`'], ['fi`x', '``fi`x``'], [' fix ', '`  fix  `']]) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    const summary = tmpSummary();
+    await assert.rejects(sweepRun(w, mode, [], { GITHUB_STEP_SUMMARY: summary }), /setup problems: SWEEP_MODE is /, shown);
+    assert.deepEqual(writes(w), [], `${shown}: it ran in report mode`);
+    assert.deepEqual(setupBullets(summary),
+      [`- SWEEP_MODE is ${shown}, which is neither report nor fix: set the repository variable to one of them (this sweep ran in report mode)`], shown);
+  }
+});
+
+test('PT5: a fix sweep names a status tag gone between its read of a post and its repair of it', async () => {
+  for (const [why, setup] of [
+    ['the status repair', (w) => w.close(17, 'completed', 'aaaaaaa1')],
+    ['the Accepted repair', (w) => { w.issues.get(17).labels.add('accepted'); w.threads.get('717').archived = false; }],
+  ]) {
+    const w = world();
+    w.issue(17);
+    setup(w);
+    const forum = { ...structuredClone(FORUM), id: '901' };
+    w.extraForums.set('901', forum);
+    w.threads.get('717').parent_id = '901';
+    // The first read is the sweep's own; the second is the repair's.
+    let reads = 0;
+    w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/901$/, async () => {
+      if (++reads === 2) forum.available_tags = forum.available_tags.filter((t) => t.name !== 'Shipped');
+    }]);
+    await assert.rejects(sweepRun(w, 'fix'), /setup problems: forum 901 has no "Shipped" tag/, why);
+  }
+});
+
+test('PT5: the Accepted repair names a forum without Accepted that the sweep did not see with it (CC2)', async () => {
+  // The issue's post changes, after the sweep's read, to an archived one in a
+  // forum without Accepted: the repair's read is the first to see that forum.
+  const w = world();
+  w.issue(17);
+  w.issues.get(17).labels.add('accepted');
+  w.threads.get('717').archived = false;
+  w.extraForums.set('902', { ...structuredClone(FORUM), id: '902', available_tags: FORUM.available_tags.filter((t) => t.name !== 'Accepted') });
+  w.thread('718', { parent_id: '902' });
+  let moved = false;
+  w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/900$/, async () => {
+    if (moved) return;
+    moved = true;
+    const i = w.issues.get(17);
+    i.body = i.body.replace('discord-thread: 717', 'discord-thread: 718');
+  }]);
+  await assert.rejects(sweepRun(w, 'fix'), /setup problems: forum 902 has no "Accepted" tag, which issues with the accepted label need/);
 });

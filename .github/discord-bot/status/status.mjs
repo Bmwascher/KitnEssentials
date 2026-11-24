@@ -14,7 +14,7 @@
 import { readFileSync, appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { STATUS, LABELS, MESSAGES, parseMarker, parseFiledMessage, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN, checklistStatus, checklistKey,
-  shownStatuses, preferStatus, triagedAlone, withAccepted, showsAccepted, ACCEPTED, inlineCode, hasTag, tagLine, acceptedLine, isDiscordId } from '../src/core.js';
+  shownStatuses, preferStatus, triagedAlone, withAccepted, showsAccepted, ACCEPTED, inlineCode, hasTag, tagLine, acceptedLine, isDiscordId, STATUS_NAMES } from '../src/core.js';
 import { discordClient, postGone } from '../src/discord.js';
 import { githubClient } from '../src/github.js';
 import { checklistRunner, parseChecklist } from './checklist.mjs';
@@ -148,6 +148,17 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   const reportSetup = () => {
     if (setup.length) writeSetup(env.GITHUB_STEP_SUMMARY, setup);
   };
+  // The sweep names every status tag a forum lacks, from every forum read it
+  // makes, its repairs' included; an event run names the one it needs.
+  const sweeping = eventName === 'schedule' || eventName === 'workflow_dispatch';
+  const checkStatusTags = (forumId, tags, names) => {
+    for (const s of names) if (!hasTag(tags, s)) setupProblem(noTagLine(forumId, s));
+  };
+  // The sweep's report, written after the setup section at the run's end.
+  let sweepSummary = null;
+  // The forums whose Accepted tag the sweep's own reads showed: one the
+  // Accepted repair then finds without it lost the tag in between (CC2).
+  const acceptedSeen = new Set();
   // A Discord refusal of the bot, named by the request it refused, which the
   // client keeps apart from the answer's text; a scrubbed checklist error
   // also carries its kept causes' requests.
@@ -576,7 +587,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           dropOther: want !== STATUS.triaged,
           accepted,
           onForum: (forumId, tags) => {
-            if (!hasTag(tags, want)) setupProblem(noTagLine(forumId, want));
+            checkStatusTags(forumId, tags, sweeping ? STATUS_NAMES : [want]);
             if (accepted && !hasTag(tags, ACCEPTED)) setupProblem(noAcceptedLine(forumId));
           },
         });
@@ -675,7 +686,15 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const want = wantedAccepted(issue);
     let r;
     try {
-      r = await discord.fixAccepted(threadId, want);
+      // An Accepted tag deleted since the sweep's own read of this forum is
+      // logged below and left to the next sweep's read (CC2); any other gap
+      // this read finds is named, the post archived or not.
+      r = await discord.fixAccepted(threadId, want, {
+        onForum: (forumId, tags) => {
+          checkStatusTags(forumId, tags, STATUS_NAMES);
+          if (want && !hasTag(tags, ACCEPTED) && !acceptedSeen.has(forumId)) setupProblem(noAcceptedLine(forumId));
+        },
+      });
     } catch (e) {
       if (!postGone(e, threadId)) throw e;
       log(`#${n}: Discord post is gone (${e.message.slice(0, 120)})`);
@@ -923,6 +942,21 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     // and neither tells anyone.
     const fix = env.SWEEP_MODE === 'fix';
     const issues = (await gh.issuesWithLabel(repo, LABELS.fromDiscord)).filter(eligible);
+    // Unset reads as report, as before. Checked after the list, so a failed
+    // list never holds a collected line.
+    if (env.SWEEP_MODE && env.SWEEP_MODE !== 'report' && !fix) {
+      setupProblem(`SWEEP_MODE is ${quoted(env.SWEEP_MODE)}, which is neither report nor fix: set the repository variable to one of them (this sweep ran in report mode)`);
+    }
+    // Every post read carries its forum's tags as read then, so each read is
+    // checked, at no extra call: a tag renamed between two reads is still
+    // named. Accepted counts for an issue that wants it, archived post or not.
+    // A post in a channel that is no forum (`forumTags`) names nothing.
+    const checkForum = (read, issue) => {
+      if (!read.tags) return;
+      checkStatusTags(read.parentId, read.tags, STATUS_NAMES);
+      if (hasTag(read.tags, ACCEPTED)) acceptedSeen.add(read.parentId);
+      else if (wantedAccepted(issue)) setupProblem(noAcceptedLine(read.parentId));
+    };
     let wrong = 0;
     let ckSpent = 0;
     const ckLeft = [];
@@ -1002,6 +1036,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         }
         shown = undefined; // the post is gone, or was not read
       }
+      if (post) checkForum(post, st.issue);
       if (!(want.length === has.length && want.every((l) => has.includes(l)))) {
         parts.push(`labels ${has.join(', ') || '(none)'} -> ${want.join(', ') || '(none)'}`);
       }
@@ -1146,7 +1181,13 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const head = `sweep (${fix ? 'fix' : 'report'} mode): ${wrong} of ${issues.length} issue(s) out of step`;
     log(head);
     if (env.GITHUB_STEP_SUMMARY) {
-      appendFileSync(env.GITHUB_STEP_SUMMARY, [`### Discord status ${head}`, '', ...report.map((l) => `- ${l}`), ''].join('\n'));
+      // A report line can quote text from outside the code (a note's message,
+      // an error), which can hold Markdown or HTML. Each line stays one
+      // bullet, and every backslash, backtick and `<` is shown as typed, so
+      // no code span, comment, tag or heading can form, whatever the quoted
+      // text holds. The checklist marker staff copy then reads as plain text.
+      const asText = (l) => l.replace(/\s+/g, ' ').replace(/[\\`]/g, '\\$&').replace(/</g, '&lt;');
+      sweepSummary = [`### Discord status ${head}`, '', ...report.map((l) => `- ${asText(l)}`), ''].join('\n');
     }
   }
 
@@ -1199,6 +1240,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // work ends the run at once with its own error and holds no setup line.
   if (badChecklistLine) setupProblem(badChecklistLine);
   reportSetup();
+  if (sweepSummary) appendFileSync(env.GITHUB_STEP_SUMMARY, sweepSummary);
   if (setup.length) problems.push(`setup problems: ${setup.join('; ')}`);
   if (problems.length) throw new Error(problems.join('; '));
   return done;
