@@ -3,10 +3,11 @@
 // text channel's last messages, or a forum's posts.
 //   node scripts/trial-check.mjs <post or channel id>... [--limit N]
 //   node scripts/trial-check.mjs --forum <forum id>
-// Use a separate bot that has only View Channels and Read Message History,
-// with the Message Content intent on, so a leaked token cannot change
-// anything. The token comes from TRIAL_READER_TOKEN, else the file
-// ~/.discord-trial-reader/token. It is never printed.
+// Use a separate bot invited with only View Channels and Read Message
+// History, with the Message Content intent on, on a test server only (it
+// also gets whatever @everyone may do there). The token comes from
+// TRIAL_READER_TOKEN, else the file ~/.discord-trial-reader/token. It is
+// never printed.
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -33,10 +34,8 @@ function readToken() {
 const tagNames = (ids, forum) => (ids || [])
   .map((id) => forum.available_tags.find((t) => t.id === id)?.name || `?${id}`);
 
-const oneLine = (s, max = 300) => {
-  const t = s.replace(/\s+/g, ' ').trim();
-  return t.length > max ? `${t.slice(0, max)}...` : t;
-};
+// Whole, never cut: a cut could split the token and hide it from main's mask.
+const oneLine = (s) => s.replace(/\s+/g, ' ').trim();
 
 function messageLines(m) {
   const who = `${m.author.username}${m.author.bot ? ' [bot]' : ''}`;
