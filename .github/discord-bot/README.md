@@ -320,7 +320,9 @@ below).
   is posted in Discord for it. A forum setting that names a channel that is
   no forum gets no tag line: the daily setup check names a player forum of
   the wrong kind, and a checklist forum set in the Worker too; a checklist
-  forum set only for Actions fails a status run's checklist work as before.
+  forum set only for Actions fails a status run's checklist work as before,
+  unless it is a media channel holding the threads and their tags, which
+  works as before.
   GitHub emails a failed run to the person whose action started it, and a
   failed scheduled sweep to the workflow's creator, or whoever later changed
   its schedule line or re-enabled it; each only when their notification

@@ -142,7 +142,8 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
   // archived for; then a finished close's archive is made. Each Discord
   // write comes before its key write, so a failure leaves a key that
   // differs from GitHub's, which the sweep names.
-  async function mirrorTags(n, rec, proof = null) {
+  // `seen` is a sweep's own read of the thread (`lines`), when it had one.
+  async function mirrorTags(n, rec, proof = null, seen = null) {
     const id = rec.threadId;
     const onThread = async (fn) => {
       try {
@@ -206,7 +207,13 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       if (sameTags(back.tags, shown.applied) && again.eligible && again.closeKnown && again.name === w.name && again.accepted === w.accepted && again.key === w.key) {
         if (back.full) log(`#${n}: no free tag slot for "${w.name}" on the checklist thread`);
         if (back.noRoom) log(`#${n}: no free tag slot for Accepted on the checklist thread`);
-        if (w.accepted && back.noAccepted) log(`#${n}: the checklist forum has no Accepted tag`);
+        if (w.accepted && back.noAccepted) {
+          log(`#${n}: the checklist forum has no Accepted tag`);
+          // A gap the sweep's read showed, for an issue accepted after it,
+          // which that read had no reason to name. One it did not show was
+          // deleted since, and is the next sweep's.
+          if (seen && !hasTag(seen.tags, ACCEPTED)) setupProblem(acceptedLine(`checklist forum ${seen.id}`));
+        }
         return;
       }
     }
@@ -217,9 +224,9 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
   // none is ever opened here, and an issue with none costs one read. A
   // thread id staff entered by hand is left for the issue's next checklist
   // job, which checks it first.
-  async function mirror(n, proof = null) {
+  async function mirror(n, proof = null, seen = null) {
     const rec = (await records(n)).checklist;
-    if (rec && rec.threadId && rec.linked) await mirrorTags(n, rec, proof);
+    if (rec && rec.threadId && rec.linked) await mirrorTags(n, rec, proof, seen);
   }
 
   // The checklist job: a record and a thread when there is none yet, then

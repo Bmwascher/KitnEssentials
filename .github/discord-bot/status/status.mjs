@@ -1171,7 +1171,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       if (fix && ck.repair && ckSpent >= CHECKLIST_SWEEP_MS) ckLeft.push(n);
       else if (fix && ck.repair) {
         try {
-          await ckTimed(() => checklist.mirror(n));
+          await ckTimed(() => checklist.mirror(n, null, ck.seen));
         } catch (e) {
           errors.push(`staff checklist: ${e.message}`);
           noteRefusal(e);

@@ -1631,6 +1631,18 @@ test('CH10: a tag the checklist forum lacks is a setup problem in a status run a
     assert.ok(out.includes('#17: the checklist forum has no Accepted tag'), 'the repair met the gap');
     assert.deepEqual(out.filter((l) => l.startsWith('setup problem: ')), [], "the sweep's repair names nothing");
   }
+  {
+    // The forum has no Accepted tag throughout. The issue is accepted while
+    // the sweep reads its thread, after its wants were read, so that read
+    // has no reason to name the gap; the repair names it from that read.
+    const w = world();
+    w.issue(17);
+    drop(w, 'Accepted');
+    seed(w, 17, { applied_tags: ['c-prog'] });
+    let reads = 0;
+    w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/950$/, async () => { if (++reads === 1) accept(w); }]);
+    await assert.rejects(sweep(w, 'fix'), (e) => e.message.includes(`setup problems: ${noAccepted}`));
+  }
   // CHECKLIST_FORUM_ID naming a channel the thread is not in gets no tag
   // line: the thread check names the wrong channel, as today.
   for (const [why, answer] of [
@@ -1648,14 +1660,15 @@ test('CH10: a tag the checklist forum lacks is a setup problem in a status run a
   }
   {
     // A media channel carries tags too, but is no forum: its thread is kept
-    // in step as on main, and no read of it names a tag.
+    // in step as on main, from that channel's own tags, and no read of it
+    // names a tag.
     const w = world();
     w.issue(17);
     accept(w);
     w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
-    const t = seed(w, 17, { applied_tags: ['c-tri'], parent_id: '960' });
-    w.extraForums.set('960', { ...structuredClone(w.ckForum), id: '960', type: 16 });
-    await go(w, 'pull_request_target', { action: 'opened', pull_request: { number: 5 } }, { CHECKLIST_FORUM_ID: '960' });
+    w.ckForum.type = 16;
+    const t = seed(w, 17, { applied_tags: ['c-tri'] });
+    await pr(w, 5);
     assert.deepEqual(ckName(w, t).sort(), ['Accepted', 'In progress']);
   }
   {
