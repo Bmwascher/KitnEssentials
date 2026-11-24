@@ -1808,3 +1808,19 @@ test('a run read that fails with a 500 whose answer quotes " -> 404 " is no dele
   assert.match(out.join('\n'), /actions\/runs\/555 -> 500 /);
   assert.doesNotMatch(out.join('\n'), /can no longer be re-run/);
 });
+
+test('a moved post\'s status messages reply to the copy and start with the reporter, who is pinged; other posts\' do not change', async () => {
+  const copyBody = '## Report\n\n> hi\n\n<!-- discord-copy -->\n<!-- discord-message: 717 -->\n<!-- discord-thread: 717 reporter: 42 -->';
+  const plainBody = '## Report\n\n> hi\n\n<!-- discord-message: 717 -->\n<!-- discord-thread: 717 reporter: 42 -->';
+  for (const [why, body, mention] of [['the copy line', copyBody, true], ['no copy line', plainBody, false]]) {
+    const w = world();
+    w.issue(17, { body });
+    w.close(17, 'completed', 'aaaaaaa1');
+    await closed(w, 17);
+    const [m, ...more] = w.threads.get('717').messages;
+    assert.deepEqual(more, [], why);
+    assert.deepEqual(m.message_reference, { message_id: '717', fail_if_not_exists: false }, why);
+    assert.match(m.content, mention ? /^<@42> \*\*Fixed!\*\*/ : /^\*\*Fixed!\*\*/, why);
+    assert.deepEqual(m.allowed_mentions, { parse: [], users: mention ? ['42'] : [], replied_user: true }, why);
+  }
+});

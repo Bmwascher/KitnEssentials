@@ -456,8 +456,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     note.body = `${body}\n<!-- discord-sending -->`;
     await gh.call('PATCH', `/repos/${repo}/issues/comments/${note.id}`, { body: note.body });
     try {
-      const sent = await discord.send(threadId, text, ping, reply);
-      if (sent && sent.replyRefused) log(`#${n}: Discord refused the reply; the message went out plain, with no ping`);
+      const sent = await discord.send(threadId, reply.mention ? `<@${reply.mention}> ${text}` : text, reply.mention ? [...ping, reply.mention] : ping, reply);
+      // A plain message still pings the reporter it mentions.
+      if (sent && sent.replyRefused) log(`#${n}: Discord refused the reply; the message went out plain, ${reply.mention ? 'its mention still pinging the reporter' : 'with no ping'}`);
     } catch (e) {
       if (statusOf(e) === 404) {
         log(`#${n}: Discord post is gone; message dropped`);
@@ -541,7 +542,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // name someone else; otherwise, or when it cannot be read, it goes plain.
   async function replyTarget(issue, threadId) {
     const filed = parseFiledMessage(issue.body);
-    if (filed) return { replyTo: filed.id };
+    // A moved post's copy was posted by the bot's webhook, so a reply to it
+    // pings no one: the reporter is mentioned instead.
+    if (filed) return filed.copy ? { replyTo: filed.id, mention: parseMarker(issue.body).reporterId } : { replyTo: filed.id };
     // A body edited during the run may have lost its marker.
     const { reporterId } = parseMarker(issue.body) || {};
     if (!reporterId) return {};
