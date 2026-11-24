@@ -147,7 +147,10 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     // Logged when met, so a run the job's time limit stops still shows it.
     log(`setup problem: ${line}`);
   };
+  // A bad CHECKLIST_FORUM_ID is named with the report, wherever the run
+  // writes one; a failure before any issue work writes none.
   const reportSetup = () => {
+    if (badChecklistLine) setupProblem(badChecklistLine);
     if (setup.length) writeSetup(env.GITHUB_STEP_SUMMARY, setup);
   };
   // The sweep names every status tag a forum lacks, from every forum read it
@@ -823,12 +826,11 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
 
   // The checklist job: the issue's own events, and only its checklist
   // thread. It sends no message, so it never runs the re-run owed scan.
-  if (env.CHECKLIST_ONLY) {
+  if (checklistOnly) {
     const n = payload.issue && payload.issue.number;
     const ours = eventName === 'issues' && (['opened', 'closed', 'reopened'].includes(payload.action)
       || (['labeled', 'unlabeled'].includes(payload.action) && payload.label && acceptedLabel(payload.label.name)));
     if (ours && badChecklistLine) {
-      setupProblem(badChecklistLine);
       reportSetup();
       throw new Error(`setup problems: ${badChecklistLine}`);
     }
@@ -1241,9 +1243,6 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   if (rerunFailed) problems.push(`the re-run's owed-note scan failed (${rerunFailed.message.slice(0, 200)})`);
   if (failed.length) problems.push(`could not update issue(s) ${failed.map((n) => `#${n}`).join(', ')}; see above`);
   if (ckFailed.length) problems.push(`checklist thread(s) not updated for ${ckFailed.map((n) => `#${n}`).join(', ')}; see above`);
-  // Named here, as SWEEP_MODE is after its list: a failure before any issue
-  // work ends the run at once with its own error and holds no setup line.
-  if (badChecklistLine) setupProblem(badChecklistLine);
   reportSetup();
   if (sweepSummary) appendFileSync(env.GITHUB_STEP_SUMMARY, sweepSummary);
   if (setup.length) problems.push(`setup problems: ${setup.join('; ')}`);

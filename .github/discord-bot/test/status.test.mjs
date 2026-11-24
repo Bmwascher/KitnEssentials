@@ -1896,10 +1896,10 @@ test('PT5: a Discord refusal is named by what it refused, and the run still fini
   const refused = (status) => new Response('{"message":"Missing Access"}', { status });
   const channel = (id) => `Discord refused the bot on channel ${id} (403), a post or its forum: give the bot View Channel, Manage Threads and Send Messages in Threads in that forum`;
   const named = (id) => new RegExp(`setup problems: ${channel(id).replace(/[()]/g, '\\$&')}`);
-  const needsInfo = (w) => {
+  const needsInfo = (w, over = {}) => {
     const i = w.issues.get(17);
     i.labels.add('needs-info');
-    return go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } }, { ...RUN, GITHUB_STEP_SUMMARY: w.summary });
+    return go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } }, { ...RUN, GITHUB_STEP_SUMMARY: w.summary, ...over });
   };
   for (const [why, setup, event, line, check = () => {}] of [
     ['a refused post, then a healthy one', (w) => {
@@ -1935,8 +1935,11 @@ test('PT5: a Discord refusal is named by what it refused, and the run still fini
         assert.equal(w.said('717').length, 1, 'the message still went out');
         assert.doesNotMatch(w.said('717')[0], /718/, 'without the link');
       }],
-    ['the needs-info reopen: the event stops at once, as before, with its line in the summary', (w) => refuseTagWrite(w), needsInfo,
-      /^Error: Discord PATCH \/channels\/717 -> 403 /, (w) => assert.deepEqual(setupBullets(w.summary), [`- ${channel(717)}`])],
+    // Its report also names a bad CHECKLIST_FORUM_ID, which the run's end,
+    // never reached, would have named.
+    ['the needs-info reopen: the event stops at once, as before, with its lines in the summary', (w) => refuseTagWrite(w), (w) => needsInfo(w, { CHECKLIST_FORUM_ID: './950' }),
+      /^Error: Discord PATCH \/channels\/717 -> 403 /, (w) => assert.deepEqual(setupBullets(w.summary), [`- ${channel(717)}`,
+        "- CHECKLIST_FORUM_ID is `./950`, which is not a Discord channel id: set the repository variable to the staff checklist forum's id, digits only (this run did no staff checklist work)"])],
     ["the sweep's post read", (w) => w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717$/, refused(403), 99]), (w) => sweepRun(w, 'report'), named(717)],
     ["a fix-mode sweep's status repair", (w) => { w.close(17, 'completed', 'aaaaaaa1'); refuseTagWrite(w); }, (w) => sweepRun(w, 'fix'), named(717)],
     ["a fix-mode sweep's Accepted repair", (w) => { w.issues.get(17).labels.add('accepted'); w.threads.get('717').archived = false; refuseTagWrite(w); },
