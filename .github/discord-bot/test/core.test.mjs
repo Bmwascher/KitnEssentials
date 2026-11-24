@@ -838,3 +838,81 @@ test('an issue filed from a moved post\'s copy ends with the copy footer, which 
   assert.deepEqual(C.parseMarker(filed), { threadId: '990', reporterId: '42' });
   assert.deepEqual(C.parseFiledMessage(filed), { id: '990', copy: true });
 });
+
+test('a moved post keeps the tags the new forum has and gets its client tags, five at most in order', () => {
+  const FROM = [
+    { id: 'f-retail', name: 'Retail' }, { id: 'f-bug', name: 'Bug' }, { id: 'f-tri', name: 'Triaged' }, { id: 'f-acc', name: 'Accepted' },
+    { id: 'f-mage', name: 'Mage' }, { id: 'f-one', name: 'ONE' }, { id: 'f-staff', name: 'Staff note' }, { id: 'f-extra', name: 'Extra' },
+    { id: 'f-retail2', name: 'Retail UI' }, { id: 'f-prog', name: 'In progress' }, { id: 'f-fixed', name: 'Fixed, next update' },
+  ];
+  const TO = [
+    { id: 't-retail', name: 'retail' }, { id: 't-forever', name: 'Forever' }, { id: 't-bug', name: 'Bug' }, { id: 't-tri', name: 'TRIAGED' },
+    { id: 't-acc', name: 'Accepted' }, { id: 't-staff', name: 'Staff note' }, { id: 't-extra', name: 'Extra' }, { id: 't-one', name: 'ONE' }, { id: 't-two', name: 'TWO' },
+    { id: 't-two2', name: 'Two alias' }, { id: 't-retail2', name: 'Retail UI' }, { id: 't-prog', name: 'In progress' }, { id: 't-fixed', name: 'Fixed, next update' },
+  ];
+  const base = { from: FROM, to: TO, client: 'Retail', fixedClient: 'Retail', fixedType: null, repoTags: C.parseRepoTags('{"ONE":"ONE","TWO":"TWO"}') };
+  const BOTH_FROM = [...FROM, { id: 'f-both', name: 'Retail Forever' }];
+  const BOTH_TO = [...TO, { id: 't-both', name: 'Retail Forever' }];
+  for (const [why, applied, over, want] of [
+    ['a name kept in any letter case', ['f-tri', 'f-staff'], {}, ['t-tri', 't-staff']],
+    ['a name the new forum lacks dropped', ['f-mage', 'f-staff'], {}, ['t-staff']],
+    ['no client of its own: its Retail tag added', ['f-staff'], { fixedClient: null }, ['t-retail', 't-staff']],
+    ['no client of its own: Forever, the Retail tag dropped', ['f-retail'], { fixedClient: null, client: 'Forever' }, ['t-forever']],
+    ['no client of its own: All gives both', [], { fixedClient: null, client: 'All' }, ['t-retail', 't-forever']],
+    ['a client of its own: an agreeing client tag kept', ['f-retail'], {}, ['t-retail']],
+    ['a client of its own: a disagreeing client tag dropped', ['f-retail', 'f-staff'], { client: 'Forever', fixedClient: 'Forever' }, ['t-staff']],
+    ['a type of its own: a disagreeing type tag dropped', ['f-bug', 'f-staff'], { fixedType: 'Feature' }, ['t-staff']],
+    ['no type of its own: the type tag kept', ['f-bug'], {}, ['t-bug']],
+    ['a repo tag the new forum has is kept, by name like any tag', ['f-one', 'f-staff'], {}, ['t-one', 't-staff']],
+    ['six cut to five: status, repo, client, Accepted, then the post\'s order', ['f-staff', 'f-extra', 'f-acc', 'f-tri', 'f-one'], { fixedClient: null },
+      ['t-tri', 't-one', 't-retail', 't-acc', 't-staff']],
+    ['a status tag named in REPO_TAGS stays a status tag', ['f-tri', 'f-one'], { repoTags: C.parseRepoTags('{"Triaged":"TWO","ONE":"ONE"}') }, ['t-tri', 't-one']],
+    ['All: a second Retail alias ranks with the rest, so Forever stays', ['f-retail', 'f-retail2', 'f-staff', 'f-acc', 'f-tri'], { fixedClient: null, client: 'All' },
+      ['t-tri', 't-retail', 't-forever', 't-acc', 't-retail2']],
+    ['three status tags: the first ranks first, the others with the rest, so both clients, the repo and Accepted stay',
+      ['f-tri', 'f-prog', 'f-fixed', 'f-acc', 'f-one'], { fixedClient: null, client: 'All' },
+      ['t-tri', 't-one', 't-retail', 't-forever', 't-acc']],
+    ['a client-named tag that REPO_TAGS maps is not the client tag', [], {
+      to: [{ id: 'x-ui', name: 'Retail UI' }, { id: 'x-retail', name: 'Retail' }],
+      fixedClient: null, repoTags: C.parseRepoTags('{"Retail UI":"ONE"}'),
+    }, ['x-retail']],
+    ['a client tag that also names a type the forum refuses is not added', [], {
+      to: [{ id: 'x-rbug', name: 'Retail Bug' }, { id: 'x-retail', name: 'Retail' }], fixedClient: null, fixedType: 'Feature',
+    }, ['x-retail']],
+    ['All: a combined client tag covers both clients, so Accepted stays', ['f-tri', 'f-one', 'f-both', 'f-acc', 'f-staff'], { from: BOTH_FROM, to: BOTH_TO, fixedClient: null, client: 'All' },
+      ['t-tri', 't-one', 't-both', 't-acc', 't-staff']],
+    ['All: the combined tag added when the forum has it', [], {
+      to: [{ id: 'y-both', name: 'Retail Forever' }, { id: 'y-staff', name: 'Staff note' }], fixedClient: null, client: 'All',
+    }, ['y-both']],
+    ['a post read with no tag list keeps none', undefined, { fixedClient: null }, ['t-retail']],
+    ['All: one client kept, the other only in a combined tag: that tag added', ['f-retail'], {
+      to: [{ id: 'z-retail', name: 'Retail' }, { id: 'z-both', name: 'Retail Forever' }], fixedClient: null, client: 'All',
+    }, ['z-both', 'z-retail']],
+    // The combined tag counts first, so the kept Retail ranks with the rest
+    // and Accepted keeps its place in the five.
+    ['All: a kept Retail tag and an added combined one: Accepted stays', ['f-tri', 'f-one', 'f-two', 'f-retail', 'f-acc'], {
+      from: [...FROM, { id: 'f-two', name: 'TWO' }],
+      to: [{ id: 'w-tri', name: 'Triaged' }, { id: 'w-one', name: 'ONE' }, { id: 'w-two', name: 'TWO' }, { id: 'w-retail', name: 'Retail' }, { id: 'w-acc', name: 'Accepted' }, { id: 'w-both', name: 'Retail Forever' }],
+      fixedClient: null, client: 'All',
+    }, ['w-tri', 'w-one', 'w-two', 'w-both', 'w-acc']],
+    // A forum with both a Forever tag and a combined one: the combined tag is
+    // added, so the status, three repos and both clients fit in five.
+    ['All: the combined tag is preferred to a single one', ['f-tri', 'f-one', 'f-two', 'f-three', 'f-retail'], {
+      from: [...FROM, { id: 'f-two', name: 'TWO' }, { id: 'f-three', name: 'THREE' }],
+      to: [{ id: 'v-tri', name: 'Triaged' }, { id: 'v-one', name: 'ONE' }, { id: 'v-two', name: 'TWO' }, { id: 'v-three', name: 'THREE' },
+        { id: 'v-retail', name: 'Retail' }, { id: 'v-forever', name: 'Forever' }, { id: 'v-both', name: 'Retail Forever' }],
+      fixedClient: null, client: 'All', repoTags: C.parseRepoTags('{"ONE":"ONE","TWO":"TWO","THREE":"THREE"}'),
+    }, ['v-tri', 'v-one', 'v-two', 'v-three', 'v-both']],
+    ['Retail: a combined tag is not added for one client', [], {
+      to: [{ id: 'v-both', name: 'Retail Forever' }, { id: 'v-staff', name: 'Staff note' }], fixedClient: null, client: 'Retail',
+    }, []],
+    ['a repo tag whose name reads as a type is kept in a forum of another type', ['f-rbug'], {
+      from: [...FROM, { id: 'f-rbug', name: 'Retail UI Bug' }], to: [{ id: 'x-rbug', name: 'Retail UI Bug' }], fixedType: 'Feature', repoTags: C.parseRepoTags('{"Retail UI Bug":"ONE"}'),
+    }, ['x-rbug']],
+    ['three tags of one repo: only the first ranks as the repo, so both clients and Accepted stay', ['f-tri', 'f-one', 'f-one2', 'f-one3', 'f-acc'], {
+      from: [...FROM, { id: 'f-one2', name: 'One alias' }, { id: 'f-one3', name: 'One third' }],
+      to: [...TO, { id: 't-one2', name: 'One alias' }, { id: 't-one3', name: 'One third' }],
+      fixedClient: null, client: 'All', repoTags: C.parseRepoTags('{"ONE":"ONE","One alias":"ONE","One third":"ONE"}'),
+    }, ['t-tri', 't-one', 't-retail', 't-forever', 't-acc']],
+  ]) assert.deepEqual(C.movedTags({ ...base, ...over, applied }), want, why);
+});

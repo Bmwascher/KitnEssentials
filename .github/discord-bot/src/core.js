@@ -496,6 +496,72 @@ export function planTags(current, available, statusName, { names = STATUS_NAMES,
   return { tags: a.tags, missing: false, full, noRoom: a.noRoom, noAccepted: a.noAccepted };
 }
 
+// A moved post's tag ids in its new forum. Each applied tag whose name, in
+// any letter case, the new forum has is kept as that forum's tag. A tag
+// REPO_TAGS maps is a repo tag only: kept by name, never read as a client or
+// a type, never added. A client tag that disagrees with the post's client
+// goes, and a forum with no client of its own gets a tag for each client no
+// kept tag names: on an All move its combined tag ("Retail Forever") when it
+// has one, else its first tag for each such client. A type tag that
+// disagrees with the forum's own type goes, and is never added. Discord takes
+// five: the status tag, a repo tag per key, a tag per client and Accepted come
+// first, then the rest in the post's order. `applied` is absent on a thread
+// read that carries no tag list.
+export function movedTags({ applied = [], from, to, client, fixedClient, fixedType, repoTags }) {
+  const target = new Map();
+  for (const t of to) if (!target.has(t.name.toLowerCase())) target.set(t.name.toLowerCase(), t.id);
+  const oldTags = new Map(from.map((t) => [t.id, t.name.toLowerCase()]));
+  const repoOf = (n) => own(repoTags, n) || '';
+  const kind = (n) => (repoOf(n) ? {} : guessFromTags([n]));
+  // The clients a tag names, a combined one both.
+  const covers = (n) => {
+    const c = kind(n).client;
+    return c === 'All' ? ['Retail', 'Forever'] : c ? [c] : [];
+  };
+  const typeFits = (n) => !(fixedType && kind(n).type && kind(n).type !== fixedType);
+  // The post and its forum's tags are read in separate calls, so a tag
+  // removed from the forum between them names nothing.
+  const kept = applied.map((id) => oldTags.get(id)).filter((n) => n !== undefined && target.has(n)
+    && !(covers(n).length && client !== 'All' && kind(n).client !== client) && typeFits(n));
+  const added = [];
+  if (!fixedClient) {
+    const need = (client === 'All' ? ['Retail', 'Forever'] : [client]).filter((c) => !kept.some((n) => covers(n).includes(c)));
+    const pick = (want) => [...target.keys()].find((n) => !repoOf(n) && want(n) && typeFits(n));
+    const combined = pick((n) => kind(n).client === 'All');
+    // On an All move the forum's combined tag is added in place of single
+    // ones, so one tag says both clients and the five leave room for the
+    // rest. On a Retail or Forever move it would say both, so only single
+    // tags are added.
+    const picks = client === 'All' && combined && need.length ? [combined] : need.map((c) => pick((n) => kind(n).client === c));
+    added.push(...picks.filter(Boolean));
+  }
+  const statuses = new Set(STATUS_NAMES.map((s) => s.toLowerCase()));
+  const all = [...new Set([...kept, ...added])];
+  // A tag ranks as a client tag when it names a client no wider tag already
+  // names: a combined tag is counted first, so a single tag it covers ranks
+  // with the rest.
+  const fresh = new Set();
+  const covered = new Set();
+  for (const n of [...all].sort((a, b) => covers(b).length - covers(a).length)) {
+    if (covers(n).some((c) => !covered.has(c))) fresh.add(n);
+    covers(n).forEach((c) => covered.add(c));
+  }
+  // The first status tag, the first tag of each repo key, and the client tags
+  // above rank as such; a further status, repo or client alias ranks with the
+  // rest, so it cannot crowd out a client or Accepted.
+  const keys = new Set();
+  let status = false;
+  const ranked = all.map((n, i) => {
+    const firstStatus = statuses.has(n) && !status;
+    if (statuses.has(n)) status = true;
+    const firstRepo = !!repoOf(n) && !keys.has(repoOf(n));
+    if (repoOf(n)) keys.add(repoOf(n));
+    const r = firstStatus ? 0 : statuses.has(n) ? 4 : firstRepo ? 1 : fresh.has(n) ? 2 : n === ACCEPTED.toLowerCase() ? 3 : 4;
+    return { n, i, r };
+  });
+  return ranked.sort((a, b) => a.r - b.r || a.i - b.i).slice(0, 5).map(({ n }) => target.get(n));
+}
+
 // A thread name cut to Discord's 100 characters, never between the two
 // halves of a surrogate pair: a checklist thread's, and a filed post's
 // (its issue's title, where the form's limits keep the prefix under 100
