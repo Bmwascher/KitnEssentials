@@ -1,9 +1,12 @@
+// A multipart body as a test reads it: its payload_json and its files' names.
+const formOf = (fd) => ({ payload: JSON.parse(fd.get('payload_json')), files: [...fd.keys()].filter((k) => k.startsWith('files[')).map((k) => fd.get(k).name) });
+
 // A recording fake for fetch: routes are [method, RegExp on the URL, handler(body, url)].
 export function fakeFetch(routes) {
   const calls = [];
   const fn = async (url, init = {}) => {
     const method = init.method || 'GET';
-    const body = init.body ? JSON.parse(init.body) : undefined;
+    const body = init.body instanceof FormData ? formOf(init.body) : init.body ? JSON.parse(init.body) : undefined;
     calls.push({ method, url, body, ...(init.redirect ? { redirect: init.redirect } : {}) });
     const route = routes.find(([m, re]) => m === method && re.test(url));
     if (!route) return new Response(`no route for ${method} ${url}`, { status: 404 });

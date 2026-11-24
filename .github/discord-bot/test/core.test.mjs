@@ -926,3 +926,42 @@ test('a moved post\'s card names the mover as text, and the moved messages link 
     'Moved here from L by M. First posted by \\*\\*Hook\\*\\*. 2 file(s) could not be copied (too large, or not downloaded); they are on the original post. The first message was too long to copy whole; the full text is on the original post.');
   assert.equal(C.MESSAGES.movedTo({ to: 'https://discord.com/channels/1/990', by: 'Mod' }), 'This post moved to https://discord.com/channels/1/990 (moved by Mod).');
 });
+
+test('a forum\'s webhook is the bot\'s own when listed, else a new one named Post mover', async () => {
+  for (const [why, list, made] of [
+    ['its own, after another app\'s and a non-incoming one', [{ id: '60', type: 1, application_id: 'other', token: 'x' }, { id: '61', type: 2, application_id: 'app' }, { id: '62', type: 1, application_id: 'app', token: 't' }], false],
+    ['none of its own', [{ id: '60', type: 1, application_id: 'other', token: 'x' }], true],
+  ]) {
+    const f = fakeFetch([['GET', /\/channels\/901\/webhooks$/, () => list], ['POST', /\/channels\/901\/webhooks$/, () => ({ id: '63', token: 'n' })]]);
+    const hook = await discordClient('bot', f).forumWebhook('901', 'app');
+    assert.equal(hook.id, made ? '63' : '62', why);
+    assert.deepEqual(f.find('POST', /webhooks$/).map((c) => c.body), made ? [{ name: 'Post mover' }] : [], why);
+  }
+});
+
+test('a webhook post is multipart with no bot token, and its errors never show the webhook token', async () => {
+  const seen = [];
+  const ok = async (url, init) => { seen.push({ url, init }); return new Response(JSON.stringify({ id: '990', channel_id: '990' }), { status: 200 }); };
+  const files = [{ name: 'a.png', blob: new Blob(['x']) }];
+  const msg = await discordClient('bot', ok).executeWebhook({ id: '61', token: 'secret-token' }, { content: 'hi' }, files);
+  assert.equal(msg.channel_id, '990');
+  assert.equal(seen[0].url, 'https://discord.com/api/v10/webhooks/61/secret-token?wait=true');
+  assert.equal(seen[0].init.headers.Authorization, undefined);
+  assert.deepEqual(JSON.parse(seen[0].init.body.get('payload_json')), { content: 'hi' });
+  assert.equal(seen[0].init.body.get('files[0]').name, 'a.png');
+  // The recording fake reads the same body.
+  const f = fakeFetch([['POST', /\/webhooks\/61\/wtok\?wait=true$/, () => ({ id: '990', channel_id: '990' })]]);
+  await discordClient('bot', f).executeWebhook({ id: '61', token: 'wtok' }, { content: 'hi' }, files);
+  assert.deepEqual(f.calls[0].body, { payload: { content: 'hi' }, files: ['a.png'] });
+  for (const [why, fetchImpl, said] of [
+    ['a refusal that echoes the address', async () => new Response('{"message":"no","url":"https://discord.com/api/v10/webhooks/61/secret-token"}', { status: 400 }),
+      /^Discord POST \/webhooks\/61\/<token> -> 400 .*webhooks\/61\/<token>/],
+    ['out of time before the call', C.timedFetch(ok, 1, Date.now() - 1), /^out of time before POST https:\/\/discord\.com\/api\/v10\/webhooks\/61\/<token>\?wait=true$/],
+    ['a 2xx whose body cannot be read', async () => new Response('{"id":', { status: 200 }), /^Discord POST \/webhooks\/61\/<token> answered 200 with a body that could not be read$/],
+  ]) {
+    const e = await discordClient('bot', fetchImpl).executeWebhook({ id: '61', token: 'secret-token' }, {}, []).then(() => null, (x) => x);
+    assert.ok(e, why);
+    assert.match(e.message, said, why);
+    assert.ok(!e.message.includes('secret-token'), why);
+  }
+});
