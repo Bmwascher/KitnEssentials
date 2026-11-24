@@ -449,11 +449,12 @@ test('a reply pings its target; a refused reply goes once more plain, and any ot
     ['a pinged reply', [200], { replyTo: '800' }, [reply], 'sent'],
     ['a refused reply goes once more, plain', [400, 200], { replyTo: '800' }, [reply, plainBody], 'refused'],
     ['a server error is thrown, with no second send', [500], { replyTo: '800' }, [reply], 'thrown'],
+    ['a server error whose answer quotes " -> 400 " is thrown, with no second send', [[500, 'upstream said -> 400 x']], { replyTo: '800' }, [reply], 'thrown'],
   ]) {
     const queue = [...answers];
     const f = fakeFetch([['POST', /\/channels\/700\/messages$/, () => {
-      const status = queue.shift();
-      return status === 200 ? { id: '1' } : new Response('{"message":"x"}', { status });
+      const [status, text = '{"message":"x"}'] = [].concat(queue.shift());
+      return status === 200 ? { id: '1' } : new Response(text, { status });
     }]]);
     const send = discordClient('t', f).send('700', 'hi', [], opts);
     if (outcome === 'thrown') await assert.rejects(send, / -> 500 /, why);
@@ -765,5 +766,24 @@ test('AT3: the Accepted-only write changes only Accepted, and only on an active 
     const r = await discordClient('t', f).fixAccepted('700', want);
     assert.deepEqual(f.find('PATCH', /\/channels\/700$/).map((c) => c.body), patches, why);
     for (const [k, v] of Object.entries(out)) assert.equal(r[k], v, `${why}: ${k}`);
+  }
+});
+
+test('a failed call\'s status is the one its client kept, never one its answer quotes', () => {
+  const kept = (side, status) => Object.assign(new Error(`X GET /x -> ${status} upstream said -> 404 x`), { [side]: { method: 'GET', path: '/x', status } });
+  assert.equal(C.statusOf(kept('discord', 500)), 500);
+  assert.equal(C.statusOf(kept('github', 502)), 502);
+  assert.equal(C.statusOf(new Error('out of time before GET https://x/ -> 404 ')), undefined);
+});
+
+test('a message read takes only its own 404 for a deleted message', async () => {
+  for (const [why, answer, deleted] of [
+    ['the message was deleted', () => new Response('{"message":"Unknown Message"}', { status: 404 }), true],
+    ['a server error whose answer quotes " -> 404 "', () => new Response('upstream said -> 404 x', { status: 500 }), false],
+  ]) {
+    const f = fakeFetch([['GET', /\/channels\/700\/messages\/800$/, answer], ['GET', /\/channels\/700$/, () => ({ id: '700' })]]);
+    const read = discordClient('t', f).readMessage('700', '800');
+    if (deleted) assert.deepEqual(await read, { message: null, channel: { id: '700' } }, why);
+    else await assert.rejects(read, { message: /^Discord GET \/channels\/700\/messages\/800 -> 500 / }, why);
   }
 });

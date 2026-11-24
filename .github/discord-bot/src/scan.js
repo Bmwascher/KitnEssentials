@@ -37,7 +37,7 @@
 //   daily:named  the posts of the give-ups a daily check has named
 // Each key has one writer: the scan writes thread: and scan:, the Worker
 // issue:, the daily check daily:named.
-import { parseForums, snowflakeMs, timedFetch, currentStatus, SEND_BUTTON, queueCard, personName, MESSAGES, discordText, postLines, taken, oneHop, isDiscordId, TEXT_TYPES } from './core.js';
+import { parseForums, snowflakeMs, timedFetch, currentStatus, SEND_BUTTON, queueCard, personName, MESSAGES, discordText, postLines, taken, oneHop, isDiscordId, TEXT_TYPES, statusOf } from './core.js';
 import { discordClient } from './discord.js';
 
 export { SEND_BUTTON };
@@ -174,7 +174,7 @@ function budgetClient(env, deps, budget) {
   return discordClient(env.DISCORD_BOT_TOKEN, countedFetch(timedFetch(oneHop(deps.fetch || fetch), CALL_MS), budget));
 }
 
-const refused = (err) => / -> (403|404) /.test(String(err && err.message));
+const refused = (err) => [403, 404].includes(statusOf(err));
 
 const buttons = (m) => (m.components || []).flatMap((row) => row.components || []);
 // An old button greeting, or a queue card, holding the post's send button.

@@ -1074,3 +1074,16 @@ test('NT1: a post that refuses the bot (403) is named once, only in a text chann
     assert.equal(f.find('GET', new RegExp(`/channels/${modId}$`)).length, reads, `${why}: ${reads} channel read(s)`);
   }
 });
+
+test('a greeting that fails with a 500 whose answer quotes " -> 403 " is tried again next run', async () => {
+  const kv = started(T0);
+  const a = idAt(T0 + 1000);
+  const f = discord({ active: [{ id: a, parent_id: '900' }] });
+  let fail = true;
+  const fetch = (url, init = {}) => (fail && init.method === 'POST' && url.endsWith(`/channels/${a}/messages`)
+    ? Promise.resolve(new Response('upstream said -> 403 x', { status: 500 })) : f(url, init));
+  const r = await scan(baseEnv(kv), { fetch, now: () => T0 + 5 * 60000, log: () => {} });
+  assert.deepEqual([r.greeted.length, r.left], [0, 1], 'left for the next run, not given up');
+  fail = false;
+  assert.deepEqual((await scan(baseEnv(kv), { fetch, now: () => T0 + 10 * 60000, log: () => {} })).greeted, [a]);
+});

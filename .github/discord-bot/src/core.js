@@ -107,6 +107,12 @@ export async function postLines(post, lines) {
 // only its body could not be read.
 export const taken = (err) => !!(err && err.discord && err.discord.notJson && err.discord.status >= 200 && err.discord.status < 300);
 
+// The HTTP status a failed Discord or GitHub call answered, from the request
+// its client kept beside the error: the answer text in the message can quote
+// any status. Undefined for an error no call answered (out of time, no
+// network, KV).
+export const statusOf = (err) => (err.discord || err.github || {}).status;
+
 // Each counted call is one request: a redirect is answered, never followed,
 // so a call count bounds what a Worker run sends and a redirect cannot
 // move a post to another channel.

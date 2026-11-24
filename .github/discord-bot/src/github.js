@@ -1,7 +1,7 @@
 // GitHub access for the worker: a GitHub App (installed on the repos only),
 // signed with Web Crypto so it runs on Cloudflare Workers and in Node alike.
 
-import { LABELS, parseMarker, snowflakeMs } from './core.js';
+import { LABELS, parseMarker, snowflakeMs, statusOf } from './core.js';
 
 const API = 'https://api.github.com';
 
@@ -78,7 +78,7 @@ export function githubClient(token, fetchImpl = fetch) {
     addLabels: (repo, n, labels) => call('POST', `/repos/${repo}/issues/${n}/labels`, { labels }),
     // A label already gone is fine; any other failure reaches the caller.
     removeLabel: (repo, n, label) => call('DELETE', `/repos/${repo}/issues/${n}/labels/${encodeURIComponent(label)}`)
-      .catch((e) => { if (/-> 404 /.test(e.message)) return null; throw e; }),
+      .catch((e) => { if (statusOf(e) === 404) return null; throw e; }),
     // Every issue (open or closed) carrying a label, following every page;
     // with `since` (epoch ms), only those last updated at or after it.
     async issuesWithLabel(repo, label, { since = null } = {}) {

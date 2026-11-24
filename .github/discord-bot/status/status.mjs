@@ -13,7 +13,7 @@
 // everything both wrote. The sweep repairs what a failed call left.
 import { readFileSync, appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { STATUS, LABELS, MESSAGES, parseMarker, parseFiledMessage, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN, checklistStatus, checklistKey,
+import { STATUS, LABELS, MESSAGES, parseMarker, parseFiledMessage, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN, checklistStatus, checklistKey, statusOf,
   shownStatuses, preferStatus, triagedAlone, withAccepted, showsAccepted } from '../src/core.js';
 import { discordClient, postGone } from '../src/discord.js';
 import { githubClient } from '../src/github.js';
@@ -406,7 +406,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     try {
       cur = await gh.call('GET', `/repos/${repo}/issues/comments/${note.id}`);
     } catch (e) {
-      if (/-> 404 /.test(e.message)) return null;
+      if (statusOf(e) === 404) return null;
       throw e;
     }
     const body = ((cur && cur.body) || '').replace(/\r\n?/g, '\n');
@@ -459,7 +459,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       const sent = await discord.send(threadId, text, ping, reply);
       if (sent && sent.replyRefused) log(`#${n}: Discord refused the reply; the message went out plain, with no ping`);
     } catch (e) {
-      if (/-> 404 /.test(e.message)) {
+      if (statusOf(e) === 404) {
         log(`#${n}: Discord post is gone; message dropped`);
         await settleNote(note, 'dropped', 'the Discord post is gone');
         return;
@@ -690,7 +690,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           open: now() - Date.parse(r.created_at) < RERUN_MS && (r.run_attempt || 1) <= MAX_RERUNS,
         }),
         (e) => {
-          if (/-> 404 /.test(e.message)) return { active: false, open: false };
+          if (statusOf(e) === 404) return { active: false, open: false };
           throw e;
         },
       ));
@@ -793,7 +793,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           // A locked post does not unarchive on a new message; reopen it first.
           // A deleted post fails here, before the send, and drops the note.
           const gone = await discord.unarchive(m.threadId).then(() => false, (e) => {
-            if (/-> 404 /.test(e.message)) return true;
+            if (statusOf(e) === 404) return true;
             throw e;
           });
           if (gone) await dropNote(note, 'the Discord post is gone');

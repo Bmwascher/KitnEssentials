@@ -5,7 +5,7 @@
 // filed answers "Already tracked" instead of opening the form. Submitting the
 // form files the issue and replies to the filed message in the post.
 import {
-  STATUS, MESSAGES, PERMS, packGroups, postLines, taken, oneHop, isDiscordId, THREAD_TYPES, buildTitle, fitName, buildBody, labelsFor, cleanPostTitle, personName, titleText,
+  STATUS, MESSAGES, PERMS, packGroups, postLines, taken, oneHop, isDiscordId, THREAD_TYPES, buildTitle, fitName, buildBody, labelsFor, cleanPostTitle, personName, titleText, statusOf,
   guessFromTags, normClient, normType, normRepoKey, parseRepos, timedFetch,
   parseForums, parseRoleIds, parseTemplates, templateCheck, templateGaps,
   templateNote, parseCustomId, templateLabels, filedCard, cardHead, BY_RIGHT_CLICK,
@@ -161,7 +161,7 @@ async function openForm(interaction, env, deps, { threadId, messageId, greetingI
     } catch (e) {
       // A card press brings no post with it: say why the form cannot open.
       if (!ch.parent_id) {
-        return reply(/ -> 404 /.test(e.message) ? 'This post no longer exists.' : 'Could not read the post just now. Press the button again.');
+        return reply(statusOf(e) === 404 ? 'This post no longer exists.' : 'Could not read the post just now. Press the button again.');
       }
     }
   }
@@ -233,7 +233,12 @@ function whereIs(issue, fallbackRepo) {
 // REPOS entry may not match.
 const sameRepo = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
 const keyOf = (cfg, repo) => Object.keys(cfg.repos).find((k) => sameRepo(cfg.repos[k], repo)) || repo;
-const httpStatus = (e) => (/-> (\d{3}) /.exec(e.message) || [])[1] || e.message.slice(0, 120);
+// The status the client kept; an error no call answered with a status (a
+// 2xx body that is not JSON, whose parser error quotes it, or out of time)
+// shows its own text, never a status read from it.
+const httpStatus = (e) => (statusOf(e) ? String(statusOf(e)) : e.message.slice(0, 120));
+// A call Discord or GitHub refused (4xx), so it was never applied.
+const refusal4xx = (e) => statusOf(e) >= 400 && statusOf(e) < 500;
 
 // The one rule for a post's saved issue, shared by the press and the filing.
 // It is read with a token for its own repo, the token and the read failing
@@ -251,8 +256,8 @@ async function readSaved(saved, tokenFor, f) {
   try {
     return { issue: await gh.getIssue(saved.repo, saved.number) };
   } catch (e) {
-    if (/-> 410 /.test(e.message)) return { gone: true };
-    return { unclear: httpStatus(e), notFound: /-> 404 /.test(e.message) };
+    if (statusOf(e) === 410) return { gone: true };
+    return { unclear: httpStatus(e), notFound: statusOf(e) === 404 };
   }
 }
 
@@ -316,13 +321,13 @@ async function tellTracked(discord, log, { threadId, messageId, text, old, greet
     const sent = await discord.send(threadId, text, [], { replyTo: messageId });
     if (sent && sent.replyRefused) log(`post ${threadId}: Discord refused the reply; the note went out plain, with no ping`);
   } catch (e) {
-    if (!/ -> 4\d\d /.test(e.message)) return [`note in the post may not have been sent: ${e.message.slice(0, 300)}`];
+    if (!refusal4xx(e)) return [`note in the post may not have been sent: ${e.message.slice(0, 300)}`];
     if (!greeting) return [`note in the post not sent: ${e.message.slice(0, 300)}`];
     try {
       await discord.call('PATCH', `/channels/${threadId}/messages/${greeting}`, { content: text, components: [], allowed_mentions: { parse: [] } });
       return [];
     } catch (e2) {
-      return [`note in the post ${/ -> 4\d\d /.test(e2.message) ? 'not sent' : 'may not have been sent'}: ${e2.message.slice(0, 300)}`];
+      return [`note in the post ${refusal4xx(e2) ? 'not sent' : 'may not have been sent'}: ${e2.message.slice(0, 300)}`];
     }
   }
   return old ? retireButton(discord, threadId, old, true) : [];
@@ -793,7 +798,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     const member = reporterId
       ? await discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, lookupsBy))
         .call('GET', `/guilds/${interaction.guild_id}/members/${reporterId}`)
-        .catch((e) => { if (!/ -> 404 /.test(e.message)) log(`member read failed: ${e.message.slice(0, 200)}`); return null; })
+        .catch((e) => { if (statusOf(e) !== 404) log(`member read failed: ${e.message.slice(0, 200)}`); return null; })
       : null;
     const by = interaction.member && interaction.member.user;
     const template = await templateFields(cfg, thread.parent_id, type, env, deps, lookupsBy, log);

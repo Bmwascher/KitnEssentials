@@ -1766,3 +1766,45 @@ test('AT12: a failed status repair stops the Accepted repair on that post', asyn
   assert.match(out.find((l) => l.startsWith('#17: ')) || '', /^#17: labels pending-release -> \(none\); post Accepted missing -> shown$/);
   assert.deepEqual(w.find('PATCH', /channels\/717$/), [], 'no post write after the failed status repair');
 });
+
+// ---- A status quoted in an answer's text ------------------------------------
+
+test('a send that fails with a 500 whose answer quotes " -> 404 " is unconfirmed, never dropped as a deleted post', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  w.fail.push(['POST', /channels\/717\/messages$/, new Response('upstream said -> 404 x', { status: 500 }), 1]);
+  await assert.rejects(closed(w, 17), /#17/);
+  assert.ok(w.issues.get(17).comments.some((c) => /^Unconfirmed \(the send failed; the player may not have it\): \*\*Fixed!\*\*/.test(c.body)));
+});
+
+test('a note read that fails with a 500 whose answer quotes " -> 404 " fails the run, and nothing is sent', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  w.fail.push(['GET', /issues\/comments\/\d+$/, new Response('upstream said -> 404 x', { status: 500 }), 1]);
+  await assert.rejects(closed(w, 17), /#17/);
+  assert.deepEqual(w.said('717'), []);
+});
+
+test('a needs-info post read that fails with a 500 whose answer quotes " -> 404 " fails the run and keeps its note', async () => {
+  const w = world();
+  const i = w.issue(17);
+  i.labels.add('needs-info');
+  w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717$/, new Response('upstream said -> 404 x', { status: 500 }), 1]);
+  await assert.rejects(go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, labels: [{ name: 'from-discord' }] } }));
+  assert.ok(!w.issues.get(17).comments.some((c) => /discord-dropped/.test(c.body)), 'not dropped as for a deleted post');
+});
+
+test('a run read that fails with a 500 whose answer quotes " -> 404 " is no deleted run', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  refuseTagWrite(w);
+  await assert.rejects(closeRun(w, RUN), /#17/);
+  w.fail.push(['GET', /actions\/runs\/555$/, new Response('upstream said -> 404 x', { status: 500 }), 1]);
+  const out = [];
+  await assert.rejects(sweepFix(w, out), /#17/);
+  assert.match(out.join('\n'), /actions\/runs\/555 -> 500 /);
+  assert.doesNotMatch(out.join('\n'), /can no longer be re-run/);
+});

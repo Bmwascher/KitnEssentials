@@ -1,5 +1,5 @@
 // Minimal Discord REST client. `fetchImpl` is injectable so tests never hit the network.
-import { nextAppliedTags, currentStatus, otherTags, sameTags, snowflakeMs, planTags, withAccepted, shownStatuses, triagedAlone, showsAccepted } from './core.js';
+import { nextAppliedTags, currentStatus, otherTags, sameTags, snowflakeMs, planTags, withAccepted, shownStatuses, triagedAlone, showsAccepted, statusOf } from './core.js';
 
 const API = 'https://discord.com/api/v10';
 
@@ -93,7 +93,7 @@ export function discordClient(token, fetchImpl = fetch) {
       try {
         return { message: await call('GET', `/channels/${channelId}/messages/${messageId}`) };
       } catch (e) {
-        if (!/ -> 404 /.test(e.message)) throw e;
+        if (statusOf(e) !== 404) throw e;
         return { message: null, channel: await call('GET', `/channels/${channelId}`) };
       }
     },
@@ -113,7 +113,7 @@ export function discordClient(token, fetchImpl = fetch) {
           message_reference: { message_id: replyTo, fail_if_not_exists: false },
         });
       } catch (e) {
-        if (!/ -> 400 /.test(e.message)) throw e;
+        if (statusOf(e) !== 400) throw e;
         return { ...(await call('POST', `/channels/${channelId}/messages`, plainBody)), replyRefused: true };
       }
     },

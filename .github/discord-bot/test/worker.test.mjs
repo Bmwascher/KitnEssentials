@@ -692,6 +692,7 @@ test('a card press on a post that cannot be read says why, never that the forum 
   for (const [why, answer, want] of [
     ['the post was deleted', () => new Response('{"message":"Unknown Channel"}', { status: 404 }), /^This post no longer exists\.$/],
     ['a passing failure', () => new Response('{}', { status: 500 }), /^Could not read the post just now\. Press the button again\.$/],
+    ['a passing failure whose answer quotes " -> 404 "', () => new Response('upstream said -> 404 x', { status: 500 }), /^Could not read the post just now\. Press the button again\.$/],
   ]) {
     const f = searched([['GET', /\/channels\/700$/, answer]]);
     const j = await (await handle(await signed(cardPress(HELPER)), QUEUE, ctxFor(), { fetch: f, ...INST })).json();
@@ -728,6 +729,14 @@ test('a press on a filed post answers Already tracked, opens no form, and the pr
       /^Already tracked as ONE #5: /, ['556', '96', { content: `${struck}\n**Filed as ONE #5**` }], [], inst,
       [{ number: 5, html_url: 'https://github.com/me/test-one/issues/5', repository_url: 'https://api.github.com/repos/me/test-one', body: '<!-- discord-thread: 700 reporter: 42 -->' }]],
     ['GitHub fails: press again', record, status(500), cardPress(HELPER), /^Could not check whether this post is already on GitHub\. Press the button again\.$/, null],
+    ['GitHub fails with a 500 whose answer quotes " -> 404 ": press again', record, () => new Response('upstream said -> 404 x', { status: 500 }), cardPress(HELPER),
+      /^Could not check whether this post is already on GitHub\. Press the button again\.$/, null],
+    ['GitHub fails with a 500 whose answer quotes " -> 410 ": press again', record, () => new Response('upstream said -> 410 x', { status: 500 }), cardPress(HELPER),
+      /^Could not check whether this post is already on GitHub\. Press the button again\.$/, null],
+    // A 2xx whose body is not JSON: the parser's error quotes a body under
+    // 21 characters whole, and that quote is never read as a 404.
+    ['GitHub answers 200 with a body that quotes " -> 404 ": press again', record, () => new Response('x -> 404 y', { status: 200 }), cardPress(HELPER),
+      /^Could not check whether this post is already on GitHub\. Press the button again\.$/, null],
     // A failed token says nothing about the issue.
     ['the token request answers 410: press again', record, issue(), cardPress(HELPER), /^Could not check whether this post is already on GitHub\./, null, [],
       async () => { throw new Error('GitHub GET /repos/me/test-one/installation -> 410 {}'); }],
@@ -821,6 +830,10 @@ test('an old button greeting is retired once the reply exists, and becomes the n
       null, [/^note in the post may not have been sent: .*500/]],
     // An edit whose answer was lost may have made the greeting the note.
     ['the reply is refused and the edit has an unknown outcome', WITH_BUTTON, [['POST', /\/channels\/700\/messages$/, refusal], ['PATCH', /\/messages\/950$/, () => new Response('{}', { status: 500 })]], 0,
+      { content: MESSAGES.tracked('ONE', 17), components: [], allowed_mentions: { parse: [] } }, [/^note in the post may not have been sent: .*500/]],
+    ['the reply fails with a 500 whose answer quotes " -> 403 ": nothing is edited', WITH_BUTTON, [['POST', /\/channels\/700\/messages$/, () => new Response('upstream said -> 403 x', { status: 500 })]], 0,
+      null, [/^note in the post may not have been sent: .*500/]],
+    ['the reply is refused and the edit fails with a 500 whose answer quotes " -> 403 "', WITH_BUTTON, [['POST', /\/channels\/700\/messages$/, refusal], ['PATCH', /\/messages\/950$/, () => new Response('upstream said -> 403 x', { status: 500 })]], 0,
       { content: MESSAGES.tracked('ONE', 17), components: [], allowed_mentions: { parse: [] } }, [/^note in the post may not have been sent: .*500/]],
   ]) {
     const kv = fakeKv({ 'thread:700': JSON.stringify({ greeting: '950' }) });
@@ -1013,7 +1026,7 @@ test('one post, one issue: the saved record, then every configured repo, is chec
   const marked = { number: 9, html_url: 'https://github.com/me/test-two/issues/9', repository_url: 'https://api.github.com/repos/me/test-two', body: '<!-- discord-thread: 700 reporter: 42 -->' };
   const inst = async () => 'inst';
   const tokenFails = (s, bad = 'me/test-two') => async ({ repo }) => {
-    if (repo === bad) throw new Error(`GitHub GET /repos/${bad}/installation -> ${s} {"message":"x"}`);
+    if (repo === bad) throw Object.assign(new Error(`GitHub GET /repos/${bad}/installation -> ${s} {"message":"x"}`), { github: { method: 'GET', path: `/repos/${bad}/installation`, status: s } });
     return 'inst';
   };
   const movedIn = () => ({ number: 40, html_url: 'https://github.com/me/test-one/issues/40', repository_url: 'https://api.github.com/repos/me/test-one' });
@@ -1043,6 +1056,9 @@ test('one post, one issue: the saved record, then every configured repo, is chec
     ['moved on, with the filer on record', { 'issue:700': JSON.stringify({ repo: 'me/test-two', number: 9, key: 'TWO', by: 'Bite' }) }, moved, inst, list([]),
       { duplicate: 31, repo: 'me/test-three' }, /^Already tracked as me\/test-three #31: /, { ...movedTo, by: 'Bite' }],
     ['deleted there (410)', elsewhere, status(410), inst, list([]), { created: 17, notes: [] }, /^Created ONE #17/, made],
+    // The filing names the reason: the parser's message, never a quoted 404.
+    ['answered 200 with a body that is not JSON and quotes " -> 404 "', elsewhere, () => new Response('x -> 404 y', { status: 200 }), inst, list([]), { refused: 'saved-issue' },
+      /^Could not check TWO #9 in me\/test-two \(Unexpected token/, null],
     ['not found there (404)', elsewhere, status(404), inst, list([]), { refused: 'saved-issue' },
       new RegExp(`^Could not check TWO #9 in me/test-two \\(404\\): it may be gone, or the app may have lost access there\\. Nothing was created\\. ${way}`), null],
     // A transfer can leave the record naming a repo the form does not offer.
@@ -1568,4 +1584,22 @@ test('WT7: the private reply keeps a last line that fits, and names what it leav
   const b = `- ${'b'.repeat(47)}`;
   assert.equal(privateText(head, [a, b, `- ${'c'.repeat(100)}`]), `${head}\n\n${a}\n${b}\n…and 1 more line(s): fix these, then run /bot-check again.`,
     'a line that fits beside the notice is kept');
+});
+
+test('a failed member read at filing is logged, unless the member left (404)', async () => {
+  for (const [why, answer, logged] of [
+    ['the member left', () => new Response('{"message":"Unknown Member"}', { status: 404 }), false],
+    ['a 500 whose answer quotes " -> 404 "', () => new Response('upstream said -> 404 x', { status: 500 }), true],
+  ]) {
+    const lines = [];
+    const f = fakeFetch(discordRoutes(githubRoutes([], [
+      ['GET', /\/guilds\/1\/members\/42$/, answer],
+      ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
+    ])));
+    const ctx = ctxFor();
+    await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst', log: (s) => lines.push(s) });
+    const [res] = await Promise.all(ctx.jobs);
+    assert.equal(res.created, 17, why);
+    assert.equal(lines.some((s) => /^member read failed: /.test(s)), logged, `${why}: ${lines.join(' | ')}`);
+  }
 });
