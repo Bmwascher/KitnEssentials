@@ -55,7 +55,7 @@ test('a forum lists only its own open posts, then archived ones', async () => {
 test('arguments are ids and options with their values, and anything else is refused', () => {
   assert.deepEqual(parseArgs(['50', '--limit', '3', '51']), { ids: ['50', '51'], limit: 3, forum: null });
   assert.deepEqual(parseArgs(['--forum', '900']), { ids: [], limit: 10, forum: '900' });
-  for (const bad of [[], ['--limt', '5'], ['--forum'], ['--limit', '2.5', '50'], ['--limit', '0', '50'], ['--forum', 'abc']]) {
+  for (const bad of [[], ['--limt', '5'], ['--forum'], ['--limit', '2.5', '50'], ['--limit', '0', '50'], ['--forum', 'abc'], ['--forum', '900', '--forum', '901']]) {
     assert.equal(parseArgs(bad), null, bad.join(' '));
   }
 });

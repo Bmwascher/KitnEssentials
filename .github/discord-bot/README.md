@@ -1118,7 +1118,8 @@ workflow by hand once to see the sweep's report.
 **Reading the results without looking.** `node scripts/trial-check.mjs <id>...`
 prints each post's name, forum, tags, archived and locked state and last
 messages (a text channel id prints its last messages; `--limit N`, default
-10); `--forum <id>` lists a forum's posts with their tags. It only reads.
+10); `--forum <id>` lists a forum's open posts and its 50 newest archived
+ones with their tags. It only reads.
 Give it its own bot, never the trial bot: a new application whose bot has
 the **Message Content** intent on and is invited with View Channels and Read
 Message History only. It also gets whatever `@everyone` may do in each

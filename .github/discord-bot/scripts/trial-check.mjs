@@ -93,7 +93,7 @@ export function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--limit' && isId(argv[i + 1]) && +argv[i + 1] >= 1 && +argv[i + 1] <= 100) out.limit = +argv[++i];
-    else if (a === '--forum' && isId(argv[i + 1])) out.forum = argv[++i];
+    else if (a === '--forum' && !out.forum && isId(argv[i + 1])) out.forum = argv[++i];
     else if (isId(a)) out.ids.push(a);
     else return null;
   }
@@ -111,14 +111,16 @@ async function main(argv) {
     console.error('No usable token: set TRIAL_READER_TOKEN or save the token alone, on one line, in ~/.discord-trial-reader/token');
     process.exit(1);
   }
+  // A message on the server can quote the token itself.
+  const hide = (text) => text.split(token).join('<reader token>');
   const api = discordClient(token);
-  if (args.forum) console.log(await listForum(api, args.forum));
-  for (const id of args.ids) console.log(`${await describe(api, id, args.limit)}\n`);
+  try {
+    if (args.forum) console.log(hide(await listForum(api, args.forum)));
+    for (const id of args.ids) console.log(hide(`${await describe(api, id, args.limit)}\n`));
+  } catch (e) {
+    console.error(hide(e.message));
+    process.exit(1);
+  }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
-  main(process.argv.slice(2)).catch((e) => {
-    console.error(e.message);
-    process.exit(1);
-  });
-}
+if (import.meta.url === pathToFileURL(process.argv[1] || '').href) main(process.argv.slice(2));
