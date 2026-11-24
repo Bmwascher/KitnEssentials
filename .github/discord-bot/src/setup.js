@@ -3,7 +3,7 @@
 // yet" replies use them.
 import {
   parseRepos, parseForums, parseRoleIds, isTemplates, PERMS, packGroups, clipLine, isDiscordId as digits, STATUS_NAMES, CHECKLIST_NAMES, ACCEPTED,
-  LABELS, LABEL_DEFS, TEXT_TYPES, THREAD_TYPES, timedFetch, oneHop,
+  LABELS, LABEL_DEFS, TEXT_TYPES, THREAD_TYPES, FORUM_TYPE, timedFetch, oneHop,
 } from './core.js';
 import { discordClient } from './discord.js';
 import { installationAccess, githubClient, appJwt, importAppKey } from './github.js';
@@ -187,7 +187,6 @@ const DISCORD_BUDGET = 28;
 const GITHUB_BUDGET = 15;
 const CALL_MS = 5000;
 const LABEL_PAGES = 3;
-const FORUM_TYPE = 15;
 // The Message Content intent: the first bit for a bot in 100 or more
 // servers, the second for one in fewer.
 const MESSAGE_CONTENT = (1n << 18n) | (1n << 19n);

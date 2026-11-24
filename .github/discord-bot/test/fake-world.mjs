@@ -11,6 +11,7 @@ export const BOT_USER = '999';
 // The staff checklist forum: the bot's eight tags and five of staff's own.
 const CHECKLIST_FORUM = {
   id: '950',
+  type: 15,
   guild_id: GUILD,
   available_tags: [
     { id: 'c-tri', name: 'Triaged' }, { id: 'c-prog', name: 'In progress' }, { id: 'c-fix', name: 'Fixed' },
