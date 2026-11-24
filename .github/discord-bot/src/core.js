@@ -642,6 +642,15 @@ export const MESSAGES = {
     return `**Duplicate.** This is the same problem as ${other}, so we'll follow it there and close this one. Thanks for reporting it!`;
   },
   needsInfo: (uid) => `${uid ? `<@${uid}> ` : ''}Could you add a bit more detail? A screenshot, your addon version and the steps to make it happen help a lot.`,
+  // The bot's message in a moved post's new post. Only the reporter is
+  // pinged (allowed_mentions); every name is text.
+  movedHere: ({ from, by, reporter, left, cut }) => [
+    `Moved here from ${from} by ${discordText(by)}.`,
+    `First posted by ${reporter.id ? `<@${reporter.id}>` : discordText(reporter.name)}.`,
+    left ? `${left} file(s) could not be copied (too large, or not downloaded); they are on the original post.` : '',
+    cut ? 'The first message was too long to copy whole; the full text is on the original post.' : '',
+  ].filter(Boolean).join(' '),
+  movedTo: ({ to, by }) => `This post moved to ${to} (moved by ${discordText(by)}).`,
 };
 
 // A fetch whose every call gives up after `ms`, and that refuses to start once
@@ -776,6 +785,8 @@ export function discordText(s) {
 const SUPPRESS_EMBEDS = 1 << 2;
 
 const openPost = (guildId, postId) => ({ type: 2, style: 5, label: 'Open post', url: `https://discord.com/channels/${guildId}/${postId}` });
+// Opens the Move form for the post.
+const moveButton = (postId) => ({ type: 2, style: 2, label: 'Move', custom_id: `${MOVE_BUTTON}:${postId}` });
 // The card's first line: the forum and the post as Discord's own mentions, so
 // Discord shows the post's current name as a link to it, and no text a player
 // chose is in the line.
@@ -790,20 +801,20 @@ export const BY_RIGHT_CLICK = 'a moderator can open the post and right-click a m
 // mention, which opens their profile and pings no one (allowed_mentions),
 // beside their username; a poster with no user id (a webhook) is named as
 // text. Unknown parts are left out. The form files the post's first message,
-// so a post whose first message is gone gets no send button, only the way to
-// file it by hand.
-export function queueCard({ guildId, forumId, postId, author, client, type, starterGone = false }) {
+// so a post whose first message is gone gets no send or Move button, only the
+// way to file it by hand. `moved` names who moved the post here.
+export function queueCard({ guildId, forumId, postId, author, client, type, starterGone = false, moved = null }) {
   const who = author && (/^\d+$/.test(String(author.id ?? '')) ? `<@${author.id}>` : discordText(author.name));
   const by = author ? `by ${who}${author.username ? ` (\`${oneLine(author.username).replace(/`/g, '')}\`)` : ''}` : '';
   const second = [by, type, client].filter(Boolean).join(' · ');
   const lines = [cardHead(forumId, postId), second,
-    starterGone ? `Its first message was deleted: ${BY_RIGHT_CLICK}` : ''].filter(Boolean);
+    starterGone ? `Its first message was deleted: ${BY_RIGHT_CLICK}` : '', moved ? `Moved by ${discordText(moved)}` : ''].filter(Boolean);
   return {
     content: lines.join('\n'),
     allowed_mentions: { parse: [] },
     flags: SUPPRESS_EMBEDS,
     components: [{ type: 1, components: [
-      ...(starterGone ? [] : [{ type: 2, style: 1, label: 'Send to GitHub', custom_id: `${SEND_BUTTON}:${postId}` }]),
+      ...(starterGone ? [] : [{ type: 2, style: 1, label: 'Send to GitHub', custom_id: `${SEND_BUTTON}:${postId}` }, moveButton(postId)]),
       openPost(guildId, postId),
     ] }],
   };

@@ -351,7 +351,7 @@ test('a queue card names the post and its poster by Discord mention, pinging no 
   assert.equal(card.content, '**New post in <#900>:** <#700>\nby <@42> (`kira_99`) · Bug · Retail');
   assert.deepEqual([card.allowed_mentions, card.flags], [{ parse: [] }, 4], 'no ping and no link preview');
   assert.deepEqual(card.components[0].components.map((b) => [b.label, b.custom_id, b.url]), [
-    ['Send to GitHub', 'send:700', undefined], ['Open post', undefined, 'https://discord.com/channels/1/700'],
+    ['Send to GitHub', 'send:700', undefined], ['Move', 'move:700', undefined], ['Open post', undefined, 'https://discord.com/channels/1/700'],
   ]);
   // A poster with no user id (a webhook) is named as text: it cannot format, mention, link, invite, preview, or reorder or break its line.
   for (const [name, want] of [
@@ -915,4 +915,14 @@ test('a moved post keeps the tags the new forum has and gets its client tags, fi
       fixedClient: null, client: 'All', repoTags: C.parseRepoTags('{"ONE":"ONE","One alias":"ONE","One third":"ONE"}'),
     }, ['t-tri', 't-one', 't-retail', 't-forever', 't-acc']],
   ]) assert.deepEqual(C.movedTags({ ...base, ...over, applied }), want, why);
+});
+
+test('a moved post\'s card names the mover as text, and the moved messages link both posts and ping only the reporter', () => {
+  const post = { guildId: '1', forumId: '900', postId: '700' };
+  assert.equal(C.queueCard({ ...post, author: { name: 'k', username: 'kira', id: '42' }, moved: 'Mod_x' }).content, '**New post in <#900>:** <#700>\nby <@42> (`kira`)\nMoved by Mod\\_x');
+  assert.equal(C.MESSAGES.movedHere({ from: 'https://discord.com/channels/1/700', by: 'Mod_x', reporter: { name: 'Pat', id: '42' } }),
+    'Moved here from https://discord.com/channels/1/700 by Mod\\_x. First posted by <@42>.');
+  assert.equal(C.MESSAGES.movedHere({ from: 'L', by: 'M', reporter: { name: '**Hook**' }, left: 2, cut: true }),
+    'Moved here from L by M. First posted by \\*\\*Hook\\*\\*. 2 file(s) could not be copied (too large, or not downloaded); they are on the original post. The first message was too long to copy whole; the full text is on the original post.');
+  assert.equal(C.MESSAGES.movedTo({ to: 'https://discord.com/channels/1/990', by: 'Mod' }), 'This post moved to https://discord.com/channels/1/990 (moved by Mod).');
 });
