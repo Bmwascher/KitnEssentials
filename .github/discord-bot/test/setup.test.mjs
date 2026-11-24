@@ -15,13 +15,14 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
   assert.deepEqual(configProblems({ ...CLEAN, STATE: undefined }, { bindings: false }), [], 'bindings off skips STATE');
   assert.deepEqual(configProblems({ ...CLEAN, FORUMS: '', FORUM_CHANNEL_IDS: '900' }), [], 'the older FORUM_CHANNEL_IDS still counts');
   assert.deepEqual(configProblems({ ...CLEAN, FORUMS: false, FORUM_CHANNEL_IDS: '900' }), [], 'a false FORUMS is unset, as the reader reads it');
-  assert.deepEqual(configProblems({ ...CLEAN, STALE_DAYS: '  ', TEMPLATES: ' ', CHECKLIST_FORUM_ID: '  ' }), [], 'settings read as unset when blank stay unset');
+  assert.deepEqual(configProblems({ ...CLEAN, STALE_DAYS: '  ', TEMPLATES: ' ', CHECKLIST_FORUM_ID: '  ', REPO_TAGS: ' ' }), [], 'settings read as unset when blank stay unset');
   assert.deepEqual(configProblems({ ...CLEAN, CHECKLIST_FORUM_ID: ' 950 ' }), [], 'the checklist id is read trimmed, as the code reads it');
+  assert.deepEqual(configProblems({ ...CLEAN, REPO_TAGS: '{"Kitn":"ke"}' }), [], 'a REPO_TAGS key in any case is read as the forms read it');
   for (const [why, over, re] of [
     ['no REPOS', { REPOS: '' }, /^REPOS is not set or not valid JSON/],
     ['a REPOS entry that is not owner/repo', { REPOS: '{"KE":"one"}' }, /^REPOS entry KE is not owner\/repo\.$/],
-    ['a lower-case REPOS key', { REPOS: '{"ke":"me/one"}' }, /^REPOS key "ke" does not fit the form: write it in upper case, at most 10 characters\.$/],
-    ['a REPOS key longer than the form field', { REPOS: '{"ELEVENCHARS":"me/one"}' }, /^REPOS key "ELEVENCHARS" does not fit the form/],
+    ['a lower-case REPOS key', { REPOS: '{"ke":"me/one"}' }, /^REPOS key "ke" is not usable: write it in upper case \(the form reads it so\), at most 10 characters \(it starts every filed title\)\.$/],
+    ['a REPOS key longer than a title prefix', { REPOS: '{"ELEVENCHARS":"me/one"}' }, /^REPOS key "ELEVENCHARS" is not usable/],
     // A key is letters and digits only: both names carry it.
     ['a REPOS key holding a line break', { REPOS: '{"K\\nE":"me/one"}' }, /^REPOS key "K E" is not made of letters and digits: write each key in A to Z, a to z and 0 to 9 only, like KE\.$/],
     ['a REPOS key holding a space', { REPOS: '{"AB CD":"me/one"}' }, /^REPOS key "AB CD" is not made of letters and digits/],
@@ -46,6 +47,15 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
     ['a GUILD_ID of spaces', { GUILD_ID: '  ' }, /^GUILD_ID is not set/],
     ['a GUILD_ID with a space', { GUILD_ID: ' 1' }, /^GUILD_ID is not set/],
     ['bad TEMPLATES', { TEMPLATES: '{"Bug":"x"}' }, /^TEMPLATES is not valid/],
+    ['REPO_TAGS that is not JSON', { REPO_TAGS: '{"UI":' }, /^REPO_TAGS is not valid: set it to JSON like \{"UI":"UI"\} \(tag name to REPOS key\)\.$/],
+    ['REPO_TAGS that is not an object of strings', { REPO_TAGS: '{"UI":1}' }, /^REPO_TAGS is not valid/],
+    ['a REPO_TAGS value that is no REPOS key', { REPO_TAGS: '{"UI":"UI"}' }, /^REPO_TAGS tag "UI" names "UI", which is not a REPOS key\.$/],
+    ['a REPO_TAGS tag that is a status', { REPO_TAGS: '{"Triaged":"KE"}' }, /^REPO_TAGS tag "Triaged" is one of the bot's own tags \(a status or Accepted\), so it is not read as a repo tag: remove it\.$/],
+    ['a REPO_TAGS name in two letter cases for two keys', { REPO_TAGS: '{"Kitn":"KE","kitn":"XX"}' }, /^REPO_TAGS names "Kitn" and "kitn", one tag in any letter case, for two keys, so neither is read: keep one\.$/],
+    ['more than 25 usable REPOS keys', { REPOS: JSON.stringify(Object.fromEntries(Array.from({ length: 26 }, (_, i) => [`K${i}`, 'me/x']))), LOCK_REPO: 'me/x' },
+      /^REPOS names 26 usable repos, and Send to GitHub's repo dropdown holds at most 25: remove some\.$/],
+    ['more than 26 player forums', { FORUMS: JSON.stringify(Object.fromEntries(Array.from({ length: 27 }, (_, i) => [String(900 + i), {}]))) },
+      /^FORUMS names 27 player forums, and the Move form lists at most 25 others, counting only forums of this server: remove first any entry \/bot-check calls not a channel of this server or the wrong kind of channel, then others if 27 or more are left\.$/],
     ['a role id that is no id', { APPROVED_ROLE_IDS: '12,mods' }, /^APPROVED_ROLE_IDS entry mods is not a role id\.$/],
     ['no MOD_CHANNEL_ID', { MOD_CHANNEL_ID: '' }, /^MOD_CHANNEL_ID is empty/],
     ['a MOD_CHANNEL_ID of spaces, which the daily check would post to', { MOD_CHANNEL_ID: '   ' }, /^MOD_CHANNEL_ID is not a channel id/],
@@ -59,6 +69,14 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
     const lines = configProblems({ ...CLEAN, ...over });
     assert.ok(lines.some((l) => re.test(l)), `${why}: ${lines.join(' | ')}`);
   }
+  // The dropdown offers only usable keys, so an unusable one is named on
+  // its own and never counted toward the 25.
+  const alias = configProblems({ ...CLEAN, REPOS: JSON.stringify({ ...Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`K${i}`, 'me/x'])), ke: 'me/x' }), LOCK_REPO: 'me/x' });
+  assert.ok(!alias.some((l) => /dropdown holds at most 25/.test(l)), alias.join(' | '));
+  assert.ok(alias.some((l) => /^REPOS key "ke" is not usable/.test(l)), alias.join(' | '));
+  // A key that is not letters and digits is named as such and not counted either.
+  const marked = configProblems({ ...CLEAN, REPOS: JSON.stringify({ ...Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`K${i}`, 'me/x'])), 'K-E': 'me/x' }), LOCK_REPO: 'me/x' });
+  assert.ok(!marked.some((l) => /dropdown holds at most 25/.test(l)), marked.join(' | '));
   // One call names every bad key and still checks the rest of the map.
   assert.deepEqual(configProblems({ ...CLEAN, REPOS: JSON.stringify({ 'a b': 'me/one', '||KE||': 'broken' }) }), [
     'REPOS key "a b" is not made of letters and digits: write each key in A to Z, a to z and 0 to 9 only, like KE.',
@@ -68,7 +86,7 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
   ]);
   // A JSON variable with no text form throws wherever it is turned into
   // text. The list is written here, not taken from the checker.
-  for (const k of ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID', 'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'RENAME_POSTS']) {
+  for (const k of ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID', 'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'RENAME_POSTS', 'REPO_TAGS']) {
     const lines = configProblems({ ...CLEAN, [k]: { toString: null } });
     assert.ok(lines.includes(`${k} is not text: set it as text. The checks below read it as unset.`), `${k} with no text form: ${lines.join(' | ')}`);
   }
@@ -267,8 +285,9 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
   const T = ['Send Messages in Threads', PERMS.sendMessagesInThreads];
   const M = ['Manage Threads', PERMS.manageThreads];
   const H = ['Read Message History', PERMS.readMessageHistory];
+  const W = ['Manage Webhooks', PERMS.manageWebhooks];
   for (const [label, at, needed] of [
-    ['Forum <#900>', 0, [V, T, M, H]],
+    ['Forum <#900>', 0, [V, T, M, H, W]],
     ['Queue channel <#556>', 1, [V, S, H]],
     ['Moderator channel <#555>', 2, [V, S]],
     ['Checklist forum <#950>', 3, [V, S, T, M, H]],
