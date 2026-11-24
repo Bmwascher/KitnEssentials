@@ -109,12 +109,10 @@ const scrubbed = (fn) => async (...args) => {
 // `records(n)` gives the records alone.
 export function checklistRunner({ gh, discord, repo, forumId, wanted, records, botIssue, log, now, settleTries, owedMs, noteRefusal, setupProblem, sweeping }) {
   const plan = (w) => (applied, available) => planTags(applied, available, w.name, { names: CHECKLIST_NAMES, accepted: w.accepted, dropOther: false });
-  // A tag the checklist forum lacks is a setup problem of the run, named by
-  // the id the forum read answered with: in a status run from the mirror's
-  // forum read as it lands, the thread's own status; in a sweep from its read
-  // (`checkSeen`), every status, outside its timed checklist work. A sweep's
-  // repair names none, so it takes no more of that time than before; a tag
-  // gone since the sweep's read is the next sweep's to name (CC2).
+  // A tag the checklist forum lacks is a setup problem, named by the id the
+  // forum read answered with. A sweep checks its own read (`checkSeen`)
+  // outside its timed checklist work and its repair checks none, so the
+  // repair takes no more of that time than before.
   const checkTags = (w, id, tags, names) => {
     for (const s of names) if (!hasTag(tags, s)) setupProblem(tagLine(`checklist forum ${id}`, s));
     if (w.accepted && !hasTag(tags, ACCEPTED)) setupProblem(acceptedLine(`checklist forum ${id}`));

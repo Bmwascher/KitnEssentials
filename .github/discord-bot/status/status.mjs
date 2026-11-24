@@ -159,7 +159,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // The sweep's report, written after the setup section at the run's end.
   let sweepSummary = null;
   // The forums whose Accepted tag the sweep's own reads showed: one the
-  // Accepted repair then finds without it lost the tag in between (CC2).
+  // Accepted repair then finds without it lost the tag in between.
   const acceptedSeen = new Set();
   // A Discord refusal of the bot, named by the request it refused, which the
   // client keeps apart from the answer's text; a scrubbed checklist error
@@ -689,7 +689,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     let r;
     try {
       // An Accepted tag deleted since the sweep's own read of this forum is
-      // logged below and left to the next sweep's read (CC2); any other gap
+      // logged below and left to the next sweep's read; any other gap
       // this read finds is named, the post archived or not.
       r = await discord.fixAccepted(threadId, want, {
         onForum: (forumId, tags) => {
@@ -1190,7 +1190,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       // an error), which can hold Markdown or HTML. Each line stays one
       // bullet, and every backslash, backtick and `<` is shown as typed, so
       // no code span, comment, tag or heading can form, whatever the quoted
-      // text holds. The checklist marker staff copy then reads as plain text.
+      // text holds.
       const asText = (l) => l.replace(/\s+/g, ' ').replace(/[\\`]/g, '\\$&').replace(/</g, '&lt;');
       sweepSummary = [`### Discord status ${head}`, '', ...report.map((l) => `- ${asText(l)}`), ''].join('\n');
     }

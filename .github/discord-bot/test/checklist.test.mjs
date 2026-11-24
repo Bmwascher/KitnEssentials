@@ -1596,7 +1596,7 @@ test('CH10: a tag the checklist forum lacks is a setup problem in a status run a
   {
     // A tag gone between the sweep's read of the checklist forum and its
     // repair: the repair, inside the sweep's timed checklist work, names
-    // nothing, and the next sweep's read names it (CC2).
+    // nothing, and the next sweep's read names it.
     const w = world();
     w.issue(17);
     w.close(17, 'not_planned');

@@ -2076,7 +2076,7 @@ test('PT5: a fix sweep names a status tag gone between its read of a post and it
   }
 });
 
-test('PT5: the Accepted repair names a forum without Accepted that the sweep did not see with it (CC2)', async () => {
+test('PT5: the Accepted repair names a forum without Accepted that the sweep did not see with it', async () => {
   // The issue's post changes, after the sweep's read, to an archived one in a
   // forum without Accepted: the repair's read is the first to see that forum.
   const w = world();
