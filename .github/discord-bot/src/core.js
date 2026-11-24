@@ -127,6 +127,7 @@ export const TEXT_TYPES = [0, 5];
 export const THREAD_TYPES = [10, 11, 12];
 
 const CLIENTS = { retail: 'Retail', forever: 'Forever', all: 'All' };
+export const CLIENT_NAMES = Object.values(CLIENTS);
 const TYPES = { bug: 'Bug', feature: 'Feature', feedback: 'Feature', request: 'Feature' };
 const own = (obj, k) => (Object.prototype.hasOwnProperty.call(obj, k) ? obj[k] : null);
 

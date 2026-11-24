@@ -10,6 +10,7 @@ import {
   parseForums, parseRoleIds, parseTemplates, templateCheck, templateGaps,
   templateNote, parseCustomId, templateLabels, filedCard, cardHead, BY_RIGHT_CLICK,
   parseRepoTags, repoFromTags, plainTags, usableRepoKeys,
+  MOVE_BUTTON, CLIENT_NAMES, cutUnits,
 } from './core.js';
 import { discordClient, postGone, archivedOf } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
@@ -18,6 +19,7 @@ import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems, unreadab
 
 export const COMMAND_NAME = 'Send to GitHub';
 export const CHECK_COMMAND = 'bot-check';
+export const MOVE_COMMAND = 'Move post';
 // The setup check ends by 20 s from the request's arrival and its posts by
 // 22 s, leaving the private reply its own time before REPORT_BY_MS. The
 // posts have their own share of calls, so a run stays within 50 requests.
@@ -64,16 +66,10 @@ const json = (obj, status = 200) => new Response(JSON.stringify(obj), {
 });
 const reply = (content) => json({ type: 4, data: { content, flags: EPHEMERAL } });
 // The bot works nowhere until its config holds: the reply names the first
-// problem, but only in the server the bot is set up for, so a moderator of
-// another server learns nothing of this one's setup. Callers check the
-// caller first.
-const notSetUp = (env, interaction) => {
-  // A GUILD_ID no reader can read names no server.
-  const guild = unreadableSettings(env).includes('GUILD_ID') ? '' : String(env.GUILD_ID ?? '');
-  if (!isDiscordId(guild)) return reply("The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).");
-  if (String(interaction.guild_id ?? '') !== guild) return reply('This only works on posts in the forums the bot is set up for.');
-  return reply(`The bot is not set up yet: ${configProblems(env, { bindings: false })[0]}`);
-};
+// problem. Every caller has checked the server first (`elsewhere`, or
+// /bot-check's own check) and then the caller, so only staff of this server
+// see it.
+const notSetUp = (env) => reply(`The bot is not set up yet: ${configProblems(env, { bindings: false })[0]}`);
 // The config, or null when it cannot be read (a broken REPOS throws), so
 // every entry point answers with the problem instead of failing.
 const configOr = (env) => {
@@ -139,6 +135,18 @@ const hasRole = (member, roles) => !!member && (member.roles || []).some((r) => 
 const allowed = (member, cfg) => canUse(member) || hasRole(member, cfg.roles);
 const NOT_ALLOWED = 'Only moderators and approved roles can send posts to GitHub.';
 const BAD_IDS = 'Nothing was created: this button or form is not valid. Press the button or right-click the post to try again.';
+const NOT_ALLOWED_MOVE = 'Only moderators and approved roles can move posts.';
+const BAD_MOVE_IDS = 'Nothing was moved: this button or form is not valid. Press the button or right-click the post to try again.';
+// A card button pressed by a member who is not a moderator while no role is
+// approved: the right-click command `cmd` is for moderators.
+const noRoles = (cmd) => `The button is not set up yet: APPROVED_ROLE_IDS is empty. A moderator can open the post and right-click a message › Apps › ${cmd}.`;
+// A forum's tags from the server's channel list. FORUMS is outside data: a
+// forum it names may be gone, or not be a forum.
+const tagsIn = (channels, id) => (channels.find((c) => c.id === id) || {}).available_tags || [];
+// The forums of FORUMS a post in `from` can move to: those this server's
+// channel list has as forums. FORUMS may name a channel of another server,
+// where a copy would publish the player's post, or one that is not a forum.
+const moveTargets = (cfg, channels, from) => cfg.forums.filter((id) => id !== from && channels.some((c) => c.id === id && c.type === 15));
 
 // A modal field: a Label (type 18) holding a text input or a select.
 const label = (text, component, description) => ({ type: 18, label: text, ...(description ? { description } : {}), component });
@@ -181,21 +189,73 @@ function repoChoice(keys, cfg, tagNames) {
 // crowd the subject out of the filed title and the renamed post.
 const NO_KEYS = 'The form cannot open: no REPOS key is usable (upper case, at most 10 characters). /bot-check names them.';
 
-async function openForm(interaction, env, deps, { threadId, messageId, greetingId = '', cardId = '', deadline = Date.now() + FORM_LOOKUP_MS }) {
-  const cfg = configOr(env);
-  if (!cfg || !cfg.forums.length) return notSetUp(env, interaction);
-  const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, deadline));
+// The post a form is for: the interaction's own channel when it is the post
+// with its parent and tags, else read. A card press brings no post with it,
+// so a failed read there says why the form cannot open.
+async function formPost(interaction, discord, threadId) {
   let ch = interaction.channel && interaction.channel.id === threadId ? interaction.channel : {};
   if (!ch.parent_id || !ch.applied_tags) {
     try {
       ch = await discord.getChannel(threadId);
     } catch (e) {
-      // A card press brings no post with it: say why the form cannot open.
       if (!ch.parent_id) {
-        return reply(statusOf(e) === 404 ? 'This post no longer exists.' : 'Could not read the post just now. Press the button again.');
+        return { answer: reply(statusOf(e) === 404 ? 'This post no longer exists.' : 'Could not read the post just now. Press the button again.') };
       }
     }
   }
+  return { ch };
+}
+
+// The Move form, answered within FORM_BY_MS as openForm is. The forums it
+// offers, and their names, come from the server's channel list, so its
+// failure opens no form. It reads no record: the move's job does, and
+// refuses a post already filed or moved. `cfg` is the config its route
+// read, naming at least one player forum.
+async function openMoveForm(interaction, env, deps, cfg, { threadId, cardId = '', deadline }) {
+  const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, deadline));
+  const post = await formPost(interaction, discord, threadId);
+  if (post.answer) return post.answer;
+  const { ch } = post;
+  if (!cfg.forums.includes(ch.parent_id)) return reply('This only works on posts in the forums the bot is set up for.');
+  const channels = await discord.call('GET', `/guilds/${interaction.guild_id}/channels`).catch(() => null);
+  if (!channels) return reply('Could not read the forums just now. Try again.');
+  // FORUMS may name a category or a text channel: a message there is no
+  // forum post, and has no tags or lock to move. Its job is reached only
+  // through this form, and a channel's type never changes, so the job needs
+  // no check of its own.
+  if (!channels.some((c) => c.id === ch.parent_id && c.type === 15)) return reply('This only works on posts in the forums the bot is set up for.');
+  const others = moveTargets(cfg, channels, ch.parent_id);
+  if (!others.length) return reply('There is no other forum to move this post to.');
+  if (others.length > SELECT_MAX) return reply(TOO_MANY);
+  const label = (id) => cutUnits(`#${channels.find((c) => c.id === id).name}`, 100);
+  // Two forums can share a name, or two long names their first 100
+  // characters: such a label carries the forum's id, so staff can tell
+  // which forum they pick.
+  const shown = (id) => (others.filter((o) => label(o) === label(id)).length > 1 ? `${cutUnits(label(id), 100 - id.length - 3)} (${id})` : label(id));
+  // A post read from the interaction alone may carry no tag list.
+  const tagIds = ch.applied_tags || [];
+  const tagNames = tagsIn(channels, ch.parent_id).filter((t) => tagIds.includes(t.id)).map((t) => t.name);
+  return json({
+    type: 9,
+    data: {
+      custom_id: `mv:${threadId}${cardId ? `:${cardId}` : ''}`,
+      title: 'Move post',
+      components: [
+        select('forum', 'Move to', others.map((id) => [id, shown(id)]), others.length === 1 ? others[0] : null),
+        select('client', 'Client', CLIENT_NAMES.map((c) => [c, c]), cfg.forumInfo[ch.parent_id].client || guessFromTags(plainTags(tagNames, cfg.repoTags)).client,
+          { required: false, description: 'Used for a forum with no client of its own' }),
+      ],
+    },
+  });
+}
+
+async function openForm(interaction, env, deps, { threadId, messageId, greetingId = '', cardId = '', deadline = Date.now() + FORM_LOOKUP_MS }) {
+  const cfg = configOr(env);
+  if (!cfg || !cfg.forums.length) return notSetUp(env);
+  const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, deadline));
+  const post = await formPost(interaction, discord, threadId);
+  if (post.answer) return post.answer;
+  const { ch } = post;
   if (!cfg.forums.includes(ch.parent_id)) {
     return reply('This only works on posts in the forums the bot is set up for.');
   }
@@ -1014,6 +1074,37 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
   }
 }
 
+// The bot serves the one server GUILD_ID names. Its commands are registered
+// for every server it is in, and FORUMS or QUEUE_CHANNEL_ID can name another
+// server's channel, so each entry point refuses any other server, or a
+// GUILD_ID that names none, before it reads anything else. A setup problem
+// is shown to staff only (`staff`); anyone else gets the entry point's own
+// refusal (`no`). /bot-check says the same in its own words.
+function elsewhere(env, bad, interaction, staff, no) {
+  const home = bad.includes('GUILD_ID') ? '' : String(env.GUILD_ID ?? '');
+  if (!isDiscordId(home)) return staff() ? reply("The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).") : reply(no);
+  return String(interaction.guild_id ?? '') === home ? null : reply('This only works on posts in the forums the bot is set up for.');
+}
+
+// The checks a button press or form submit makes first, in order: the
+// server, the ids, readable settings, a config that reads, and the caller.
+// `noRoles` is the reply to a member who is not a moderator while no role is
+// approved; with `forums`, a config naming no player forum is not set up.
+// Returns the reply, or the config and the custom id's parts.
+function gate(interaction, env, bad, roles, { no, badIds = BAD_IDS, noRoles: none = '', forums = false }) {
+  const away = elsewhere(env, bad, interaction, () => allowed(interaction.member, { roles: roles() }), no);
+  if (away) return { answer: away };
+  const ids = parseCustomId(interaction.data.custom_id);
+  if (!ids) return { answer: reply(badIds) };
+  if (bad.length) return { answer: allowed(interaction.member, { roles: roles() }) ? notSetUp(env) : reply(no) };
+  const cfg = configOr(env);
+  if (!cfg) return { answer: allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env) : reply(no) };
+  if (none && !cfg.roles.length && !canUse(interaction.member)) return { answer: reply(none) };
+  if (!allowed(interaction.member, cfg)) return { answer: reply(no) };
+  if (forums && !cfg.forums.length) return { answer: notSetUp(env) };
+  return { cfg, ids };
+}
+
 export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(...a) }) {
   // Discord's 3 s for the first answer runs from here: reading the body and
   // checking the signature count against it. Every path's deadlines count
@@ -1033,9 +1124,21 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
   const roles = () => (bad.includes('APPROVED_ROLE_IDS') ? [] : parseRoleIds(env.APPROVED_ROLE_IDS));
 
   if (interaction.type === 2 && interaction.data.name === COMMAND_NAME) {
+    const away = elsewhere(env, bad, interaction, () => canUse(interaction.member), 'Only moderators and admins can send posts to GitHub.');
+    if (away) return away;
     if (!canUse(interaction.member)) return reply('Only moderators and admins can send posts to GitHub.');
-    if (bad.length) return notSetUp(env, interaction);
+    if (bad.length) return notSetUp(env);
     return openForm(interaction, env, deps, { threadId: interaction.channel_id, messageId: interaction.data.target_id, deadline: t0 + FORM_BY_MS });
+  }
+
+  if (interaction.type === 2 && interaction.data.name === MOVE_COMMAND) {
+    const away = elsewhere(env, bad, interaction, () => canUse(interaction.member), 'Only moderators and admins can move posts.');
+    if (away) return away;
+    if (!canUse(interaction.member)) return reply('Only moderators and admins can move posts.');
+    if (bad.length) return notSetUp(env);
+    const cfg = configOr(env);
+    if (!cfg || !cfg.forums.length) return notSetUp(env);
+    return openMoveForm(interaction, env, deps, cfg, { threadId: interaction.channel_id, deadline: t0 + FORM_BY_MS });
   }
 
   if (interaction.type === 2 && interaction.data.name === CHECK_COMMAND) {
@@ -1045,21 +1148,14 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     const guild = bad.includes('GUILD_ID') ? '' : String(env.GUILD_ID ?? '');
     if (!isDiscordId(guild)) return reply("The bot's GUILD_ID is not set to a server id, so it can check nothing. Fix it in the Worker's settings.");
     if (String(interaction.guild_id) !== guild) return reply('This command checks only the server the bot is set up for.');
-    if (bad.length) return notSetUp(env, interaction);
+    if (bad.length) return notSetUp(env);
     ctx.waitUntil(runCheck(interaction, env, deps, t0));
     return json({ type: 5, data: { flags: EPHEMERAL } });
   }
 
   if (interaction.type === 3 && String(interaction.data.custom_id).startsWith(`${SEND_BUTTON}:`)) {
-    const ids = parseCustomId(interaction.data.custom_id);
-    if (!ids) return reply(BAD_IDS);
-    if (bad.length) return allowed(interaction.member, { roles: roles() }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
-    const cfg = configOr(env);
-    if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
-    if (!cfg.roles.length && !canUse(interaction.member)) {
-      return reply('The button is not set up yet: APPROVED_ROLE_IDS is empty. A moderator can open the post and right-click a message › Apps › Send to GitHub.');
-    }
-    if (!allowed(interaction.member, cfg)) return reply(NOT_ALLOWED);
+    const { answer, cfg, ids } = gate(interaction, env, bad, roles, { no: NOT_ALLOWED, noRoles: noRoles(COMMAND_NAME) });
+    if (answer) return answer;
     // A press on a post already filed answers at once and opens no form.
     const answered = await pressCheck(interaction, env, deps, cfg, ids.threadId, t0, ctx);
     if (answered) return answered;
@@ -1073,13 +1169,16 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     });
   }
 
+  if (interaction.type === 3 && String(interaction.data.custom_id).startsWith(`${MOVE_BUTTON}:`)) {
+    const { answer, cfg, ids } = gate(interaction, env, bad, roles, { no: NOT_ALLOWED_MOVE, badIds: BAD_MOVE_IDS, noRoles: noRoles(MOVE_COMMAND), forums: true });
+    if (answer) return answer;
+    // The Move button is on queue cards only, so the press carries its card.
+    return openMoveForm(interaction, env, deps, cfg, { threadId: ids.threadId, cardId: interaction.message.id, deadline: t0 + FORM_BY_MS });
+  }
+
   if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('gh:')) {
-    if (!parseCustomId(interaction.data.custom_id)) return reply(BAD_IDS);
-    if (bad.length) return allowed(interaction.member, { roles: roles() }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
-    const cfg = configOr(env);
-    if (!cfg) return allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env, interaction) : reply(NOT_ALLOWED);
-    if (!allowed(interaction.member, cfg)) return reply(NOT_ALLOWED);
-    if (!cfg.forums.length) return notSetUp(env, interaction);
+    const { answer, cfg } = gate(interaction, env, bad, roles, { no: NOT_ALLOWED, forums: true });
+    if (answer) return answer;
     const v = modalValues(interaction.data);
     const problems = [];
     if (!usableRepoKeys(cfg.repos).includes(normRepoKey(v.repo, cfg.repos))) problems.push('The repo chosen is no longer in REPOS: pick it again.');

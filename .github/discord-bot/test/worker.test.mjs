@@ -13,13 +13,14 @@ const pubHex = Buffer.from(await crypto.subtle.exportKey('raw', keys.publicKey))
 const env = {
   DISCORD_PUBLIC_KEY: pubHex, DISCORD_BOT_TOKEN: 'bot-token',
   GITHUB_APP_ID: '1', GITHUB_APP_PRIVATE_KEY: 'unused',
-  REPOS: '{"ONE":"me/test-one","TWO":"me/test-two"}', LOCK_REPO: 'me/test-one', FORUM_CHANNEL_IDS: '900',
+  REPOS: '{"ONE":"me/test-one","TWO":"me/test-two"}', LOCK_REPO: 'me/test-one', FORUM_CHANNEL_IDS: '900', GUILD_ID: '1',
 };
 const MOD = { permissions: String(1n << 34n), user: { id: '5', username: 'moddy' } };
 const PLAYER = { permissions: '0', user: { id: '6', username: 'pat' } };
 
+// An interaction that names no server comes from the bot's own ('1').
 async function signed(obj, { tamper = false, ts = String(Math.floor(Date.now() / 1000)) } = {}) {
-  const body = JSON.stringify(obj);
+  const body = JSON.stringify(obj.type === 1 || 'guild_id' in obj ? obj : { ...obj, guild_id: '1' });
   const sig = Buffer.from(await crypto.subtle.sign('Ed25519', keys.privateKey, new TextEncoder().encode(ts + body))).toString('hex');
   return new Request('https://bot.example/', {
     method: 'POST', body: tamper ? body.replace('1', '2') : body,
@@ -1786,4 +1787,156 @@ test('a Send to GitHub form in the older Action Row shape is still read', async 
   const ctx = ctxFor();
   await handle(await signed(form), env, ctx, { fetch: f, installationToken: async () => 'inst' });
   assert.deepEqual(await Promise.all(ctx.jobs), [{ created: 17, notes: [] }]);
+});
+
+// ---- Moving a post -------------------------------------------------------------
+
+const MOVE_ENV = {
+  ...env, FORUM_CHANNEL_IDS: '', GUILD_ID: '1', QUEUE_CHANNEL_ID: '556', APPROVED_ROLE_IDS: '77', CHECKLIST_FORUM_ID: '950',
+  FORUMS: '{"900":{"client":"Retail","type":"Bug"},"901":{"type":"Feature"},"902":{"client":"Forever","type":"Bug"}}',
+  REPO_TAGS: '{"ONE":"ONE","TWO":"TWO"}',
+};
+// The server's channel list: the queue channel, and the three player forums
+// with their tags.
+const CHANNELS = [
+  { id: '556', type: 0, name: 'queue' },
+  { id: '900', type: 15, name: 'retail-bugs', available_tags: FORUM.available_tags },
+  { id: '901', type: 15, name: 'feedback', available_tags: [
+    { id: 'f-retail', name: 'Retail' }, { id: 'f-forever', name: 'Forever' }, { id: 'f-feat', name: 'Feedback' }, { id: 'f-staff', name: 'Staff note' },
+    { id: 'f-tri', name: 'Triaged' }, { id: 'f-acc', name: 'Accepted' }, { id: 'f-one', name: 'ONE' }, { id: 'f-two', name: 'TWO' },
+  ] },
+  { id: '902', type: 15, name: 'forever-bugs', available_tags: [{ id: 'v-bug', name: 'Bug' }, { id: 'v-tri', name: 'Triaged' }, { id: 'v-acc', name: 'Accepted' }, { id: 'v-two', name: 'TWO' }] },
+];
+const answerOf = (v) => (typeof v === 'function' ? v() : v);
+// A move's world: post 700 in forum 900, filed nowhere, with the server's
+// forums, the bot's webhook in each, and the lock repo. `edit(s)` changes any
+// answer first; an answer may be a function, called at each request, and
+// `s.extra` routes go before the rest.
+function moveWorld(edit = () => {}) {
+  const s = {
+    post: { id: '700', parent_id: '900', name: 'Bags overlap', applied_tags: ['t-retail', 't-bug', 't-staff'], thread_metadata: { archived: false, locked: false } },
+    first: { id: '700', content: 'My bags overlap', author: { id: '42', username: 'pat', global_name: 'Pat', avatar: 'abc', discriminator: '0' }, attachments: [] },
+    said: [],
+    member: { nick: 'Patty' },
+    channels: CHANNELS,
+    hooks: [{ id: '61', type: 1, application_id: 'app', token: 'wtok' }],
+    one: [],
+    two: [],
+    files: {},
+    made: { id: '990', channel_id: '990' },
+    card: { id: '97' },
+    lock: {},
+    claim: () => new Response('{}', { status: 201 }),
+    kv: {},
+    putFails: '',
+    putHangs: '',
+    extra: [],
+  };
+  edit(s);
+  const kv = fakeKv(s.kv);
+  const put = kv.put;
+  kv.put = async (k, v) => {
+    if (k === s.putFails) throw new Error('KV down');
+    if (k === s.putHangs) return new Promise(() => {});
+    return put(k, v);
+  };
+  const f = fakeFetch([
+    ...s.extra,
+    ['GET', /\/channels\/700$/, () => answerOf(s.post)],
+    ['GET', /\/channels\/700\/messages\/700$/, () => answerOf(s.first)],
+    ['GET', /\/channels\/700\/messages\?limit=100$/, () => answerOf(s.said)],
+    ['GET', /\/users\/@me$/, () => ({ id: 'b' })],
+    ['GET', /\/guilds\/1\/channels$/, () => answerOf(s.channels)],
+    ['GET', /\/guilds\/1\/members\/42$/, () => answerOf(s.member)],
+    ['GET', /\/channels\/90\d\/webhooks$/, () => answerOf(s.hooks)],
+    ['POST', /\/channels\/90\d\/webhooks$/, () => ({ id: '62', type: 1, application_id: 'app', token: 'new' })],
+    ['GET', /^https:\/\/cdn\.example\//, (b, url) => answerOf(s.files[url])],
+    ['POST', /\/webhooks\/\d+\/\w+\?wait=true$/, () => answerOf(s.made)],
+    ['POST', /\/channels\/(700|990)\/messages$/, () => ({ id: 'm1' })],
+    ['PATCH', /\/channels\/700$/, () => answerOf(s.lock)],
+    ['PATCH', /\/channels\/556\/messages\/96$/, () => ({})],
+    ['POST', /\/channels\/556\/messages$/, () => answerOf(s.card)],
+    ['PATCH', /\/webhooks\/app\/itok/, () => ({})],
+    ['GET', /api\.github\.com\/repos\/me\/test-one\/issues\?state=all.*labels=from-discord/, () => answerOf(s.one)],
+    ['GET', /api\.github\.com\/repos\/me\/test-two\/issues\?state=all.*labels=from-discord/, () => answerOf(s.two)],
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/labels$/, () => answerOf(s.claim)],
+    ['DELETE', /api\.github\.com\/repos\/me\/test-one\/labels\/discord-lock-700$/, () => null],
+  ]);
+  return { f, s, kv };
+}
+const moveClick = (member = MOD) => ({ type: 2, member, guild_id: '1', channel_id: '700', data: { name: 'Move post', target_id: '800' } });
+const movePress = (member = HELPER) => ({ type: 3, member, guild_id: '1', channel_id: '556', message: { id: '96' }, data: { custom_id: 'move:700', component_type: 2 } });
+
+test('the Move form offers the other forums of this server, pre-selects what it can, and refuses where it cannot move', async () => {
+  // FORUMS for 27 forums, all in the server's channel list.
+  const many = Array.from({ length: 27 }, (_, i) => String(900 + i));
+  const manyChannels = many.map((id) => ({ id, type: 15, name: `f${id}`, available_tags: [] }));
+  for (const [why, req, edit, envOver, want] of [
+    ['a card press', movePress(), null, {}, { custom: 'mv:700:96', forum: undefined, client: 'Retail' }],
+    ['a right-click', moveClick(), null, {}, { custom: 'mv:700', forum: undefined, client: 'Retail' }],
+    ['one other forum: chosen', moveClick(), null, { FORUMS: '{"900":{"client":"Retail"},"901":{}}' }, { forum: '901' }],
+    // FORUMS is outside data: an id there may be a channel of another
+    // server, which this server's list lacks, or not be a forum.
+    ['a FORUMS forum of another server is not offered', moveClick(), (s) => { s.channels = CHANNELS.filter((c) => c.id !== '902'); }, {}, { forum: '901' }],
+    ['a FORUMS channel that is not a forum is not offered', moveClick(), (s) => { s.channels = CHANNELS.map((c) => (c.id === '902' ? { ...c, type: 0 } : c)); }, {}, { forum: '901' }],
+    ['the client from the tags', moveClick(), (s) => { s.post.applied_tags = ['t-forever']; }, { FORUMS: '{"900":{},"901":{},"902":{}}' }, { client: 'Forever' }],
+    ['a post outside FORUMS', moveClick(), (s) => { s.post.parent_id = '999'; }, {}, /^This only works on posts in the forums the bot is set up for\.$/],
+    // FORUMS names a category: a message in a text channel under it.
+    ['a text channel under a FORUMS category', moveClick(), (s) => {
+      s.channels = CHANNELS.map((c) => (c.id === '900' ? { ...c, type: 4 } : c));
+      s.post = { id: '700', type: 0, parent_id: '900', name: 'general' };
+    }, {}, /^This only works on posts in the forums the bot is set up for\.$/],
+    ['no other forum', moveClick(), null, { FORUMS: '{"900":{}}' }, /^There is no other forum to move this post to\.$/],
+    ['no other forum in this server', moveClick(), (s) => { s.channels = CHANNELS.filter((c) => c.id === '900'); }, {}, /^There is no other forum to move this post to\.$/],
+    ['a player right-click', moveClick(PLAYER), null, {}, /^Only moderators and admins can move posts\.$/],
+    ['a player card press', movePress(PLAYER), null, {}, /^Only moderators and approved roles can move posts\.$/],
+    ['26 other forums', moveClick(), (s) => { s.channels = manyChannels; }, { FORUMS: JSON.stringify(Object.fromEntries(many.map((id) => [id, {}]))) },
+      /^The form cannot open: its dropdowns hold 25 choices, and REPOS or FORUMS names more\. /],
+    ['the forum list fails', moveClick(), (s) => { s.channels = () => new Response('{}', { status: 500 }); }, {}, /^Could not read the forums just now\. Try again\.$/],
+  ]) {
+    const w = moveWorld(edit || (() => {}));
+    const j = await (await handle(await signed(req), { ...MOVE_ENV, STATE: w.kv, ...envOver }, ctxFor(), { fetch: w.f, log: () => {} })).json();
+    if (want instanceof RegExp) {
+      assert.match(j.data.content, want, why);
+      continue;
+    }
+    assert.equal(j.type, 9, why);
+    if (want.custom) assert.equal(j.data.custom_id, want.custom, why);
+    const v = formValues(j);
+    for (const k of ['forum', 'client']) if (k in want) assert.equal(v[k], want[k], `${why}: ${k}`);
+  }
+  const w = moveWorld();
+  const j = await (await handle(await signed(movePress()), { ...MOVE_ENV, STATE: w.kv }, ctxFor(), { fetch: w.f })).json();
+  const [forum, client, ...more] = j.data.components;
+  assert.equal(j.data.title, 'Move post');
+  assert.deepEqual(forum.component.options.map((o) => [o.value, o.label]), [['901', '#feedback'], ['902', '#forever-bugs']], 'the other forums, by name');
+  assert.deepEqual([client.component.required, client.description], [false, 'Used for a forum with no client of its own']);
+  assert.deepEqual(more, [], 'no repo: the move takes none');
+  // Two forums of one name: each label carries its forum's id.
+  const twin = moveWorld((s) => { s.channels = CHANNELS.map((c) => (c.id === '901' || c.id === '902' ? { ...c, name: 'bugs' } : c)); });
+  const t = await (await handle(await signed(movePress()), { ...MOVE_ENV, STATE: twin.kv }, ctxFor(), { fetch: twin.f })).json();
+  assert.deepEqual(t.data.components[0].component.options.map((o) => o.label), ['#bugs (901)', '#bugs (902)']);
+});
+
+test('every entry point refuses another server, or a GUILD_ID that names none, before reading anything', async () => {
+  const sendPress = { type: 3, member: MOD, guild_id: '1', channel_id: '556', message: { id: '96' }, data: { custom_id: 'send:700', component_type: 2 } };
+  const sendClick = { type: 2, member: MOD, guild_id: '1', channel_id: '700', data: { name: COMMAND_NAME, target_id: '800' } };
+  for (const [why, guild, envOver, want] of [
+    ['another server', '2', {}, 'This only works on posts in the forums the bot is set up for.'],
+    ['GUILD_ID unset', '1', { GUILD_ID: '' }, "The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces)."],
+  ]) {
+    for (const [entry, req] of [['right-click Send to GitHub', sendClick], ['a send button', sendPress], ['a Send to GitHub submit', submit()],
+      ['right-click Move post', moveClick()], ['a Move button', movePress(MOD)]]) {
+      const w = moveWorld();
+      const j = await (await handle(await signed({ ...req, guild_id: guild }), { ...MOVE_ENV, STATE: w.kv, ...envOver }, ctxFor(), { fetch: w.f })).json();
+      assert.equal(j.data.content, want, `${why}: ${entry}`);
+      assert.equal(w.f.calls.length, 0, `${why}: ${entry}: nothing read`);
+    }
+  }
+  // A setup problem is for staff: a player gets the entry point's own refusal,
+  // as the base's unreadable-settings case (WT6) has it for GUILD_ID.
+  const w = moveWorld();
+  const j = await (await handle(await signed(movePress(PLAYER)), { ...MOVE_ENV, STATE: w.kv, GUILD_ID: '' }, ctxFor(), { fetch: w.f })).json();
+  assert.equal(j.data.content, 'Only moderators and approved roles can move posts.');
+  assert.equal(w.f.calls.length, 0);
 });
