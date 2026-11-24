@@ -73,7 +73,8 @@ const RERUN_ADVICE = 'After fixing them, re-run this run. A run that owes a play
 // A value from outside the code, shown as written: a line break would split
 // its summary line, and Markdown in it (a comment, a <br>) would change what
 // the summary shows.
-const quoted = (v, max = 80) => inlineCode(String(v).replace(/\s+/g, ' ').slice(0, max));
+// Cut by whole characters, so an emoji at the cut is never split.
+const quoted = (v, max = 80) => inlineCode(Array.from(String(v).replace(/\s+/g, ' ')).slice(0, max).join(''));
 const noTagLine = (forumId, name) => tagLine(`forum ${forumId}`, name);
 const noAcceptedLine = (forumId) => acceptedLine(`forum ${forumId}`);
 

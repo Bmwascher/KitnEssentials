@@ -2050,7 +2050,9 @@ test('PT5: the sweep checks the forum of every post it reads, and its own mode, 
     await assert.rejects(sweepRun(w, 'report'),
       /^Error: setup problems: forum 900 has no "Accepted" tag, which issues with the accepted label need: add it, spelled as the README lists it$/);
   }
-  for (const [mode, shown] of [['fixx', '`fixx`'], ['fix\nx', '`fix x`'], ['fi<!--x-->x', '`fi<!--x-->x`'], ['fi`x', '``fi`x``'], [' fix ', '`  fix  `']]) {
+  // The last row's emoji sits across the 80-character cut and stays whole.
+  for (const [mode, shown] of [['fixx', '`fixx`'], ['fix\nx', '`fix x`'], ['fi<!--x-->x', '`fi<!--x-->x`'], ['fi`x', '``fi`x``'], [' fix ', '`  fix  `'],
+    [`${'x'.repeat(79)}\u{1F600}y`, `\`${'x'.repeat(79)}\u{1F600}\``]]) {
     const w = world();
     w.issue(17);
     w.close(17, 'completed', 'aaaaaaa1');
