@@ -1,5 +1,5 @@
 // Minimal Discord REST client. `fetchImpl` is injectable so tests never hit the network.
-import { nextAppliedTags, currentStatus, otherTags, sameTags, snowflakeMs, planTags, withAccepted, shownStatuses, triagedAlone, showsAccepted, statusOf } from './core.js';
+import { nextAppliedTags, currentStatus, otherTags, sameTags, snowflakeMs, planTags, withAccepted, shownStatuses, triagedAlone, showsAccepted, statusOf, forumTags } from './core.js';
 
 const API = 'https://discord.com/api/v10';
 const USER_AGENT = 'DiscordBot (https://github.com, 1.0)';
@@ -45,6 +45,13 @@ export function discordClient(token, fetchImpl = fetch) {
       throw Object.assign(new Error(`Discord ${method} ${path} -> ${res.status} (the answer was not JSON)`), { discord: { ...request, notJson: true } });
     });
   }
+
+  // `onForum(forumId, tags)` sees each read of a forum as it lands, so a
+  // caller keeps what a read showed even when a later step fails.
+  const seeForum = (onForum, id, channel) => {
+    const tags = forumTags(channel);
+    if (tags) onForum(id, tags);
+  };
 
   async function threadAndForum(threadId) {
     const thread = await call('GET', `/channels/${threadId}`);
@@ -163,8 +170,9 @@ export function discordClient(token, fetchImpl = fetch) {
     // post shows. A move unarchives the post, as before. With `dropOther`
     // false, a post with no status and five other tags is left as it is
     // rather than lose one of them.
-    async setStatus(threadId, statusName, beforeMove, { dropOther = true, accepted = null } = {}) {
+    async setStatus(threadId, statusName, beforeMove, { dropOther = true, accepted = null, onForum = () => {} } = {}) {
       const { thread, forum } = await threadAndForum(threadId);
+      seeForum(onForum, String(thread.parent_id), forum);
       const from = currentStatus(thread.applied_tags, forum.available_tags, statusName);
       if (from === statusName) return { from, tags: thread.applied_tags || [] };
       if (beforeMove) await beforeMove(from);
@@ -186,6 +194,7 @@ export function discordClient(token, fetchImpl = fetch) {
       let p = plan(thread, forum.available_tags);
       if (p.skipped) return { from, skipped: p.skipped };
       const freshForum = await call('GET', `/channels/${thread.parent_id}`);
+      seeForum(onForum, String(thread.parent_id), freshForum);
       const fresh = await call('GET', `/channels/${threadId}`);
       // A post moved to another forum meanwhile is decided again from there.
       if (fresh.parent_id !== thread.parent_id
@@ -202,10 +211,11 @@ export function discordClient(token, fetchImpl = fetch) {
     // before the write, and changes only the Accepted tag, so a status move
     // that lands inside its last request is put back to Triaged alone, under
     // the tag names last read. It never sends `archived`.
-    async fixAccepted(threadId, want) {
+    async fixAccepted(threadId, want, { onForum = () => {} } = {}) {
       const out = (r) => ({ wrote: false, noRoom: false, noAccepted: false, archived: false, refused: false, raced: false, ...r });
       const alone = (t, avail) => triagedAlone(shownStatuses(t.applied_tags, avail));
       const { thread, forum } = await threadAndForum(threadId);
+      seeForum(onForum, String(thread.parent_id), forum);
       if (archivedOf(thread)) return out({ archived: true });
       if (!alone(thread, forum.available_tags)) return out({ refused: true });
       // Already as wanted: a post showing another Accepted tag shows it.
@@ -213,6 +223,7 @@ export function discordClient(token, fetchImpl = fetch) {
       let p = withAccepted(thread.applied_tags || [], forum.available_tags, want);
       if (inStep(thread, forum.available_tags, p)) return out({ noRoom: p.noRoom, noAccepted: p.noAccepted });
       const freshForum = await call('GET', `/channels/${thread.parent_id}`);
+      seeForum(onForum, String(thread.parent_id), freshForum);
       const fresh = await call('GET', `/channels/${threadId}`);
       if (fresh.parent_id !== thread.parent_id) return out({ raced: true });
       if (archivedOf(fresh)) return out({ archived: true });
@@ -241,13 +252,17 @@ export function discordClient(token, fetchImpl = fetch) {
     // changed nothing. Any other failure may have opened the thread before
     // its answer was lost, so the re-archive is still sent; when it cannot
     // be made, the error is thrown marked `rearchive`.
-    async setTags(threadId, forumId, plan, { open = false } = {}) {
+    // `onForum(forumId, tags)` sees the forum read once the thread is
+    // confirmed in that forum, before any write can fail: a forum the thread
+    // is not in has nothing to fix for it.
+    async setTags(threadId, forumId, plan, { open = false, onForum = () => {} } = {}) {
       const path = `/channels/${threadId}`;
       const forum = await call('GET', `/channels/${forumId}`);
       const thread = await call('GET', path);
       if (String(thread.parent_id) !== String(forumId)) {
         throw new Error(`staff checklist thread is in channel ${thread.parent_id}, not the checklist forum`);
       }
+      seeForum(onForum, String(forum.id), forum);
       const applied = thread.applied_tags || [];
       const p = plan(applied, forum.available_tags || []);
       const archived = archivedOf(thread);
@@ -276,7 +291,7 @@ export function discordClient(token, fetchImpl = fetch) {
     // A thread's parent, its tags, its own forum's tags and its archive state.
     async threadState(threadId) {
       const { thread, forum } = await threadAndForum(threadId);
-      return { parentId: String(thread.parent_id), applied: thread.applied_tags || [], available: forum.available_tags || [], archived: archivedOf(thread) };
+      return { parentId: String(thread.parent_id), applied: thread.applied_tags || [], available: forum.available_tags || [], tags: forumTags(forum), archived: archivedOf(thread) };
     },
     createThread: (forumId, { name, content, tagIds }) => call('POST', `/channels/${forumId}/threads`, {
       name, applied_tags: tagIds, message: { content, allowed_mentions: { parse: [] } },

@@ -14,7 +14,7 @@
 import { readFileSync, appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { STATUS, LABELS, MESSAGES, parseMarker, parseFiledMessage, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN, checklistStatus, checklistKey, statusOf,
-  shownStatuses, preferStatus, triagedAlone, withAccepted, showsAccepted } from '../src/core.js';
+  shownStatuses, preferStatus, triagedAlone, withAccepted, showsAccepted, ACCEPTED, inlineCode, hasTag, tagLine, acceptedLine, isDiscordId, STATUS_NAMES } from '../src/core.js';
 import { discordClient, postGone } from '../src/discord.js';
 import { githubClient } from '../src/github.js';
 import { checklistRunner, parseChecklist } from './checklist.mjs';
@@ -68,6 +68,22 @@ const noteRecord = (key, text, status, runId) => `Notification attempted: ${text
 const NOTE_TEXT = /^(?:Told the player|Notification attempted|Delivery confirmed|Dropped \([^)\n]*\)|Unconfirmed \([^)\n]*\)): ([\s\S]*?)\n\n<!--/;
 const UNCONFIRMED = 'Unconfirmed (the send failed; the player may not have it)';
 
+const SETUP_HEAD = '### Discord status: setup problems';
+const RERUN_ADVICE = 'After fixing them, re-run this run. A run that owes a player a message sends it then; a message marked Unconfirmed is never sent again, and the sweep lists it.';
+// A value from outside the code, shown as written: a line break would split
+// its summary line, and Markdown in it (a comment, a <br>) would change what
+// the summary shows.
+// Cut by whole characters, so an emoji at the cut is never split.
+const quoted = (v, max = 80) => inlineCode(Array.from(String(v).replace(/\s+/g, ' ')).slice(0, max).join(''));
+const noTagLine = (forumId, name) => tagLine(`forum ${forumId}`, name);
+const noAcceptedLine = (forumId) => acceptedLine(`forum ${forumId}`);
+
+// Outside Actions there is no summary file.
+function writeSetup(path, lines) {
+  if (!path) return;
+  appendFileSync(path, [SETUP_HEAD, '', ...lines.map((l) => `- ${l}`), '', RERUN_ADVICE, ''].join('\n'));
+}
+
 // The release labels an issue should carry.
 export function wantedLabels(st) {
   if (!st.fix) return [];
@@ -85,14 +101,32 @@ export function wantedStatus(st, prs) {
   return working ? STATUS.inProgress : STATUS.triaged;
 }
 
+// A scheduled run's payload names no repository; Actions sets GITHUB_REPOSITORY.
+const repoOf = (payload, env) => (payload.repository && payload.repository.full_name) || env.GITHUB_REPOSITORY;
+
 export async function run({ eventName, payload, env, fetchImpl = fetch, log = console.log, now = Date.now }) {
-  // A scheduled run's payload names no repository; Actions sets GITHUB_REPOSITORY.
-  const repo = (payload.repository && payload.repository.full_name) || env.GITHUB_REPOSITORY;
+  const repo = repoOf(payload, env);
   const [owner, name] = repo.split('/');
-  const pattern = new RegExp(env.RELEASE_TAG_PATTERN || DEFAULT_RELEASE_PATTERN);
+  // Every run needs the pattern, and a repository variable can hold anything:
+  // one that does not compile is a setup problem, reported before any call.
+  let pattern;
+  try {
+    pattern = new RegExp(env.RELEASE_TAG_PATTERN || DEFAULT_RELEASE_PATTERN);
+  } catch (e) {
+    const line = `RELEASE_TAG_PATTERN is not a valid pattern (${quoted(e.message)}): fix the repository variable`;
+    writeSetup(env.GITHUB_STEP_SUMMARY, [line]);
+    throw new Error(`setup problems: ${line}`);
+  }
   // A setting pasted with a space around the id is still that id, as the
-  // Worker reads it.
-  const checklistForum = String(env.CHECKLIST_FORUM_ID || '').trim();
+  // Worker reads it. Only a plain id is used: any other set value, spaces
+  // alone included (the workflow starts the checklist job for it), would go
+  // into request paths as typed, so the run does no checklist work and names
+  // it at its end, beside its other setup lines.
+  const checklistSetting = String(env.CHECKLIST_FORUM_ID || '');
+  const checklistForum = isDiscordId(checklistSetting.trim()) ? checklistSetting.trim() : '';
+  const badChecklistLine = checklistSetting && !checklistForum
+    ? `CHECKLIST_FORUM_ID is ${quoted(checklistSetting)}, which is not a Discord channel id: set the repository variable to the staff checklist forum's id, digits only (this run did no staff checklist work)`
+    : null;
   // A re-run of a workflow run keeps its id, so it can still send what the
   // run owes.
   const runId = env.GITHUB_RUN_ID || null;
@@ -104,6 +138,56 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   const done = [];
   const failed = [];
   const report = [];
+  // Setup problems, one line each with its fix, kept apart so the run
+  // finishes every other issue and then fails once. A line holds ids, tag
+  // names and setting names only, so one problem met twice is one line.
+  const setup = [];
+  const setupProblem = (line) => {
+    if (setup.includes(line)) return;
+    setup.push(line);
+    // Logged when met, so a run the job's time limit stops still shows it.
+    log(`setup problem: ${line}`);
+  };
+  // A bad CHECKLIST_FORUM_ID is named with the report, wherever the run
+  // writes one; a failure before any issue work writes none.
+  const reportSetup = () => {
+    if (badChecklistLine) setupProblem(badChecklistLine);
+    if (setup.length) writeSetup(env.GITHUB_STEP_SUMMARY, setup);
+  };
+  // The sweep names every status tag a forum lacks, from every forum read it
+  // makes, its repairs' included; an event run names the one it needs.
+  const sweeping = eventName === 'schedule' || eventName === 'workflow_dispatch';
+  const checkStatusTags = (forumId, tags, names) => {
+    for (const s of names) if (!hasTag(tags, s)) setupProblem(noTagLine(forumId, s));
+  };
+  // The sweep's report, written after the setup section at the run's end.
+  let sweepSummary = null;
+  // A Discord refusal of the bot, named by the request it refused, which the
+  // client keeps apart from the answer's text; a scrubbed checklist error
+  // also carries its kept causes' requests.
+  const noteRefusal = (e) => {
+    for (const d of [e.discord, ...(e.also || [])]) {
+      if (!d) continue;
+      if (d.status === 401) {
+        setupProblem("Discord refused the bot token (401): set the repository secret DISCORD_BOT_TOKEN to the bot's current token");
+        continue;
+      }
+      if (d.status !== 403) continue;
+      // A path's ids are a marker's digits, a plain CHECKLIST_FORUM_ID, or
+      // ones Discord gave: a post's `parent_id` can be null (a marker naming
+      // a channel with no parent), which puts no id in the forum read's path.
+      // Such a refusal names nothing and still fails the run.
+      const [, ch, rest = ''] = /^\/channels\/(\d+)(\/.*)?$/.exec(d.path) || [];
+      if (!ch) continue;
+      if (d.method === 'POST' && rest === '/messages') {
+        setupProblem(`Discord refused the bot's message in post ${ch} (403): give the bot View Channel, Send Messages in Threads and Read Message History (a reply needs it) in that post's forum`);
+      } else if (rest.startsWith('/messages/')) {
+        setupProblem(`Discord refused the bot reading messages in post ${ch} (403): give the bot View Channel and Read Message History in that post's forum`);
+      } else {
+        setupProblem(`Discord refused the bot on channel ${ch} (403), a post or its forum: give the bot View Channel, Manage Threads and Send Messages in Threads in that forum`);
+      }
+    }
+  };
   if (runId) log(`workflow run ${runId}, attempt ${attempt}`);
   // An issue moved in from another repo arrives as `opened`. Its post and
   // its thread already follow it, and a commit-closed one would be told
@@ -465,6 +549,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         await settleNote(note, 'dropped', 'the Discord post is gone');
         return;
       }
+      noteRefusal(e);
       await settleNote(note, 'unconfirmed').catch((err) => log(`#${n}: could not mark the note unconfirmed: ${err.message}`));
       throw e;
     }
@@ -498,7 +583,18 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       try {
         // Triaged says only that the issue is filed: it never costs a staff
         // tag. A status with news still takes the fifth slot, as at filing.
-        r = await discord.setStatus(threadId, want, beforeMove, { dropOther: want !== STATUS.triaged, accepted: wantedAccepted(st.issue) });
+        // Each forum read is checked as it lands, so a failure after it, or a
+        // post gone before the write, never hides a tag the forum lacks. A
+        // post with no free slot is staff's choice and stays a log line.
+        const accepted = wantedAccepted(st.issue);
+        r = await discord.setStatus(threadId, want, beforeMove, {
+          dropOther: want !== STATUS.triaged,
+          accepted,
+          onForum: (forumId, tags) => {
+            checkStatusTags(forumId, tags, sweeping ? STATUS_NAMES : [want]);
+            if (accepted && !hasTag(tags, ACCEPTED)) setupProblem(noAcceptedLine(forumId));
+          },
+        });
       } catch (e) {
         // A deleted post can never be told; its issue still moves. Only the
         // post's own read or write answering 404 says it is gone.
@@ -551,7 +647,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     try {
       const first = await discord.getMessage(threadId, threadId);
       return first && first.author && first.author.id === reporterId ? { replyTo: threadId } : {};
-    } catch {
+    } catch (e) {
+      noteRefusal(e);
       return {};
     }
   }
@@ -584,7 +681,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
 
   // The sweep's Accepted-only repair, on an open issue GitHub wants at
   // Triaged only. It reads no records, claims no note and moves no status.
-  async function repairAccepted(n) {
+  // `readIn` is the forum the sweep's own read of this post showed, with
+  // Accepted.
+  async function repairAccepted(n, readIn) {
     const issue = await gh.getIssue(repo, n);
     if (!eligible(issue)) return;
     if (issue.state !== 'open' || wantedStatus({ issue }, await prsFor(n)) !== STATUS.triaged) {
@@ -595,7 +694,16 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const want = wantedAccepted(issue);
     let r;
     try {
-      r = await discord.fixAccepted(threadId, want);
+      // An Accepted tag deleted since the sweep's own read of this post's
+      // forum is left to the next sweep's read, which names it; any other
+      // gap this read finds (the post changed meanwhile to one in another
+      // forum) is named, the post archived or not.
+      r = await discord.fixAccepted(threadId, want, {
+        onForum: (forumId, tags) => {
+          checkStatusTags(forumId, tags, STATUS_NAMES);
+          if (want && !hasTag(tags, ACCEPTED) && forumId !== readIn) setupProblem(noAcceptedLine(forumId));
+        },
+      });
     } catch (e) {
       if (!postGone(e, threadId)) throw e;
       log(`#${n}: Discord post is gone (${e.message.slice(0, 120)})`);
@@ -633,6 +741,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       return ch && ch.guild_id ? `https://discord.com/channels/${ch.guild_id}/${m.threadId}` : null;
     } catch (err) {
       log(`#${n}: could not find the duplicate's post: ${err.message}`);
+      noteRefusal(err);
       return null;
     }
   }
@@ -677,6 +786,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       } catch (e) {
         log(`#${n}: ${e.message}`);
         failed.push(n);
+        noteRefusal(e);
       }
     }
   }
@@ -706,16 +816,28 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     return eligible(issue) ? issue : null;
   }
 
+  // The checklist job fails on its own error, as it always has; the other
+  // runs also name what the runner meets as setup problems.
+  const checklistOnly = !!env.CHECKLIST_ONLY;
   const checklist = checklistForum
-    ? checklistRunner({ gh, discord, repo, forumId: checklistForum, wanted, records: recordsOf, botIssue, log, now, settleTries: SETTLE_TRIES, owedMs: OWED_MS })
+    ? checklistRunner({
+      gh, discord, repo, forumId: checklistForum, wanted, records: recordsOf, botIssue, log, now, settleTries: SETTLE_TRIES, owedMs: OWED_MS,
+      noteRefusal: checklistOnly ? () => {} : noteRefusal,
+      setupProblem: checklistOnly ? () => {} : setupProblem,
+      sweeping,
+    })
     : null;
 
   // The checklist job: the issue's own events, and only its checklist
   // thread. It sends no message, so it never runs the re-run owed scan.
-  if (env.CHECKLIST_ONLY) {
+  if (checklistOnly) {
     const n = payload.issue && payload.issue.number;
     const ours = eventName === 'issues' && (['opened', 'closed', 'reopened'].includes(payload.action)
       || (['labeled', 'unlabeled'].includes(payload.action) && payload.label && acceptedLabel(payload.label.name)));
+    if (ours && badChecklistLine) {
+      reportSetup();
+      throw new Error(`setup problems: ${badChecklistLine}`);
+    }
     if (!checklist || !ours) {
       log('not a checklist event, or CHECKLIST_FORUM_ID is not set: nothing to do');
       return done;
@@ -780,28 +902,38 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   } else if (eventName === 'issues') {
     const n = payload.issue.number;
     if (payload.action === 'labeled' && payload.label && payload.label.name === LABELS.needsInfo) {
-      const issue = await botIssue(n);
-      // A label taken off before this run started asks for nothing.
-      const m = issue && hasLabel(issue, LABELS.needsInfo) && parseMarker(issue.body);
-      if (m) {
-        const text = MESSAGES.needsInfo(m.reporterId);
-        // One ping per labeling: a rerun of the event finds the note, and a
-        // re-run of this run takes over its own note only if it was never
-        // marked as sending, so the ping goes out at most once.
-        handled.add(n);
-        const note = await claim(n, `needs-info-${String(payload.issue.updated_at || 'once').replace(/\W/g, '')}`, text, null, true);
-        if (note && !hasLabel(await gh.getIssue(repo, n), LABELS.needsInfo)) {
-          await dropNote(note, 'no longer true');
-        } else if (note) {
-          // A locked post does not unarchive on a new message; reopen it first.
-          // A deleted post fails here, before the send, and drops the note.
-          const gone = await discord.unarchive(m.threadId).then(() => false, (e) => {
-            if (statusOf(e) === 404) return true;
-            throw e;
-          });
-          if (gone) await dropNote(note, 'the Discord post is gone');
-          else await deliver(n, m.threadId, note, text, null, m.reporterId ? [m.reporterId] : []);
+      // A failure here ends the run at once, as it always has: caught by
+      // `each`, a failed first read would leave the ping's note to the
+      // owed-note scan, whose ordinary sync can move the post and tell its
+      // player. Its setup problems are reported before the throw.
+      try {
+        const issue = await botIssue(n);
+        // A label taken off before this run started asks for nothing.
+        const m = issue && hasLabel(issue, LABELS.needsInfo) && parseMarker(issue.body);
+        if (m) {
+          const text = MESSAGES.needsInfo(m.reporterId);
+          // One ping per labeling: a rerun of the event finds the note, and a
+          // re-run of this run takes over its own note only if it was never
+          // marked as sending, so the ping goes out at most once.
+          handled.add(n);
+          const note = await claim(n, `needs-info-${String(payload.issue.updated_at || 'once').replace(/\W/g, '')}`, text, null, true);
+          if (note && !hasLabel(await gh.getIssue(repo, n), LABELS.needsInfo)) {
+            await dropNote(note, 'no longer true');
+          } else if (note) {
+            // A locked post does not unarchive on a new message; reopen it first.
+            // A deleted post fails here, before the send, and drops the note.
+            const gone = await discord.unarchive(m.threadId).then(() => false, (e) => {
+              if (statusOf(e) === 404) return true;
+              throw e;
+            });
+            if (gone) await dropNote(note, 'the Discord post is gone');
+            else await deliver(n, m.threadId, note, text, null, m.reporterId ? [m.reporterId] : []);
+          }
         }
+      } catch (e) {
+        noteRefusal(e);
+        reportSetup();
+        throw e;
       }
     } else if (['opened', 'closed', 'reopened'].includes(payload.action)) {
       // At `opened` the Worker has tagged a post with no status Triaged and
@@ -820,6 +952,20 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     // and neither tells anyone.
     const fix = env.SWEEP_MODE === 'fix';
     const issues = (await gh.issuesWithLabel(repo, LABELS.fromDiscord)).filter(eligible);
+    // Unset reads as report, as before. Checked after the list, so a failed
+    // list never holds a collected line.
+    if (env.SWEEP_MODE && env.SWEEP_MODE !== 'report' && !fix) {
+      setupProblem(`SWEEP_MODE is ${quoted(env.SWEEP_MODE)}, which is neither report nor fix: set the repository variable to one of them (this sweep ran in report mode)`);
+    }
+    // Every post read carries its forum's tags as read then, so each read is
+    // checked, at no extra call: a tag renamed between two reads is still
+    // named. Accepted counts for an issue that wants it, archived post or not.
+    // A post in a channel that is no forum (`forumTags`) names nothing.
+    const checkForum = (read, issue) => {
+      if (!read.tags) return;
+      checkStatusTags(read.parentId, read.tags, STATUS_NAMES);
+      if (wantedAccepted(issue) && !hasTag(read.tags, ACCEPTED)) setupProblem(noAcceptedLine(read.parentId));
+    };
     let wrong = 0;
     let ckSpent = 0;
     const ckLeft = [];
@@ -892,12 +1038,14 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       } catch (e) {
         // The issue's failure line at the end of the sweep logs the error.
         // Only the post's own read answering 404 says it is gone.
+        noteRefusal(e);
         if (!postGone(e, threadId)) {
           unread = e;
           parts.push('Discord post not read (see the log)');
         }
         shown = undefined; // the post is gone, or was not read
       }
+      if (post) checkForum(post, st.issue);
       if (!(want.length === has.length && want.every((l) => has.includes(l)))) {
         parts.push(`labels ${has.join(', ') || '(none)'} -> ${want.join(', ') || '(none)'}`);
       }
@@ -989,6 +1137,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           ck = { parts: [`staff checklist not read: ${e.message.slice(0, 200)}`], repair: false, unread: e };
         }
       }
+      if (ck.unread) noteRefusal(ck.unread);
+      if (ck.seen) checklist.checkSeen(ck.seen);
       // An Accepted line alone never starts the status repair: its quiet move
       // could leave a run that is about to tell the player nothing to send.
       const accFix = accRepairable && !owed.length;
@@ -1010,13 +1160,15 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           // A post whose status repair failed gets no Accepted write either.
           playerStop = true;
           errors.push(e.message);
+          noteRefusal(e);
         }
       }
       if (fix && accFix && !unread && !playerStop) {
         try {
-          await repairAccepted(n);
+          await repairAccepted(n, post.parentId);
         } catch (e) {
           errors.push(e.message);
+          noteRefusal(e);
         }
       }
       if (fix && ck.repair && ckSpent >= CHECKLIST_SWEEP_MS) ckLeft.push(n);
@@ -1025,6 +1177,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           await ckTimed(() => checklist.mirror(n));
         } catch (e) {
           errors.push(`staff checklist: ${e.message}`);
+          noteRefusal(e);
         }
       }
       if (ck.unread) errors.push(`staff checklist thread not read (${ck.unread.message.slice(0, 200)})`);
@@ -1038,7 +1191,13 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const head = `sweep (${fix ? 'fix' : 'report'} mode): ${wrong} of ${issues.length} issue(s) out of step`;
     log(head);
     if (env.GITHUB_STEP_SUMMARY) {
-      appendFileSync(env.GITHUB_STEP_SUMMARY, [`### Discord status ${head}`, '', ...report.map((l) => `- ${l}`), ''].join('\n'));
+      // A report line can quote text from outside the code (a note's message,
+      // an error), which can hold Markdown or HTML. Each line stays one
+      // bullet, and every backslash, backtick and `<` is shown as typed, so
+      // no code span, comment, tag or heading can form, whatever the quoted
+      // text holds.
+      const asText = (l) => l.replace(/\s+/g, ' ').replace(/[\\`]/g, '\\$&').replace(/</g, '&lt;');
+      sweepSummary = [`### Discord status ${head}`, '', ...report.map((l) => `- ${asText(l)}`), ''].join('\n');
     }
   }
 
@@ -1046,8 +1205,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // left a note it never sent. The event may no longer lead to that issue: a
   // tag run's window of recent closes has moved on, or a PR no longer links
   // it. The sync then sends the note while it is still true.
-  // With the checklist on, a failed owed-note scan is kept, so the checklist
-  // work below still runs; with it off, it is thrown at once.
+  // With the checklist on, or a setup line met or due, a failed owed-note
+  // scan is kept, so the checklist work and the setup report below still
+  // run; otherwise it is thrown at once.
   let rerunFailed = null;
   if (runId && attempt > 1 && eventName !== 'schedule' && eventName !== 'workflow_dispatch') {
     try {
@@ -1059,7 +1219,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       }
       await each(owing, (n) => sync(n));
     } catch (e) {
-      if (!checklist) throw e;
+      if (!checklist && !setup.length && !badChecklistLine) throw e;
       rerunFailed = e;
       log(`re-run owed-note scan failed: ${e.message.slice(0, 200)}`);
     }
@@ -1076,6 +1236,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       } catch (e) {
         log(`#${n}: staff checklist: ${e.message}`);
         ckFailed.push(n);
+        noteRefusal(e);
       }
     }
   }
@@ -1085,18 +1246,39 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   if (rerunFailed) problems.push(`the re-run's owed-note scan failed (${rerunFailed.message.slice(0, 200)})`);
   if (failed.length) problems.push(`could not update issue(s) ${failed.map((n) => `#${n}`).join(', ')}; see above`);
   if (ckFailed.length) problems.push(`checklist thread(s) not updated for ${ckFailed.map((n) => `#${n}`).join(', ')}; see above`);
+  reportSetup();
+  if (sweepSummary) appendFileSync(env.GITHUB_STEP_SUMMARY, sweepSummary);
+  if (setup.length) problems.push(`setup problems: ${setup.join('; ')}`);
   if (problems.length) throw new Error(problems.join('; '));
   return done;
 }
 
+// With no bot token, a repo with no issue the bot filed is skipped, so the
+// workflow can be merged before the bot is set up; a labeled PR or a
+// hand-labeled issue does not count. A repo with one fails, with the fix in
+// the job summary.
+export async function main({ eventName, payload, env, fetchImpl = fetch, log = console.log }) {
+  if (env.DISCORD_BOT_TOKEN) return run({ eventName, payload, env, fetchImpl, log });
+  let line = null;
+  try {
+    // issuesWithLabel leaves PRs out; `eligible` needs the bot's marker too.
+    const labeled = await githubClient(env.GITHUB_TOKEN, timedFetch(fetchImpl, CALL_MS)).issuesWithLabel(repoOf(payload, env), LABELS.fromDiscord);
+    if (labeled.some(eligible)) line = 'DISCORD_BOT_TOKEN is not set, but this repo has issues the bot filed: add the repository secret DISCORD_BOT_TOKEN';
+  } catch (e) {
+    line = `DISCORD_BOT_TOKEN is not set, and the bot's issues could not be checked (${quoted(e.message, 200)}): add the repository secret DISCORD_BOT_TOKEN, or re-run this run`;
+  }
+  if (!line) {
+    log('DISCORD_BOT_TOKEN is not set: skipping Discord updates');
+    return [];
+  }
+  writeSetup(env.GITHUB_STEP_SUMMARY, [line]);
+  throw new Error(`setup problems: ${line}`);
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const payload = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
-  if (!process.env.DISCORD_BOT_TOKEN) {
-    console.log('DISCORD_BOT_TOKEN is not set: skipping Discord updates');
-  } else {
-    run({ eventName: process.env.GITHUB_EVENT_NAME, payload, env: process.env }).catch((e) => {
-      console.error(e);
-      process.exit(1);
-    });
-  }
+  main({ eventName: process.env.GITHUB_EVENT_NAME, payload, env: process.env }).catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
 }

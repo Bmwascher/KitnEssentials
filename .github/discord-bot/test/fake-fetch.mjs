@@ -56,6 +56,7 @@ export function fakeKv(init = {}) {
 // A help forum with client and type tags, plus the bot's status and Accepted tags.
 export const FORUM = {
   id: '900',
+  type: 15,
   available_tags: [
     { id: 't-retail', name: 'Retail' }, { id: 't-forever', name: 'Forever' },
     { id: 't-bug', name: 'Bug' }, { id: 't-feedback', name: 'Feedback/Request' }, { id: 't-staff', name: 'Staff note' },

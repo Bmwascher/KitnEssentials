@@ -3,8 +3,11 @@ name: Discord status
 # Keeps each forum post the bot made in step with its GitHub issue: the
 # issue's state, the commit that closed it, the release tags, and its open PRs
 # decide the post's status tag (Triaged, In progress, Fixed, Shipped, Closed).
-# Only touches issues labeled `from-discord`. Does nothing until the
-# DISCORD_BOT_TOKEN secret is set. An issue's opened run settles its post's
+# Only touches issues labeled `from-discord`. Without the DISCORD_BOT_TOKEN
+# secret it skips while the repo has no issue the bot filed, and fails once it
+# has one. A setup problem (a forum missing a tag, Discord refusing the bot, a
+# bad repository variable) fails the status job after its other work, with the
+# fix in the job summary. An issue's opened run settles its post's
 # status tag; the script leaves an issue the bot did not file alone. With the
 # CHECKLIST_FORUM_ID repository variable set, the checklist job opens one
 # staff checklist thread per issue at the issue's own events, and PR and
@@ -68,7 +71,7 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/discord-bot
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Update the Discord post
@@ -109,7 +112,7 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/discord-bot
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Update the merge-plan comment
@@ -140,7 +143,7 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/discord-bot
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Show the event

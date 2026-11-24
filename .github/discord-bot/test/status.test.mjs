@@ -1,8 +1,11 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { run } from '../status/status.mjs';
+import { run, main } from '../status/status.mjs';
 import { world, shippedIn } from './fake-world.mjs';
 import { FORUM } from './fake-fetch.mjs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const env = { GITHUB_TOKEN: 'gh', DISCORD_BOT_TOKEN: 'bot', RELEASE_TAG_PATTERN: '^v\\d' };
 const repository = { full_name: 'me/one', default_branch: 'dev' };
@@ -14,6 +17,42 @@ const go = (w, eventName, payload, over = {}) => run({ eventName, payload: { rep
 const prEvent = (w, number, action = 'opened') => go(w, PR, { action, pull_request: { number } });
 const closed = (w, n) => go(w, 'issues', { action: 'closed', issue: { number: n } });
 const tag = (w, name, extra = {}) => go(w, 'push', { ref: `refs/tags/${name}`, created: true, after: `obj-${name}`, head_commit: { id: `c-${name}` }, ...extra });
+
+// Forum 900 answers without the named tags until the returned restore runs;
+// a failed answer passes through as it is.
+const dropTag = (w, ...names) => {
+  const real = w.fetch;
+  w.fetch = async (url, init = {}) => {
+    const r = await real(url, init);
+    if (!r.ok || !/discord\.com\/api\/v10\/channels\/900$/.test(url) || (init.method || 'GET') !== 'GET') return r;
+    const forum = await r.json();
+    forum.available_tags = forum.available_tags.filter((t) => !names.includes(t.name));
+    return new Response(JSON.stringify(forum));
+  };
+  return () => { w.fetch = real; };
+};
+// Every job summary of this file's cases sits in one folder, removed at the end.
+const SUMMARIES = mkdtempSync(join(tmpdir(), 'status-summary-'));
+after(() => rmSync(SUMMARIES, { recursive: true }));
+let summaries = 0;
+const tmpSummary = () => {
+  const p = join(SUMMARIES, `${++summaries}.md`);
+  writeFileSync(p, '');
+  return p;
+};
+// The setup section's problem lines, as the summary shows them. The section
+// appears at most once, runs to the next heading (a sweep's report) or the
+// end, and holds its bullets, then one paragraph of advice.
+const setupBullets = (path) => {
+  const sections = readFileSync(path, 'utf8').split('### Discord status: setup problems\n').slice(1);
+  if (!sections.length) return [];
+  assert.equal(sections.length, 1, 'one setup section');
+  const paragraphs = sections[0].slice(1).split(/\n(?=### )/)[0].replace(/\n$/, '').split('\n\n');
+  assert.equal(paragraphs.length, 2, 'the bullets, then the advice, and nothing else');
+  assert.match(paragraphs[1], /\S/, 'the advice has text');
+  assert.doesNotMatch(paragraphs[1], /^- /m, 'the advice is no bullet');
+  return paragraphs[0].split('\n');
+};
 
 // ---- In progress -----------------------------------------------------------
 
@@ -525,18 +564,9 @@ test('a forum missing a status tag does not repeat the message on every sync', a
   const w = world();
   w.issue(17);
   w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
-  const noProg = w.fetch;
-  w.fetch = async (url, init) => {
-    const r = await noProg(url, init);
-    if (/channels\/900$/.test(url)) {
-      const forum = await r.json();
-      forum.available_tags = forum.available_tags.filter((t) => t.name !== 'In progress');
-      return new Response(JSON.stringify(forum));
-    }
-    return r;
-  };
-  await prEvent(w, 5);
-  await prEvent(w, 5, 'reopened');
+  dropTag(w, 'In progress');
+  await assert.rejects(prEvent(w, 5), /forum 900 has no "In progress" tag: add it, spelled as the README lists it/);
+  await assert.rejects(prEvent(w, 5, 'reopened'), /forum 900 has no "In progress" tag/);
   assert.deepEqual(w.said('717'), []);
   assert.equal(w.tagOf('717'), 'Triaged');
 });
@@ -572,10 +602,7 @@ test('a shipped issue with no ship record (shipped before records existed) stays
 });
 
 test('the sweep reports a post with no status tag, and a missing ship record, into the job summary', async () => {
-  const { mkdtempSync, readFileSync } = await import('node:fs');
-  const { join } = await import('node:path');
-  const { tmpdir } = await import('node:os');
-  const summary = join(mkdtempSync(join(tmpdir(), 'sweep-')), 'summary.md');
+  const summary = tmpSummary();
   const w = world();
   w.issue(17);
   w.thread('717', { applied_tags: ['t-retail'] });
@@ -868,17 +895,6 @@ const closeRun = (w, over) => go(w, 'issues', { action: 'closed', issue: { numbe
 const sweepFix = (w, out) => run({ eventName: 'schedule', payload: {}, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: (s) => out.push(s), now: () => w.clock });
 const fixedNotes = (w) => w.issues.get(17).comments.filter((c) => /discord-told: fixed-/.test(c.body));
 const refuseTagWrite = (w) => w.fail.push(['PATCH', /channels\/717$/, new Response('{"message":"Missing Permissions"}', { status: 403 }), 1]);
-// The forum has no Fixed tag while `gone()` says so.
-const withoutFixedTag = (w, gone) => {
-  const real = w.fetch;
-  w.fetch = async (url, init) => {
-    const r = await real(url, init);
-    if (!gone() || !/channels\/900$/.test(url)) return r;
-    const forum = await r.json();
-    forum.available_tags = forum.available_tags.filter((t) => t.name !== 'Fixed, next update');
-    return new Response(JSON.stringify(forum));
-  };
-};
 
 test('of two runs that write a note for one message at once, the later drops its own note', async () => {
   const w = world();
@@ -901,19 +917,19 @@ test('a message stopped by a setup problem stays owed: the sweep leaves the post
     const w = world();
     w.issue(17);
     w.close(17, 'completed', 'aaaaaaa1');
-    let broken = true;
+    let restore = () => {};
     if (problem === 'tag write refused') {
       refuseTagWrite(w);
       await assert.rejects(closeRun(w, RUN), /#17/);
     } else {
-      withoutFixedTag(w, () => broken);
-      await closeRun(w, RUN);
+      restore = dropTag(w, 'Fixed, next update');
+      await assert.rejects(closeRun(w, RUN), /forum 900 has no "Fixed, next update" tag/);
     }
     assert.equal(w.tagOf('717'), 'Triaged', problem);
     assert.deepEqual(w.said('717'), [], problem);
     assert.match(fixedNotes(w)[0].body, /^Notification attempted: \*\*Fixed!\*\*/, problem);
 
-    broken = false;
+    restore();
     // A sweep right after the failure leaves the post too.
     await sweepFix(w, []);
     assert.equal(w.tagOf('717'), 'Triaged', `${problem}: an immediate sweep leaves the post`);
@@ -1550,7 +1566,7 @@ test('AT7: the sweep lists each Accepted gap on an active post, and none on an a
     withLabel(w, 17);
     w.threads.get('717').archived = false;
     const out = [];
-    await sweepRun(w, 'report', out);
+    await assert.rejects(sweepRun(w, 'report', out), /setup problems: forum 900 has no "Accepted" tag, which issues with the accepted label need/);
     assert.match(out.find((l) => l.startsWith('#17: ')) || '', /^#17: the forum has no Accepted tag$/);
   } finally {
     FORUM.available_tags = saved;
@@ -1823,4 +1839,392 @@ test('a moved post\'s status messages reply to the copy and start with the repor
     assert.match(m.content, mention ? /^<@42> \*\*Fixed!\*\*/ : /^\*\*Fixed!\*\*/, why);
     assert.deepEqual(m.allowed_mentions, { parse: [], users: mention ? ['42'] : [], replied_user: true }, why);
   }
+});
+// ---- Setup problems -----------------------------------------------------------------
+
+test('PT5: a forum missing a status tag fails the run once, after every other issue, with its fix in the summary; a re-run sends what it owes', async () => {
+  const w = world();
+  w.issue(17);
+  w.issue(18);
+  w.issue(19);
+  w.threads.get('718').parent_id = '901';
+  // Tag ids of its own, so a write built from the other forum's tags shows.
+  const own = (id) => `h-${id}`;
+  w.extraForums.set('901', { ...structuredClone(FORUM), id: '901', available_tags: FORUM.available_tags.map((t) => ({ ...t, id: own(t.id) })) });
+  w.threads.get('718').applied_tags = w.threads.get('718').applied_tags.map(own);
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17, 18, 19] });
+  // Shipped, which this PR run does not need, goes too: an event run names
+  // only the tag it needs.
+  const restore = dropTag(w, 'In progress', 'Shipped');
+  const summary = tmpSummary();
+  const out = [];
+  const pr = (over, log = quiet) => run({
+    eventName: PR, payload: { repository, action: 'opened', pull_request: { number: 5 } },
+    env: { ...env, GITHUB_RUN_ID: '77', ...over }, fetchImpl: w.fetch, log,
+  });
+  await assert.rejects(pr({ GITHUB_STEP_SUMMARY: summary }, (s) => out.push(s)),
+    /^Error: setup problems: forum 900 has no "In progress" tag: add it, spelled as the README lists it$/);
+  assert.deepEqual(setupBullets(summary), ['- forum 900 has no "In progress" tag: add it, spelled as the README lists it'], 'one line for the two issues in that forum');
+  assert.deepEqual(out.filter((l) => l.startsWith('setup problem: ')), ['setup problem: forum 900 has no "In progress" tag: add it, spelled as the README lists it'],
+    'logged once, when first met');
+  assert.equal(w.said('718').length, 1, "the healthy forum's player was told in that run");
+  assert.ok(w.threads.get('718').applied_tags.includes(own('s-prog')), "the healthy post shows its own forum's In progress tag");
+  assert.deepEqual([w.said('717'), w.said('719')], [[], []], "the broken forum's players were not");
+  restore();
+  await pr({ GITHUB_RUN_ATTEMPT: '2', GITHUB_STEP_SUMMARY: tmpSummary() });
+  assert.deepEqual([w.said('717').length, w.said('718').length, w.said('719').length], [1, 1, 1], 'the re-run sends the owed messages and nothing more');
+});
+
+test('PT5: a forum without the Accepted tag an accepted issue needs fails the run, whether the status moves, already shows, has no slot, its write fails, or the post goes before the write', async () => {
+  const fiveOthers = ['t-retail', 't-forever', 't-bug', 't-feedback', 't-staff'];
+  const fixPr = (w) => w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  const alone = /^Error: setup problems: forum 900 has no "Accepted" tag, which issues with the accepted label need: add it, spelled as the README lists it$/;
+  for (const [why, setup, event, line, shown, told] of [
+    ['the status moves', fixPr, (w) => prEvent(w, 5), alone, 'In progress', 1],
+    ['the post already shows the status', (w) => { fixPr(w); w.threads.get('717').applied_tags = ['t-retail', 's-prog']; }, (w) => prEvent(w, 5), alone, 'In progress', 0],
+    ['five other tags leave Triaged no slot', (w) => { w.threads.get('717').applied_tags = [...fiveOthers]; },
+      (w) => go(w, 'issues', { action: 'reopened', issue: { number: 17 } }), alone, null, 0],
+    ['the status write fails', (w) => { fixPr(w); refuseTagWrite(w); },
+      (w) => prEvent(w, 5), /^Error: could not update issue\(s\) #17; see above; setup problems: forum 900 has no "Accepted" tag, which issues with the accepted label need/, 'Triaged', 0],
+    // The post's read just before the write answers 404, so the run takes the
+    // post as gone and has no other failure.
+    ['the post goes before the write', (w) => {
+      fixPr(w);
+      let once = false;
+      w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/900$/, async () => {
+        if (once) return;
+        once = true;
+        w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717$/, new Response('{"message":"Unknown Channel","code":10003}', { status: 404 }), 1]);
+      }]);
+    }, (w) => prEvent(w, 5), alone, 'Triaged', 0],
+  ]) {
+    const w = world();
+    w.issue(17, { labels: ['from-discord', 'accepted'] });
+    setup(w);
+    dropTag(w, 'Accepted');
+    await assert.rejects(event(w), line, why);
+    assert.equal(w.tagOf('717') || null, shown, why);
+    assert.equal(w.said('717').length, told, `${why}: the player messages are as before`);
+  }
+});
+
+test('PT5: an invalid RELEASE_TAG_PATTERN fails the run before any call, its error shown as written on one summary line', async () => {
+  for (const [why, pattern] of [['an unclosed group', '('], ['a pattern holding a line break', 'v\\d\n(']]) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    const summary = tmpSummary();
+    await assert.rejects(closeRun(w, { RELEASE_TAG_PATTERN: pattern, GITHUB_STEP_SUMMARY: summary }), /^Error: setup problems: RELEASE_TAG_PATTERN is not a valid pattern \(/, why);
+    assert.deepEqual(w.calls, [], `${why}: no call`);
+    const lines = setupBullets(summary);
+    assert.equal(lines.length, 1, why);
+    assert.match(lines[0], /^- RELEASE_TAG_PATTERN is not a valid pattern \(`Invalid regular expression: [^\n`]*`\): fix the repository variable$/, why);
+  }
+});
+
+test('PT5: a re-run whose owed-note scan fails reports the setup problems it met, throws its own error when it met none, and a clean run writes no setup section', async () => {
+  for (const [why, broken, over, line, bullets] of [
+    ['a setup problem met', true, {}, /^Error: the re-run's owed-note scan failed \(.*\); setup problems: forum 900 has no "Fixed, next update" tag/,
+      ['- forum 900 has no "Fixed, next update" tag: add it, spelled as the README lists it']],
+    // Named only at the end, so the scan's failure is kept for it.
+    ['a bad CHECKLIST_FORUM_ID due', false, { CHECKLIST_FORUM_ID: './950' }, /^Error: the re-run's owed-note scan failed \(.*\); setup problems: CHECKLIST_FORUM_ID is `\.\/950`/,
+      ["- CHECKLIST_FORUM_ID is `./950`, which is not a Discord channel id: set the repository variable to the staff checklist forum's id, digits only (this run did no staff checklist work)"]],
+    ['none met: the scan error itself', false, {}, /^Error: GitHub GET \/repos\/me\/one\/issues\?/, []],
+  ]) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    if (broken) dropTag(w, 'Fixed, next update');
+    w.fail.push(['GET', /\/repos\/me\/one\/issues\?/, new Response('{}', { status: 500 }), 1]);
+    const summary = tmpSummary();
+    await assert.rejects(closeRun(w, { ...RUN, GITHUB_RUN_ATTEMPT: '2', GITHUB_STEP_SUMMARY: summary, ...over }), line, why);
+    assert.deepEqual(setupBullets(summary), bullets, why);
+  }
+  {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    const summary = tmpSummary();
+    await closeRun(w, { GITHUB_STEP_SUMMARY: summary });
+    assert.equal(readFileSync(summary, 'utf8'), '');
+  }
+});
+
+test('PT5: a Discord refusal is named by what it refused, and the run still finishes its other work first', async () => {
+  const refused = (status) => new Response('{"message":"Missing Access"}', { status });
+  const channel = (id) => `Discord refused the bot on channel ${id} (403), a post or its forum: give the bot View Channel, Manage Threads and Send Messages in Threads in that forum`;
+  const named = (id) => new RegExp(`setup problems: ${channel(id).replace(/[()]/g, '\\$&')}`);
+  const needsInfo = (w) => {
+    const i = w.issues.get(17);
+    i.labels.add('needs-info');
+    return go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } },
+      { ...RUN, GITHUB_STEP_SUMMARY: w.summary, CHECKLIST_FORUM_ID: './950' });
+  };
+  for (const [why, setup, event, line, check = () => {}] of [
+    ['a refused post, then a healthy one', (w) => {
+      w.issue(18);
+      w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17, 18] });
+      w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717$/, refused(403), 99]);
+    }, (w) => go(w, PR, { action: 'opened', pull_request: { number: 5 } }, { GITHUB_STEP_SUMMARY: w.summary }),
+    /^Error: could not update issue\(s\) #17; see above; setup problems: Discord refused the bot on channel 717 \(403\)/,
+    (w) => {
+      assert.equal(w.said('718').length, 1, 'the healthy issue after it is still told');
+      assert.deepEqual(setupBullets(w.summary), [`- ${channel(717)}`]);
+    }],
+    ['the send', (w) => { w.close(17, 'completed', 'aaaaaaa1'); w.fail.push(['POST', /discord\.com\/api\/v10\/channels\/717\/messages$/, refused(403), 99]); },
+      (w) => closed(w, 17),
+      /setup problems: Discord refused the bot's message in post 717 \(403\): give the bot View Channel, Send Messages in Threads and Read Message History \(a reply needs it\) in that post's forum/],
+    ['the token', (w) => { w.close(17, 'completed', 'aaaaaaa1'); w.fail.push(['GET', /discord\.com\/api\/v10\//, refused(401), 99]); },
+      (w) => closed(w, 17), /setup problems: Discord refused the bot token \(401\): set the repository secret DISCORD_BOT_TOKEN to the bot's current token/],
+    ["the reporter's first message", (w) => {
+      w.close(17, 'completed', 'aaaaaaa1');
+      // The starter is the reporter's, so a readable one would make the message a reply.
+      w.threads.get('717').starter = { author: { id: '42' }, content: 'hi' };
+      w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717\/messages\/717$/, refused(403), 99]);
+    }, (w) => closed(w, 17),
+    /^Error: setup problems: Discord refused the bot reading messages in post 717 \(403\): give the bot View Channel and Read Message History in that post's forum$/,
+    (w) => {
+      const [sent] = w.threads.get('717').messages;
+      assert.equal(w.threads.get('717').messages.length, 1, 'the message still went out');
+      assert.deepEqual([sent.message_reference, sent.allowed_mentions.replied_user], [undefined, undefined], 'plain: no reply, no ping');
+    }],
+    ["the duplicate's post", (w) => { w.issue(18); w.close(17, 'duplicate', null, null, 18); w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/718$/, refused(403), 99]); },
+      (w) => closed(w, 17), named(718),
+      (w) => {
+        assert.equal(w.said('717').length, 1, 'the message still went out');
+        assert.doesNotMatch(w.said('717')[0], /718/, 'without the link');
+      }],
+    // Its report also names a bad CHECKLIST_FORUM_ID, which the run's end,
+    // never reached, would have named.
+    ['the needs-info reopen: the event stops at once, as before, with its lines in the summary', (w) => refuseTagWrite(w), needsInfo,
+      /^Error: Discord PATCH \/channels\/717 -> 403 /, (w) => assert.deepEqual(setupBullets(w.summary), [`- ${channel(717)}`,
+        "- CHECKLIST_FORUM_ID is `./950`, which is not a Discord channel id: set the repository variable to the staff checklist forum's id, digits only (this run did no staff checklist work)"])],
+    ["the sweep's post read", (w) => w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717$/, refused(403), 99]), (w) => sweepRun(w, 'report'), named(717)],
+    ["a fix-mode sweep's status repair", (w) => { w.close(17, 'completed', 'aaaaaaa1'); refuseTagWrite(w); }, (w) => sweepRun(w, 'fix'), named(717)],
+    ["a fix-mode sweep's Accepted repair", (w) => { w.issues.get(17).labels.add('accepted'); w.threads.get('717').archived = false; refuseTagWrite(w); },
+      (w) => sweepRun(w, 'fix'), named(717)],
+  ]) {
+    const w = world();
+    w.issue(17);
+    w.summary = tmpSummary();
+    setup(w);
+    await assert.rejects(event(w), line, why);
+    check(w);
+  }
+});
+
+test('PT5: a refused send is logged as a setup problem before its note is marked Unconfirmed, so a run stopped there still shows it', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  w.fail.push(['POST', /discord\.com\/api\/v10\/channels\/717\/messages$/, new Response('{"message":"Missing Access"}', { status: 403 }), 99]);
+  const out = [];
+  let atMark = null;
+  w.hooks.push(['PATCH', /\/issues\/comments\/\d+$/, async (call) => {
+    if (atMark === null && /discord-unconfirmed/.test(call.body.body)) atMark = out.filter((l) => l.startsWith('setup problem: '));
+  }]);
+  await assert.rejects(run({ eventName: 'issues', payload: { repository, action: 'closed', issue: { number: 17 } }, env, fetchImpl: w.fetch, log: (s) => out.push(s) }),
+    /setup problems: Discord refused the bot's message in post 717 \(403\)/);
+  assert.deepEqual(atMark, ["setup problem: Discord refused the bot's message in post 717 (403): give the bot View Channel, Send Messages in Threads and Read Message History (a reply needs it) in that post's forum"]);
+});
+
+test('PT5: a needs-info re-run whose issue read fails stops there, so no other step moves the post or tells the player', async () => {
+  const w = world();
+  const i = w.issue(17);
+  i.labels.add('needs-info');
+  const ev = { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } };
+  refuseTagWrite(w);
+  await assert.rejects(go(w, 'issues', ev, RUN), /-> 403/);
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  w.fail.push(['GET', /\/repos\/me\/one\/issues\/17$/, new Response('{}', { status: 500 }), 1]);
+  await assert.rejects(go(w, 'issues', ev, { ...RUN, GITHUB_RUN_ATTEMPT: '2' }), /^Error: GitHub GET \/repos\/me\/one\/issues\/17 -> 500/);
+  assert.deepEqual(w.said('717'), [], 'no message');
+  assert.equal(w.tagOf('717'), 'Triaged', 'no move');
+});
+
+test('PT5: the sweep checks the forum of every post it reads, and its own mode, and is red in report mode too', async () => {
+  const writes = (w) => w.calls.filter((c) => c.method !== 'GET' && !/graphql$/.test(c.url));
+  {
+    const w = world();
+    w.issue(17);
+    dropTag(w, 'Shipped');
+    const summary = tmpSummary();
+    await assert.rejects(sweepRun(w, 'report', [], { GITHUB_STEP_SUMMARY: summary }), /^Error: setup problems: forum 900 has no "Shipped" tag: add it, spelled as the README lists it$/);
+    assert.deepEqual(writes(w), [], 'report mode writes nothing');
+    assert.deepEqual(setupBullets(summary), ['- forum 900 has no "Shipped" tag: add it, spelled as the README lists it']);
+    const text = readFileSync(summary, 'utf8');
+    const setupAt = text.indexOf('### Discord status: setup problems');
+    assert.ok(setupAt >= 0 && setupAt < text.indexOf('### Discord status sweep'),
+      'the setup section comes before the report, so nothing a report line quotes can hide it');
+  }
+  {
+    // A quoted note's text stays inside its one report bullet: no heading,
+    // list, comment, tag or code span of its own, whatever backticks or
+    // backslashes surround its `<` (runs of unequal length, an escaped
+    // backtick, a stray one). The checklist marker a damaged record tells
+    // staff to copy, on the same line, reads as typed.
+    const w = world();
+    w.issue(17);
+    w.record(17, 'Unconfirmed (the send failed; the player may not have it): hi\n\n### Discord status: setup problems\n\n- forged <!-- x <h3>y</h3> ``<b>` \\`<i>` `\n\n<!-- discord-told: k -->\n<!-- discord-unconfirmed -->');
+    w.record(17, '<!-- discord-checklist: broken -->');
+    const summary = tmpSummary();
+    await sweepRun(w, 'report', [], { GITHUB_STEP_SUMMARY: summary, CHECKLIST_FORUM_ID: '950' });
+    assert.deepEqual(setupBullets(summary), [], 'no setup section');
+    const text = readFileSync(summary, 'utf8');
+    assert.ok(text.includes('\n- #17: message "hi ### Discord status: setup problems - forged &lt;!-- x &lt;h3>y&lt;/h3> \\`\\`&lt;b>\\` \\\\\\`&lt;i>\\` \\`" may not have reached the player ('),
+      'every backslash, backtick and < in the note is shown as typed');
+    assert.ok(text.includes('reads \\`&lt;!-- discord-checklist: THREAD-ID guild: SERVER-ID -->\\`, with'), 'the marker reads as typed');
+  }
+  {
+    // A post in a channel that is no forum: the Worker's daily setup check
+    // names that channel; the sweep names nothing.
+    const w = world();
+    w.issue(17);
+    w.extraForums.set('902', { id: '902', type: 0 });
+    w.threads.get('717').parent_id = '902';
+    const out = [];
+    await sweepRun(w, 'report', out);
+    assert.deepEqual(out.filter((l) => l.startsWith('setup problem: ')), []);
+  }
+  {
+    // The tag goes between the two posts' reads of their forum: the second
+    // read still names it. The hook runs before the fake serves that read.
+    const w = world();
+    w.issue(17);
+    w.issue(18);
+    const forum = { ...structuredClone(FORUM), id: '901' };
+    w.extraForums.set('901', forum);
+    for (const id of ['717', '718']) w.threads.get(id).parent_id = '901';
+    let reads = 0;
+    w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/901$/, async () => {
+      if (++reads === 2) forum.available_tags = forum.available_tags.filter((t) => t.name !== 'Shipped');
+    }]);
+    await assert.rejects(sweepRun(w, 'report'), /^Error: setup problems: forum 901 has no "Shipped" tag: add it, spelled as the README lists it$/);
+  }
+  {
+    // The world's posts are archived, which the Accepted report line passes over.
+    const w = world();
+    withLabel(w, 17);
+    dropTag(w, 'Accepted');
+    await assert.rejects(sweepRun(w, 'report'),
+      /^Error: setup problems: forum 900 has no "Accepted" tag, which issues with the accepted label need: add it, spelled as the README lists it$/);
+  }
+  // The last row's emoji sits across the 80-character cut and stays whole.
+  for (const [mode, shown] of [['fixx', '`fixx`'], ['fix\nx', '`fix x`'], ['fi<!--x-->x', '`fi<!--x-->x`'], ['fi`x', '``fi`x``'], [' fix ', '`  fix  `'],
+    [`${'x'.repeat(79)}\u{1F600}y`, `\`${'x'.repeat(79)}\u{1F600}\``]]) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    const summary = tmpSummary();
+    await assert.rejects(sweepRun(w, mode, [], { GITHUB_STEP_SUMMARY: summary }), /setup problems: SWEEP_MODE is /, shown);
+    assert.deepEqual(writes(w), [], `${shown}: it ran in report mode`);
+    assert.deepEqual(setupBullets(summary),
+      [`- SWEEP_MODE is ${shown}, which is neither report nor fix: set the repository variable to one of them (this sweep ran in report mode)`], shown);
+  }
+});
+
+test('PT5: a fix sweep names a status tag gone between its read of a post and its repair of it', async () => {
+  for (const [why, setup] of [
+    ['the status repair', (w) => w.close(17, 'completed', 'aaaaaaa1')],
+    ['the Accepted repair', (w) => { w.issues.get(17).labels.add('accepted'); w.threads.get('717').archived = false; }],
+  ]) {
+    const w = world();
+    w.issue(17);
+    setup(w);
+    const forum = { ...structuredClone(FORUM), id: '901' };
+    w.extraForums.set('901', forum);
+    w.threads.get('717').parent_id = '901';
+    // The first read is the sweep's own; the second is the repair's.
+    let reads = 0;
+    w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/901$/, async () => {
+      if (++reads === 2) forum.available_tags = forum.available_tags.filter((t) => t.name !== 'Shipped');
+    }]);
+    await assert.rejects(sweepRun(w, 'fix'), /setup problems: forum 901 has no "Shipped" tag/, why);
+  }
+});
+
+test('PT5: the Accepted repair names a forum without Accepted that the sweep did not see with it', async () => {
+  // The issue's post changes, after the sweep's read, to an archived one in a
+  // forum without Accepted: the repair's read is the first to see that forum.
+  const w = world();
+  w.issue(17);
+  w.issues.get(17).labels.add('accepted');
+  w.threads.get('717').archived = false;
+  w.extraForums.set('902', { ...structuredClone(FORUM), id: '902', available_tags: FORUM.available_tags.filter((t) => t.name !== 'Accepted') });
+  w.thread('718', { parent_id: '902' });
+  let moved = false;
+  w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/900$/, async () => {
+    if (moved) return;
+    moved = true;
+    const i = w.issues.get(17);
+    i.body = i.body.replace('discord-thread: 717', 'discord-thread: 718');
+  }]);
+  await assert.rejects(sweepRun(w, 'fix'), /setup problems: forum 902 has no "Accepted" tag, which issues with the accepted label need/);
+});
+
+test('PT6: with no bot token, a repo with issues the bot filed fails with the fix in the summary; one without skips green; a failed list fails', async () => {
+  const noToken = { ...env, DISCORD_BOT_TOKEN: '' };
+  const payload = { repository, action: 'closed', issue: { number: 17 } };
+  {
+    const w = world();
+    w.issue(17);
+    const summary = tmpSummary();
+    await assert.rejects(main({ eventName: 'issues', payload, env: { ...noToken, GITHUB_STEP_SUMMARY: summary }, fetchImpl: w.fetch, log: quiet }),
+      /^Error: setup problems: DISCORD_BOT_TOKEN is not set, but this repo has issues the bot filed: add the repository secret DISCORD_BOT_TOKEN$/);
+    assert.deepEqual(setupBullets(summary), ['- DISCORD_BOT_TOKEN is not set, but this repo has issues the bot filed: add the repository secret DISCORD_BOT_TOKEN']);
+    assert.deepEqual(w.calls.filter((c) => /discord\.com/.test(c.url)), [], 'no Discord call, of any method');
+  }
+  for (const [why, setup] of [
+    ['no labeled item', () => {}],
+    ['a labeled PR with the marker', (w) => w.issue(5, { pull_request: { url: 'https://api.github.com/repos/me/one/pulls/5' } })],
+    ['a hand-labeled issue without the marker', (w) => w.issue(17, { body: 'filed on GitHub' })],
+  ]) {
+    const w = world();
+    setup(w);
+    const out = [];
+    assert.deepEqual(await main({ eventName: 'issues', payload, env: noToken, fetchImpl: w.fetch, log: (s) => out.push(s) }), [], why);
+    assert.deepEqual(out, ['DISCORD_BOT_TOKEN is not set: skipping Discord updates'], why);
+  }
+  {
+    const w = world();
+    w.fail.push(['GET', /\/repos\/me\/one\/issues\?/, new Response('{}', { status: 500 }), 1]);
+    const summary = tmpSummary();
+    const line = /^DISCORD_BOT_TOKEN is not set, and the bot's issues could not be checked \(`GitHub GET \/repos\/me\/one\/issues\?[^`]* -> 500 \{\}`\): add the repository secret DISCORD_BOT_TOKEN, or re-run this run$/;
+    await assert.rejects(main({ eventName: 'issues', payload, env: { ...noToken, GITHUB_STEP_SUMMARY: summary }, fetchImpl: w.fetch, log: quiet }),
+      (e) => line.test(e.message.replace(/^setup problems: /, '')));
+    const bullets = setupBullets(summary);
+    assert.equal(bullets.length, 1);
+    assert.match(bullets[0].replace(/^- /, ''), line);
+  }
+  {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    await main({ eventName: 'issues', payload, env, fetchImpl: w.fetch, log: quiet });
+    assert.equal(w.said('717').length, 1, 'with the token, main runs the status run');
+  }
+});
+
+test("PT5: the Accepted repair judges its read against the sweep's read of its own post, not another post in that forum", async () => {
+  // #18, listed first, reads forum 902 with Accepted. #17's post then
+  // changes to one in 902, which loses the tag: #17's own read showed 900,
+  // so the repair's read names the gap.
+  const w = world();
+  w.issue(18);
+  w.issue(17);
+  w.issues.get(17).labels.add('accepted');
+  w.threads.get('717').archived = false;
+  const forum = { ...structuredClone(FORUM), id: '902' };
+  w.extraForums.set('902', forum);
+  w.threads.get('718').parent_id = '902';
+  w.thread('719', { parent_id: '902' });
+  let moved = false;
+  w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/900$/, async () => {
+    if (moved) return;
+    moved = true;
+    const i = w.issues.get(17);
+    i.body = i.body.replace('discord-thread: 717', 'discord-thread: 719');
+    forum.available_tags = forum.available_tags.filter((t) => t.name !== 'Accepted');
+  }]);
+  await assert.rejects(sweepRun(w, 'fix'), /setup problems: forum 902 has no "Accepted" tag, which issues with the accepted label need/);
 });

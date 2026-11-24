@@ -116,7 +116,8 @@ sends it. A message that stopped being true before its last check is dropped
 the next message corrects it).
 
 If a setup problem (a missing tag, a missing permission) stops the post's tag
-from moving, its message stays owed. The sweep leaves that post as it is
+from moving, its message stays owed, and the run ends red with the fix in its
+job summary (Checking the setup, Red status runs). The sweep leaves that post as it is
 and lists the owed message with a link to the run. Fix the setup, then re-run
 that run (Re-run failed jobs, or Re-run all jobs for a run that passed), and
 the message goes out, even if another run has moved the post in the meantime.
@@ -162,7 +163,11 @@ Two halves, no always-on server:
   on cron triggers.
 - `status/status.mjs` runs in **GitHub Actions** (`.github/workflows/discord-status.yml`),
   and `status/merge-plan.mjs` beside it, in its own job after it, for pull requests.
-  Both do nothing until the `DISCORD_BOT_TOKEN` secret exists, so they are safe to merge early.
+  Without the `DISCORD_BOT_TOKEN` secret both do nothing while the repo has no
+  issue the bot filed, so they are safe to merge early; once it has one, the
+  status job fails until the secret is added, and the merge plan still skips.
+  A status run whose issues could not be listed to check fails too, saying
+  so; re-run it.
 
 None of this ships to players: `.github` is excluded from sync and builds.
 
@@ -234,7 +239,9 @@ The job takes about a minute and ends its own calls within 60 seconds; its
 ## Checking the setup
 
 The Worker checks its own setup in three places: `/bot-check`, the daily
-setup check, and its replies to a moderator while a setting is broken.
+setup check, and its replies to a moderator while a setting is broken. The
+status workflow checks the GitHub side in its own runs (Red status runs,
+below).
 
 - **`/bot-check`.** A moderator (Manage Threads) runs it in the server the
   bot is set up for; in any other server, or while `GUILD_ID` is not set, it
@@ -296,8 +303,48 @@ setup check, and its replies to a moderator while a setting is broken.
   the moderator's reply includes "tag not set" with the reason, among its
   other notes. The setup checks name a missing status tag of every forum
   every day.
+- **Red status runs.** A status run or a sweep that meets a setup problem (a
+  forum missing a status tag, or the Accepted tag an accepted issue needs,
+  the staff checklist forum included;
+  Discord refusing the bot; a bad `RELEASE_TAG_PATTERN` or `SWEEP_MODE`; a
+  `CHECKLIST_FORUM_ID` that is not a plain channel id, digits only, which
+  also stops all staff checklist work in that run; no
+  `DISCORD_BOT_TOKEN` in a repo with issues the bot filed, or whose issues
+  could not be listed to check) finishes every
+  other issue, then fails (a needs-info event stops at its first failure,
+  as it always has), with each problem and its fix under "Discord
+  status: setup problems" in the job summary, for example
+  `forum 900 has no "Fixed, next update" tag: add it, spelled as the README lists it`.
+  Each problem is also in the run's log, where it was met. A refusal is
+  named by the channel Discord refused, so a forum the bot cannot see gives
+  a line for each of its posts that run read, all with the same fix. A
+  transferred issue's opened run does nothing, as before, so it names no
+  bad `CHECKLIST_FORUM_ID`; the next run does. The checklist job
+  fails the same way on a bad pattern, a bad `CHECKLIST_FORUM_ID` or a
+  missing token; a checklist thread it cannot settle fails it as before,
+  with no setup line. The sweep is red in report mode too. Fix the problem,
+  then re-run that same run: it sends the messages it still owes. Nothing
+  is posted in Discord for it. A forum setting that names a channel that is
+  no forum gets no tag line: the daily setup check names a player forum of
+  the wrong kind, and a checklist forum set in the Worker too; a checklist
+  forum set only for Actions fails a status run's checklist work as before,
+  unless it is a media channel holding the threads and their tags, which
+  works as before.
+  GitHub emails a failed run to the person whose action started it, and a
+  failed scheduled sweep to the workflow's creator, or whoever later changed
+  its schedule line or re-enabled it; each only when their notification
+  settings ask for failed Actions runs. GitHub's docs do not say who, if
+  anyone, is told of a run the bot's GitHub App started (an issue's opened
+  run). The sweep is scheduled four times a day, and a sweep checks the
+  forum of each post it reads, so a player forum problem is normally named
+  within about six hours. A sweep that fails before it reads the posts (its
+  issue list unreadable), or that its ten-minute job limit stops, names only
+  what it reached; checklist threads it has no time for (its checklist work
+  stops at two minutes) wait for a later sweep. Only event runs see a
+  refused message send or message read; the daily setup check names those
+  permissions in the moderator channel.
 
-Neither check can see the Worker's cron triggers. After every deploy, read
+Neither of the Worker's checks can see its cron triggers. After every deploy, read
 Wrangler's output (step 5 of the setup).
 
 ## The issue
@@ -728,7 +775,10 @@ staff tag: a status or Accepted tag with no free slot waits, the run logs it,
 and the sweep lists it. If the forum lacks the status tag an issue needs,
 the bot changes no tag on its thread and the run fails naming the tag; if it
 lacks only the Accepted tag, the status still moves, and the run logs it and
-the sweep lists it. The sweep names only the bot's tags in the Actions log,
+the sweep lists it. A status run (a PR or a release) and a sweep also name
+either missing tag as a setup problem and end red (Checking the setup); the
+checklist job logs a missing Accepted tag and stays green, as before.
+The sweep names only the bot's tags in the Actions log,
 and counts staff tags.
 
 **Who opens.** Only the issue's own events open its thread: opened, closed,
@@ -1222,7 +1272,23 @@ Accepted on purpose; each line says how you would notice it.
   checklist thread" comment is copied into the other, the bot can take the
   first issue's thread for the second. Never copy that comment between
   issues; delete the copy, and the issue's next event opens its own thread.
-- `/bot-check` and the daily setup check cannot see the Actions settings.
+- `/bot-check` and the daily setup check cannot see the Actions settings; a
+  status run or the sweep names a bad one as a red run.
+- GitHub shows no job summary at all for a step whose summary passes 1 MiB.
+  A sweep's report quotes each note it lists in full, so a very long report
+  can pass it; its setup problems are then only in the run's log, where
+  each was met.
+- A Discord refusal met during a sweep's checklist repair is named inside
+  the two minutes that work may take, so a sweep right at that limit can
+  leave the next issue's checklist thread for a later sweep.
+- An issue that gets the accepted label after a sweep read its staff
+  checklist thread, in a checklist forum with no Accepted tag, is not named
+  by that sweep; a fix-mode repair of the thread that settles logs the
+  missing tag, and the next sweep names it as a setup problem.
+- A Discord refusal still in flight when a run's time limit stops it is not
+  named by that run. A refused message send is not tried again (its note is
+  listed by the sweep as maybe not delivered), so its fix comes from the
+  daily setup check, which names the forum's missing permission.
 - The setup check computes the bot's permissions from the server's roles and
   each channel's overrides, in Discord's documented order; a rule outside
   that order can make a line wrong.
@@ -1335,6 +1401,18 @@ releases to CurseForge and Wago.** Each step should change the tag and post
 its message. (The workflow here already defaults to that tag pattern; set the
 repo variable `RELEASE_TAG_PATTERN` to change it.) Run the `Discord status`
 workflow by hand once to see the sweep's report.
+
+**Reading the results without looking.** `node scripts/trial-check.mjs <id>...`
+prints each post's name, forum, tags, archived and locked state and last
+messages (a text channel id prints its last messages; `--limit N`, default
+10); `--forum <id>` lists a forum's open posts and its 50 newest archived
+ones with their tags. It only reads.
+Give it its own bot, never the trial bot: a new application whose bot has
+the **Message Content** intent on and is invited with View Channels and Read
+Message History only. It also gets whatever `@everyone` may do in each
+channel, so use it on a test server only. Its token goes in
+`TRIAL_READER_TOKEN` or in the file `~/.discord-trial-reader/token`, alone on
+one line, outside every repo.
 
 ## Stage 3: live
 
