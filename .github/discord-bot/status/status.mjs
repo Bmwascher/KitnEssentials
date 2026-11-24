@@ -541,7 +541,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // name someone else; otherwise, or when it cannot be read, it goes plain.
   async function replyTarget(issue, threadId) {
     const filed = parseFiledMessage(issue.body);
-    if (filed) return { replyTo: filed };
+    if (filed) return { replyTo: filed.id };
     // A body edited during the run may have lost its marker.
     const { reporterId } = parseMarker(issue.body) || {};
     if (!reporterId) return {};

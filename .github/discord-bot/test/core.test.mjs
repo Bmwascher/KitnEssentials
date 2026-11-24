@@ -71,7 +71,7 @@ test('body: a table names both people, then the quoted report, with the hidden l
     '', '<!-- discord-message: 800 -->', '<!-- discord-thread: 2 reporter: 42 -->',
   ].join('\n'));
   assert.deepEqual(C.parseMarker(body), { threadId: '2', reporterId: '42' });
-  assert.equal(C.parseFiledMessage(body), '800');
+  assert.deepEqual(C.parseFiledMessage(body), { id: '800', copy: false });
   assert.equal(C.parseMarker('no marker'), null);
   // Only the bot's footer line, just before the thread marker, counts: an
   // older issue may quote such a line in its report.
@@ -830,4 +830,11 @@ test('an avatar address is the server avatar, else the user avatar, else the def
     ['the default for an id past 2^53', { id, avatar: null, discriminator: '0' }, {}, 'https://cdn.discordapp.com/embed/avatars/3.png'],
     ['the default for an old discriminator', { id, avatar: null, discriminator: '1234' }, null, 'https://cdn.discordapp.com/embed/avatars/4.png'],
   ]) assert.equal(C.avatarUrl({ guildId: '1', user, member }), want, why);
+});
+
+test('an issue filed from a moved post\'s copy ends with the copy footer, which every footer reader reads', () => {
+  const filed = C.buildBody({ content: 'hi', reporter: { name: 'Pat', id: '42' }, sender: null, threadUrl: 'u', threadId: '990', messageId: '990', copied: true });
+  assert.match(filed, /\n\n<!-- discord-copy -->\n<!-- discord-message: 990 -->\n<!-- discord-thread: 990 reporter: 42 -->$/);
+  assert.deepEqual(C.parseMarker(filed), { threadId: '990', reporterId: '42' });
+  assert.deepEqual(C.parseFiledMessage(filed), { id: '990', copy: true });
 });

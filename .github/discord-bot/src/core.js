@@ -369,13 +369,23 @@ export function parseMarker(body) {
 // before the bot wrote it. Only the bot's footer counts: the line directly
 // before the thread marker that ends the body, since an older body may quote
 // such a line in its report.
+// The line a moved post's copy adds before the footer: the filed message was
+// posted by the bot's webhook, so a reply to it pings no one. Player text
+// cannot hold it (neutralize).
+export const COPY_MARK = '<!-- discord-copy -->';
+// The footer's filed message id, and whether the copy line sits directly
+// before the footer; null with no footer.
 export function parseFiledMessage(body) {
-  const m = /(?:^|\n)<!-- discord-message: (\d+) -->\n<!-- discord-thread: \d+ reporter: (?:\d+|unknown) -->\s*$/.exec(lf(body));
-  return m ? m[1] : null;
+  const text = lf(body);
+  const m = /(?:^|\n)<!-- discord-message: (\d+) -->\n<!-- discord-thread: \d+ reporter: (?:\d+|unknown) -->\s*$/.exec(text);
+  if (!m) return null;
+  const before = text.slice(0, m.index);
+  return { id: m[1], copy: before === COPY_MARK || before.endsWith(`\n${COPY_MARK}`) };
 }
 
-// `reporter` and `sender` are { name, username, id }, any part missing.
-export function buildBody({ content, reporter, sender, threadUrl, attachments, threadId, messageId, templateLine }) {
+// `reporter` and `sender` are { name, username, id }, any part missing;
+// `copied` marks an issue filed from a moved post's copy.
+export function buildBody({ content, reporter, sender, threadUrl, attachments, threadId, messageId, templateLine, copied = false }) {
   const lines = [
     `| Reporter | ${personCell(reporter)} |`, '| --- | --- |',
     `| Filed by | ${personCell(sender)} |`,
@@ -387,6 +397,7 @@ export function buildBody({ content, reporter, sender, threadUrl, attachments, t
   }
   if (templateLine) lines.push('', `Template check (advisory): ${templateLine}`);
   lines.push('');
+  if (copied) lines.push(COPY_MARK);
   if (messageId) lines.push(`<!-- discord-message: ${messageId} -->`);
   lines.push(marker({ threadId, reporterId: reporter && reporter.id }));
   return lines.join('\n');
