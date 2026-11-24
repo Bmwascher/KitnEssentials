@@ -1458,3 +1458,23 @@ test('AT10: a failed Accepted repair is reported at the end, and the issue\'s ch
   assert.match(out.join('\n'), /Discord PATCH \/channels\/717 -> 500/, 'the refused write is reported');
   assert.deepEqual(ckName(w, t), ['Triaged', 'Accepted'], 'the checklist thread is still repaired');
 });
+
+test('CH11: a CHECKLIST_FORUM_ID that is not a plain Discord id is a setup problem: a PR run moves the post and makes no checklist request; the checklist job fails', async () => {
+  const line = (shown) => `setup problems: CHECKLIST_FORUM_ID is ${shown}, which is not a Discord channel id: set the repository variable to the staff checklist forum's id, digits only (this run did no staff checklist work)`;
+  // 717 is the player's post and 900 its forum: any other Discord request is checklist work.
+  const checklistCalls = (w) => w.calls.filter((c) => /discord\.com/.test(c.url) && !/channels\/(717|900)\b/.test(c.url));
+  for (const [id, shown] of [['./950', '`./950`'], ['9\n50', '`9 50`'], ['951/../950', '`951/../950`'], ['   ', '` `']]) {
+    const w = world();
+    w.issue(17);
+    w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+    seed(w, 17, { applied_tags: ['c-tri'] });
+    await assert.rejects(go(w, 'pull_request_target', { action: 'opened', pull_request: { number: 5 } }, { CHECKLIST_FORUM_ID: id }),
+      (e) => e.message === line(shown), shown);
+    assert.equal(w.tagOf('717'), 'In progress', `${shown}: the player's post still moves`);
+    assert.deepEqual(checklistCalls(w), [], `${shown}: no checklist request of any method`);
+  }
+  const w = world();
+  w.issue(17);
+  await assert.rejects(job(w, 'opened', { over: { CHECKLIST_FORUM_ID: './950' } }), (e) => e.message === line('`./950`'));
+  assert.deepEqual(w.calls.filter((c) => /discord\.com/.test(c.url)), [], 'the checklist job makes no Discord call');
+});

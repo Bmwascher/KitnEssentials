@@ -41,6 +41,7 @@ export function world() {
     fail: [], // [method, RegExp, Response | Error, times]
     runs: new Map(), // workflow run id -> { status, run_attempt, created_at }
     ckForum: structuredClone(CHECKLIST_FORUM), // a test may take a tag away
+    extraForums: new Map(), // id -> forum, beside FORUM and the checklist forum
     archivePage: 50, // archived threads a listing page holds
   };
   w.start = w.clock;
@@ -248,6 +249,7 @@ export function world() {
     ['GET', /discord\.com\/api\/v10\/channels\/(\d+)$/, (m) => {
       if (m[1] === FORUM.id) return json(FORUM);
       if (m[1] === w.ckForum.id) return json(w.ckForum);
+      if (w.extraForums.has(m[1])) return json(w.extraForums.get(m[1]));
       const t = w.threads.get(m[1]);
       if (!t) return json({ message: 'Unknown Channel' }, 404);
       // The server id differs from the forum id (900), so a link built from the wrong one fails.

@@ -1,8 +1,11 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { run } from '../status/status.mjs';
 import { world, shippedIn } from './fake-world.mjs';
 import { FORUM } from './fake-fetch.mjs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const env = { GITHUB_TOKEN: 'gh', DISCORD_BOT_TOKEN: 'bot', RELEASE_TAG_PATTERN: '^v\\d' };
 const repository = { full_name: 'me/one', default_branch: 'dev' };
@@ -14,6 +17,42 @@ const go = (w, eventName, payload, over = {}) => run({ eventName, payload: { rep
 const prEvent = (w, number, action = 'opened') => go(w, PR, { action, pull_request: { number } });
 const closed = (w, n) => go(w, 'issues', { action: 'closed', issue: { number: n } });
 const tag = (w, name, extra = {}) => go(w, 'push', { ref: `refs/tags/${name}`, created: true, after: `obj-${name}`, head_commit: { id: `c-${name}` }, ...extra });
+
+// Forum 900 answers without the named tags until the returned restore runs;
+// a failed answer passes through as it is.
+const dropTag = (w, ...names) => {
+  const real = w.fetch;
+  w.fetch = async (url, init = {}) => {
+    const r = await real(url, init);
+    if (!r.ok || !/discord\.com\/api\/v10\/channels\/900$/.test(url) || (init.method || 'GET') !== 'GET') return r;
+    const forum = await r.json();
+    forum.available_tags = forum.available_tags.filter((t) => !names.includes(t.name));
+    return new Response(JSON.stringify(forum));
+  };
+  return () => { w.fetch = real; };
+};
+// Every job summary of this file's cases sits in one folder, removed at the end.
+const SUMMARIES = mkdtempSync(join(tmpdir(), 'status-summary-'));
+after(() => rmSync(SUMMARIES, { recursive: true }));
+let summaries = 0;
+const tmpSummary = () => {
+  const p = join(SUMMARIES, `${++summaries}.md`);
+  writeFileSync(p, '');
+  return p;
+};
+// The setup section's problem lines, as the summary shows them. The section
+// appears at most once, runs to the next heading (a sweep's report) or the
+// end, and holds its bullets and the whole advice once.
+const setupBullets = (path) => {
+  const sections = readFileSync(path, 'utf8').split('### Discord status: setup problems\n').slice(1);
+  if (!sections.length) return [];
+  assert.equal(sections.length, 1, 'one setup section');
+  const paragraphs = sections[0].slice(1).split(/\n(?=### )/)[0].replace(/\n$/, '').split('\n\n');
+  assert.equal(paragraphs.length, 2, 'the bullets, then the advice, and nothing else');
+  assert.equal(paragraphs[1], 'After fixing them, re-run this run. A run that owes a player a message sends it then; '
+    + 'a message marked Unconfirmed is never sent again, and the sweep lists it.');
+  return paragraphs[0].split('\n');
+};
 
 // ---- In progress -----------------------------------------------------------
 
@@ -525,18 +564,9 @@ test('a forum missing a status tag does not repeat the message on every sync', a
   const w = world();
   w.issue(17);
   w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
-  const noProg = w.fetch;
-  w.fetch = async (url, init) => {
-    const r = await noProg(url, init);
-    if (/channels\/900$/.test(url)) {
-      const forum = await r.json();
-      forum.available_tags = forum.available_tags.filter((t) => t.name !== 'In progress');
-      return new Response(JSON.stringify(forum));
-    }
-    return r;
-  };
-  await prEvent(w, 5);
-  await prEvent(w, 5, 'reopened');
+  dropTag(w, 'In progress');
+  await assert.rejects(prEvent(w, 5), /forum 900 has no "In progress" tag: add it, spelled as the README lists it/);
+  await assert.rejects(prEvent(w, 5, 'reopened'), /forum 900 has no "In progress" tag/);
   assert.deepEqual(w.said('717'), []);
   assert.equal(w.tagOf('717'), 'Triaged');
 });
@@ -572,10 +602,7 @@ test('a shipped issue with no ship record (shipped before records existed) stays
 });
 
 test('the sweep reports a post with no status tag, and a missing ship record, into the job summary', async () => {
-  const { mkdtempSync, readFileSync } = await import('node:fs');
-  const { join } = await import('node:path');
-  const { tmpdir } = await import('node:os');
-  const summary = join(mkdtempSync(join(tmpdir(), 'sweep-')), 'summary.md');
+  const summary = tmpSummary();
   const w = world();
   w.issue(17);
   w.thread('717', { applied_tags: ['t-retail'] });
@@ -868,17 +895,6 @@ const closeRun = (w, over) => go(w, 'issues', { action: 'closed', issue: { numbe
 const sweepFix = (w, out) => run({ eventName: 'schedule', payload: {}, env: { ...env, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: (s) => out.push(s), now: () => w.clock });
 const fixedNotes = (w) => w.issues.get(17).comments.filter((c) => /discord-told: fixed-/.test(c.body));
 const refuseTagWrite = (w) => w.fail.push(['PATCH', /channels\/717$/, new Response('{"message":"Missing Permissions"}', { status: 403 }), 1]);
-// The forum has no Fixed tag while `gone()` says so.
-const withoutFixedTag = (w, gone) => {
-  const real = w.fetch;
-  w.fetch = async (url, init) => {
-    const r = await real(url, init);
-    if (!gone() || !/channels\/900$/.test(url)) return r;
-    const forum = await r.json();
-    forum.available_tags = forum.available_tags.filter((t) => t.name !== 'Fixed, next update');
-    return new Response(JSON.stringify(forum));
-  };
-};
 
 test('of two runs that write a note for one message at once, the later drops its own note', async () => {
   const w = world();
@@ -901,19 +917,19 @@ test('a message stopped by a setup problem stays owed: the sweep leaves the post
     const w = world();
     w.issue(17);
     w.close(17, 'completed', 'aaaaaaa1');
-    let broken = true;
+    let restore = () => {};
     if (problem === 'tag write refused') {
       refuseTagWrite(w);
       await assert.rejects(closeRun(w, RUN), /#17/);
     } else {
-      withoutFixedTag(w, () => broken);
-      await closeRun(w, RUN);
+      restore = dropTag(w, 'Fixed, next update');
+      await assert.rejects(closeRun(w, RUN), /forum 900 has no "Fixed, next update" tag/);
     }
     assert.equal(w.tagOf('717'), 'Triaged', problem);
     assert.deepEqual(w.said('717'), [], problem);
     assert.match(fixedNotes(w)[0].body, /^Notification attempted: \*\*Fixed!\*\*/, problem);
 
-    broken = false;
+    restore();
     // A sweep right after the failure leaves the post too.
     await sweepFix(w, []);
     assert.equal(w.tagOf('717'), 'Triaged', `${problem}: an immediate sweep leaves the post`);
@@ -1765,4 +1781,110 @@ test('AT12: a failed status repair stops the Accepted repair on that post', asyn
   await assert.rejects(sweepRun(w, 'fix', out), /#17/);
   assert.match(out.find((l) => l.startsWith('#17: ')) || '', /^#17: labels pending-release -> \(none\); post Accepted missing -> shown$/);
   assert.deepEqual(w.find('PATCH', /channels\/717$/), [], 'no post write after the failed status repair');
+});
+
+// ---- Setup problems -----------------------------------------------------------------
+
+test('PT5: a forum missing a status tag fails the run once, after every other issue, with its fix in the summary; a re-run sends what it owes', async () => {
+  const w = world();
+  w.issue(17);
+  w.issue(18);
+  w.issue(19);
+  w.threads.get('718').parent_id = '901';
+  w.extraForums.set('901', { ...structuredClone(FORUM), id: '901' });
+  w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17, 18, 19] });
+  // Shipped, which this PR run does not need, goes too: an event run names
+  // only the tag it needs.
+  const restore = dropTag(w, 'In progress', 'Shipped');
+  const summary = tmpSummary();
+  const out = [];
+  const pr = (over, log = quiet) => run({
+    eventName: PR, payload: { repository, action: 'opened', pull_request: { number: 5 } },
+    env: { ...env, GITHUB_RUN_ID: '77', ...over }, fetchImpl: w.fetch, log,
+  });
+  await assert.rejects(pr({ GITHUB_STEP_SUMMARY: summary }, (s) => out.push(s)),
+    /^Error: setup problems: forum 900 has no "In progress" tag: add it, spelled as the README lists it$/);
+  assert.deepEqual(setupBullets(summary), ['- forum 900 has no "In progress" tag: add it, spelled as the README lists it'], 'one line for the two issues in that forum');
+  assert.deepEqual(out.filter((l) => l.startsWith('setup problem: ')), ['setup problem: forum 900 has no "In progress" tag: add it, spelled as the README lists it'],
+    'logged once, when first met');
+  assert.equal(w.said('718').length, 1, "the healthy forum's player was told in that run");
+  assert.deepEqual([w.said('717'), w.said('719')], [[], []], "the broken forum's players were not");
+  restore();
+  await pr({ GITHUB_RUN_ATTEMPT: '2', GITHUB_STEP_SUMMARY: tmpSummary() });
+  assert.deepEqual([w.said('717').length, w.said('718').length, w.said('719').length], [1, 1, 1], 'the re-run sends the owed messages and nothing more');
+});
+
+test('PT5: a forum without the Accepted tag an accepted issue needs fails the run, whether the status moves, already shows, has no slot, its write fails, or the post goes before the write', async () => {
+  const fiveOthers = ['t-retail', 't-forever', 't-bug', 't-feedback', 't-staff'];
+  const fixPr = (w) => w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] });
+  const alone = /^Error: setup problems: forum 900 has no "Accepted" tag, which issues with the accepted label need: add it, spelled as the README lists it$/;
+  for (const [why, setup, event, line, shown, told] of [
+    ['the status moves', fixPr, (w) => prEvent(w, 5), alone, 'In progress', 1],
+    ['the post already shows the status', (w) => { fixPr(w); w.threads.get('717').applied_tags = ['t-retail', 's-prog']; }, (w) => prEvent(w, 5), alone, 'In progress', 0],
+    ['five other tags leave Triaged no slot', (w) => { w.threads.get('717').applied_tags = [...fiveOthers]; },
+      (w) => go(w, 'issues', { action: 'reopened', issue: { number: 17 } }), alone, null, 0],
+    ['the status write fails', (w) => { fixPr(w); refuseTagWrite(w); },
+      (w) => prEvent(w, 5), /^Error: could not update issue\(s\) #17; see above; setup problems: forum 900 has no "Accepted" tag, which issues with the accepted label need/, 'Triaged', 0],
+    // The post's read just before the write answers 404, so the run takes the
+    // post as gone and has no other failure.
+    ['the post goes before the write', (w) => {
+      fixPr(w);
+      let once = false;
+      w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/900$/, async () => {
+        if (once) return;
+        once = true;
+        w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717$/, new Response('{"message":"Unknown Channel","code":10003}', { status: 404 }), 1]);
+      }]);
+    }, (w) => prEvent(w, 5), alone, 'Triaged', 0],
+  ]) {
+    const w = world();
+    w.issue(17, { labels: ['from-discord', 'accepted'] });
+    setup(w);
+    dropTag(w, 'Accepted');
+    await assert.rejects(event(w), line, why);
+    assert.equal(w.tagOf('717') || null, shown, why);
+    assert.equal(w.said('717').length, told, `${why}: the player messages are as before`);
+  }
+});
+
+test('PT5: an invalid RELEASE_TAG_PATTERN fails the run before any call, its error shown as written on one summary line', async () => {
+  for (const [why, pattern] of [['an unclosed group', '('], ['a pattern holding a line break', 'v\\d\n(']]) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    const summary = tmpSummary();
+    await assert.rejects(closeRun(w, { RELEASE_TAG_PATTERN: pattern, GITHUB_STEP_SUMMARY: summary }), /^Error: setup problems: RELEASE_TAG_PATTERN is not a valid pattern \(/, why);
+    assert.deepEqual(w.calls, [], `${why}: no call`);
+    const lines = setupBullets(summary);
+    assert.equal(lines.length, 1, why);
+    assert.match(lines[0], /^- RELEASE_TAG_PATTERN is not a valid pattern \(`Invalid regular expression: [^\n`]*`\): fix the repository variable$/, why);
+  }
+});
+
+test('PT5: a re-run whose owed-note scan fails reports the setup problems it met, throws its own error when it met none, and a clean run writes no setup section', async () => {
+  for (const [why, broken, over, line, bullets] of [
+    ['a setup problem met', true, {}, /^Error: the re-run's owed-note scan failed \(.*\); setup problems: forum 900 has no "Fixed, next update" tag/,
+      ['- forum 900 has no "Fixed, next update" tag: add it, spelled as the README lists it']],
+    // Named only at the end, so the scan's failure is kept for it.
+    ['a bad CHECKLIST_FORUM_ID due', false, { CHECKLIST_FORUM_ID: './950' }, /^Error: the re-run's owed-note scan failed \(.*\); setup problems: CHECKLIST_FORUM_ID is `\.\/950`/,
+      ["- CHECKLIST_FORUM_ID is `./950`, which is not a Discord channel id: set the repository variable to the staff checklist forum's id, digits only (this run did no staff checklist work)"]],
+    ['none met: the scan error itself', false, {}, /^Error: GitHub GET \/repos\/me\/one\/issues\?/, []],
+  ]) {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    if (broken) dropTag(w, 'Fixed, next update');
+    w.fail.push(['GET', /\/repos\/me\/one\/issues\?/, new Response('{}', { status: 500 }), 1]);
+    const summary = tmpSummary();
+    await assert.rejects(closeRun(w, { ...RUN, GITHUB_RUN_ATTEMPT: '2', GITHUB_STEP_SUMMARY: summary, ...over }), line, why);
+    assert.deepEqual(setupBullets(summary), bullets, why);
+  }
+  {
+    const w = world();
+    w.issue(17);
+    w.close(17, 'completed', 'aaaaaaa1');
+    const summary = tmpSummary();
+    await closeRun(w, { GITHUB_STEP_SUMMARY: summary });
+    assert.equal(readFileSync(summary, 'utf8'), '');
+  }
 });

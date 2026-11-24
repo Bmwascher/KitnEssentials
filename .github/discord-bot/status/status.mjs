@@ -14,7 +14,7 @@
 import { readFileSync, appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { STATUS, LABELS, MESSAGES, parseMarker, parseFiledMessage, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN, checklistStatus, checklistKey,
-  shownStatuses, preferStatus, triagedAlone, withAccepted, showsAccepted } from '../src/core.js';
+  shownStatuses, preferStatus, triagedAlone, withAccepted, showsAccepted, ACCEPTED, inlineCode, hasTag, tagLine, acceptedLine, isDiscordId } from '../src/core.js';
 import { discordClient, postGone } from '../src/discord.js';
 import { githubClient } from '../src/github.js';
 import { checklistRunner, parseChecklist } from './checklist.mjs';
@@ -68,6 +68,21 @@ const noteRecord = (key, text, status, runId) => `Notification attempted: ${text
 const NOTE_TEXT = /^(?:Told the player|Notification attempted|Delivery confirmed|Dropped \([^)\n]*\)|Unconfirmed \([^)\n]*\)): ([\s\S]*?)\n\n<!--/;
 const UNCONFIRMED = 'Unconfirmed (the send failed; the player may not have it)';
 
+const SETUP_HEAD = '### Discord status: setup problems';
+const RERUN_ADVICE = 'After fixing them, re-run this run. A run that owes a player a message sends it then; a message marked Unconfirmed is never sent again, and the sweep lists it.';
+// A value from outside the code, shown as written: a line break would split
+// its summary line, and Markdown in it (a comment, a <br>) would change what
+// the summary shows.
+const quoted = (v, max = 80) => inlineCode(String(v).replace(/\s+/g, ' ').slice(0, max));
+const noTagLine = (forumId, name) => tagLine(`forum ${forumId}`, name);
+const noAcceptedLine = (forumId) => acceptedLine(`forum ${forumId}`);
+
+// Outside Actions there is no summary file.
+function writeSetup(path, lines) {
+  if (!path) return;
+  appendFileSync(path, [SETUP_HEAD, '', ...lines.map((l) => `- ${l}`), '', RERUN_ADVICE, ''].join('\n'));
+}
+
 // The release labels an issue should carry.
 export function wantedLabels(st) {
   if (!st.fix) return [];
@@ -89,10 +104,26 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // A scheduled run's payload names no repository; Actions sets GITHUB_REPOSITORY.
   const repo = (payload.repository && payload.repository.full_name) || env.GITHUB_REPOSITORY;
   const [owner, name] = repo.split('/');
-  const pattern = new RegExp(env.RELEASE_TAG_PATTERN || DEFAULT_RELEASE_PATTERN);
+  // Every run needs the pattern, and a repository variable can hold anything:
+  // one that does not compile is a setup problem, reported before any call.
+  let pattern;
+  try {
+    pattern = new RegExp(env.RELEASE_TAG_PATTERN || DEFAULT_RELEASE_PATTERN);
+  } catch (e) {
+    const line = `RELEASE_TAG_PATTERN is not a valid pattern (${quoted(e.message)}): fix the repository variable`;
+    writeSetup(env.GITHUB_STEP_SUMMARY, [line]);
+    throw new Error(`setup problems: ${line}`);
+  }
   // A setting pasted with a space around the id is still that id, as the
-  // Worker reads it.
-  const checklistForum = String(env.CHECKLIST_FORUM_ID || '').trim();
+  // Worker reads it. Only a plain id is used: any other set value, spaces
+  // alone included (the workflow starts the checklist job for it), would go
+  // into request paths as typed, so the run does no checklist work and names
+  // it at its end, beside its other setup lines.
+  const checklistSetting = String(env.CHECKLIST_FORUM_ID || '');
+  const checklistForum = isDiscordId(checklistSetting.trim()) ? checklistSetting.trim() : '';
+  const badChecklistLine = checklistSetting && !checklistForum
+    ? `CHECKLIST_FORUM_ID is ${quoted(checklistSetting)}, which is not a Discord channel id: set the repository variable to the staff checklist forum's id, digits only (this run did no staff checklist work)`
+    : null;
   // A re-run of a workflow run keeps its id, so it can still send what the
   // run owes.
   const runId = env.GITHUB_RUN_ID || null;
@@ -104,6 +135,19 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   const done = [];
   const failed = [];
   const report = [];
+  // Setup problems, one line each with its fix, kept apart so the run
+  // finishes every other issue and then fails once. A line holds ids, tag
+  // names and setting names only, so one problem met twice is one line.
+  const setup = [];
+  const setupProblem = (line) => {
+    if (setup.includes(line)) return;
+    setup.push(line);
+    // Logged when met, so a run the job's time limit stops still shows it.
+    log(`setup problem: ${line}`);
+  };
+  const reportSetup = () => {
+    if (setup.length) writeSetup(env.GITHUB_STEP_SUMMARY, setup);
+  };
   if (runId) log(`workflow run ${runId}, attempt ${attempt}`);
   // An issue moved in from another repo arrives as `opened`. Its post and
   // its thread already follow it, and a commit-closed one would be told
@@ -497,7 +541,18 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       try {
         // Triaged says only that the issue is filed: it never costs a staff
         // tag. A status with news still takes the fifth slot, as at filing.
-        r = await discord.setStatus(threadId, want, beforeMove, { dropOther: want !== STATUS.triaged, accepted: wantedAccepted(st.issue) });
+        // Each forum read is checked as it lands, so a failure after it, or a
+        // post gone before the write, never hides a tag the forum lacks. A
+        // post with no free slot is staff's choice and stays a log line.
+        const accepted = wantedAccepted(st.issue);
+        r = await discord.setStatus(threadId, want, beforeMove, {
+          dropOther: want !== STATUS.triaged,
+          accepted,
+          onForum: (forumId, tags) => {
+            if (!hasTag(tags, want)) setupProblem(noTagLine(forumId, want));
+            if (accepted && !hasTag(tags, ACCEPTED)) setupProblem(noAcceptedLine(forumId));
+          },
+        });
       } catch (e) {
         // A deleted post can never be told; its issue still moves. Only the
         // post's own read or write answering 404 says it is gone.
@@ -713,6 +768,11 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const n = payload.issue && payload.issue.number;
     const ours = eventName === 'issues' && (['opened', 'closed', 'reopened'].includes(payload.action)
       || (['labeled', 'unlabeled'].includes(payload.action) && payload.label && acceptedLabel(payload.label.name)));
+    if (ours && badChecklistLine) {
+      setupProblem(badChecklistLine);
+      reportSetup();
+      throw new Error(`setup problems: ${badChecklistLine}`);
+    }
     if (!checklist || !ours) {
       log('not a checklist event, or CHECKLIST_FORUM_ID is not set: nothing to do');
       return done;
@@ -1043,8 +1103,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // left a note it never sent. The event may no longer lead to that issue: a
   // tag run's window of recent closes has moved on, or a PR no longer links
   // it. The sync then sends the note while it is still true.
-  // With the checklist on, a failed owed-note scan is kept, so the checklist
-  // work below still runs; with it off, it is thrown at once.
+  // With the checklist on, or a setup line met or due, a failed owed-note
+  // scan is kept, so the checklist work and the setup report below still
+  // run; otherwise it is thrown at once.
   let rerunFailed = null;
   if (runId && attempt > 1 && eventName !== 'schedule' && eventName !== 'workflow_dispatch') {
     try {
@@ -1056,7 +1117,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       }
       await each(owing, (n) => sync(n));
     } catch (e) {
-      if (!checklist) throw e;
+      if (!checklist && !setup.length && !badChecklistLine) throw e;
       rerunFailed = e;
       log(`re-run owed-note scan failed: ${e.message.slice(0, 200)}`);
     }
@@ -1082,6 +1143,11 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   if (rerunFailed) problems.push(`the re-run's owed-note scan failed (${rerunFailed.message.slice(0, 200)})`);
   if (failed.length) problems.push(`could not update issue(s) ${failed.map((n) => `#${n}`).join(', ')}; see above`);
   if (ckFailed.length) problems.push(`checklist thread(s) not updated for ${ckFailed.map((n) => `#${n}`).join(', ')}; see above`);
+  // Named here, as SWEEP_MODE is after its list: a failure before any issue
+  // work ends the run at once with its own error and holds no setup line.
+  if (badChecklistLine) setupProblem(badChecklistLine);
+  reportSetup();
+  if (setup.length) problems.push(`setup problems: ${setup.join('; ')}`);
   if (problems.length) throw new Error(problems.join('; '));
   return done;
 }
