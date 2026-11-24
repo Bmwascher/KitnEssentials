@@ -679,7 +679,7 @@ export const MESSAGES = {
   },
   needsInfo: (uid) => `${uid ? `<@${uid}> ` : ''}Could you add a bit more detail? A screenshot, your addon version and the steps to make it happen help a lot.`,
   // The bot's message in a moved post's new post. Only the reporter is
-  // pinged (allowed_mentions); every name is text.
+  // pinged (allowed_mentions); the mover's mention pings no one.
   movedHere: ({ from, by, reporter, left, cut }) => [
     `Moved here from ${from} by ${shownStaff(by)}.`,
     `First posted by ${reporter.id ? `<@${reporter.id}>` : discordText(reporter.name)}.`,

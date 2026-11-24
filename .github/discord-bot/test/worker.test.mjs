@@ -2021,7 +2021,9 @@ test('an unfiled post moves: a webhook copy in the new forum, both records, the 
   const here = f.find('POST', /\/channels\/990\/messages$/)[0].body;
   assert.equal(here.content, 'Moved here from https://discord.com/channels/1/700 by <@8>. First posted by <@42>.');
   assert.deepEqual(here.allowed_mentions, { parse: [], users: ['42'] });
-  assert.equal(f.find('POST', /\/channels\/700\/messages$/)[0].body.content, 'This post moved to https://discord.com/channels/1/990 (moved by <@8>).');
+  const note = f.find('POST', /\/channels\/700\/messages$/)[0].body;
+  assert.equal(note.content, 'This post moved to https://discord.com/channels/1/990 (moved by <@8>).');
+  assert.deepEqual(note.allowed_mentions, { parse: [], users: [] }, 'the mover\'s mention pings no one');
   assert.deepEqual(f.find('PATCH', /\/channels\/700$/)[0].body, { locked: true, archived: true });
   const card = f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body;
   assert.equal(card.content, '**New post in <#901>:** <#990>\nby <@42> (`pat`) · Feature · Retail\nMoved by <@8>');

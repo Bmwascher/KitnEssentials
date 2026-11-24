@@ -760,8 +760,8 @@ function githubAccess(env, deps, f) {
 export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
   const cfg = config(env);
   const { threadId, messageId, greetingId, cardId } = parseCustomId(interaction.data.custom_id);
-  // The moderator who sent the form, as the card and the filing record name them.
-  const modName = interaction.member && interaction.member.user ? staffRef(interaction.member.user) : null;
+  // The moderator who sent the form, as the card and the filing record mention them.
+  const filer = interaction.member && interaction.member.user ? staffRef(interaction.member.user) : null;
   const v = modalValues(interaction.data);
   const repoKey = normRepoKey(v.repo, cfg.repos);
   const client = normClient(v.client);
@@ -1023,13 +1023,13 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
       if (status.skipped) notes.push(`tag not set: ${status.skipped}`);
     } catch (e) { if (e !== shown) notes.push(`tag not set: ${e.message.slice(0, 300)}`); }
     try {
-      await within(kvMs, saveIssueRecord(kv, threadId, { repo, number: issue.number, key: repoKey, by: modName }));
+      await within(kvMs, saveIssueRecord(kv, threadId, { repo, number: issue.number, key: repoKey, by: filer }));
     } catch (e) { notes.push(`post record not saved: ${e.message.slice(0, 200)}`); }
     notes.push(...await tellTracked(teller, log, {
       threadId, messageId, text: MESSAGES.tracked(repoKey, issue.number), old: oldGreeting, greeting: greetingId || (rec && rec.greeting), ping: copyId,
     }));
     await followup(`Created ${repoKey} #${issue.number}: ${issue.html_url}${notes.length ? ` (${notes.join('; ')})` : ''}${gapText()}`);
-    cardAfter = { cardId, head, key: repoKey, number: issue.number, by: modName };
+    cardAfter = { cardId, head, key: repoKey, number: issue.number, by: filer };
     renameAfter = cfg.rename;
     return { created: issue.number, notes };
   } catch (e) {
@@ -1044,14 +1044,14 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
         // Worker sent it), the moderator's report, and, after the lock's
         // release, the card.
         const late = tmplNote ? [tmplNote] : [];
-        await within(kvMs, saveIssueRecord(env.STATE, threadId, { repo, number: found.number, key: repoKey, by: modName }))
+        await within(kvMs, saveIssueRecord(env.STATE, threadId, { repo, number: found.number, key: repoKey, by: filer }))
           .catch((err) => late.push(`post record not saved: ${err.message.slice(0, 200)}`));
         const tail = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, TAIL_MS, t0 + TRACKED_BY_MS));
         late.push(...await tellTracked(tail, log, {
           threadId, messageId, text: MESSAGES.tracked(repoKey, found.number), old: oldGreeting, greeting: greetingId || (rec && rec.greeting), ping: copyId,
         }));
         await followup(`Created ${repoKey} #${found.number}: ${found.html_url} (GitHub answered late; the post's status tag comes from the issue's first workflow run${late.length ? `; ${late.join('; ')}` : ''})${gapText()}`);
-        cardAfter = { cardId, head: thread ? cardHead(thread.parent_id, threadId) : '', key: repoKey, number: found.number, by: modName };
+        cardAfter = { cardId, head: thread ? cardHead(thread.parent_id, threadId) : '', key: repoKey, number: found.number, by: filer };
         renameAfter = cfg.rename;
         return { created: found.number, late: true };
       }
