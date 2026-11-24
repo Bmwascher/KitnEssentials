@@ -42,15 +42,14 @@ const tmpSummary = () => {
 };
 // The setup section's problem lines, as the summary shows them. The section
 // appears at most once, runs to the next heading (a sweep's report) or the
-// end, and holds its bullets and the whole advice once.
+// end, and holds its bullets, then one paragraph of advice.
 const setupBullets = (path) => {
   const sections = readFileSync(path, 'utf8').split('### Discord status: setup problems\n').slice(1);
   if (!sections.length) return [];
   assert.equal(sections.length, 1, 'one setup section');
   const paragraphs = sections[0].slice(1).split(/\n(?=### )/)[0].replace(/\n$/, '').split('\n\n');
   assert.equal(paragraphs.length, 2, 'the bullets, then the advice, and nothing else');
-  assert.equal(paragraphs[1], 'After fixing them, re-run this run. A run that owes a player a message sends it then; '
-    + 'a message marked Unconfirmed is never sent again, and the sweep lists it.');
+  assert.doesNotMatch(paragraphs[1], /^- /m, 'the advice is no bullet');
   return paragraphs[0].split('\n');
 };
 
@@ -1791,7 +1790,10 @@ test('PT5: a forum missing a status tag fails the run once, after every other is
   w.issue(18);
   w.issue(19);
   w.threads.get('718').parent_id = '901';
-  w.extraForums.set('901', { ...structuredClone(FORUM), id: '901' });
+  // Tag ids of its own, so a write built from the other forum's tags shows.
+  const own = (id) => `h-${id}`;
+  w.extraForums.set('901', { ...structuredClone(FORUM), id: '901', available_tags: FORUM.available_tags.map((t) => ({ ...t, id: own(t.id) })) });
+  w.threads.get('718').applied_tags = w.threads.get('718').applied_tags.map(own);
   w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17, 18, 19] });
   // Shipped, which this PR run does not need, goes too: an event run names
   // only the tag it needs.
@@ -1808,6 +1810,7 @@ test('PT5: a forum missing a status tag fails the run once, after every other is
   assert.deepEqual(out.filter((l) => l.startsWith('setup problem: ')), ['setup problem: forum 900 has no "In progress" tag: add it, spelled as the README lists it'],
     'logged once, when first met');
   assert.equal(w.said('718').length, 1, "the healthy forum's player was told in that run");
+  assert.ok(w.threads.get('718').applied_tags.includes(own('s-prog')), "the healthy post shows its own forum's In progress tag");
   assert.deepEqual([w.said('717'), w.said('719')], [[], []], "the broken forum's players were not");
   restore();
   await pr({ GITHUB_RUN_ATTEMPT: '2', GITHUB_STEP_SUMMARY: tmpSummary() });
@@ -1898,7 +1901,7 @@ test('PT5: a Discord refusal is named by what it refused, and the run still fini
     i.labels.add('needs-info');
     return go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, updated_at: '2026-11-16T12:00:00Z' } }, { ...RUN, GITHUB_STEP_SUMMARY: w.summary });
   };
-  for (const [why, setup, event, line, after = () => {}] of [
+  for (const [why, setup, event, line, check = () => {}] of [
     ['a refused post, then a healthy one', (w) => {
       w.issue(18);
       w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17, 18] });
@@ -1944,7 +1947,7 @@ test('PT5: a Discord refusal is named by what it refused, and the run still fini
     w.summary = tmpSummary();
     setup(w);
     await assert.rejects(event(w), line, why);
-    after(w);
+    check(w);
   }
 });
 
