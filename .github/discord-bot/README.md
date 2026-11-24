@@ -1063,9 +1063,9 @@ Accepted on purpose; each line says how you would notice it.
   the two minutes that work may take, so a sweep right at that limit can
   leave the next issue's checklist thread for a later sweep.
 - An issue that gets the accepted label after a sweep read its staff
-  checklist thread, in a checklist forum with no Accepted tag, has the
-  missing tag only logged by that sweep's repair; the next sweep names it
-  as a setup problem.
+  checklist thread, in a checklist forum with no Accepted tag, is not named
+  by that sweep; a fix-mode repair of the thread that settles logs the
+  missing tag, and the next sweep names it as a setup problem.
 - A Discord refusal still in flight when a run's time limit stops it is not
   named by that run. A refused message send is not tried again (its note is
   listed by the sweep as maybe not delivered), so its fix comes from the
