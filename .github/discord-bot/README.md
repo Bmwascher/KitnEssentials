@@ -1115,6 +1115,18 @@ its message. (The workflow here already defaults to that tag pattern; set the
 repo variable `RELEASE_TAG_PATTERN` to change it.) Run the `Discord status`
 workflow by hand once to see the sweep's report.
 
+**Reading the results without looking.** `node scripts/trial-check.mjs <id>...`
+prints each post's name, forum, tags, archived and locked state and last
+messages (a text channel id prints its last messages; `--limit N`, default
+10); `--forum <id>` lists a forum's open posts and its 50 newest archived
+ones with their tags. It only reads.
+Give it its own bot, never the trial bot: a new application whose bot has
+the **Message Content** intent on and is invited with View Channels and Read
+Message History only. It also gets whatever `@everyone` may do in each
+channel, so use it on a test server only. Its token goes in
+`TRIAL_READER_TOKEN` or in the file `~/.discord-trial-reader/token`, alone on
+one line, outside every repo.
+
 ## Stage 3: live
 
 Same steps against the real server and repos, with `FORUMS` set to the real
