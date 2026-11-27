@@ -267,16 +267,6 @@ test('a label refusal that is not "already exists" is an error, not a busy lock'
   assert.doesNotMatch(f.find('PATCH', /\/webhooks\//)[0].body.content, /another send/);
 });
 
-test('a form submitted after its forum left the list files nothing', async () => {
-  const f = fakeFetch(discordRoutes(githubRoutes()));
-  const ctx = ctxFor();
-  await handle(await signed(submit()), { ...env, FORUM_CHANNEL_IDS: '901' }, ctx, { fetch: f, installationToken: async () => 'inst' });
-  assert.deepEqual(await Promise.all(ctx.jobs), [{ refused: 'forum' }]);
-  assert.equal(f.find('POST', /\/issues$/).length, 0);
-  const r = await handle(await signed(submit()), { ...env, FORUM_CHANNEL_IDS: '' }, ctxFor(), { fetch: f });
-  assert.match((await r.json()).data.content, /not set up/);
-});
-
 test('a send that finished while this one waited for the lock is not filed again', async () => {
   // The look comes after the lock, so it sees the issue the other send left.
   const f = fakeFetch(discordRoutes(githubRoutes([], [
@@ -480,9 +470,9 @@ test('a create that got no answer is reported as maybe created, not as nothing',
 
 test('a create that answered late is found again: the player gets the reply, the moderator the result, and the card is marked last', async () => {
   let looks = 0;
-  // Two searches before the create find nothing; the re-check after it finds the issue.
+  // The search before the create finds nothing; the re-check after it finds the issue.
   const base = fakeFetch(discordRoutes(githubRoutes([], [
-    ['GET', /test-one\/issues\?state=all.*labels=from-discord/, () => (++looks <= 2 ? [] : [{ number: 17, html_url: 'u/17', body: '<!-- discord-thread: 700 reporter: 42 -->' }])],
+    ['GET', /test-one\/issues\?state=all.*labels=from-discord/, () => (++looks <= 1 ? [] : [{ number: 17, html_url: 'u/17', body: '<!-- discord-thread: 700 reporter: 42 -->' }])],
     ['PATCH', /\/channels\/556\/messages\/96$/, () => ({})],
   ])));
   const hang = (url, init = {}) => (init.method === 'POST' && /\/issues$/.test(url)
@@ -512,7 +502,7 @@ test('a create that answered late is found again: the player gets the reply, the
 test('a late create whose record save never answers still reports in time', async () => {
   let looks = 0;
   const base = fakeFetch(discordRoutes(githubRoutes([], [
-    ['GET', /test-one\/issues\?state=all.*labels=from-discord/, () => (++looks <= 2 ? [] : [{ number: 17, html_url: 'u/17', body: '<!-- discord-thread: 700 reporter: 42 -->' }])],
+    ['GET', /test-one\/issues\?state=all.*labels=from-discord/, () => (++looks <= 1 ? [] : [{ number: 17, html_url: 'u/17', body: '<!-- discord-thread: 700 reporter: 42 -->' }])],
   ])));
   const hang = (url, init = {}) => (init.method === 'POST' && /\/issues$/.test(url) ? stall(init) : base(url, init));
   const kv = { get: async () => null, put: () => new Promise(() => {}) };
@@ -572,7 +562,7 @@ test('each closing phase has its own end: a late re-check is skipped but the rep
     const [res] = await Promise.all(ctx.jobs);
     assert.equal(res.uncertain, true);
     const looks = base.find('GET', /test-one\/issues\?state=all.*labels=from-discord/).length;
-    assert.equal(looks, 2, 'the two searches before the create, and no re-check after 20 s');
+    assert.equal(looks, 1, 'the search before the create, and no re-check after 20 s');
     assert.match(base.find('PATCH', /\/webhooks\//)[0].body.content, /may have been created/);
   } finally { clock.restore(); }
 });
@@ -1036,9 +1026,6 @@ test('one post, one issue: the saved record, then every configured repo, is chec
   const movedIn = () => ({ number: 40, html_url: 'https://github.com/me/test-one/issues/40', repository_url: 'https://api.github.com/repos/me/test-one' });
   // GitHub names the repo in its own casing, which REPOS need not match.
   const caseIn = () => ({ number: 40, html_url: 'https://github.com/Me/Test-One/issues/40', repository_url: 'https://api.github.com/repos/Me/Test-One' });
-  // A list that misses the post's issue the first time and holds it the
-  // second, as when the issue shifted between two pages while it was read.
-  const secondTime = (items) => { let n = 0; return () => (++n <= 1 ? [] : items); };
   const inOne = { number: 17, html_url: 'https://github.com/me/test-one/issues/17', repository_url: 'https://api.github.com/repos/me/test-one', body: '<!-- discord-thread: 700 reporter: 42 -->' };
   // A record from before the filing record kept the issue beside the greeting.
   const legacy = (repo, number) => ({ 'thread:700': JSON.stringify({ issue: { repo, number } }) });
@@ -1093,8 +1080,6 @@ test('one post, one issue: the saved record, then every configured repo, is chec
       /^Already tracked: ONE #40 https:\/\/github\.com\/Me\/Test-One\/issues\/40$/, { repo: 'Me/Test-One', number: 40, key: 'ONE', by: null }],
     ['no token for the chosen repo', {}, live, tokenFails(500, 'me/test-one'), list([]), 'error',
       /^Nothing was created: could not get access to me\/test-one \(.*500.*\)\. Try again\.$/, null],
-    ['the second search finds what the first missed: no create', {}, live, inst, list([]), { duplicate: 17 },
-      /^Already tracked: ONE #17 https:\/\/github\.com\/me\/test-one\/issues\/17$/, { repo: 'me/test-one', number: 17, key: 'ONE', by: null }, secondTime([inOne])],
   ]) {
     const kv = entries === 'unreadable' ? brokenKv : entries === 'silent' ? silentKv : fakeKv(entries);
     const f = fakeFetch(discordRoutes(githubRoutes([], [
@@ -1347,29 +1332,6 @@ test('a message deleted before its filing files nothing and says how to file the
   assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 1, 'the lock is released');
 });
 
-test('a message deleted while the member or the template is read files nothing', async () => {
-  const PIN = { ...env, FORUM_CHANNEL_IDS: '', FORUMS: '{"900":{"client":"Retail","type":"Bug","template":"https://discord.com/channels/1/960/961"}}' };
-  for (const [why, during] of [
-    ['deleted while the reporter\'s member record is read', /\/guilds\/1\/members\/42$/],
-    ['deleted while the pinned template is read', /\/channels\/960\/messages\/961$/],
-  ]) {
-    let gone = false;
-    const f = fakeFetch(discordRoutes(githubRoutes([], [
-      ['GET', /\/channels\/700\/messages\/800$/, () => (gone
-        ? new Response('{"message":"Unknown Message"}', { status: 404 })
-        : { id: '800', content: 'My bags overlap', author: { id: '42', username: 'pat' }, attachments: [] })],
-      ['GET', during, () => { gone = true; return new Response('{"message":"x"}', { status: 404 }); }],
-      ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
-    ])));
-    const ctx = ctxFor();
-    await handle(await signed(submit()), PIN, ctx, { fetch: f, installationToken: async () => 'inst', log: () => {} });
-    assert.deepEqual(await Promise.all(ctx.jobs), [{ refused: 'message' }], why);
-    assert.equal(f.find('POST', /\/issues$/).length, 0, `${why}: nothing is created`);
-    assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content, /^Nothing was created: the message to file was deleted; a moderator can open the post/, why);
-    assert.equal(f.find('DELETE', /labels\/discord-lock-700$/).length, 1, `${why}: the lock is released`);
-  }
-});
-
 test('a filing whose post was deleted says the post was deleted, never the message', async () => {
   let reads = 0;
   const f = fakeFetch(discordRoutes(githubRoutes([], [
@@ -1385,13 +1347,13 @@ test('a filing whose post was deleted says the post was deleted, never the messa
   assert.equal(f.find('PATCH', /\/webhooks\//)[0].body.content, 'Nothing was created: the post was deleted.');
 });
 
-test('a filing whose searches end late still reads its message last and creates the issue', async () => {
+test('a filing whose search ends late still creates the issue', async () => {
   const clock = shiftClock();
   try {
     const base = fakeFetch(discordRoutes(githubRoutes([], [
       ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u/17' })],
     ])));
-    // The searches and the first read of the message end at second eight of fifteen.
+    // The search and the read of the message end at second eight of fifteen.
     let shifted = false;
     const late = (url, init = {}) => {
       const res = base(url, init);
@@ -1402,7 +1364,6 @@ test('a filing whose searches end late still reads its message last and creates 
     await handle(await signed(submit()), env, ctx, { fetch: late, installationToken: async () => 'inst', log: () => {} });
     const [res] = await Promise.all(ctx.jobs);
     assert.equal(res.created, 17, JSON.stringify(res));
-    assert.equal(base.find('GET', /\/channels\/700\/messages\/800$/).length, 2, 'the message is read again just before the create');
     assert.equal(base.find('GET', /\/guilds\/1\/members\//).length, 0, 'the optional member read is skipped');
   } finally { clock.restore(); }
 });
@@ -1678,15 +1639,6 @@ test('Send to GitHub offers only usable repo keys', async () => {
   const long = 'K'.repeat(100);
   const sub = await (await handle(await signed(submit({ repo: long })), { ...env, REPOS: JSON.stringify({ ONE: 'me/test-one', [long]: 'me/test-two' }) }, ctxFor(), { fetch: fakeFetch([]) })).json();
   assert.match(sub.data.content, /^Nothing was created\. The repo chosen is no longer in REPOS: pick it again\./);
-});
-
-test('a Send to GitHub form in the older Action Row shape is still read', async () => {
-  const form = submit();
-  form.data.components = form.data.components.map(({ component: c }) => ({ type: 1, components: [{ type: 4, custom_id: c.custom_id, value: c.values ? c.values[0] : c.value }] }));
-  const f = fakeFetch(discordRoutes(githubRoutes([], [['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 17, html_url: 'u' })]])));
-  const ctx = ctxFor();
-  await handle(await signed(form), env, ctx, { fetch: f, installationToken: async () => 'inst' });
-  assert.deepEqual(await Promise.all(ctx.jobs), [{ created: 17, notes: [] }]);
 });
 
 // ---- Moving a post -------------------------------------------------------------
@@ -2063,26 +2015,6 @@ test('a member read that stalls does not hold the webhook lookup: the post moves
   } finally { clock.restore(); }
 });
 
-test('the copy takes the first message as read just before the create: an edit\'s text, without a file the player removed, counting the files that read lists', async () => {
-  const twoReads = (before, after) => moveWorld((s) => {
-    let reads = 0;
-    const [a, b] = [{ ...s.first, attachments: before }, { ...s.first, content: 'My bags overlap (edited)', attachments: after }];
-    s.first = () => (reads++ ? b : a);
-    s.files['https://cdn.example/a1'] = new Response('12345');
-  });
-  const here = (w) => w.f.find('POST', /\/channels\/990\/messages$/)[0].body.content;
-  // A downloaded file and one too large, both removed: neither is posted or counted.
-  const removed = twoReads([{ id: 'a1', filename: 'bags.png', size: 5, url: 'https://cdn.example/a1' }, { id: 'big', filename: 'big.zip', size: 21 * 1024 * 1024, url: 'https://cdn.example/big' }], []);
-  await runMove(removed);
-  const sent = removed.f.find('POST', /\?wait=true$/)[0].body;
-  assert.deepEqual([sent.files, sent.payload.content], [[], 'My bags overlap (edited)']);
-  assert.doesNotMatch(here(removed), /could not be copied/);
-  // A file added meanwhile was never downloaded: it is counted as left behind.
-  const added = twoReads([], [{ id: 'n1', filename: 'new.png', size: 5, url: 'https://cdn.example/n1' }]);
-  await runMove(added);
-  assert.match(here(added), / 1 file\(s\) could not be copied \(too large, or not downloaded\); they are on the original post\.$/);
-});
-
 test('a move refused before the new post changes nothing and says why', async () => {
   const RECEIPT = /^Nothing was moved: the bot's "now tracked" reply in this post \(https:\/\/discord\.com\/channels\/1\/700\/m8\) says it was sent to GitHub, though its issue was not found by its filing record or the from-discord label; moving filed posts comes in a later update\. If that issue was deleted, delete that reply, then move the post again\.$/;
   const FILED = (s) => {
@@ -2146,11 +2078,6 @@ test('a move refused before the new post changes nothing and says why', async ()
     ['a lock GitHub did not confirm', (s) => { s.claim = () => { throw new Error('Network connection lost.'); }; },
       /^Nothing was moved: GitHub did not confirm the lock discord-lock-700 in me\/test-one \(Network connection lost\.\)\. Wait a few minutes, then move the post again; /],
     ['the first message deleted', (s) => { s.first = () => new Response('{"message":"Unknown Message"}', { status: 404 }); }, /^Nothing was moved: the post's first message was deleted, so there is nothing to copy\.$/],
-    ['the first message deleted while the move ran', (s) => {
-      const m = s.first;
-      let reads = 0;
-      s.first = () => (reads++ ? new Response('{"message":"Unknown Message"}', { status: 404 }) : m);
-    }, /^Nothing was moved: the post's first message was deleted, so there is nothing to copy\.$/],
     ['the bot\'s copy whose record is not readable yet', (s) => { s.first = { ...s.first, webhook_id: '61', application_id: 'app' }; },
       /^Nothing was moved: this post is a copy the bot moved here, and its record movedfrom:700 is not readable yet\. /],
     ['a saved issue that cannot be checked', (s) => {

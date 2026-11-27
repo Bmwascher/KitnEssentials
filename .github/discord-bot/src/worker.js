@@ -66,8 +66,6 @@ const TEMPLATE_MS = 2000;
 const MOVE_PREP_BY_MS = 12000;
 const MOVE_CREATE_BY_MS = 18000;
 const MOVE_REST_BY_MS = 23000;
-// The downloads end this long before the prep phase: the re-read's time.
-const MOVE_REREAD_MS = 2000;
 // Discord takes 20 MiB per file and 25 MiB per request; 1 MiB of the request
 // is left for the message and the multipart framing.
 const COPY_FILE_MAX = 20 * 1024 * 1024;
@@ -177,13 +175,10 @@ const select = (id, text, choices, chosen, { required = true, description } = {}
 }, description);
 
 // A modal's answers by field id: a Label's text input (`value`) or select
-// (its first value, none when left empty), or an Action Row's text input, as
-// a form opened before this version sends it.
+// (its first value, none when left empty).
 function modalValues(data) {
   const out = {};
-  for (const row of data.components || []) {
-    for (const c of row.component ? [row.component] : row.components || []) out[c.custom_id] = c.values ? c.values[0] : c.value;
-  }
+  for (const { component: c } of data.components || []) out[c.custom_id] = c.values ? c.values[0] : c.value;
   return out;
 }
 
@@ -795,12 +790,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     lockGh = githubClient(lockToken, f);
     ghRelease = githubClient(lockToken, timedFetch(deps.fetch, TAIL_MS, t0 + RELEASE_BY_MS));
 
-    // The form may have been opened before the forum list changed: check again.
     thread = await discord.getChannel(threadId);
-    if (!cfg.forums.includes(thread.parent_id)) {
-      await followup('Nothing was created: this post is not in a forum the bot is set up for.');
-      return { refused: 'forum' };
-    }
 
     // Lock, then look once: any send that finished before the lock was
     // granted has left its issue to be found. The post's KV record, when it
@@ -893,10 +883,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
         return { refused: 'saved-issue' };
       }
     }
-    // A search that finds nothing runs once more before the create: an issue
-    // that shifted between two pages of a list while it was read is found
-    // the second time.
-    const existing = (await already()) || (await already());
+    const existing = await already();
     if (existing) {
       const where = whereIs(existing.issue, existing.repo);
       const elsewhere = sameRepo(where.repo, repo) ? '' : `. Nothing was created in ${repo}.`;
@@ -904,11 +891,8 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     }
 
     // The filed message may be gone since the form opened: a card cannot
-    // follow its post's first message, since the scan never edits a card. It
-    // is read for its author, then read again directly before the create,
-    // whose body takes that last read, so a message deleted while the member
-    // and the template are read files nothing. A deleted post is told apart
-    // from a deleted message.
+    // follow its post's first message, since the scan never edits a card. A
+    // deleted post is told apart from a deleted message.
     const readFiled = async (client) => {
       try {
         const { message: found } = await client.readMessage(threadId, messageId);
@@ -946,8 +930,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     copyId = copy && copy.id ? copy.id : null;
     const reporterId = copy ? copyId : first.message.webhook_id ? null : author.id;
     // The member and template reads are optional, so they end a full call's
-    // time before the filing's deadline. The last read of the message and
-    // the create must both run: they share what is left, in that order.
+    // time before the filing's deadline, which the create keeps.
     const lookupsBy = t0 + budgetMs - callMs;
     // The server nickname is a nicety: any failure files with the display
     // name. A 404 is a member who left; any other failure is logged.
@@ -958,9 +941,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
       : null;
     const by = interaction.member && interaction.member.user;
     const template = await templateFields(cfg, thread.parent_id, type, env, deps, lookupsBy, log);
-    const last = await readFiled(discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, t0 + budgetMs)));
-    if (last.refused) return { refused: last.refused };
-    const { message } = last;
+    const { message } = first;
     const check = template.fields.length ? templateCheck(message.content, template.fields, (message.attachments || []).length) : [];
     gaps = templateGaps(check, template.optional);
     tmplNote = template.note;
@@ -1067,10 +1048,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
 }
 
 // The issue a post was filed as, for a move: the saved one when it is live,
-// else every configured repo searched. A search that finds nothing runs once
-// more, as the filing's does: an issue that shifted between two pages of a
-// list while it was read is found the second time. A saved issue that
-// cannot be checked is `unclear`, with why. `key` is the one the saved
+// else every configured repo searched. A saved issue that cannot be checked is `unclear`, with why. `key` is the one the saved
 // issue was filed under while REPOS still maps it to the issue's repo, else
 // the repo's first key.
 async function findIssue(cfg, saved, postId, tokenFor, f) {
@@ -1086,8 +1064,7 @@ async function findIssue(cfg, saved, postId, tokenFor, f) {
     if (r.issue) return found(r.issue, saved.repo, true);
     if (!r.gone) return { unclear: r.unclear };
   }
-  const search = () => searchRepos(Object.values(cfg.repos), postId, tokenFor, f);
-  const hit = (await search()) || (await search());
+  const hit = await searchRepos(Object.values(cfg.repos), postId, tokenFor, f);
   return hit ? found(hit.issue, hit.repo) : {};
 }
 
@@ -1146,7 +1123,6 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       if (!postGone(e, oldId)) throw e;
       return await refuse('the post was deleted', 'post');
     }
-    if (!cfg.forums.includes(old.parent_id)) return await refuse('this post is not in a forum the bot is set up for', 'forum');
 
     let records;
     try {
@@ -1220,8 +1196,8 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       // any failed read, gives the user's own. The read has its own short
       // call that ends a call's time before the prep phase (by 4 s with the
       // 8 s call), so one that stalls cannot take the time of the webhook
-      // lookup after it, which keeps a whole call, of the downloads (to 10 s)
-      // or of the re-read (to 12 s).
+      // lookup after it, which keeps a whole call, or of the downloads (to
+      // 12 s).
       const member = await discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, t0 + MOVE_PREP_BY_MS - callMs))
         .call('GET', `/guilds/${guildId}/members/${first.author.id}`)
         .catch((e) => { if (statusOf(e) !== 404) log(`member read failed: ${e.message.slice(0, 200)}`); return null; });
@@ -1238,10 +1214,9 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
 
     // Each file in order that fits Discord's limits is downloaded; the rest,
     // and any whose download fails, is stopped or cannot start in time, stay
-    // on the old post. The downloads end MOVE_REREAD_MS before the prep
-    // phase, so a slow file cannot take the time of the first message's read
-    // below, which the create needs.
-    const download = timedFetch(deps.fetch, callMs, t0 + MOVE_PREP_BY_MS - MOVE_REREAD_MS);
+    // on the old post. The downloads end with the prep phase, so a slow file
+    // cannot take the create's time.
+    const download = timedFetch(deps.fetch, callMs, t0 + MOVE_PREP_BY_MS);
     const files = [];
     let room = COPY_MAX_BYTES;
     for (const a of first.attachments) {
@@ -1256,41 +1231,26 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       }
     }
 
-    // The first message is read again just before the create, as a filing
-    // reads its message: one deleted while the move prepared (its reads and
-    // the file downloads) is not posted again.
-    let last;
-    try {
-      last = (await discord.readMessage(oldId, oldId)).message;
-    } catch (e) {
-      if (!postGone(e, oldId)) throw e;
-      return await refuse('the post was deleted', 'post');
-    }
-    if (!last) return await refuse("the post's first message was deleted, so there is nothing to copy", 'message');
-    // The copy takes the downloaded files this read still lists, so a file
-    // the player removed meanwhile is not posted; every other file it lists,
-    // one added meanwhile included, is counted as left on the old post.
-    const copied = files.filter((x) => last.attachments.some((a) => a.id === x.id));
-    const left = last.attachments.length - copied.length;
+    const left = first.attachments.length - files.length;
 
     const type = target.type;
-    const text = last.content;
+    const text = first.content;
     const cut = text.length > MAX_REPLY;
     // Built before the create, so the catch below sees only the create's own
     // failure. A thread read may carry no tag list (movedTags' default).
     const payload = {
       thread_name: old.name,
       applied_tags: movedTags({ applied: old.applied_tags, from: tagsIn(channels, old.parent_id), to: tagsIn(channels, targetId), client, fixedClient: target.client, fixedType: target.type, repoTags: cfg.repoTags }),
-      content: cut ? `${cutUnits(text, MAX_REPLY - 1)}…` : text || (copied.length ? '' : NOTHING_TO_COPY),
+      content: cut ? `${cutUnits(text, MAX_REPLY - 1)}…` : text || (files.length ? '' : NOTHING_TO_COPY),
       username: webhookName(reporter.name, reporter.username),
       // A webhook's reporter has no avatar.
       ...(reporter.avatar ? { avatar_url: reporter.avatar } : {}),
       allowed_mentions: { parse: [] },
-      attachments: copied.map((x, i) => ({ id: i, filename: x.name, ...(x.description ? { description: x.description } : {}) })),
+      attachments: files.map((x, i) => ({ id: i, filename: x.name, ...(x.description ? { description: x.description } : {}) })),
     };
     let made;
     try {
-      made = await discordClient(env.DISCORD_BOT_TOKEN, until(MOVE_CREATE_BY_MS)).executeWebhook(hook, payload, copied);
+      made = await discordClient(env.DISCORD_BOT_TOKEN, until(MOVE_CREATE_BY_MS)).executeWebhook(hook, payload, files);
     } catch (e) {
       if (refusal4xx(e)) return await refuse(`Discord refused the new post (${e.message.slice(0, 300)})`, 'create');
       if (/^out of time before /.test(e.message)) throw e;
