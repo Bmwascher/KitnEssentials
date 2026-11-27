@@ -65,14 +65,6 @@ const CARD_BUDGET = 3 * MAX_CARDS;
 const FORUM_BUDGET = 44;
 const POST_BUDGET = 4;
 const MAX_KV_READS = 60;
-// The most records a new post's visit reads: its own, its filing, its move
-// away, and, when its first message is out of view, its move here.
-const VISIT_READS = 4;
-// The records an older post's card retry reads: its own, its filing and its
-// move away (its greeting is out, so its move here is not read). The new
-// posts' visits keep these clear for each older post owed a card, up to the
-// card share, so a run of new posts cannot starve them.
-const CARD_READS = 3;
 // A post whose pass fails this many runs in a row (not a refusal) is given
 // up on: about 30 minutes of errors at one scan a minute. Its greeting and
 // its card share the count; once the greeting is out, giving up skips only
@@ -179,9 +171,6 @@ async function lookIn(discord, threadId, myId) {
     // The move's own message: the post is a copy the bot made, even when its
     // first message is gone or past these 100.
     moved: mine.some((m) => String(m.content || '').startsWith(MOVED_START)),
-    // The move's note: the post was moved away, even when its movedto:
-    // record was not saved and the move could not lock it.
-    away: mine.some((m) => String(m.content || '').startsWith(AWAY_START)),
     greeting: mine.find((m) => hasButton(m, threadId) || m.content === GREETING) || null,
     starter: recent.find((m) => m.id === threadId) || null,
     full: recent.length >= 100,
@@ -208,7 +197,6 @@ export async function scan(env, deps = {}) {
   }
   const since = Number(rawSince);
   const errors = [];
-  const endedNow = [];
   const state = (await readStrict(kv, 'scan:state')) || {};
   const through = { ...state.through };
   const greetedTo = { ...through, ...state.greeted };
@@ -328,16 +316,6 @@ export async function scan(env, deps = {}) {
         wroteAt.set(id, clock());
       }
     };
-    // A finished post whose record says the scan gave up on it, but which
-    // the state does not name (its state write was lost, or an overlapping
-    // scan wrote over it), is named again from its record; one that ended
-    // on its own refusal drops its entries from the saved paragraph again.
-    const restored = (t, rec) => {
-      const g = rec.gaveUp;
-      if (g && now - g.at < GAVE_UP_KEPT_MS) name(t.id, g.what, g.at);
-      if (rec.ended) endedNow.push(t.id);
-      return { greeted: true, finished: true };
-    };
     // A failed pass. Out of this run's calls or reads, or with its record
     // unread, the post waits, spends no try, and nothing overwrites its
     // record. Any other failure raises the post's one tries count; at
@@ -389,16 +367,11 @@ export async function scan(env, deps = {}) {
       } else if (told && !denied) {
         errors.push(`${what} (${refused(err) ? 'the queue channel refused the bot' : `gave up after ${tries} tries`})`);
       }
-      // A post that refused the bot (403) is named once, by its give-up line,
-      // and a deleted one (404) nowhere; a saved problem paragraph would
-      // name either again.
-      const ended = giveUp && own && [403, 404].includes(err.discord.status);
-      if (ended) endedNow.push(t.id);
       const kind = greetedNow ? 'queue card' : 'greeting';
       const label = denied ? `${kind} refused by the post (403)` : kind;
       try {
         await putRecord(t.id, giveUp
-          ? { ...rec, [greetedNow ? 'cardSkipped' : 'skipped']: err.message.slice(0, 200), ...(told ? { gaveUp: { at: now, what: label } } : {}), ...(ended ? { ended: true } : {}) }
+          ? { ...rec, [greetedNow ? 'cardSkipped' : 'skipped']: err.message.slice(0, 200), ...(told ? { gaveUp: { at: now, what: label } } : {}) }
           : { ...rec, tries });
       } catch (e) {
         log(`${what}: its record was not saved: ${e.message}`);
@@ -416,7 +389,7 @@ export async function scan(env, deps = {}) {
       let seen = null;
       try {
         rec = (await read(`thread:${t.id}`)) || {};
-        if (finished(rec, queue)) return restored(t, rec);
+        if (finished(rec, queue)) return { greeted: true, finished: true };
         // A post filed before this pass (by right-click, or from its card
         // after the greeting) gets no greeting and no card.
         if (await read(`issue:${t.id}`)) return { greeted: true, finished: true };
@@ -438,21 +411,11 @@ export async function scan(env, deps = {}) {
           // The bot's copy of a moved post (the move's message is there, or
           // its first message came from the bot's webhook) gets no greeting
           // or card: the move's message and the old post's card stand in.
-          // Discord shows these before KV shows the move's records. A first
-          // message out of view is told by the record, or, past these 100
-          // with no record saved, by reading the first message on its own.
-          // The application is read only for a message that could be its copy.
+          // Discord shows these before KV shows the move's records. The
+          // application is read only for a message that could be its copy.
           const isCopy = async (m) => !!(m && m.webhook_id && m.application_id) && isBotCopy(m, await myAppId());
-          let copy = seen.moved || await isCopy(seen.starter);
-          if (!copy && !seen.starter) copy = !!(await read(`movedfrom:${t.id}`));
-          if (!copy && !seen.starter && seen.full) copy = await isCopy((await greeter.readMessage(t.id, t.id)).message);
-          if (copy) {
+          if (seen.moved || await isCopy(seen.starter)) {
             rec = { ...rec, skipped: MOVED_HERE };
-            await putRecord(t.id, rec);
-            return { greeted: true, finished: true };
-          }
-          if (seen.away) {
-            rec = { ...rec, skipped: 'a post the bot moved away' };
             await putRecord(t.id, rec);
             return { greeted: true, finished: true };
           }
@@ -485,20 +448,16 @@ export async function scan(env, deps = {}) {
         return failed(t, rec, err);
       }
     };
-    // New posts' greetings first; then older posts' card retries, so a run
-    // of new posts never starves them; then the new posts' cards, with what
-    // is left of the card share. An older post past the card share waits
-    // unread.
+    // New posts' greetings first; then older posts' card retries; then the
+    // new posts' cards, with what is left of the card share. An older post
+    // past the card share or the reads waits unread.
     const outcome = new Map();
     const owed = [];
     const older = fresh.filter((x) => !isNew.has(x.id));
-    const newReads = MAX_KV_READS - Math.min(older.length, MAX_CARDS) * CARD_READS;
     for (const t of fresh.filter((x) => isNew.has(x.id))) {
       // Once the greeting share is spent, a later new post could only wait:
       // it waits unread.
-      // A visit starts only with room for its most reads: one that reads
-      // four after an even count would otherwise eat into the older share.
-      if (reads + VISIT_READS > newReads || tried >= MAX_GREET) { left++; continue; }
+      if (reads >= MAX_KV_READS || tried >= MAX_GREET) { left++; continue; }
       const o = await greet(t);
       outcome.set(t.id, o);
       if (o.owes) owed.push(o.owes);
@@ -529,16 +488,7 @@ export async function scan(env, deps = {}) {
     if (!errors.length) errors.push(err.message);
     throw err;
   } finally {
-    const namesEnded = (s) => endedNow.some((id) => new RegExp(`post ${id}\\b`).test(s));
-    const withoutEnded = (e) => {
-      if (!e || !endedNow.length) return e;
-      // A saved error with no `items` list is left whole.
-      if (!Array.isArray(e.items) || !e.items.every((s) => typeof s === 'string')) return e;
-      const items = e.items.filter((s) => !namesEnded(s));
-      return items.length ? { at: e.at, text: `could not read or message ${items.join(', ')}`, items } : undefined;
-    };
-    const keptError = withoutEnded(state.error);
-    const next = { last: now, through, greeted: greetedTo, ...(keptError ? { error: keptError } : {}) };
+    const next = { last: now, through, greeted: greetedTo, ...(state.error ? { error: state.error } : {}) };
     if (errors.length) next.error = { at: now, text: `could not read or message ${errors.slice(0, 5).join(', ')}`, items: errors.slice(0, 5) };
     // Every post given up on stays named for two days, whatever errors
     // follow, so the daily alert lists each one.
