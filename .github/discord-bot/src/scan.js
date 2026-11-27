@@ -17,8 +17,7 @@
 //                             post there is handled, so a run reads KV only after it},
 //                 "greeted": {forum: the same, for the greeting alone: posts past
 //                             it are new, and go before any card retry},
-//                 "error": {"at": epoch ms, "text": the last failure,
-//                           "items": its entries, one per post or read},
+//                 "error": {"at": epoch ms, "text": the last failure},
 //                 "gaveUp": [{"at", "post", "what": "greeting", "queue card",
 //                             "greeting refused by the post (403)", "queue
 //                             card refused by the post (403)"}], each kept
@@ -28,8 +27,7 @@
 //                 "card": queue card id, "cardSkipped": why no card goes out,
 //                 "skipped": why no greeting goes out, "tracked": the bot's
 //                 "now tracked" reply found in the post, "tries": failed
-//                 passes, the greeting's and the card's together, "gaveUp":
-//                 {"at", "what"} once the scan gave up on it and names it};
+//                 passes, the greeting's and the card's together};
 //                 one from before the filing record may hold "issue"
 //   issue:<id>   the Worker's record once the post is filed: {"repo",
 //                 "number", "key", "by": the filer's mention, or an older
@@ -370,7 +368,7 @@ export async function scan(env, deps = {}) {
       const label = denied ? `${kind} refused by the post (403)` : kind;
       try {
         await putRecord(t.id, giveUp
-          ? { ...rec, [greetedNow ? 'cardSkipped' : 'skipped']: err.message.slice(0, 200), ...(told ? { gaveUp: { at: now, what: label } } : {}) }
+          ? { ...rec, [greetedNow ? 'cardSkipped' : 'skipped']: err.message.slice(0, 200) }
           : { ...rec, tries });
       } catch (e) {
         log(`${what}: its record was not saved: ${e.message}`);
@@ -488,7 +486,7 @@ export async function scan(env, deps = {}) {
     throw err;
   } finally {
     const next = { last: now, through, greeted: greetedTo, ...(state.error ? { error: state.error } : {}) };
-    if (errors.length) next.error = { at: now, text: `could not read or message ${errors.slice(0, 5).join(', ')}`, items: errors.slice(0, 5) };
+    if (errors.length) next.error = { at: now, text: `could not read or message ${errors.slice(0, 5).join(', ')}` };
     // Every post given up on stays named for two days, whatever errors
     // follow, so the daily alert lists each one.
     const gaveUp = [...kept, ...gaveUpNow];

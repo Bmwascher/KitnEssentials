@@ -505,7 +505,7 @@ The bot does not retry them, and there is no repair procedure: each state
 below is known and accepted. What you see in each:
 
 - **The old post's record** (`record movedto:<old post id>`). The old post
-  can be sent again, and moved again once someone unlocks it, and the scan
+  can be sent again at once, and moved again once someone unlocks it, and the scan
   may greet it if its lock also failed. Leave it locked; if it is unlocked,
   close it again.
 - **The queue card** (`queue card for the new post`). The card still shows
@@ -535,9 +535,9 @@ below is known and accepted. What you see in each:
   the states above may hold. Look at both posts before acting.
 
 **Files** are copied up to 20 MiB each and 24 MiB in all, Discord's limits
-less room for the message. The rest, any that fail to download, and any the
-player adds while the move runs stay on the old post, and the moved message
-says how many. A first message over
+less room for the message. The rest and any that fail to download stay on
+the old post, and the moved message says how many; a file the player adds
+while the move runs stays there too, uncounted. A first message over
 Discord's 2,000 characters is cut, and the moved message says the full text
 is on the original.
 
@@ -588,8 +588,8 @@ filed. A move writes two more records, both the Worker's:
 `movedfrom:<new post id>` (the old post, the player and the queue card) and
 `movedto:<old post id>` (the new post); without `movedfrom:` the new post is
 refused for sending and moving for good, and without `movedto:` the old
-post can be sent or moved again once someone unlocks it (as in When a move
-stops partway).
+post can be sent again, and moved again once someone unlocks it (as in When
+a move stops partway).
 
 ## Changing the lock repo
 
@@ -768,8 +768,6 @@ thread in the forum is this issue's: one whose first message was deleted
 can be, and its name started "#<issue number> " unless someone renamed it.
 The issue's next event then opens a new thread. If you are not sure, leave
 the comment; the sweep keeps listing it.
-If the comment's hidden lines are edited so they no longer read, or deleted,
-the bot writes nothing for that issue, and the sweep says how to mend it.
 For a thread outside the checklist forum, set `CHECKLIST_FORUM_ID` back if
 it changed by mistake; if it changed on purpose, archive or delete the old
 thread, then delete that comment, and the next event opens a new thread.
@@ -790,7 +788,7 @@ Accepted on purpose; each line says how you would notice it.
   fail with an error in the Worker log; delete or rewrite it as the bot
   wrote it (Clearing a filing record). The one exception is `scan:since`:
   one that is not a time in milliseconds makes the scan greet nothing, with
-  no error, and deleting it restarts the scan from now, passing over every
+  no error (an empty one or `0` reads as 1970 and greets every open post), and deleting it restarts the scan from now, passing over every
   waiting post. Rewrite it with a time, never delete it.
 - A setting saved as a JSON value with no text form, or a
   `DISCORD_PUBLIC_KEY` or `GITHUB_APP_PRIVATE_KEY` that is not text, is not
@@ -822,9 +820,8 @@ Accepted on purpose; each line says how you would notice it.
     before KV showed the move's record: a greeting or a queue card in or for
     the old post. Delete the greeting; the card's buttons answer that the
     post moved.
-  - The bot's copy whose moved message failed, whose first message the
-    player deleted, and whose move record the scan cannot read yet: a
-    greeting and a second card on the copy. Delete both.
+  - The bot's copy whose moved message failed and whose first message the
+    player deleted: a greeting and a second card on the copy. Delete both.
   - A filing's card edit or rename that lands after a move of the same post:
     the card points back at the old post, or the old post is reopened.
     Right-click the new post; archive the old post again.
@@ -846,6 +843,18 @@ Accepted on purpose; each line says how you would notice it.
   save in its state is not named at all.
 - A closed issue whose close GitHub's events list does not show yet is
   judged from an earlier close, or from none, until the next run.
+- When a ship record cannot be written and GitHub's tag list lags, the
+  staff checklist can show the issue's status from before the release until
+  the next run.
+- A move while the Message Content setting is off copies a post with no
+  text or files as the "nothing the bot can copy" placeholder, then locks
+  and archives the old post: `/bot-check` names the setting; unlock the old
+  post and delete the copy.
+- A player's edit or file removal in the seconds a move runs can be copied
+  as it was before; a moderator can delete or edit the copy.
+- If Discord's setup reads stall long enough, the daily setup report can
+  go to the Worker log instead of the moderator channel; the next day's
+  check runs again.
 - A "Staff checklist thread" comment whose hidden lines staff broke reads
   as no record, so the next job can open a second record and thread; delete
   the broken comment or mend it as the bot wrote it.
@@ -881,7 +890,7 @@ Accepted on purpose; each line says how you would notice it.
   daily alert names each such post, and moderators file it by right-click.
 - A post archived or locked before its card went out gets no card, and nothing
   names the missing card. This includes a post archived or locked while a
-  setting the Worker cannot read stopped the scan. The daily waiting list covers it only in part: it
+  broken setting stopped the scan. The daily waiting list covers it only in part: it
   lists posts older than `STALE_DAYS` (3 by default) with no status or
   `Answered` tag, leaves out locked posts, reads archived posts from the last
   30 days only (up to 300 per forum), and names about 20 posts at most.
@@ -939,8 +948,9 @@ Accepted on purpose; each line says how you would notice it.
 - The merge plan follows the PR's own events: a Development sidebar link, or
   an issue closed or relabeled, shows at the PR's next event. A closing
   keyword in a commit message is not shown, and neither is a post's status.
-- The merge plan of a PR with more than 100 closing references names only
-  the first 100.
+- The merge plan of a PR with more than 100 closing references reads only
+  the first 100 GitHub lists; a reference past those is named only when the
+  PR's description holds its closing keyword.
 - A merge-plan comment write that times out may still be applied by GitHub
   after the job has moved on, and a job stopped partway (an error, or its time
   limit) may have edited one copy and not another. The PR can then show an
@@ -1125,7 +1135,7 @@ Accepted on purpose; each line says how you would notice it.
   staff reply reopens the thread for good.
 - If the bot's re-archive of a finished checklist thread fails after a tag
   change, or the job is stopped between the tag change and the re-archive,
-  or Discord applies a timed-out tag change after the re-archive, the thread
+  or a tag change times out (the bot then sends no re-archive), the thread
   may stay open and nothing lists it; the run is red in Actions. One click
   archives it.
 - If the bot's re-archive fails after it changed the tags of an open issue's
@@ -1193,16 +1203,15 @@ Accepted on purpose; each line says how you would notice it.
   and the sweep's line says to send it by hand if it is still needed. The
   post keeps Triaged and Accepted while the close's tag is still missing:
   the sweep lists it and skips the move until the tag is added.
-- A staff reply in the moment between the bot's re-archive landing, with
-  its answer lost, and the bot's read of the thread just after can be
-  archived over by the next run. The moment is one request long; another
+- A staff reply in the moment before the bot's re-archive lands can be
+  archived over. The moment is one request long; another
   reply reopens the thread for good.
 - If an issue is reopened and closed again while another bot run (a fix-mode
   sweep or a PR run) is opening its checklist thread for the reopen, the
   finished thread can stay open with nothing listing it: you see a finished
   issue whose thread is open, and one click archives it.
-- If an issue is reopened and closed again within a minute before GitHub
-  lists either event, or closed again for another reason while the bot reads
+- If an issue is reopened and closed again before GitHub lists either
+  event, or closed again for another reason while the bot reads
   it, the thread can be keyed on the wrong close: it stays open until the
   sweep lists "checklist archive owed", or a staff reply made after the
   bot's archive is archived over once; reply again to reopen it for good.
@@ -1216,8 +1225,8 @@ Accepted on purpose; each line says how you would notice it.
   two threads for one issue; keep the one that comment links and delete the
   other.
 - If an issue closes as the bot reads the checklist forum just before making
-  its thread, and GitHub does not show the close yet, the thread is made open
-  and the job is red; the issue's next event or a fix-mode sweep archives it.
+  its thread, and GitHub does not show the close yet, the thread is made
+  open; the issue's next event or a fix-mode sweep archives it.
 - An edit to the "Staff checklist thread" comment saved in the moment the bot
   rewrites it can be lost: you see your edit gone; make it again.
 - `/bot-check` and the daily setup check cannot see the Actions settings; a
@@ -1259,8 +1268,8 @@ Accepted on purpose; each line says how you would notice it.
   present, and the bot checks a setting `/bot-check` covers only there, not
   again at each use: a setting `/bot-check` flags (more than 25 forums or
   repos for a form's choices, or no usable `REPOS` key) can make the form
-  fail to open, with Discord's generic failure. A failed read, an empty answer or a missing optional
-  field is "could not check", never a pass.
+  fail to open, with Discord's generic failure. A failed read is "could
+  not check", never a pass.
 - A player name that looks like `#12`, `GH-12`, a commit hash or a URL can
   show as a link in the issue's Reporter row.
 

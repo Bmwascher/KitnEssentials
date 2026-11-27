@@ -95,15 +95,13 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
   async function current(rec) {
     const r = parseChecklist(await gh.call('GET', commentPath(rec)));
     if (!r) throw new Error(`the staff checklist record lost its marker (${rec.url})`);
-    if (r.state !== rec.state) throw new Error(`the staff checklist record changed during this run (${rec.url}); the issue's next event checks it`);
+    if (r.state !== rec.state) throw new Error(`the staff checklist record changed during this run (${rec.url}); the issue's next event settles it`);
     return r;
   }
-  // `rec` is the record as this run last read or wrote it; `over` is the
-  // change, or a function giving it from the record as just read. It is laid
-  // on that read, so anything else staff changed in the record stays.
-  async function write(rec, over) {
+  // `rec` is the record as this run last read or wrote it; `change` is laid
+  // on the record as just read, so anything else staff changed there stays.
+  async function write(rec, change) {
     const seen = await current(rec);
-    const change = typeof over === 'function' ? over(seen) : over;
     await gh.call('PATCH', commentPath(rec), { body: checklistBody({ ...seen, ...change }) });
   }
 

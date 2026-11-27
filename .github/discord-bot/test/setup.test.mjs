@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { configProblems, channelPermissions, fitLines, setupCheck } from '../src/setup.js';
 import { PERMS, postLines, taken, STATUS_NAMES, CHECKLIST_NAMES, LABEL_DEFS, LABELS } from '../src/core.js';
 import { setupWorld } from './setup-world.mjs';
-import { stall } from './fake-fetch.mjs';
+import { stall, stallBody } from './fake-fetch.mjs';
 
 // Discord's own message limit, which every message sent must fit.
 const DISCORD_MAX = 2000;
@@ -315,6 +315,13 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
     const fetch = (url, init) => (/\/applications\/@me$/.test(url) ? stall(init) : deps.fetch(url, init));
     const r = await setupCheck(env, { fetch }, { deadline: Date.now() + 300 });
     assert.ok(r.problems.some((l) => l.startsWith('Could not check the Message Content setting or the public key (')), `a read the deadline cuts off: ${r.problems.join(' | ')}`);
+  }
+  {
+    // The headers come at once; the body stalls until the deadline.
+    const { env, deps } = setupWorld();
+    const fetch = (url, init) => (/\/applications\/@me$/.test(url) ? stallBody(init) : deps.fetch(url, init));
+    const r = await setupCheck(env, { fetch }, { deadline: Date.now() + 300 });
+    assert.ok(r.problems.some((l) => l.startsWith('Could not check the Message Content setting or the public key (')), `a body the deadline cuts off: ${r.problems.join(' | ')}`);
   }
   const unlisted = { ...setupWorld().s.channels[2] };
   // Each row breaks one thing; the moderator channel's state stays its own.

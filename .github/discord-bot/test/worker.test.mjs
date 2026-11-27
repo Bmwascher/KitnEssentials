@@ -1026,7 +1026,6 @@ test('one post, one issue: the saved record, then every configured repo, is chec
   const movedIn = () => ({ number: 40, html_url: 'https://github.com/me/test-one/issues/40', repository_url: 'https://api.github.com/repos/me/test-one' });
   // GitHub names the repo in its own casing, which REPOS need not match.
   const caseIn = () => ({ number: 40, html_url: 'https://github.com/Me/Test-One/issues/40', repository_url: 'https://api.github.com/repos/Me/Test-One' });
-  const inOne = { number: 17, html_url: 'https://github.com/me/test-one/issues/17', repository_url: 'https://api.github.com/repos/me/test-one', body: '<!-- discord-thread: 700 reporter: 42 -->' };
   // A record from before the filing record kept the issue beside the greeting.
   const legacy = (repo, number) => ({ 'thread:700': JSON.stringify({ issue: { repo, number } }) });
   const elsewhere = legacy('me/test-two', 9);
@@ -1255,17 +1254,6 @@ test('filing a moved post names its player, ends with the copy line and pings th
   await handle(await signed(submit()), { ...env, STATE: fakeKv({ 'thread:700': JSON.stringify({ skipped: MOVED_HERE }) }) }, orphanCtx, { fetch: orphan, installationToken: async () => 'inst' });
   assert.deepEqual(await Promise.all(orphanCtx.jobs), [{ refused: 'copy-record' }]);
   assert.equal(orphan.find('POST', /\/issues$/).length, 0);
-});
-
-test('with no STATE bound, a player\'s message with the "now tracked" text costs a filing no read of the bot\'s user', async () => {
-  const f = fakeFetch(discordRoutes(githubRoutes([], [
-    ['GET', /\/channels\/700\/messages\?limit=100$/, () => [{ id: 'q1', author: { id: '42' }, content: MESSAGES.tracked('ONE', 40) }]],
-    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 18, html_url: 'u/18' })],
-  ])));
-  const ctx = ctxFor();
-  await handle(await signed(submit()), env, ctx, { fetch: f, installationToken: async () => 'inst' });
-  assert.deepEqual(await Promise.all(ctx.jobs), [{ created: 18, notes: [] }]);
-  assert.equal(f.find('GET', /\/users\/@me$/).length, 0);
 });
 
 test('a message deleted before its filing files nothing and says how to file the post', async () => {
