@@ -276,9 +276,6 @@ const lf = (text) => String(text || '').replace(/\r\n?/g, '\n');
 // more backticks or tildes, then at most one plain language word. Any other
 // fence-like line is text, its marks escaped, so GitHub opens nothing there.
 const FENCE_OPEN = /^(`{3,}|~{3,})[ \t]*([A-Za-z0-9+#.-]*)[ \t]*$/;
-// Language words GitHub draws as a diagram, formula or map instead of
-// showing the code; the block keeps its code and loses the word.
-const DRAWN = new Set(['mermaid', 'math', 'geojson', 'topojson', 'stl']);
 // GitHub reads at most this many backticks of a fence line, so a block that
 // holds a run this long cannot be outrun and stays text.
 const MAX_FENCE = 255;
@@ -312,8 +309,7 @@ export function neutralize(text) {
     } else {
       flush();
       const fence = '`'.repeat(Math.max(3, longest + 1));
-      const word = DRAWN.has(open[2].toLowerCase()) ? '' : open[2];
-      out.push([fence + word, ...body.map((l) => l.replace(/<!--/g, `<${ZWSP}!--`)), fence].join('\n'));
+      out.push([fence + open[2], ...body.map((l) => l.replace(/<!--/g, `<${ZWSP}!--`)), fence].join('\n'));
     }
     i = end;
   }
@@ -329,14 +325,9 @@ const BIDI = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
 const CONTROLS = new RegExp(`[\\u0000-\\u001f\\u007f-\\u009f]|${BIDI.source}`, 'g');
 const oneLine = (s) => String(s ?? '').replace(/\r\n?|[\n\u2028\u2029]/g, ' ').replace(CONTROLS, '');
 
-// A name inside a table cell of the bot's own: all text. Markdown marks,
-// pipes and brackets are backslashed. A # or GH- before a digit is broken so
-// it links no issue, a run of hex digits every six so it links no commit,
-// and a URL's :// and www. so GitHub links nothing; <, @ and & go as in
-// player text.
-const nameText = (s) => plain(oneLine(s).replace(/[\\`*_~|[\]]/g, '\\$&').replace(/#(?=\d)/g, `#${ZWSP}`)
-  .replace(/\b(GH)-(?=\d)/gi, `$1-${ZWSP}`).replace(/[0-9a-f]{6}(?=[0-9a-f])/gi, `$&${ZWSP}`)
-  .replace(/:\/\//g, `:${ZWSP}//`).replace(/\b(www)\./gi, `$1${ZWSP}.`));
+// A name inside a table cell of the bot's own: Markdown marks, pipes and
+// brackets are backslashed; <, @ and & go as in player text.
+const nameText = (s) => plain(oneLine(s).replace(/[\\`*_~|[\]]/g, '\\$&'));
 
 // A code span no backtick inside `s` can end early, so the text shows as
 // written: never a link, a mention or Markdown. Markdown needs a space

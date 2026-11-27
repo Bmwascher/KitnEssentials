@@ -81,15 +81,12 @@ test('body: a table names both people, then the quoted report, with the hidden l
   }
 });
 
-test('a hostile name stays one row of text: no link, mention, cross-reference or reordering', () => {
+test('a hostile name stays one row of text: no Markdown, mention or reordering', () => {
   const row = (body) => body.split('\n')[0];
   for (const [name, want] of [
     ['a|b', 'a\\|b'], ['x]y', 'x\\]y'], ['**x**', '\\*\\*x\\*\\*'], ['_b_', '\\_b\\_'],
-    ['#12', '#\u200B12'], ['@org/team', '@\u200Borg/team'], ['<!--', '&lt;!--'],
-    ['a\u202Eb', 'ab'], ['two\nlines', 'two lines'], ['[x](https://e.example)', '\\[x\\](https:\u200B//e.example)'],
-    ['https://evil.example', 'https:\u200B//evil.example'], ['www.evil.example', 'www\u200B.evil.example'],
-    // GitHub links GH-<n> to an issue, and seven or more hex digits to a commit.
-    ['GH-12', 'GH-\u200B12'], ['gh-12', 'gh-\u200B12'], ['a5c3785ed8d6', 'a5c378\u200B5ed8d6'],
+    ['@org/team', '@\u200Borg/team'], ['<!--', '&lt;!--'],
+    ['a\u202Eb', 'ab'], ['two\nlines', 'two lines'], ['[x](https://e.example)', '\\[x\\](https://e.example)'],
   ]) {
     const body = C.buildBody({ content: 'x', reporter: { name, username: 'u', id: '42' }, threadUrl: 'u', threadId: '2' });
     assert.equal(row(body), `| Reporter | [${want}](https://discord.com/users/42) (\`u\`) |`, JSON.stringify(name));
@@ -186,7 +183,7 @@ test('Discord no-preview links survive into the issue as working links', () => {
   // An & that starts no entity is left alone, so a URL keeps its address.
   assert.equal(C.neutralize('a & b https://e.com/?b=1&c=2'), 'a & b https://e.com/?b=1&c=2');
   assert.equal(C.neutralize('<https://e.com/?b=1&c=2>'), `[${dest('https://e.com/?b=1&c=2')}](${dest('https://e.com/?b=1&c=2')})`);
-  assert.equal(C.buildBody({ content: 'hi', reporter: { name: '&#64;mod' }, threadUrl: 'u', threadId: '1' }).includes('| Reporter | &#\u200B64;mod |'), true);
+  assert.equal(C.buildBody({ content: 'hi', reporter: { name: '&#64;mod' }, threadUrl: 'u', threadId: '1' }).includes('| Reporter | &amp;#64;mod |'), true);
   // Every character of the destination survives: parentheses, trailing
   // punctuation, an @ (which the mention escaping would otherwise change).
   for (const url of ['https://example.com/a)b', 'https://example.com/search?q=wow!', 'https://example.com/a&copy;b',
@@ -215,8 +212,6 @@ test('a fenced code block keeps what the player typed, between fence lines the b
     // Windows and old Mac line endings are line endings.
     [`${fence(3)}\r\nx\r\n${fence(3)}\r\n@y <b>`, `${fence(3)}\nx\n${fence(3)}\n@\u200By &lt;b>`],
     [`${fence(3)}\rx\r${fence(3)}\r@y`, `${fence(3)}\nx\n${fence(3)}\n@\u200By`],
-    // A language word GitHub draws instead of showing the code is dropped.
-    [`${fence(3, 'mermaid')}\nx\n${fence(3)}`, `${fence(3)}\nx\n${fence(3)}`],
   ]) assert.equal(C.neutralize(text), want, text);
 });
 
