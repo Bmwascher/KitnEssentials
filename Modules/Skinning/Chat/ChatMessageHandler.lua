@@ -316,6 +316,8 @@ end
 
 -- Icon replacement
 local seenGroups = {}
+---@param message string
+---@return string
 function CMH:ChatFrame_ReplaceIconAndGroupExpressions(message, noIconReplacement, noGroupReplacement)
     if not message then return message end
 

@@ -171,6 +171,7 @@ function DT:_ShieldWarningUpdate()
         Swap.NoteShown(cue, false, GetTime())
         return
     end
+    ---@cast same boolean
     frame.body:SetAlphaFromBoolean(same, 1, 0)
     frame:Show()
     -- Only a readable answer can say the text just appeared.

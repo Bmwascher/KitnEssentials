@@ -221,12 +221,13 @@ end
 -- the accent; skinned Blizzard frames follow it only while TintSkins is on.
 -- Absent or nil TintSkins means on, so a profile written before the switch
 -- existed keeps behaving exactly as it did.
+---@return number[] color
 function KE:GetSkinBrandColor()
     local db = self.db and self.db.global and self.db.global.Theme
     if db and db.TintSkins == false then
         return CopyColor(SKIN_NEUTRAL)
     end
-    return self:GetThemeColor("accent")
+    return self:GetThemeColor("accent") --[[@as number[] ]]
 end
 
 ---------------------------------------------------------------------------------

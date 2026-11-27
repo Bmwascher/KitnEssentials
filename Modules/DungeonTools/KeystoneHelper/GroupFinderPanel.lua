@@ -203,10 +203,6 @@ end
 -- and can throw on an already-tainted path.
 ------------------------------------------------------------------------
 
-local function Secret(v)
-    return _G.issecretvalue and _G.issecretvalue(v)
-end
-
 -- Decoration's own boundary. FAIL CLOSED -- never decorate an unreadable
 -- value. The constraint that sets the order is NOT SetFormattedText (which
 -- is AllowedWhenTainted and accepts secret text by contract) but
@@ -217,12 +213,12 @@ local function SanitizeScore(resultID)
     local ok = pcall(function()
         local info = C_LFGList.GetSearchResultInfo(resultID)
         local s = info and info.leaderOverallDungeonScore
-        if s == nil or Secret(s) then return end
+        if s == nil or issecretvalue(s) then return end
         if s == 0 then return end
         score = s
     end)
     if not ok then return nil end
-    if Secret(score) then return nil end
+    if issecretvalue(score) then return nil end
     return score
 end
 

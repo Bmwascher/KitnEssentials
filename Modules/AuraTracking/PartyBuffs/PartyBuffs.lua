@@ -1367,6 +1367,7 @@ local function RestyleGroup(container, d, settings)
     for i = 1, count do
         local okFrame, button = pcall(container.GetAuraGroupFrame, container, d.key, i)
         if okFrame and button then
+            ---@cast button table
             local r = retired[button]
             if r == false then
                 if not RetireButton(button) then clean = false end
