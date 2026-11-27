@@ -537,7 +537,7 @@ below is known and accepted. What you see in each:
 **Files** are copied up to 20 MiB each and 24 MiB in all, Discord's limits
 less room for the message. The rest and any that fail to download stay on
 the old post, and the moved message says how many; a file the player adds
-while the move runs stays there too, uncounted. A first message over
+after the bot reads the first message stays there too, uncounted. A first message over
 Discord's 2,000 characters is cut, and the moved message says the full text
 is on the original.
 
@@ -788,8 +788,9 @@ Accepted on purpose; each line says how you would notice it.
   fail with an error in the Worker log; delete or rewrite it as the bot
   wrote it (Clearing a filing record). The one exception is `scan:since`:
   one that is not a time in milliseconds makes the scan greet nothing, with
-  no error (an empty one or `0` reads as 1970 and greets every open post), and deleting it restarts the scan from now, passing over every
-  waiting post. Rewrite it with a time, never delete it.
+  no error (an empty one or `0` reads as 1970, so open posts past the
+  scan's saved progress are greeted), and deleting it restarts the scan
+  from now, passing over every waiting post. Rewrite it with a time, never delete it.
 - A setting saved as a JSON value with no text form, or a
   `DISCORD_PUBLIC_KEY` or `GITHUB_APP_PRIVATE_KEY` that is not text, is not
   checked for: requests fail with an error in the Worker log. Save each
@@ -821,7 +822,8 @@ Accepted on purpose; each line says how you would notice it.
     the old post. Delete the greeting; the card's buttons answer that the
     post moved.
   - The bot's copy whose moved message failed and whose first message the
-    player deleted: a greeting and a second card on the copy. Delete both.
+    player deleted, or pushed past the post's last 100 messages: a greeting
+    and a second card on the copy. Delete both.
   - A filing's card edit or rename that lands after a move of the same post:
     the card points back at the old post, or the old post is reopened.
     Right-click the new post; archive the old post again.
@@ -1203,9 +1205,6 @@ Accepted on purpose; each line says how you would notice it.
   and the sweep's line says to send it by hand if it is still needed. The
   post keeps Triaged and Accepted while the close's tag is still missing:
   the sweep lists it and skips the move until the tag is added.
-- A staff reply in the moment before the bot's re-archive lands can be
-  archived over. The moment is one request long; another
-  reply reopens the thread for good.
 - If an issue is reopened and closed again while another bot run (a fix-mode
   sweep or a PR run) is opening its checklist thread for the reopen, the
   finished thread can stay open with nothing listing it: you see a finished
@@ -1265,10 +1264,11 @@ Accepted on purpose; each line says how you would notice it.
 - The moderator channel check sees only `@everyone`: a role that players
   hold and that is allowed into the channel is not found.
 - The checks trust the fields Discord and GitHub document as always
-  present, and the bot checks a setting `/bot-check` covers only there, not
-  again at each use: a setting `/bot-check` flags (more than 25 forums or
-  repos for a form's choices, or no usable `REPOS` key) can make the form
-  fail to open, with Discord's generic failure. A failed read is "could
+  present. Some settings `/bot-check` flags are no longer checked again
+  when used: more than 25 forums or repos for a form's choices, or no
+  usable `REPOS` key, can make the form fail to open with Discord's generic
+  failure, and a `QUEUE_CHANNEL_ID` outside this server gets a moved post's
+  card wherever the bot can write. A failed read is "could
   not check", never a pass.
 - A player name that looks like `#12`, `GH-12`, a commit hash or a URL can
   show as a link in the issue's Reporter row.

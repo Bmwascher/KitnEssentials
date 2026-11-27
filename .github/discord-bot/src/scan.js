@@ -202,10 +202,10 @@ export async function scan(env, deps = {}) {
   // The give-ups the state still holds. A post is named once.
   const kept = (state.gaveUp || []).filter((g) => now - g.at < GAVE_UP_KEPT_MS);
   const named = new Set(kept.map((g) => g.post));
-  const name = (post, what, at = now) => {
+  const name = (post, what) => {
     if (named.has(post)) return;
     named.add(post);
-    gaveUpNow.push({ at, post, what });
+    gaveUpNow.push({ at: now, post, what });
   };
   let left = 0;
   try {

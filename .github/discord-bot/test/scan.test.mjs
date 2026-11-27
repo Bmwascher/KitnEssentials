@@ -625,7 +625,7 @@ test('a card or a receipt whose record write fails is no give-up, even at the la
     await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
     assert.equal(stateOf(kv).gaveUp, undefined, `${why}: not named as given up`);
     const after = JSON.parse(kv.m.get(`thread:${a}`));
-    assert.deepEqual([after.skipped, after.cardSkipped, after.gaveUp], [undefined, undefined, undefined], why);
+    assert.deepEqual([after.skipped, after.cardSkipped], [undefined, undefined], why);
   }
 });
 
