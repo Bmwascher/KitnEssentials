@@ -16,7 +16,7 @@ import {
 import { discordClient, postGone, archivedOf } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
 import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch, AWAY_START, MOVED_HERE, isReceipt } from './scan.js';
-import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems, MESSAGE_CONTENT } from './setup.js';
+import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems } from './setup.js';
 
 export const COMMAND_NAME = 'Send to GitHub';
 export const CHECK_COMMAND = 'bot-check';
@@ -170,7 +170,6 @@ const input = (id, text, value, opts = {}) => label(text, {
   required: opts.required !== false, max_length: opts.max || 100,
   value: value || undefined, placeholder: opts.placeholder,
 });
-const TOO_MANY = `The form cannot open: its dropdowns hold ${SELECT_MAX} choices, and REPOS or FORUMS names more. /bot-check names which; remove some.`;
 // A select of [value, label] choices, `chosen` pre-selected when it is one.
 const select = (id, text, choices, chosen, { required = true, description } = {}) => label(text, {
   type: 3, custom_id: id, required,
@@ -195,7 +194,6 @@ function repoChoice(keys, cfg, tagNames) {
   const tagged = normRepoKey(repoFromTags(tagNames, cfg.repoTags), cfg.repos);
   return keys.includes(tagged) ? tagged : keys.length === 1 ? keys[0] : null;
 }
-const NO_KEYS = 'The form cannot open: no REPOS key is usable (upper case, at most 10 characters). /bot-check names them.';
 
 // The post a form is for: the interaction's own channel when it is the post
 // with its parent and tags, else read. A card press brings no post with it,
@@ -227,14 +225,8 @@ async function openMoveForm(interaction, env, deps, cfg, { threadId, cardId = ''
   if (!cfg.forums.includes(ch.parent_id)) return reply('This only works on posts in the forums the bot is set up for.');
   const channels = await discord.call('GET', `/guilds/${interaction.guild_id}/channels`).catch(() => null);
   if (!channels) return reply('Could not read the forums just now. Try again.');
-  // FORUMS may name a category or a text channel: a message there is no
-  // forum post, and has no tags or lock to move. Its job is reached only
-  // through this form, and a channel's type never changes, so the job needs
-  // no check of its own.
-  if (!channels.some((c) => c.id === ch.parent_id && c.type === 15)) return reply('This only works on posts in the forums the bot is set up for.');
   const others = moveTargets(cfg, channels, ch.parent_id);
   if (!others.length) return reply('There is no other forum to move this post to.');
-  if (others.length > SELECT_MAX) return reply(TOO_MANY);
   const label = (id) => cutUnits(`#${channels.find((c) => c.id === id).name}`, 100);
   // Two forums can share a name, or two long names their first 100
   // characters: such a label carries the forum's id, so staff can tell
@@ -274,8 +266,6 @@ async function openForm(interaction, env, deps, { threadId, messageId, greetingI
   let guess = { ...cfg.forumInfo[ch.parent_id] };
   let tagNames = [];
   const keys = usableRepoKeys(cfg.repos);
-  if (!keys.length) return reply(NO_KEYS);
-  if (keys.length > SELECT_MAX) return reply(TOO_MANY);
   if (!guess.client || !guess.type || (keys.length > 1 && Object.keys(cfg.repoTags).length)) {
     try {
       const forum = await discord.getChannel(ch.parent_id);
@@ -1218,18 +1208,6 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     if (!records.movedFrom && isBotCopy(first, interaction.application_id)) {
       return await refuse(`this post is a copy the bot moved here, and its record movedfrom:${oldId} is not readable yet. Wait a minute, then move it again`, 'copy-record');
     }
-    // With Message Content off the bot sees no text and no files, so a report
-    // would be copied as an empty one. A first message the bot sees nothing
-    // in is checked against the setting; one with a sticker alone moves.
-    if (!first.content && !first.attachments.length) {
-      const app = await discord.call('GET', '/applications/@me');
-      // Discord documents the flags as optional. With none the setting is
-      // unknown, and a report copied empty would be archived: refused too.
-      const raw = app.flags_new ?? app.flags;
-      if (raw == null || (BigInt(raw) & MESSAGE_CONTENT) === 0n) {
-        return await refuse("the bot sees no text or file in the post's first message, and the Message Content setting is off or could not be read. Turn it on in the developer portal › Bot › Privileged Gateway Intents (/bot-check checks it), then move the post again", 'message-content');
-      }
-    }
     let reporter;
     if (records.movedFrom) {
       // The old post is itself a moved copy: its record names the player.
@@ -1355,14 +1333,9 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     // The queue card shows the new post, edited before movedfrom: so the
     // record names the card. With no card, or one Discord refuses to edit
     // (deleted), a new card is posted: the card is how an approved role, who
-    // has no right-click command, reaches the post. A queue channel outside
-    // this server gets nothing: its staff would see this server's post and
-    // could send it.
+    // has no right-click command, reaches the post.
     let card = cfg.queue ? cardId || (records.thread && records.thread.card) || (records.movedFrom && records.movedFrom.card) || '' : '';
-    if (cfg.queue && !channels.some((c) => c.id === cfg.queue)) {
-      card = '';
-      notes.push('queue card for the new post: QUEUE_CHANNEL_ID names no channel of this server (/bot-check names it)');
-    } else if (cfg.queue) {
+    if (cfg.queue) {
       const body = queueCard({ guildId, forumId: targetId, postId: newId, author: reporter, client, type, moved: mover });
       await step('queue card for the new post', async () => {
         if (card) {

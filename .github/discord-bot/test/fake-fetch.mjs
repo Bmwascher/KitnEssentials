@@ -33,20 +33,6 @@ export function stall(init, onAbort = () => {}) {
   });
 }
 
-// An answer whose headers come at once and whose body never ends until the
-// signal aborts.
-export function stallBody(init, status = 200) {
-  const keep = setInterval(() => {}, 1000);
-  return new Response(new ReadableStream({
-    start(c) {
-      init.signal.addEventListener('abort', () => {
-        clearInterval(keep);
-        c.error(init.signal.reason);
-      });
-    },
-  }), { status });
-}
-
 // Workers KV with only the two calls the bot makes.
 export function fakeKv(init = {}) {
   const m = new Map(Object.entries(init));

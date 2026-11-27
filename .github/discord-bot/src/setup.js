@@ -281,35 +281,9 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
   try { forums = Object.fromEntries(Object.entries(parseForums(env)).filter(([id]) => digits(id))); } catch { /* named by configProblems */ }
   // configProblems says why no player forum is left; this says what it hides.
   if (token && !Object.keys(forums).length) problems.push(`The forum checks (permissions, tags and template messages) did not run: fix ${forumSetting(env)} above, then run the check again.`);
-  // A call ends when its answer's body is read, so its time limit covers
-  // both steps. A call whose limit came from the deadline, not from its own
-  // CALL_MS, was stopped by the deadline when it times out.
-  const cutOff = (f) => async (url, init = {}) => {
-    const late = deadline - Date.now() < CALL_MS;
-    try {
-      const res = await f(url, init);
-      // An error answer's status is the diagnosis, so a body that cannot be
-      // read costs only the body, as the clients' own readers treat it.
-      const body = await res.arrayBuffer().catch((e) => { if (res.ok) throw e; return null; });
-      // A 204, 205 or 304 answer may carry no body.
-      return new Response([204, 205, 304].includes(res.status) || body === null ? null : body, { status: res.status, statusText: res.statusText, headers: res.headers });
-    } catch (e) {
-      if (late && e.name === 'TimeoutError') throw new Error(`out of time during ${init.method || 'GET'} ${url}`);
-      throw e;
-    }
-  };
-  const timed = cutOff(timedFetch(oneHop(deps.fetch || fetch), CALL_MS, deadline));
-  // One Discord share for every read. The channel list ends one call's time
-  // before the deadline, so a slow list never leaves the moderator channel's
-  // own read without time.
-  const shared = countedFetch(oneHop(deps.fetch || fetch), DISCORD_BUDGET);
-  const discord = discordClient(env.DISCORD_BOT_TOKEN, cutOff(timedFetch(shared, CALL_MS, deadline)));
-  const lister = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(shared, CALL_MS, deadline - CALL_MS));
-  // A 204 is an answer with no record.
-  const need = (v, what) => {
-    if (v === null || v === undefined) throw new Error(`Discord's answer had no ${what}`);
-    return v;
-  };
+  const timed = timedFetch(oneHop(deps.fetch || fetch), CALL_MS, deadline);
+  // One Discord share for every read.
+  const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(countedFetch(oneHop(deps.fetch || fetch), DISCORD_BUDGET), CALL_MS, deadline));
 
   // The server group: the bot, its member record and the server's roles are
   // what every permission rests on. The channel list only saves reads: when
@@ -322,9 +296,9 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
     problems.push('The channel, tag and role checks did not run: fix GUILD_ID above, then run the check again.');
   } else {
     try {
-      const me = need(await discord.me(), 'user');
-      const member = need(await discord.call('GET', `/guilds/${guild}/members/${me.id}`), 'member');
-      const roles = need(await discord.call('GET', `/guilds/${guild}/roles`), 'role list');
+      const me = await discord.me();
+      const member = await discord.call('GET', `/guilds/${guild}/members/${me.id}`);
+      const roles = await discord.call('GET', `/guilds/${guild}/roles`);
       base = { me, member, roles };
     } catch (e) {
       problems.push(stopped(e) ? "The bot's access to the server: not checked (out of time or calls), so its channel, tag and role checks did not run: run the check again."
@@ -333,7 +307,7 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
     }
     if (base) {
       try {
-        listed = new Map(need(await lister.call('GET', `/guilds/${guild}/channels`), 'channel list').map((c) => [String(c.id), c]));
+        listed = new Map((await discord.call('GET', `/guilds/${guild}/channels`)).map((c) => [String(c.id), c]));
       } catch { /* each channel is read on its own */ }
     }
   }
@@ -366,9 +340,6 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
               : say(label, stopped(e) ? 'not checked (out of time or calls)' : `could not check it (${short(e)})`);
         }
       }
-      // A 204 gives no channel; a channel's server id is optional.
-      if (!c) return say(label, "could not check it (Discord's answer had no channel)");
-      if (unset(c.guild_id)) return say(label, "could not check it (Discord's answer had no server id)");
       if (String(c.guild_id) !== guild) return say(label, 'it is not a channel of this server', 'Check the id.');
       if (THREAD_TYPES.includes(c.type)) return say(label, 'it is a post, not a channel', 'Check the id.');
       return { c };
@@ -386,26 +357,15 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
           return { lacking: null, ...say(label, `it is the wrong kind of channel (${kinds.includes(FORUM_TYPE) ? 'a forum' : 'a text channel'} is needed)`, 'Check the id.') };
         }
         passed++;
-        let out;
-        // The overwrite and tag lists are optional fields of a channel.
-        if (unset(c.permission_overwrites)) {
-          out = { lacking: null, ...say(label, "could not check the bot's permissions (Discord's answer had no permission overwrites)") };
-        } else {
-          const has = perms(c);
-          const lacking = Object.keys(NEEDS[kind]).filter((k) => (has & NEEDS[kind][k]) === 0n);
-          ok(!lacking.length, `${label}: the bot lacks ${lacking.join(', ')}.${lacking.includes('Read Message History') ? extra : ''} Allow ${them(lacking)} for the bot's role in the channel's permissions.`);
-          out = { lacking, why: '', c };
-        }
+        const has = perms(c);
+        const lacking = Object.keys(NEEDS[kind]).filter((k) => (has & NEEDS[kind][k]) === 0n);
+        ok(!lacking.length, `${label}: the bot lacks ${lacking.join(', ')}.${lacking.includes('Read Message History') ? extra : ''} Allow ${them(lacking)} for the bot's role in the channel's permissions.`);
         if (tags) {
-          if (unset(c.available_tags)) {
-            say(label, "could not check its tags (Discord's answer had no tag list)");
-          } else {
-            const names = new Set(c.available_tags.map((t) => t.name.toLowerCase()));
-            const absent = tags.filter((t) => !names.has(t.toLowerCase()));
-            ok(!absent.length, `${label} has no ${absent.map((t) => `"${t}"`).join(', ')} tag${absent.length > 1 ? 's' : ''}. Add ${them(absent)}, spelled as the README lists ${them(absent)}.`);
-          }
+          const names = new Set(c.available_tags.map((t) => t.name.toLowerCase()));
+          const absent = tags.filter((t) => !names.has(t.toLowerCase()));
+          ok(!absent.length, `${label} has no ${absent.map((t) => `"${t}"`).join(', ')} tag${absent.length > 1 ? 's' : ''}. Add ${them(absent)}, spelled as the README lists ${them(absent)}.`);
         }
-        return out;
+        return { lacking, why: '', c };
       } catch (e) {
         return { lacking: null, ...say(label, stopped(e) ? 'not checked (out of time or calls)' : `could not check it (${short(e)})`) };
       }
@@ -433,17 +393,11 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
     if (token) {
       try {
         const app = await discord.call('GET', '/applications/@me');
-        if (!app) {
-          problems.push("Could not check the Message Content setting or the public key (Discord's answer had no application).");
-        } else {
-          const raw = app.flags_new ?? app.flags;
-          if (unset(raw)) problems.push("Could not check the Message Content setting (Discord's answer had no flags).");
-          else ok((BigInt(raw) & MESSAGE_CONTENT) !== 0n, 'The Message Content setting is off: filed issues would quote no text, and the bot would see no attachments. Turn it on in the developer portal › Bot › Privileged Gateway Intents.');
-          // A mismatch shows the two secrets name different apps, not which
-          // of them is wrong.
-          if (HEX_KEY.test(String(env.DISCORD_PUBLIC_KEY ?? ''))) {
-            ok(String(app.verify_key).toLowerCase() === String(env.DISCORD_PUBLIC_KEY).toLowerCase(), "DISCORD_PUBLIC_KEY and DISCORD_BOT_TOKEN belong to different Discord apps. In the developer portal, open the bot's app and set both from it: the public key (General Information) with npx wrangler@3 secret put DISCORD_PUBLIC_KEY, the token (Bot) with npx wrangler@3 secret put DISCORD_BOT_TOKEN.");
-          }
+        ok((BigInt(app.flags_new ?? app.flags) & MESSAGE_CONTENT) !== 0n, 'The Message Content setting is off: filed issues would quote no text, and the bot would see no attachments. Turn it on in the developer portal › Bot › Privileged Gateway Intents.');
+        // A mismatch shows the two secrets name different apps, not which
+        // of them is wrong.
+        if (HEX_KEY.test(String(env.DISCORD_PUBLIC_KEY ?? ''))) {
+          ok(String(app.verify_key).toLowerCase() === String(env.DISCORD_PUBLIC_KEY).toLowerCase(), "DISCORD_PUBLIC_KEY and DISCORD_BOT_TOKEN belong to different Discord apps. In the developer portal, open the bot's app and set both from it: the public key (General Information) with npx wrangler@3 secret put DISCORD_PUBLIC_KEY, the token (Bot) with npx wrangler@3 secret put DISCORD_BOT_TOKEN.");
         }
       } catch (e) {
         problems.push(stopped(e) ? 'The Message Content setting and the public key: not checked (out of time or calls).'
@@ -471,8 +425,8 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
     for (const [id, info] of token ? Object.entries(forums) : []) {
       if (!info.template) continue;
       try {
-        const m = await discord.call('GET', `/channels/${info.template.channelId}/messages/${info.template.messageId}`);
-        ok(!!m, `Forum <#${id}>: could not check its template message (Discord's answer had no message).`);
+        await discord.call('GET', `/channels/${info.template.channelId}/messages/${info.template.messageId}`);
+        passed++;
       } catch (e) {
         // Only a refusal (403) or a missing message (404) is a link or
         // permission fault; any other failure says nothing about the setup.

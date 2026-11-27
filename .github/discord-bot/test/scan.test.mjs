@@ -984,11 +984,10 @@ test('NT1: a post that refuses the bot (403) is named once, only in a text chann
     const toMod = f.calls.filter((c) => /\/channels\/555(\/messages)?$/.test(c.url));
     assert.ok(toMod.some((c) => c.method === 'POST') && toMod.every((c) => c.redirect === 'manual'), `${why}: the check and the posts follow no redirect`);
   }
-  // The gate's other refusals: a failed read, an answer with no server id,
-  // and an id that is not one, which is never read.
+  // The gate's other refusals: a failed read, and an id that is not one,
+  // which is never read.
   for (const [why, mod, modId, logged, reads] of [
     ['a channel read failing (500)', new Response('{}', { status: 500 }), '555', /not posted to the moderator channel: MOD_CHANNEL_ID 555 could not be checked \(Discord 500\)/, 1],
-    ['an answer with no server id', { id: '555', type: 0 }, '555', /not posted to the moderator channel: MOD_CHANNEL_ID 555 could not be checked \(Discord's answer had no server id\)/, 1],
     ['a MOD_CHANNEL_ID that is no id', undefined, '5x', /not posted to the moderator channel: MOD_CHANNEL_ID is not a channel id/, 0],
   ]) {
     const kv = started(T0);

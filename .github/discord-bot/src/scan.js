@@ -578,11 +578,8 @@ export async function daily(env, deps = {}) {
   const checkChannel = async () => {
     if (wrongChannel === null) {
       wrongChannel = !id ? 'MOD_CHANNEL_ID is not a channel id' : await checker.getChannel(id).then(
-        // A channel's server id is optional in Discord's answer; its absence
-        // leaves the channel unverified.
-        (c) => (!c || c.guild_id === undefined || c.guild_id === null ? `MOD_CHANNEL_ID ${id} could not be checked (Discord's answer had no server id)`
-          : TEXT_TYPES.includes(c.type) && String(c.guild_id) === String(env.GUILD_ID) ? '' : `MOD_CHANNEL_ID ${id} is not a text channel of this server`),
-        (err) => `MOD_CHANNEL_ID ${id} could not be checked (${err instanceof BudgetSpent ? 'out of calls' : `Discord ${(err.discord && err.discord.status) || 'gave no answer'}`})`,
+        (c) => (TEXT_TYPES.includes(c.type) && String(c.guild_id) === String(env.GUILD_ID) ? '' : `MOD_CHANNEL_ID ${id} is not a text channel of this server`),
+        (err) => `MOD_CHANNEL_ID ${id} could not be checked (Discord ${(err.discord && err.discord.status) || 'gave no answer'})`,
       );
     }
     return wrongChannel;

@@ -1668,18 +1668,8 @@ test('Send to GitHub pre-selects the repo from the post\'s repo tag, else the on
   assert.deepEqual([vs.repo, vs.client, vs.type], [undefined, 'Retail', 'Bug']);
 });
 
-test('Send to GitHub offers only usable repo keys, and does not open with more than its dropdown holds', async () => {
+test('Send to GitHub offers only usable repo keys', async () => {
   const req = { type: 2, member: MOD, channel_id: '700', data: { name: COMMAND_NAME, target_id: '800' } };
-  for (const [why, repos, want] of [
-    ['26 repos', JSON.stringify(Object.fromEntries(Array.from({ length: 26 }, (_, i) => [`K${i}`, 'me/test-one']))), /^The form cannot open: its dropdowns hold 25 choices/],
-    // The submit reads a key in upper case: "ke" would file as nothing.
-    ['only a lower-case key', '{"ke":"me/test-one"}', /^The form cannot open: no REPOS key is usable/],
-    // A key past ten characters would crowd the subject out of the title.
-    ['only an eleven-character key', '{"ELEVENCHARS":"me/test-one"}', /^The form cannot open: no REPOS key is usable/],
-  ]) {
-    const j = await (await handle(await signed(req), { ...env, REPOS: repos, LOCK_REPO: 'me/test-one' }, ctxFor(), { fetch: fakeFetch(discordRoutes()) })).json();
-    assert.match(j.data.content, want, why);
-  }
   // "KE" beside "ke" and a 100-character key for other repos: only the key
   // the submit reads back as itself, short enough for a title, is offered.
   const both = await (await handle(await signed(req), { ...env, REPOS: JSON.stringify({ KE: 'me/test-one', ke: 'me/test-two', ['K'.repeat(100)]: 'me/test-two' }), LOCK_REPO: 'me/test-one' }, ctxFor(), { fetch: fakeFetch(discordRoutes()) })).json();
@@ -1778,9 +1768,6 @@ const moveClick = (member = MOD) => ({ type: 2, member, guild_id: '1', channel_i
 const movePress = (member = HELPER) => ({ type: 3, member, guild_id: '1', channel_id: '556', message: { id: '96' }, data: { custom_id: 'move:700', component_type: 2 } });
 
 test('the Move form offers the other forums of this server, pre-selects what it can, and refuses where it cannot move', async () => {
-  // FORUMS for 27 forums, all in the server's channel list.
-  const many = Array.from({ length: 27 }, (_, i) => String(900 + i));
-  const manyChannels = many.map((id) => ({ id, type: 15, name: `f${id}`, available_tags: [] }));
   for (const [why, req, edit, envOver, want] of [
     ['a card press', movePress(), null, {}, { custom: 'mv:700:96', forum: undefined, client: 'Retail' }],
     ['a right-click', moveClick(), null, {}, { custom: 'mv:700', forum: undefined, client: 'Retail' }],
@@ -1791,17 +1778,10 @@ test('the Move form offers the other forums of this server, pre-selects what it 
     ['a FORUMS channel that is not a forum is not offered', moveClick(), (s) => { s.channels = CHANNELS.map((c) => (c.id === '902' ? { ...c, type: 0 } : c)); }, {}, { forum: '901' }],
     ['the client from the tags', moveClick(), (s) => { s.post.applied_tags = ['t-forever']; }, { FORUMS: '{"900":{},"901":{},"902":{}}' }, { client: 'Forever' }],
     ['a post outside FORUMS', moveClick(), (s) => { s.post.parent_id = '999'; }, {}, /^This only works on posts in the forums the bot is set up for\.$/],
-    // FORUMS names a category: a message in a text channel under it.
-    ['a text channel under a FORUMS category', moveClick(), (s) => {
-      s.channels = CHANNELS.map((c) => (c.id === '900' ? { ...c, type: 4 } : c));
-      s.post = { id: '700', type: 0, parent_id: '900', name: 'general' };
-    }, {}, /^This only works on posts in the forums the bot is set up for\.$/],
     ['no other forum', moveClick(), null, { FORUMS: '{"900":{}}' }, /^There is no other forum to move this post to\.$/],
     ['no other forum in this server', moveClick(), (s) => { s.channels = CHANNELS.filter((c) => c.id === '900'); }, {}, /^There is no other forum to move this post to\.$/],
     ['a player right-click', moveClick(PLAYER), null, {}, /^Only moderators and admins can move posts\.$/],
     ['a player card press', movePress(PLAYER), null, {}, /^Only moderators and approved roles can move posts\.$/],
-    ['26 other forums', moveClick(), (s) => { s.channels = manyChannels; }, { FORUMS: JSON.stringify(Object.fromEntries(many.map((id) => [id, {}]))) },
-      /^The form cannot open: its dropdowns hold 25 choices, and REPOS or FORUMS names more\. /],
     ['the forum list fails', moveClick(), (s) => { s.channels = () => new Response('{}', { status: 500 }); }, {}, /^Could not read the forums just now\. Try again\.$/],
   ]) {
     const w = moveWorld(edit || (() => {}));
@@ -1951,12 +1931,6 @@ test('a move with no card to edit, or whose card is gone, posts a new queue card
   const bothRun = await runMove(both);
   assert.equal(bothRun.told, `${PARTWAY}\n- queue card for the new post`);
   assert.equal('card' in JSON.parse(bothRun.kv.m.get('movedfrom:990')), false);
-  // A queue channel outside this server is not written to: a card there
-  // would let its staff send this server's post.
-  const away = moveWorld((s) => { s.channels = CHANNELS.filter((c) => c.id !== '556'); });
-  const awayRun = await runMove(away);
-  assert.equal(awayRun.told, `${PARTWAY}\n- queue card for the new post: QUEUE_CHANNEL_ID names no channel of this server (/bot-check names it)`);
-  assert.equal(away.f.calls.filter((c) => /\/channels\/556\/messages/.test(c.url)).length, 0, 'nothing sent to that channel');
   // No queue channel set, though the form names the old post's card: the
   // card step is skipped with no line, no queue call is made, and the copy's
   // record names no card, so a later filing marks none.
@@ -2133,13 +2107,6 @@ test('a move refused before the new post changes nothing and says why', async ()
       s.extra = [['GET', /api\.github\.com\/repos\/me\/test-two\/issues\/12$/, () => new Response('{}', { status: 410 })]];
       s.two = [{ number: 13, html_url: 'https://github.com/me/test-two/issues/13', repository_url: 'https://api.github.com/repos/me/test-two', body: '<!-- discord-thread: 700 reporter: 42 -->' }];
     }, /^This post is already tracked as TWO #13 /, { REPOS: '{"ONE":"me/test-one","TWO":"me/test-two","DUO":"me/test-two"}' }],
-    // The bot sees no text or files with Message Content off: an empty first
-    // message is checked against the setting before anything is copied.
-    ['Message Content off', (s) => { s.first.content = ''; s.extra = [['GET', /\/applications\/@me$/, () => ({ flags: 0 })]]; },
-      /^Nothing was moved: the bot sees no text or file in the post's first message, and the Message Content setting is off or could not be read\. Turn it on in the developer portal › Bot › Privileged Gateway Intents \(\/bot-check checks it\), then move the post again\.$/],
-    // The flags are optional in Discord's answer: an unknown setting is refused too.
-    ['Message Content not readable', (s) => { s.first.content = ''; s.extra = [['GET', /\/applications\/@me$/, () => ({ id: 'app' })]]; },
-      /^Nothing was moved: the bot sees no text or file in the post's first message, and the Message Content setting is off or could not be read\. /],
     ['a post already moved', (s) => { s.kv = { 'movedto:700': '{"to":"990"}' }; }, /^Nothing was moved: this post was already moved to https:\/\/discord\.com\/channels\/1\/990\.$/],
     ['a post already moved, which the move locked', (s) => { s.kv = { 'movedto:700': '{"to":"990"}' }; s.post.thread_metadata.locked = true; },
       /^Nothing was moved: this post was already moved to https:\/\/discord\.com\/channels\/1\/990\.$/],
