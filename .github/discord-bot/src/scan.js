@@ -296,8 +296,8 @@ export async function scan(env, deps = {}) {
     // wait behind an older post's card retry.
     const isNew = new Set(fresh.filter((t) => BigInt(t.id) > mark(greetedTo, t.parent_id)).map((t) => t.id));
     let reads = 0;
-    // Both of a post's records are read strictly: a value the bot could not
-    // have written is never taken for "no record", so it is never written over.
+    // Both of a post's records are read strictly: a read that fails, or text
+    // that is not JSON, is never taken for "no record".
     const read = async (key) => {
       if (reads >= MAX_KV_READS) throw new BudgetSpent('KV reads for this run are spent');
       reads++;

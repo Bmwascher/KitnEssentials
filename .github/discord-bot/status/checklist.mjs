@@ -150,11 +150,6 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       // Settled when a write now would change nothing and GitHub still wants
       // the same; the slot and tag notes come from that same read.
       const shown = await onThread(() => discord.threadState(id));
-      // A tag renamed or deleted since the write's forum read: the status tag
-      // fails the thread below and Accepted is only logged, so this read names
-      // both. A sweep's repair names none, and a channel that is no forum
-      // (`forumTags`), such as a media channel, which has tags too, names none.
-      if (!sweeping && shown.tags) checkTags(w, shown.parentId, shown.tags, [w.name]);
       const back = plan(w)(shown.applied, shown.available);
       if (back.missing) throw new Error(noTag(w.name));
       const again = await wanted(n);

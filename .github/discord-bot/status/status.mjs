@@ -38,7 +38,7 @@ export const BOT_LOGIN = 'github-actions[bot]';
 const RELEASE = [LABELS.pendingRelease, LABELS.shipped];
 // Lists are followed this many pages (100 each) at most.
 const MAX_PAGES = 10;
-// A note is judged once it is this old: its run has ended by then.
+// A note is judged once it is this old: its status job has ended by then.
 const OWED_MS = 10 * 60 * 1000;
 // GitHub allows a run to be re-run for this long after its first attempt.
 const RERUN_MS = 30 * 24 * 60 * 60 * 1000;
@@ -160,29 +160,27 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // The sweep's report, written after the setup section at the run's end.
   let sweepSummary = null;
   // A Discord refusal of the bot, named by the request it refused, which the
-  // client keeps apart from the answer's text; a scrubbed checklist error
-  // also carries its kept causes' requests.
+  // client keeps apart from the answer's text.
   const noteRefusal = (e) => {
-    for (const d of [e.discord, ...(e.also || [])]) {
-      if (!d) continue;
-      if (d.status === 401) {
-        setupProblem("Discord refused the bot token (401): set the repository secret DISCORD_BOT_TOKEN to the bot's current token");
-        continue;
-      }
-      if (d.status !== 403) continue;
-      // A path's ids are a marker's digits, a plain CHECKLIST_FORUM_ID, or
-      // ones Discord gave: a post's `parent_id` can be null (a marker naming
-      // a channel with no parent), which puts no id in the forum read's path.
-      // Such a refusal names nothing and still fails the run.
-      const [, ch, rest = ''] = /^\/channels\/(\d+)(\/.*)?$/.exec(d.path) || [];
-      if (!ch) continue;
-      if (d.method === 'POST' && rest === '/messages') {
-        setupProblem(`Discord refused the bot's message in post ${ch} (403): give the bot View Channel, Send Messages in Threads and Read Message History (a reply needs it) in that post's forum`);
-      } else if (rest.startsWith('/messages/')) {
-        setupProblem(`Discord refused the bot reading messages in post ${ch} (403): give the bot View Channel and Read Message History in that post's forum`);
-      } else {
-        setupProblem(`Discord refused the bot on channel ${ch} (403), a post or its forum: give the bot View Channel, Manage Threads and Send Messages in Threads in that forum`);
-      }
+    const d = e.discord;
+    if (!d) return;
+    if (d.status === 401) {
+      setupProblem("Discord refused the bot token (401): set the repository secret DISCORD_BOT_TOKEN to the bot's current token");
+      return;
+    }
+    if (d.status !== 403) return;
+    // A path's ids are a marker's digits, a plain CHECKLIST_FORUM_ID, or
+    // ones Discord gave: a post's `parent_id` can be null (a marker naming
+    // a channel with no parent), which puts no id in the forum read's path.
+    // Such a refusal names nothing and still fails the run.
+    const [, ch, rest = ''] = /^\/channels\/(\d+)(\/.*)?$/.exec(d.path) || [];
+    if (!ch) return;
+    if (d.method === 'POST' && rest === '/messages') {
+      setupProblem(`Discord refused the bot's message in post ${ch} (403): give the bot View Channel, Send Messages in Threads and Read Message History (a reply needs it) in that post's forum`);
+    } else if (rest.startsWith('/messages/')) {
+      setupProblem(`Discord refused the bot reading messages in post ${ch} (403): give the bot View Channel and Read Message History in that post's forum`);
+    } else {
+      setupProblem(`Discord refused the bot on channel ${ch} (403), a post or its forum: give the bot View Channel, Manage Threads and Send Messages in Threads in that forum`);
     }
   };
   if (runId) log(`workflow run ${runId}, attempt ${attempt}`);

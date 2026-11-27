@@ -814,7 +814,7 @@ test('the daily check keeps its warnings when a long list is cut to fit', async 
   assert.match(out.join('\n'), /Only the most recently archived posts were checked/);
 });
 
-test('NT1: a post that refuses the bot (403) is named once, only in a text channel of the server; a deleted one (404) never is', async () => {
+test('NT1: a post that refuses the bot (403) on its first send is named once, only in a text channel of the server; a deleted one (404) is not', async () => {
   for (const [status, named] of [[403, 1], [404, 0]]) {
     const kv = started(T0);
     const a = idAt(T0 + 1000);

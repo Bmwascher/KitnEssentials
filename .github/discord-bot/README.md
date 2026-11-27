@@ -44,10 +44,9 @@ repo in `REPOS`), answers you privately "Already tracked as KE #17" with the
 link, and marks that card filed; no form opens and no one is pinged. The form
 opens only after that check finished and found nothing. If the check cannot
 finish, you are asked to press again; if that keeps happening, a moderator
-can right-click the post instead (the form's submission checks too). The
-submission reads the message to file again just before it creates the
-issue: a message deleted meanwhile files nothing and says so, and so does a
-deleted post.
+can right-click the post instead (the form's submission checks too). A
+message or post deleted before the submission reads it files nothing and
+says so.
 
 After that the `Discord status` workflow keeps the post in step with its
 issue, working out the status from the issue each time rather than stepping
@@ -412,8 +411,9 @@ forum. Whoever can file can move: a member of an approved role (or a
 moderator) presses **Move** on the post's queue card, and a moderator can
 right-click any message in the post > **Apps > Move post**. A player gets
 "Only moderators and admins can move posts.". A forum outside `FORUMS`, the
-checklist forum included, is never a source or a target, and neither is a
-`FORUMS` entry that is not a forum of this server (`/bot-check` names it).
+checklist forum included, is never a source or a target, and a `FORUMS`
+entry that is not a forum of this server is never a target (`/bot-check`
+names it).
 Every forum in `FORUMS` must be open to the same players: a move into a
 forum a player cannot see archives the post they can read and leaves them
 a link and a mention they cannot open. The bot cannot tell who can see a
@@ -458,7 +458,6 @@ after; one someone deletes is made again at the next move. The player sees:
 The new post gets no greeting. The old post's queue card is edited to show
 the new post, with its buttons and "Moved by @mover"; a post with no card
 yet, or whose card Discord will not edit, gets a new card for the new post.
-A `QUEUE_CHANNEL_ID` that is not a channel of this server gets no card.
 
 **Tags.** The new post keeps every tag of the old post whose name, in any
 letter case, the new forum has, a repo tag included; none is added for a
@@ -510,8 +509,7 @@ below is known and accepted. What you see in each:
   close it again.
 - **The queue card** (`queue card for the new post`). The card still shows
   the old post; its buttons answer that the post moved. Right-click the
-  new post to send or move it. With "QUEUE_CHANNEL_ID names no channel of
-  this server", no card was sent there; `/bot-check` names the setting.
+  new post to send or move it.
 - **The new post's record** (`record movedfrom:<new post id>`). Sending or
   moving the new post by its first message answers that its record is not
   readable yet, for good, and so does sending a reply in it once the scan
@@ -789,7 +787,10 @@ Accepted on purpose; each line says how you would notice it.
   `movedto:`, `scan:` and `daily:named`) to hold what it wrote. A record
   edited by hand into another shape can make the scan, a filing or a move
   fail with an error in the Worker log; delete or rewrite it as the bot
-  wrote it (Clearing a filing record).
+  wrote it (Clearing a filing record). The one exception is `scan:since`:
+  one that is not a time in milliseconds makes the scan greet nothing, with
+  no error, and deleting it restarts the scan from now, passing over every
+  waiting post. Rewrite it with a time, never delete it.
 - A setting saved as a JSON value with no text form, or a
   `DISCORD_PUBLIC_KEY` or `GITHUB_APP_PRIVATE_KEY` that is not text, is not
   checked for: requests fail with an error in the Worker log. Save each
@@ -839,8 +840,16 @@ Accepted on purpose; each line says how you would notice it.
   about 30 minutes at one scan a minute, is given up on; the daily alert names
   it.
 - A post the scan gave up on can be named again by the scan's saved problem
-  paragraph in the next daily alert, and one whose give-up the scan could not
+  paragraph in the next daily alert, a deleted post included when an earlier
+  try failed for another reason, and one whose give-up the scan could not
   save in its state is not named at all.
+- A closed issue whose close GitHub's events list does not show yet is
+  judged from an earlier close, or from none, until the next run.
+- A "Staff checklist thread" comment whose hidden lines staff broke reads
+  as no record, so the next job can open a second record and thread; delete
+  the broken comment or mend it as the bot wrote it.
+- A Discord link in a PR to a post whose issue carries the label in another
+  letter case (`From-Discord`) gets a merge-plan line too.
 - A post can rarely get two greetings when two scans overlap (a scan that runs
   longer than a minute).
 - A queue card can stay live on a filed post, or a post can get two cards:
@@ -1247,7 +1256,9 @@ Accepted on purpose; each line says how you would notice it.
   hold and that is allowed into the channel is not found.
 - The checks trust the fields Discord and GitHub document as always
   present, and the bot checks a setting `/bot-check` covers only there, not
-  again at each use. A failed read, an empty answer or a missing optional
+  again at each use: a setting `/bot-check` flags (more than 25 forums or
+  repos for a form's choices, or no usable `REPOS` key) can make the form
+  fail to open, with Discord's generic failure. A failed read, an empty answer or a missing optional
   field is "could not check", never a pass.
 - A player name that looks like `#12`, `GH-12`, a commit hash or a URL can
   show as a link in the issue's Reporter row.
