@@ -788,8 +788,8 @@ Accepted on purpose; each line says how you would notice it.
   fail with an error in the Worker log; delete or rewrite it as the bot
   wrote it (Clearing a filing record). The one exception is `scan:since`:
   one that is not a time in milliseconds makes the scan greet nothing, with
-  no error (an empty one or `0` reads as 1970, so open posts past the
-  scan's saved progress are greeted), and deleting it restarts the scan
+  no error (an empty one or `0` reads as 1970, so the scan takes up every
+  open post past its saved progress, however old), and deleting it restarts the scan
   from now, passing over every waiting post. Rewrite it with a time, never delete it.
 - A setting saved as a JSON value with no text form, or a
   `DISCORD_PUBLIC_KEY` or `GITHUB_APP_PRIVATE_KEY` that is not text, is not
@@ -821,9 +821,10 @@ Accepted on purpose; each line says how you would notice it.
     before KV showed the move's record: a greeting or a queue card in or for
     the old post. Delete the greeting; the card's buttons answer that the
     post moved.
-  - The bot's copy whose moved message failed and whose first message the
-    player deleted, or pushed past the post's last 100 messages: a greeting
-    and a second card on the copy. Delete both.
+  - The bot's copy whose first message and moved message the scan cannot
+    see (the moved message failed or the player deleted the first message,
+    or both are past the post's last 100 messages): a greeting and a second
+    card on the copy. Delete both.
   - A filing's card edit or rename that lands after a move of the same post:
     the card points back at the old post, or the old post is reopened.
     Right-click the new post; archive the old post again.
@@ -1274,7 +1275,8 @@ Accepted on purpose; each line says how you would notice it.
   show as a link in the issue's Reporter row.
 - A `FORUMS` entry's `client` or `type` that is misspelled or written as a
   JSON object instead of text reads as unset, and `/bot-check` does not name
-  it: the form is not pre-filled, and a move keeps the post's own type tag.
+  it: the form guesses from the post's tags instead, and a move goes by the
+  post's own tags.
   Write each as plain text, like `"type":"Feature"`.
 
 ## Tests
