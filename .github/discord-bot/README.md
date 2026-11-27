@@ -146,7 +146,8 @@ status tag and no `Answered` tag (open posts, and posts archived in the last
 stopped, or hit a problem with some post or forum in the last day. A post
 that refuses the bot (Discord's 403: a missing permission) is given up on at
 once and named in the next alert as "refused by the post (403)", with the
-permissions to check; a deleted post is skipped without a word. The alert,
+permissions to check; a deleted post is skipped without a word (unless an
+earlier try failed for another reason: Known limits). The alert,
 like every bot message to `MOD_CHANNEL_ID`, goes only to a text channel of
 the server; otherwise it goes to the Worker log. A post
 that fails 30 runs in a row (about 30 minutes) is given up on, and so is one
@@ -547,7 +548,7 @@ starts with an @mention of them.
 **Calls.** Workers' free plan allows 50 `fetch` calls a run; KV calls are
 not counted here. A move with one repo, which `LOCK_REPO` also names, the
 webhook already made, a queue card to edit and a first message a player
-posted makes 18 (the GitHub token takes two, its search for an issue runs
+posted makes 17 (the GitHub token takes two, its search for an issue runs
 once, as a filing's does, and the post's last 100 messages are read for
 the bot's "now tracked" reply). A `LOCK_REPO` of another repo adds two,
 for its own token; moving a moved copy saves one, the member read. It adds one per file it
@@ -558,8 +559,8 @@ extra cost); and one when the post's messages hold one that starts as the
 bot's "now tracked" reply, to read the bot's own id. Each further repo
 searched costs three (its token's two and its search), plus one for each
 further 100 `from-discord` issues updated there since the post was made.
-With ten files and two repos, 19 calls are left: about 1,900 such issues
-past the first 100 in each repo, in the two repos together (about 950 in
+With ten files and two repos, 20 calls are left: about 2,000 such issues
+past the first 100 in each repo, in the two repos together (about 1,000 in
 each); past that,
 the last steps fail and are reported. If KV calls
 count too, the figure grows by six (four reads, two writes). The live bot

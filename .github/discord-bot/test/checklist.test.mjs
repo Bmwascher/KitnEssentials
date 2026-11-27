@@ -647,6 +647,17 @@ test('CH3: staff recovery: a thread id put in place of "creating" is taken, and 
   }
 });
 
+test('CH3: the record write after a create keeps what staff changed in the record meanwhile', async () => {
+  const w = world();
+  w.issue(17);
+  w.hooks.push(['POST', /channels\/950\/threads$/, async () => {
+    const c = botComments(w, 17).find((x) => parseChecklist(x));
+    c.body = c.body.replace('discord-checklist-forum: 950', 'discord-checklist-forum: 951');
+  }]);
+  await job(w);
+  assert.deepEqual([recordOf(w).threadId, recordOf(w).forumId], [ours(w)[0].id, '951']);
+});
+
 test('CH3: an issue that stops being the bot\'s during the forum read gets no thread', async () => {
   const w = world();
   w.issue(17);
