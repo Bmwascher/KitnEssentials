@@ -931,14 +931,26 @@ test('a moved post keeps the tags the new forum has and gets its client tags, fi
   ]) assert.deepEqual(C.movedTags({ ...base, ...over, applied }), want, why);
 });
 
-test('a moved post\'s card names the mover as text, and the moved messages link both posts and ping only the reporter', () => {
+test('a moved post\'s card mentions the mover, and the moved messages link both posts and ping only the reporter', () => {
   const post = { guildId: '1', forumId: '900', postId: '700' };
-  assert.equal(C.queueCard({ ...post, author: { name: 'k', username: 'kira', id: '42' }, moved: 'Mod_x' }).content, '**New post in <#900>:** <#700>\nby <@42> (`kira`)\nMoved by Mod\\_x');
-  assert.equal(C.MESSAGES.movedHere({ from: 'https://discord.com/channels/1/700', by: 'Mod_x', reporter: { name: 'Pat', id: '42' } }),
-    'Moved here from https://discord.com/channels/1/700 by Mod\\_x. First posted by <@42>.');
-  assert.equal(C.MESSAGES.movedHere({ from: 'L', by: 'M', reporter: { name: '**Hook**' }, left: 2, cut: true }),
-    'Moved here from L by M. First posted by \\*\\*Hook\\*\\*. 2 file(s) could not be copied (too large, or not downloaded); they are on the original post. The first message was too long to copy whole; the full text is on the original post.');
-  assert.equal(C.MESSAGES.movedTo({ to: 'https://discord.com/channels/1/990', by: 'Mod' }), 'This post moved to https://discord.com/channels/1/990 (moved by Mod).');
+  assert.equal(C.queueCard({ ...post, author: { name: 'k', username: 'kira', id: '42' }, moved: '<@8>' }).content, '**New post in <#900>:** <#700>\nby <@42> (`kira`)\nMoved by <@8>');
+  assert.equal(C.MESSAGES.movedHere({ from: 'https://discord.com/channels/1/700', by: '<@8>', reporter: { name: 'Pat', id: '42' } }),
+    'Moved here from https://discord.com/channels/1/700 by <@8>. First posted by <@42>.');
+  assert.equal(C.MESSAGES.movedHere({ from: 'L', by: '<@8>', reporter: { name: '**Hook**' }, left: 2, cut: true }),
+    'Moved here from L by <@8>. First posted by \\*\\*Hook\\*\\*. 2 file(s) could not be copied (too large, or not downloaded); they are on the original post. The first message was too long to copy whole; the full text is on the original post.');
+  assert.equal(C.MESSAGES.movedTo({ to: 'https://discord.com/channels/1/990', by: '<@8>' }), 'This post moved to https://discord.com/channels/1/990 (moved by <@8>).');
+});
+
+test('a staff member shows as their mention; a name an older record saved stays text', () => {
+  assert.equal(C.staffRef({ id: '5', username: 'moddy' }), '<@5>');
+  for (const [why, by, want] of [
+    ['a mention', '<@5>', '<@5>'],
+    ['an older record\'s name', 'Mod_x', 'Mod\\_x'],
+    ['a name that only starts like a mention', '<@5> hi', '\\<@5\\> hi'],
+  ]) assert.equal(C.shownStaff(by), want, why);
+  const card = C.filedCard({ guildId: '1', postId: '700', head: 'h', key: 'KE', number: 3, by: '<@5>' });
+  assert.equal(card.content, '~~h~~\n**Filed as KE #3** by <@5>');
+  assert.deepEqual(card.allowed_mentions, { parse: [] }, 'shown, never pinged');
 });
 
 test('a forum\'s webhook is the bot\'s own when listed, else a new one named Post mover', async () => {

@@ -495,12 +495,12 @@ test('a create that answered late is found again: the player gets the reply, the
   assert.equal(res.created, 17);
   // The template result goes with a late create too.
   assert.equal(base.find('PATCH', /\/webhooks\//)[0].body.content, 'Created ONE #17: u/17 (GitHub answered late; the post\'s status tag comes from the issue\'s first workflow run) Template: Addon version unsure, UI version unsure, Updated with the game closed unsure, What happened unsure, What you expected unsure, How to make it happen again unsure.');
-  assert.deepEqual(JSON.parse(kv.m.get('issue:700')), { repo: 'me/test-one', number: 17, key: 'ONE', by: 'moddy' }, 'the filing is recorded');
+  assert.deepEqual(JSON.parse(kv.m.get('issue:700')), { repo: 'me/test-one', number: 17, key: 'ONE', by: '<@5>' }, 'the filing is recorded');
   const [receipt, ...more] = base.find('POST', /\/channels\/700\/messages$/);
   assert.deepEqual(more, [], 'one receipt');
   assert.equal(receipt.body.content, MESSAGES.tracked('ONE', 17), 'the player is told');
   assert.deepEqual(receipt.body.message_reference, { message_id: '800', fail_if_not_exists: false });
-  assert.equal(base.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, '~~**New post in <#900>:** <#700>~~\n**Filed as ONE #17** by moddy', 'the card is marked filed, its first line the post\'s mention');
+  assert.equal(base.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, '~~**New post in <#900>:** <#700>~~\n**Filed as ONE #17** by <@5>', 'the card is marked filed, its first line the post\'s mention');
   const pos = (method, re) => at(base, method, re);
   const marked = pos('PATCH', /\/channels\/556\/messages\/96$/);
   assert.ok(pos('PATCH', /\/webhooks\//) < marked && pos('POST', /\/channels\/700\/messages$/) < marked, 'the card last');
@@ -792,8 +792,8 @@ test('a press check that cannot finish asks for another press', async () => {
 
 test('filing replies to the filed message with a ping, leaves the greeting alone, records the filing and marks the card last', async () => {
   for (const [why, req, messageId, by] of [
-    ['from the queue card', { ...submit(), member: HELPER, channel_id: '556', data: { ...submit().data, custom_id: 'gh:700:700:0:96' } }, '700', 'helper'],
-    ['by right-click on a later message, the card from the record', submit(), '800', 'moddy'],
+    ['from the queue card', { ...submit(), member: HELPER, channel_id: '556', data: { ...submit().data, custom_id: 'gh:700:700:0:96' } }, '700', '<@8>'],
+    ['by right-click on a later message, the card from the record', submit(), '800', '<@5>'],
   ]) {
     const kv = fakeKv({ 'thread:700': JSON.stringify({ greeting: '951', buttonless: true, card: '96' }) });
     const f = fakeFetch(discordRoutes(githubRoutes([], [
@@ -1047,7 +1047,7 @@ test('one post, one issue: the saved record, then every configured repo, is chec
   const elsewhere = legacy('me/test-two', 9);
   const brokenKv = { get: async () => { throw new Error('KV down'); }, put: async () => {} };
   const silentKv = { get: () => new Promise(() => {}), put: async () => {} };
-  const made = { repo: 'me/test-one', number: 17, key: 'ONE', by: 'moddy' };
+  const made = { repo: 'me/test-one', number: 17, key: 'ONE', by: '<@5>' };
   const movedTo = { repo: 'me/test-three', number: 31, key: 'me/test-three', by: null };
   const way = 'If it is gone, a bot admin can clear this post\'s filing record \\(the KV key issue:700, or the "issue" field of thread:700 for a post filed before this version\\), and the post can then be sent again\\.$';
   // `two` and `one` answer the configured repos' issue lists; `saved` is the
@@ -2019,12 +2019,14 @@ test('an unfiled post moves: a webhook copy in the new forum, both records, the 
   assert.deepEqual(JSON.parse(kv.m.get('movedfrom:990')), { from: '700', reporter: { name: 'Patty', id: '42', username: 'pat', avatar: 'https://cdn.discordapp.com/avatars/42/abc.png' }, card: '96' });
   assert.deepEqual(JSON.parse(kv.m.get('movedto:700')), { to: '990' });
   const here = f.find('POST', /\/channels\/990\/messages$/)[0].body;
-  assert.equal(here.content, 'Moved here from https://discord.com/channels/1/700 by helper. First posted by <@42>.');
+  assert.equal(here.content, 'Moved here from https://discord.com/channels/1/700 by <@8>. First posted by <@42>.');
   assert.deepEqual(here.allowed_mentions, { parse: [], users: ['42'] });
-  assert.equal(f.find('POST', /\/channels\/700\/messages$/)[0].body.content, 'This post moved to https://discord.com/channels/1/990 (moved by helper).');
+  const note = f.find('POST', /\/channels\/700\/messages$/)[0].body;
+  assert.equal(note.content, 'This post moved to https://discord.com/channels/1/990 (moved by <@8>).');
+  assert.deepEqual(note.allowed_mentions, { parse: [], users: [] }, 'the mover\'s mention pings no one');
   assert.deepEqual(f.find('PATCH', /\/channels\/700$/)[0].body, { locked: true, archived: true });
   const card = f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body;
-  assert.equal(card.content, '**New post in <#901>:** <#990>\nby <@42> (`pat`) · Feature · Retail\nMoved by helper');
+  assert.equal(card.content, '**New post in <#901>:** <#990>\nby <@42> (`pat`) · Feature · Retail\nMoved by <@8>');
   assert.deepEqual(card.components[0].components.map((b) => b.custom_id || b.url), ['send:990', 'move:990', 'https://discord.com/channels/1/990']);
   assert.equal(told, MOVED);
 });
@@ -2112,7 +2114,7 @@ test('files over 20 MiB, past the 24 MiB left, or that fail to download stay beh
   assert.deepEqual(sent.files, ['a.png', 'c.png']);
   assert.equal(sent.payload.content, `${'x'.repeat(1999)}…`);
   assert.equal(w.f.find('POST', /\/channels\/990\/messages$/)[0].body.content,
-    'Moved here from https://discord.com/channels/1/700 by helper. First posted by <@42>. 3 file(s) could not be copied (too large, or not downloaded); they are on the original post. The first message was too long to copy whole; the full text is on the original post.');
+    'Moved here from https://discord.com/channels/1/700 by <@8>. First posted by <@42>. 3 file(s) could not be copied (too large, or not downloaded); they are on the original post. The first message was too long to copy whole; the full text is on the original post.');
   const empty = moveWorld((s) => { s.first.content = ''; s.first.attachments = [{ filename: 'big.zip', size: 21 * MiB, url: 'https://cdn.example/big' }]; });
   await runMove(empty);
   assert.equal(empty.f.find('POST', /\?wait=true$/)[0].body.payload.content, '(The first message had nothing the bot can copy.)');

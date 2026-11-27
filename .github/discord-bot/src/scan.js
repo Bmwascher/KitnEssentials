@@ -33,7 +33,8 @@
 //                 {"at", "what"} once the scan gave up on it and names it};
 //                 one from before the filing record may hold "issue"
 //   issue:<id>   the Worker's record once the post is filed: {"repo",
-//                 "number", "key", "by"}
+//                 "number", "key", "by": the filer's mention, or an older
+//                 version's name}
 //   movedfrom:<id>  the Worker's record of a post a move made: {"from": the
 //                 old post's id, "reporter": {"name", "id", "username",
 //                 "avatar"}, "card": the old post's queue card id}; the
