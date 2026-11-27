@@ -38,13 +38,10 @@ export const BOT_LOGIN = 'github-actions[bot]';
 const RELEASE = [LABELS.pendingRelease, LABELS.shipped];
 // Lists are followed this many pages (100 each) at most.
 const MAX_PAGES = 10;
-// A note with no run to ask about (the older `Told the player` form, or one
-// from a run without an id) is judged once it is this old.
+// A note is judged once it is this old: its run has ended by then.
 const OWED_MS = 10 * 60 * 1000;
-// GitHub allows a run to be re-run for this long after its first attempt,
-// and this many times.
+// GitHub allows a run to be re-run for this long after its first attempt.
 const RERUN_MS = 30 * 24 * 60 * 60 * 1000;
-const MAX_RERUNS = 50;
 // The sweep's own checklist calls stop once they have taken this long in a
 // run, so slow checklist reads never keep later issues' player repairs from
 // the job's time limit; the issues left are named, and the next sweep
@@ -748,26 +745,6 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     }
   }
 
-  // A workflow run's state, for the sweep: whether it is still going, and
-  // whether GitHub still lets it be re-run (30 days from its first attempt,
-  // 50 re-runs at most). A deleted run is neither.
-  const runs = new Map();
-  function runInfo(id) {
-    if (!runs.has(id)) {
-      runs.set(id, gh.call('GET', `/repos/${repo}/actions/runs/${id}`).then(
-        (r) => ({
-          active: r.status !== 'completed',
-          open: now() - Date.parse(r.created_at) < RERUN_MS && (r.run_attempt || 1) <= MAX_RERUNS,
-        }),
-        (e) => {
-          if (statusOf(e) === 404) return { active: false, open: false };
-          throw e;
-        },
-      ));
-    }
-    return runs.get(id);
-  }
-
   async function botIssue(n) {
     const issue = await gh.getIssue(repo, n);
     return eligible(issue) ? issue : null;
@@ -1025,14 +1002,13 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       //   only after its send, so an unmarked one may have gone out: it is
       //   listed, and never held, dropped or resent.
       // - A newer note still attempted was never sent: its send marks it
-      //   first. Still true, and its run still going or still re-runnable, it
-      //   is owed: the post is left for that run from the moment the note
+      //   first. Still true, and its run still re-runnable (judged by the
+      //   note's age), it is owed: the post is left for that run from the moment the note
       //   exists, since a re-run sends it whether or not the post moved.
       //   One no re-run could send is dropped: its post is gone, or its
       //   message no longer holds (a status note, whatever the post shows; a
       //   needs-info ping once the label is off).
-      // A note is judged once its run has ended (its run's state, or, with no
-      // run, the note's age).
+      // A note is judged once it is OWED_MS old.
       const owed = [];
       const stale = [];
       const seen = new Set();
@@ -1048,9 +1024,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           continue;
         }
         if (t.state !== 'attempted' && t.state !== 'sending') continue;
-        const r = t.run ? await playerRead(() => runInfo(t.run), `run of ${t.url} not read`) : null;
-        if (noteStop) break;
-        const done = r ? !r.active : now() - t.at > OWED_MS;
+        const done = now() - t.at > OWED_MS;
+        const open = Boolean(t.run) && now() - t.at < RERUN_MS;
         // A note marked as sending may have gone out; nothing resends it.
         if (t.state === 'sending') {
           if (done) parts.push(`message "${t.text}" may not have reached the player (${t.url})`);
@@ -1062,7 +1037,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         const dead = shown === undefined ? 'the Discord post is gone'
           : (t.status ? !stillTrue : t.key.startsWith('needs-info-') && !hasLabel(st.issue, LABELS.needsInfo)) ? 'no longer true'
             : '';
-        if (stillTrue && r && (r.active || r.open)) {
+        if (stillTrue && open) {
           if (shown !== t.status) owed.push(t);
           if (done) parts.push(`owed message "${t.text}" (${t.url}): fix the setup if needed, then re-run ${runUrl(t.run)}; a post not showing it is left as it is until then`);
         } else if (dead) {
@@ -1071,8 +1046,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
             parts.push(`owed message "${t.text}" ${dead === 'no longer true' ? 'is no longer true' : 'cannot be sent: the Discord post is gone'} (${t.url})`);
           }
         } else if (done) {
-          const how = !r ? '' : r.open ? `; re-run ${runUrl(t.run)} sends it while it is still true`
-            : `; its run ${runUrl(t.run)} can no longer be re-run (30 days from its first attempt, or 50 re-runs, have passed, or it was deleted), so send it by hand if it is still needed`;
+          const how = !t.run ? '' : open ? `; re-run ${runUrl(t.run)} sends it while it is still true`
+            : `; its run ${runUrl(t.run)} can no longer be re-run (30 days have passed), so send it by hand if it is still needed`;
           parts.push(`message "${t.text}" was not sent (${t.url})${how}`);
         }
       }

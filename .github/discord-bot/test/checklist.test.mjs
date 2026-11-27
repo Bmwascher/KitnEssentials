@@ -1142,6 +1142,7 @@ test('CH8: a failed player-side step in fix mode stops the post\'s repair, never
     w.fail.push(['POST', /issues\/17\/comments$/, fail500(), 1]);
     // A note with a run: the failed ship record stops the repair, not the note judging.
     w.record(17, 'Notification attempted: x\n\n<!-- discord-told: shipped-a -->\n<!-- discord-told-status: Shipped -->\n<!-- discord-told-run: 4242 -->');
+    w.clock += 60 * 60 * 1000;
     const out = [];
     await assert.rejects(run({
       eventName: 'schedule', payload: {}, env: { ...env, ...over, SWEEP_MODE: 'fix', GITHUB_REPOSITORY: 'me/one' }, fetchImpl: w.fetch, log: (s) => out.push(s), now: () => w.clock,
@@ -1161,18 +1162,6 @@ test('CH8: a failed player-side step in fix mode stops the post\'s repair, never
       assert.deepEqual([ckName(w, t), t.archived], [['Shipped'], true], 'the thread is still repaired');
       assert.match(lineOf(out, 17), /owed message "x" is no longer true/, 'the notes are still judged');
     }
-  }
-  // A note's run cannot be read.
-  {
-    const w = world();
-    w.issue(17);
-    const t = seed(w, 17, { applied_tags: ['c-tri', 'c-acc'] });
-    w.record(17, 'Notification attempted: x\n\n<!-- discord-told: fixed-a -->\n<!-- discord-told-status: Fixed, next update -->\n<!-- discord-told-run: 4242 -->');
-    w.fail.push(['GET', /actions\/runs\/4242$/, fail500(), 99]);
-    const out = [];
-    await assert.rejects(sweep(w, 'fix', out), /could not update issue\(s\) #17; see above/);
-    assert.match(out.filter((l) => l.startsWith('#17: ')).at(-1), /run of .+ not read/);
-    assert.deepEqual(ckName(w, t), ['Triaged'], 'the thread is still repaired');
   }
   // A note's message cannot be worked out: the In progress message reads the issue's events.
   {

@@ -1055,41 +1055,30 @@ test('an old Told the player status note lists as possibly unsent, and is never 
   }
 });
 
-test('a note whose run GitHub no longer lets re-run holds nothing, however new the note', async () => {
-  const DAY = 24 * 60 * 60 * 1000;
-  const run = (w, over) => w.runs.set('555', { id: 555, status: 'completed', run_attempt: 1, created_at: new Date(w.start).toISOString(), ...over });
-  for (const [why, setup] of [
-    // The note comes from a late attempt; the run's first attempt was 31 days ago.
-    ['30 days since the first attempt', (w) => run(w, { run_attempt: 2, created_at: new Date(w.clock - 31 * DAY).toISOString() })],
-    ['50 re-runs used', (w) => run(w, { run_attempt: 51 })],
-    ['run deleted', (w) => w.fail.push(['GET', /actions\/runs\/555$/, new Response('{"message":"Not Found"}', { status: 404 }), 1])],
-  ]) {
-    const w = world();
-    w.issue(17);
-    w.close(17, 'completed', 'aaaaaaa1');
-    refuseTagWrite(w);
-    await assert.rejects(closeRun(w, RUN), /#17/);
-    setup(w);
-    const out = [];
-    await sweepFix(w, out);
-    assert.match(out.join('\n'), /message "\*\*Fixed!\*\*.*" was not sent .*can no longer be re-run/, why);
-    assert.equal(w.tagOf('717'), 'Fixed, next update', `${why}: the sweep repairs the post`);
-    assert.deepEqual(w.said('717'), [], why);
-  }
+test('a note older than GitHub\'s 30-day re-run window holds nothing', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  refuseTagWrite(w);
+  await assert.rejects(closeRun(w, RUN), /#17/);
+  w.clock += 31 * 24 * 60 * 60 * 1000;
+  const out = [];
+  await sweepFix(w, out);
+  assert.match(out.join('\n'), /message "\*\*Fixed!\*\*.*" was not sent .*can no longer be re-run/);
+  assert.equal(w.tagOf('717'), 'Fixed, next update', 'the sweep repairs the post');
+  assert.deepEqual(w.said('717'), []);
 });
 
-test('a note whose run is still queued or running is neither listed nor dropped, and its post is held', async () => {
-  for (const [status, reopened] of [['queued', false], ['in_progress', false], ['in_progress', true]]) {
-    const why = `${status}${reopened ? ', issue reopened' : ''}`;
+test('a note under ten minutes old is neither listed nor dropped, and its post is held', async () => {
+  for (const reopened of [false, true]) {
+    const why = reopened ? 'issue reopened' : 'closed';
     const w = world();
     w.issue(17);
     w.close(17, 'completed', 'aaaaaaa1');
     refuseTagWrite(w);
     await assert.rejects(closeRun(w, RUN), /#17/);
-    w.runs.set('555', { id: 555, status, run_attempt: 1, created_at: new Date(w.start).toISOString() });
     if (reopened) Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
-    // Well past ten minutes: the run's state decides, not the note's age.
-    w.clock += 60 * 60 * 1000;
+    w.clock += 5 * 60 * 1000;
     const out = [];
     await sweepFix(w, out);
     assert.doesNotMatch(out.join('\n'), /\*\*Fixed!\*\*/, why);
@@ -1176,8 +1165,8 @@ test('a sweep drop does not overwrite a note a re-run marked after the sweep rea
   await assert.rejects(closeRun(w, RUN), /#17/);
   Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
   w.clock += 60 * 60 * 1000;
-  // The run's re-run marks the note while the sweep is judging it.
-  w.hooks.push(['GET', /actions\/runs\/555$/, async () => {
+  // The run's re-run marks the note after the sweep read it.
+  w.hooks.push(['GET', /issues\/comments\/\d+$/, async () => {
     const note = fixedNotes(w)[0];
     note.body = `${note.body}\n<!-- discord-sending -->\n<!-- discord-unconfirmed -->`;
   }]);
@@ -1615,7 +1604,6 @@ test('AT8: a fix-mode sweep repairs Accepted only on a post showing Triaged alon
     let k = 0;
     w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/900$/, async () => { if (++k === at) await fn(); }]);
   };
-  const owing = (w) => w.runs.set('555', { id: 555, status: 'in_progress', run_attempt: 1, created_at: new Date(w.start).toISOString() });
   for (const [why, setup, patches, line] of [
     ['a Triaged post gets Accepted', (w) => withLabel(w, 17),
       [{ applied_tags: ['t-retail', 't-bug', 's-tri', 't-acc'] }], /^#17: post Accepted missing -> shown$/],
@@ -1625,7 +1613,7 @@ test('AT8: a fix-mode sweep repairs Accepted only on a post showing Triaged alon
       (w) => { withLabel(w, 17); w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] }); w.threads.get('717').applied_tags = ['t-retail', 's-prog']; },
       [], /^#17: post Accepted missing -> shown \(waits for the post's next status change\)$/],
     ['a post an owed note holds is left whole, Accepted included',
-      (w) => { w.issue(17); w.close(17, 'completed', 'aaaaaaa1'); w.record(17, OWED); owing(w); w.threads.get('717').applied_tags = ['t-retail', 't-acc', 's-tri']; },
+      (w) => { w.issue(17); w.close(17, 'completed', 'aaaaaaa1'); w.record(17, OWED); w.threads.get('717').applied_tags = ['t-retail', 't-acc', 's-tri']; },
       [], /post Accepted shown -> removed \(waits for the post's next status change\)$/],
     ['a closed issue\'s stale Accepted: listed, left', (w) => { w.issue(17); w.close(17, 'completed'); w.threads.get('717').applied_tags = ['t-retail', 't-acc', 's-closed']; },
       [], /^#17: post Accepted shown -> removed \(waits for the post's next status change\)$/],
@@ -1810,19 +1798,6 @@ test('a needs-info post read that fails with a 500 whose answer quotes " -> 404 
   w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717$/, new Response('upstream said -> 404 x', { status: 500 }), 1]);
   await assert.rejects(go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, labels: [{ name: 'from-discord' }] } }));
   assert.ok(!w.issues.get(17).comments.some((c) => /discord-dropped/.test(c.body)), 'not dropped as for a deleted post');
-});
-
-test('a run read that fails with a 500 whose answer quotes " -> 404 " is no deleted run', async () => {
-  const w = world();
-  w.issue(17);
-  w.close(17, 'completed', 'aaaaaaa1');
-  refuseTagWrite(w);
-  await assert.rejects(closeRun(w, RUN), /#17/);
-  w.fail.push(['GET', /actions\/runs\/555$/, new Response('upstream said -> 404 x', { status: 500 }), 1]);
-  const out = [];
-  await assert.rejects(sweepFix(w, out), /#17/);
-  assert.match(out.join('\n'), /actions\/runs\/555 -> 500 /);
-  assert.doesNotMatch(out.join('\n'), /can no longer be re-run/);
 });
 
 test('a moved post\'s status messages reply to the copy and start with the reporter, who is pinged; other posts\' do not change', async () => {
