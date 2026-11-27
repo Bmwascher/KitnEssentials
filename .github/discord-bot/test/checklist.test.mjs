@@ -536,8 +536,7 @@ test('CH2: with the forum unset, a non-bot issue, a missing status tag or a refu
     await assert.rejects(job(w), /-> 400/);
     assert.equal(recordOf(w).state, 'pending', 'a refused create made nothing');
     await job(w);
-    assert.equal(ckThreads(w).length, 1);
-    assert.equal(w.find('GET', /threads\/active$/).length, 0, 'the next job opens at once');
+    assert.equal(ckThreads(w).length, 1, 'the next job opens at once');
   }
   {
     // A refused create whose set-back write fails too: the record stays

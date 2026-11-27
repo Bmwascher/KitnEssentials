@@ -200,6 +200,8 @@ test('with no forum configured the command works nowhere', async () => {
   const j = await r.json();
   assert.equal(j.type, 4);
   assert.match(j.data.content, /not set up/);
+  const s = await handle(await signed(submit()), { ...env, FORUM_CHANNEL_IDS: '' }, ctxFor(), { fetch: f });
+  assert.match((await s.json()).data.content, /not set up/);
 });
 
 test('an hour-old signed request is refused', async () => {
@@ -1976,6 +1978,7 @@ test('a move refused before the new post changes nothing and says why', async ()
       s.two = [{ number: 13, html_url: 'https://github.com/me/test-two/issues/13', repository_url: 'https://api.github.com/repos/me/test-two', body: '<!-- discord-thread: 700 reporter: 42 -->' }];
     }, /^This post is already tracked as TWO #13 /, { REPOS: '{"ONE":"me/test-one","TWO":"me/test-two","DUO":"me/test-two"}' }],
     ['a post already moved', (s) => { s.kv = { 'movedto:700': '{"to":"990"}' }; }, /^Nothing was moved: this post was already moved to https:\/\/discord\.com\/channels\/1\/990\.$/],
+    ['a filing record that is not JSON', (s) => { s.kv = { 'issue:700': '{' }; }, /^Nothing was moved: could not read this post's saved record just now\. Try again\.$/],
     ['a post already moved, which the move locked', (s) => { s.kv = { 'movedto:700': '{"to":"990"}' }; s.post.thread_metadata.locked = true; },
       /^Nothing was moved: this post was already moved to https:\/\/discord\.com\/channels\/1\/990\.$/],
     ['a filed post', FILED, /^This post is already tracked as ONE #40 \(https:\/\/github\.com\/me\/test-one\/issues\/40\); moving filed posts comes in a later update\.$/],

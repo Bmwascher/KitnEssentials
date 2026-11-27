@@ -41,7 +41,6 @@ export function world() {
     fail: [], // [method, RegExp, Response | Error, times]
     ckForum: structuredClone(CHECKLIST_FORUM), // a test may take a tag away
     extraForums: new Map(), // id -> forum, beside FORUM and the checklist forum
-    archivePage: 50, // archived threads a listing page holds
   };
   w.start = w.clock;
 
@@ -284,16 +283,6 @@ export function world() {
       w.threads.set(id, t);
       return json(chan(t));
     }],
-    ['GET', /discord\.com\/api\/v10\/guilds\/(\d+)\/threads\/active$/, () => json({ threads: [...w.threads.values()].filter((t) => !t.archived).map(chan) })],
-    // A forum's archived threads, newest archive first, `w.archivePage` to a page.
-    ['GET', /discord\.com\/api\/v10\/channels\/(\d+)\/threads\/archived\/public/, (m, url) => {
-      const before = decodeURIComponent((/[?&]before=([^&]+)/.exec(url) || [0, ''])[1]);
-      const all = [...w.threads.values()].filter((t) => t.archived && t.parent_id === m[1]).map(chan)
-        .sort((a, b) => Date.parse(b.thread_metadata.archive_timestamp) - Date.parse(a.thread_metadata.archive_timestamp))
-        .filter((t) => !before || t.thread_metadata.archive_timestamp < before);
-      return json({ threads: all.slice(0, w.archivePage), has_more: all.length > w.archivePage });
-    }],
-    ['GET', /discord\.com\/api\/v10\/users\/@me$/, () => json({ id: BOT_USER })],
   ];
 
   w.fetch = async (url, init = {}) => {

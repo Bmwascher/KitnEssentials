@@ -90,7 +90,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
   const commentPath = (rec) => `/repos/${repo}/issues/comments/${rec.id}`;
   // The record as it is now, which must still be the one this run holds: a
   // record staff changed meanwhile is left for the issue's next checklist
-  // job to check. GitHub has no compare-and-save, so it is read just before
+  // job to settle. GitHub has no compare-and-save, so it is read just before
   // every archive decision and every record write.
   async function current(rec) {
     const r = parseChecklist(await gh.call('GET', commentPath(rec)));

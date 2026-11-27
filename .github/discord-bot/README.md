@@ -796,8 +796,8 @@ Accepted on purpose; each line says how you would notice it.
   checked for: requests fail with an error in the Worker log. Save each
   setting as plain text.
 - The bot needs its `STATE` KV namespace bound; without it a filing cannot
-  tell a moved post from its records, so an unlocked old post or a reply in
-  the bot's copy can be filed. `/bot-check` names a missing binding.
+  tell a moved post from its records, so an old post or a reply in the
+  bot's copy can be filed. `/bot-check` names a missing binding.
 - A filing knows a post was moved away only from its `movedto:` record. In
   about the minute before KV shows that record, or when its save failed,
   Send to GitHub on the old post files it; close the extra issue by hand.
@@ -853,8 +853,9 @@ Accepted on purpose; each line says how you would notice it.
   text or files as the "nothing the bot can copy" placeholder, then locks
   and archives the old post: `/bot-check` names the setting; unlock the old
   post and delete the copy.
-- A player's edit or file removal in the seconds a move runs can be copied
-  as it was before; a moderator can delete or edit the copy.
+- A player's edit, file removal or deleted first message in the seconds a
+  move runs can be copied as it was before; a moderator can delete or edit
+  the copy.
 - If Discord's setup reads stall long enough, the daily setup report can
   go to the Worker log instead of the moderator channel; the next day's
   check runs again.
