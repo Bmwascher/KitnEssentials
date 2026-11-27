@@ -165,9 +165,9 @@ export function discordClient(token, fetchImpl = fetch) {
     // Discord takes only a whole tag list, so the post is read again just
     // before the write: a tag added meanwhile is seen, and a status another
     // writer set meanwhile stops the write (`raced`), so the caller decides
-    // again from what the post shows. A move unarchives the post, as before. With `dropOther`
-    // false, a post with no status and five other tags is left as it is
-    // rather than lose one of them.
+    // again from what the post shows. A move unarchives the post, as before.
+    // With `dropOther` false, a post with no status and five other tags is
+    // left as it is rather than lose one of them.
     async setStatus(threadId, statusName, beforeMove, { dropOther = true, accepted = null, onForum = () => {} } = {}) {
       const { thread, forum } = await threadAndForum(threadId);
       seeForum(onForum, String(thread.parent_id), forum);

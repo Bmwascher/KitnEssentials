@@ -1003,8 +1003,9 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       //   listed, and never held, dropped or resent.
       // - A newer note still attempted was never sent: its send marks it
       //   first. Still true, and its run still re-runnable (judged by the
-      //   note's age), it is owed: the post is left for that run from the moment the note
-      //   exists, since a re-run sends it whether or not the post moved.
+      //   note's age), it is owed: the post is left for that run from the
+      //   moment the note exists, since a re-run sends it whether or not the
+      //   post moved.
       //   One no re-run could send is dropped: its post is gone, or its
       //   message no longer holds (a status note, whatever the post shows; a
       //   needs-info ping once the label is off).
