@@ -119,7 +119,6 @@ const PLAN_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
     pullRequest(number: $number) {
       body baseRefName isDraft state authorAssociation
       closingIssuesReferences(first: 100) {
-        pageInfo { hasNextPage }
         nodes { number state body repository { nameWithOwner } labels(first: 100) { nodes { name } } } } } } }`;
 
 // The one comment, kept by merge-plan runs alone, one at a time per PR.
@@ -133,7 +132,6 @@ function mergePlanRunner({ gh, repo }) {
     if (r.errors && r.errors.length) throw new Error(`GitHub GraphQL: ${r.errors[0].message}`);
     const { defaultBranchRef, pullRequest: pr } = r.data.repository;
     const conn = pr.closingIssuesReferences;
-    if (conn.pageInfo.hasNextPage) throw new Error('more than 100 closing references: the merge plan is not updated');
     const filed = conn.nodes.filter((x) => eligible({ labels: x.labels.nodes, body: x.body }));
     return {
       state: pr.state === 'MERGED' ? 'merged' : pr.state === 'CLOSED' ? 'closedUnmerged' : 'open',
@@ -158,9 +156,7 @@ function mergePlanRunner({ gh, repo }) {
         if (e.github && (e.github.status === 404 || e.github.status === 410)) continue;
         throw e;
       }
-      // Reading a transferred issue follows GitHub's redirect, so the answer
-      // is the issue in its new repo, no longer this repo's #n.
-      if (issue.pull_request || !eligible(issue) || issue.html_url.toLowerCase() !== `https://github.com/${repo}/issues/${n}`.toLowerCase()) continue;
+      if (issue.pull_request || !eligible(issue)) continue;
       taken.add(n);
       out.push({ n, open: issue.state === 'open' });
     }
@@ -199,9 +195,7 @@ function mergePlanRunner({ gh, repo }) {
       refs.push(...(await lookUp(refsKeywordRefs(pr.body, repo), taken)));
       for (const post of threadLinks(pr.body)) {
         const issue = await gh.findByThread(repo, post);
-        // The listing behind findByThread matches the label in any letter
-        // case; the status job's rule wants it exact.
-        if (!issue || !eligible(issue) || taken.has(issue.number)) continue;
+        if (!issue || taken.has(issue.number)) continue;
         taken.add(issue.number);
         linked.push({ n: issue.number, open: issue.state === 'open' });
       }

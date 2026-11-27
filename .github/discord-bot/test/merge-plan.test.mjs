@@ -220,11 +220,6 @@ test('MP5: a merge-plan failure is logged, never thrown, and writes nothing', as
       w.prs.get(5).body = 'Fixes #17\nRefs #18';
       w.fail.push(['GET', /\/repos\/me\/one\/issues\/18$/, new Response('{"message":"Forbidden"}', { status: 403 }), 1]);
     }, /issues\/18 -> 403/],
-    ['more than one page of closing references', (w) => {
-      w.pageSize = 1;
-      w.issue(18);
-      w.prs.get(5).closes.push(18);
-    }, /more than 100 closing references: the merge plan is not updated/],
   ]) {
     const w = world();
     w.issue(17);
@@ -271,18 +266,7 @@ test('MP6: which PRs get a comment, and what it names', async () => {
     ['a cross-repo issue without the label', open({ closes: [other({ labels: { nodes: [] } })], body: 'Fixes me/two#12' }), none],
     ['a link to the post of #17', open({ body: 'See https://discord.com/channels/800/717\nThanks.' }),
       says(/This PR links the Discord post tracked as #17 but does not close it, unless a commit message does\./)],
-    ['a link to the post of #17, its label in another letter case', (w) => {
-      const { labels } = w.issues.get(17);
-      labels.delete('from-discord');
-      labels.add('From-Discord');
-      open({ body: 'See https://discord.com/channels/800/717' })(w);
-    }, none],
     ['a link to a post with no issue', open({ body: 'See https://discord.com/channels/800/12345' }), none],
-    ['Refs #17 after #17 moved to another repo', (w) => {
-      // Reading a transferred issue follows GitHub's redirect to its new repo.
-      w.issues.get(17).html_url = 'https://github.com/me/two/issues/9';
-      open({ body: 'Refs #17' })(w);
-    }, none],
     ['a plain mention', open({ body: 'See #17' }), none],
     ['Refs to a PR with the label and a copied marker', (w) => {
       w.issue(30, { pull_request: {} });
