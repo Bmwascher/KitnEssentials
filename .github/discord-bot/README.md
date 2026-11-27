@@ -1272,6 +1272,10 @@ Accepted on purpose; each line says how you would notice it.
   not check", never a pass.
 - A player name that looks like `#12`, `GH-12`, a commit hash or a URL can
   show as a link in the issue's Reporter row.
+- A `FORUMS` entry's `client` or `type` that is misspelled or written as a
+  JSON object instead of text reads as unset, and `/bot-check` does not name
+  it: the form is not pre-filled, and a move keeps the post's own type tag.
+  Write each as plain text, like `"type":"Feature"`.
 
 ## Tests
 
