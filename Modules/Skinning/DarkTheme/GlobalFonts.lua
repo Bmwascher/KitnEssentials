@@ -5,6 +5,7 @@
 -- ║           owns them.                                     ║
 -- ╚══════════════════════════════════════════════════════════╝
 
+---@class KE
 local KE = select(2, ...)
 local S = KE.Skins
 local unpack = unpack

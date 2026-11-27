@@ -432,6 +432,7 @@ end
 
 -- The value may be secret: the bar and the percent take it as it is, and neither
 -- is read back. Only a plain nil hides them.
+---@param value number?
 function RA:PaintHealth(value)
     local parts = self.parts
     local bar, percent = parts.health, parts.percent

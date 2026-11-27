@@ -284,6 +284,7 @@ local function OwnedKeystone()
     if not (C_LFGList and C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel) then return nil end
     local ok, actID, _, level = pcall(C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel)
     if not ok or not actID then return nil end
+    ---@cast actID number
     local mapID
     if C_LFGList.GetActivityInfoTable then
         local ok2, info = pcall(C_LFGList.GetActivityInfoTable, actID)
