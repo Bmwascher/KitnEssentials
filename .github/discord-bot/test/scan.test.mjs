@@ -139,7 +139,6 @@ test('a busy run greets eight posts and leaves the rest for the next run', async
   assert.deepEqual([second.greeted.length, second.left], [3, 0]);
 });
 
-
 test('the daily check lists posts waiting too long with no status or Answered tag, each name as text', async () => {
   const kv = started(T0, { last: T0 + 5 * 24 * HOUR - 60000 });
   const now = T0 + 5 * 24 * HOUR;
@@ -538,7 +537,6 @@ test('a long daily alert goes out in whole lines under 1,900 characters, and wha
   const posted = f.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content);
   assert.equal(posted.length, 4, 'the daily posting share');
   assert.match(posted[0], /^The post scan gave up on these posts: after 30 tries;/);
-  assert.match(posted[0], /except a damaged movedfrom: or movedto: record, which is corrected by hand and never deleted/);
   const entry = /^- queue card: https:\/\/discord\.com\/channels\/1\/\d+$/;
   for (const [i, msg] of posted.entries()) {
     assert.ok(msg.length <= 1900, `message ${i}: ${msg.length} characters`);
@@ -548,30 +546,6 @@ test('a long daily alert goes out in whole lines under 1,900 characters, and wha
   const all = [...posted, logged].join('\n');
   for (const id of posts) assert.equal(all.split(`/channels/1/${id}`).length - 1, 1, `${id} is named once`);
   assert.ok(posts.some((id) => logged.includes(`/channels/1/${id}`)), 'the rest is in the log');
-});
-
-test('a damaged record is never taken for no record or for a filing, nor written over: the post is skipped and named', async () => {
-  for (const [why, key, value] of [
-    ['the scan\'s record is not JSON', 'thread', '{"greeting"'],
-    ['the scan\'s record is not a record', 'thread', '[]'],
-    ['the filing record is JSON null', 'issue', 'null'],
-    ['the filing record names no issue', 'issue', '{}'],
-    // Valid JSON whose fields the bot could not have written.
-    ['the scan\'s record marks a filing with no reply id', 'thread', '{"tracked":true}'],
-    ['the scan\'s record counts its tries in text', 'thread', '{"greeting":"g","tries":"5"}'],
-    ['the filing record\'s repo is not owner/name', 'issue', '{"repo":"/","number":3}'],
-  ]) {
-    const a = idAt(T0 + 1000);
-    const kv = started(T0);
-    await kv.put(`${key}:${a}`, value);
-    const f = discord({ active: [{ id: a, parent_id: '900' }] });
-    await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
-    assert.deepEqual(sends(f), [], `${why}: no greeting and no card`);
-    assert.equal(kv.m.get(`${key}:${a}`), value, `${why}: left as it was`);
-    assert.match(stateOf(kv).error.text, new RegExp(`post ${a} \\(its saved record ${key}:${a} is damaged\\)`), why);
-    assert.deepEqual(stateOf(kv).gaveUp.map((g) => [g.post, g.what]), [[a, `damaged record ${key}:${a}`]], why);
-    assert.equal(stateOf(kv).through['900'], a, `${why}: the post holds back nothing`);
-  }
 });
 
 test('a give-up is named once its record says so, and only once', async () => {
@@ -626,34 +600,6 @@ test('a give-up saved just after a daily check read the state is named by the ne
   assert.match(out.join('\n'), new RegExp(`/channels/1/${early}`));
   assert.match(next.join('\n'), new RegExp(`- queue card: https://discord\\.com/channels/1/${late}`), 'named by the next check');
   assert.doesNotMatch(next.join('\n'), new RegExp(`/channels/1/${early}`), 'named once');
-});
-
-test('a damaged start time is never a first run: nothing is reset, no post is passed over, and the daily check says why', async () => {
-  const kv = fakeKv({ 'scan:since': 'broken', 'scan:state': JSON.stringify({ last: T0 }) });
-  const a = idAt(T0 + 1000);
-  const f = discord({ active: [{ id: a, parent_id: '900' }] });
-  await scan(baseEnv(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} }).catch(() => {});
-  assert.equal(kv.m.get('scan:since'), 'broken', 'left for a bot admin');
-  assert.deepEqual(sends(f), []);
-  const out = [];
-  await daily(baseEnv(kv), { fetch: discord(), now: () => T0 + 6 * 60000, log: (s) => out.push(s) });
-  assert.match(out.join('\n'), /scan:since \(its saved value is damaged/);
-});
-
-test('a damaged scan state is rebuilt and said so, never read as no state', async () => {
-  for (const value of ['{"through"', '{"gaveUp":5}', '{"through":{"900":"abc"}}']) {
-    const kv = fakeKv({ 'scan:since': String(T0), 'scan:state': value });
-    const a = idAt(T0 + 1000);
-    const f = discord({ active: [{ id: a, parent_id: '900' }] });
-    await scan(baseEnv(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
-    assert.deepEqual(sends(f), [a], `${value}: the scan still greets`);
-    assert.match(stateOf(kv).error.text, /scan:state \(its saved value was damaged and is rebuilt/, value);
-    await kv.put('scan:state', value);
-    const out = [];
-    await daily(baseEnv(kv), { fetch: discord(), now: () => T0 + 6 * 60000, log: (s) => out.push(s) });
-    assert.match(out.join('\n'), /saved state \(scan:state\) is damaged/, value);
-    assert.doesNotMatch(out.join('\n'), /has not run/, value);
-  }
 });
 
 test('a new post\'s card makes its own look just before it goes out, so a filing or a deleted first message since its greeting is seen', async () => {
@@ -750,7 +696,7 @@ test('a post whose record cannot be read waits, and an hour after it was made is
   }
 });
 
-test('a daily alert the channel refused is named again by the next check, and a damaged list of named posts is said so', async () => {
+test('a daily alert the channel refused is named again by the next check', async () => {
   const a = idAt(T0 + 1000);
   const D = T0 + 24 * HOUR;
   const kv = started(T0, { last: D, gaveUp: [{ at: D - HOUR, post: a, what: 'queue card' }] });
@@ -760,14 +706,7 @@ test('a daily alert the channel refused is named again by the next check, and a 
   await daily(mod, { fetch: f, now: () => D + 60000, log: () => {} });
   const posted = f.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content).join('\n');
   assert.match(posted, new RegExp(`- queue card: https://discord\\.com/channels/1/${a}`), 'named once the channel takes it');
-  // A list the bot could not have written: the alert says some lines may be repeats.
-  await kv.put('daily:named', '{"x":1}');
-  const out = [];
-  await daily(baseEnv(kv), { fetch: discord(), now: () => D + 120000, log: (s) => out.push(s) });
-  assert.match(out.join('\n'), /\(daily:named\) was damaged, so some below may have been named before/);
 });
-
-
 
 test('posts already handled are not read from KV again', async () => {
   const kv = started(T0);
@@ -823,9 +762,6 @@ test('a post that keeps failing is given up on after 30 runs, and newer posts ar
   assert.deepEqual(r.greeted, [newest.id]);
 });
 
-
-
-
 test('a scan writes its state only when something changed, or as a 15-minute heartbeat', async () => {
   const MIN = 60 * 1000;
   const a = idAt(T0 + 1000);
@@ -854,7 +790,6 @@ test('the daily check says nothing about archive pages when nothing is waiting',
   await daily(baseEnv(kv), { fetch: f, now: () => T0 + 30 * 24 * HOUR, log: (s) => out.push(s) });
   assert.deepEqual(out, []);
 });
-
 
 test('the greeting limit counts tries, not successful sends', async () => {
   const kv = started(T0);
@@ -1004,16 +939,6 @@ test('NT1: a post that refuses the bot (403) is named once, only in a text chann
     assert.ok(text.split('\n').includes(`- greeting refused by the post (403): https://discord.com/channels/1/${a}`), `a lost state write: the recovered 403 line is posted: ${text}`);
   }
   {
-    // An `ended` the bot could not have written makes the record damaged,
-    // never a reason to drop a saved entry.
-    const a = idAt(T0 + 1000);
-    const kv = started(T0, { error: { at: T0, text: `could not read or message post ${a}`, items: [`post ${a}`] } });
-    await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g', skipped: 'x', ended: 'false' }));
-    const f = discord({ active: [{ id: a, parent_id: '900' }] });
-    await scan(baseEnv(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
-    assert.match(String((stateOf(kv).error || {}).text), new RegExp(`post ${a} \\(its saved record .* is damaged\\)`), 'an ended of the wrong type: the record is damaged');
-  }
-  {
     // Discord takes the alert but its answer is not JSON: the give-up counts
     // as named, and the next daily check does not repeat it.
     const kv = started(T0);
@@ -1090,23 +1015,6 @@ test('a greeting that fails with a 500 whose answer quotes " -> 403 " is tried a
   assert.deepEqual([r.greeted.length, r.left], [0, 1], 'left for the next run, not given up');
   fail = false;
   assert.deepEqual((await scan(baseEnv(kv), { fetch, now: () => T0 + 10 * 60000, log: () => {} })).greeted, [a]);
-});
-
-test('the move records read strictly by their shape', async () => {
-  const kv = fakeKv({
-    'movedfrom:9': JSON.stringify({ from: '7', reporter: { name: 'Pat', id: '42', username: 'pat', avatar: 'https://cdn.discordapp.com/avatars/42/a.png' }, card: '96' }),
-    'movedfrom:10': JSON.stringify({ from: '7', reporter: { name: 'Hook' } }),
-    'movedto:7': '{"to":"9"}',
-    'movedfrom:8': '{"from":"7","reporter":{}}', 'movedto:6': '{"to":"x"}',
-    'movedfrom:5': '{"from":"7","reporter":{"name":"Pat","id":"x"}}', 'movedfrom:4': '{"from":"7","reporter":{"name":"Pat"},"card":"x"}',
-    'movedfrom:3': '{"from":"7","reporter":{"name":"Pat","username":""}}',
-    'movedto:2': '{"to":1234567890123456789}',
-  });
-  assert.deepEqual(await readStrict(kv, 'movedto:7'), { to: '9' });
-  assert.equal((await readStrict(kv, 'movedfrom:9')).reporter.name, 'Pat');
-  assert.equal((await readStrict(kv, 'movedfrom:10')).reporter.name, 'Hook', 'a webhook reporter has its name alone');
-  // Each id goes into a Discord path or mention, so one that is not digits is damaged.
-  for (const key of ['movedfrom:8', 'movedto:6', 'movedfrom:5', 'movedfrom:4', 'movedfrom:3', 'movedto:2']) await assert.rejects(readStrict(kv, key), (e) => e.damaged === key, key);
 });
 
 test('a moved post is known by the move\'s message or record when its first message is not seen, a post moved away by its record, and a receipt that starts with a mention still counts', async () => {

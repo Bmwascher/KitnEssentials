@@ -490,16 +490,6 @@ async function postRecords(kv, id, ms) {
   return { thread, saved: issue || (thread && thread.issue) || null, movedFrom, movedTo };
 }
 
-// What a bot admin does with a damaged record. Deleting a move record does
-// not clear the way: without `movedfrom:` the copy is refused for good, and
-// without `movedto:` the old post is open to a send or move once unlocked.
-// So the reply says that before it says delete.
-const damagedFix = (key) => (/^movedfrom:/.test(key)
-  ? 'A bot admin can correct that KV key by hand (deleting it leaves this post refused as a copy for good)'
-  : /^movedto:/.test(key)
-    ? 'A bot admin can correct that KV key by hand (deleting it lets the old post be sent or moved again once someone unlocks it)'
-    : 'A bot admin can delete that KV key');
-
 // This bot's own messages among a post's last 100 that say what became of
 // it: `away`, the new post's link in its move note, and, with `receipts`,
 // `receipt`, its "now tracked" reply; each null when absent. The bot's user
@@ -543,7 +533,6 @@ async function pressCheck(interaction, env, deps, cfg, postId, t0, ctx) {
     const rec = filed ? null : await wait(readStrict(env.STATE, `thread:${postId}`));
     saved = filed || (rec && rec.issue) || null;
   } catch (e) {
-    if (e.damaged) return reply(`This post's saved record is damaged (${e.damaged}). Nothing was opened. A bot admin can delete that KV key; then press again.`);
     log(`press check failed after ${Date.now() - t0} ms: ${e.message.slice(0, 200)}`);
     return again;
   }
@@ -874,9 +863,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     try {
       ({ thread: rec, saved, movedFrom, movedTo } = await postRecords(kv, threadId, kvMs));
     } catch (e) {
-      await followup(e.damaged
-        ? `Nothing was created: this post's saved record is damaged (${e.damaged}). ${damagedFix(e.damaged)}; then send the post again.`
-        : "Nothing was created: could not read this post's saved record just now. Try again.");
+      await followup("Nothing was created: could not read this post's saved record just now. Try again.");
       return { refused: 'record' };
     }
     // A post moved away: its record, else, on a locked post, the move's note.
@@ -1175,9 +1162,7 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     try {
       records = await postRecords(kv, oldId, kvMs);
     } catch (e) {
-      return await refuse(e.damaged
-        ? `this post's saved record is damaged (${e.damaged}). ${damagedFix(e.damaged)}; then move the post again`
-        : "could not read this post's saved record just now. Try again", 'record');
+      return await refuse("could not read this post's saved record just now. Try again", 'record');
     }
     if (records.movedTo) return await refuse(`this post was already moved to ${link(records.movedTo.to)}`, 'moved');
     // The bot's move locks the old post, and Discord shows a lock at once,

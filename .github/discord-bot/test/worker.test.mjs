@@ -747,9 +747,7 @@ test('a press on a filed post answers Already tracked, opens no form, and the pr
     ['the token request answers 410: press again', record, issue(), cardPress(HELPER), /^Could not check whether this post is already on GitHub\./, null, [],
       async () => { throw new Error('GitHub GET /repos/me/test-one/installation -> 410 {}'); }],
     ['a configured repo cannot be searched: press again', {}, issue(), cardPress(HELPER), /^Could not check whether this post is already on GitHub\./, null, status(500)],
-    ['a damaged record', { 'issue:700': '{"repo"' }, issue(), cardPress(HELPER), /^This post's saved record is damaged \(issue:700\)\. Nothing was opened\. A bot admin can delete that KV key; then press again\.$/, null],
-    ['an empty record', { 'issue:700': '' }, issue(), cardPress(HELPER), /^This post's saved record is damaged \(issue:700\)/, null],
-    ['a record that names no issue', { 'issue:700': '{}' }, issue(), cardPress(HELPER), /^This post's saved record is damaged \(issue:700\)/, null],
+    ['a record that is not JSON: press again', { 'issue:700': '{"repo"' }, issue(), cardPress(HELPER), /^Could not check whether this post is already on GitHub\. Press the button again\.$/, null],
     ['an old in-post button', record, issue(), press(HELPER), /^Already tracked as ONE #3: /, ['700', '950', { components: [] }]],
   ]) {
     const f = fakeFetch(discordRoutes([
@@ -1084,13 +1082,7 @@ test('one post, one issue: the saved record, then every configured repo, is chec
     ['the record read fails', 'unreadable', live, inst, list([]), { refused: 'record' }, /^Nothing was created: could not read this post's saved record just now\. Try again\.$/, undefined],
     ['the record read never answers', 'silent', live, inst, list([]), { refused: 'record' }, /^Nothing was created: could not read this post's saved record just now\. Try again\.$/, undefined],
     ['the filing record is not JSON', { 'issue:700': '{"repo": "me/test-tw' }, live, inst, list([]), { refused: 'record' },
-      /^Nothing was created: this post's saved record is damaged \(issue:700\)\. A bot admin can delete that KV key; then send the post again\.$/, undefined],
-    ['the scan\'s record is an empty string', { 'thread:700': '' }, live, inst, list([]), { refused: 'record' }, /^Nothing was created: this post's saved record is damaged \(thread:700\)/, undefined],
-    // JSON the bot could not have written is damaged too, never "no record".
-    ['the filing record is JSON null', { 'issue:700': 'null' }, live, inst, list([]), { refused: 'record' }, /^Nothing was created: this post's saved record is damaged \(issue:700\)/, undefined],
-    ['the filing record names no issue', { 'issue:700': '{}' }, live, inst, list([]), { refused: 'record' }, /^Nothing was created: this post's saved record is damaged \(issue:700\)/, undefined],
-    ['the scan\'s record is not a record', { 'thread:700': '[]' }, live, inst, list([]), { refused: 'record' }, /^Nothing was created: this post's saved record is damaged \(thread:700\)/, undefined],
-    ['the filing record\'s repo is not owner/name', { 'issue:700': JSON.stringify({ repo: '/', number: 3 }) }, live, inst, list([]), { refused: 'record' }, /^Nothing was created: this post's saved record is damaged \(issue:700\)/, undefined],
+      /^Nothing was created: could not read this post's saved record just now\. Try again\.$/, undefined],
     ['the same repo, deleted (410): the search runs and files', legacy('me/test-one', 17), status(410), inst, list([]), { created: 17, notes: [] }, /^Created ONE #17/, made],
     // Where the issue is now decides the advice, not where the record saw it.
     ['moved out of the chosen repo: the transfer advice', legacy('me/test-one', 17), moved, inst, list([]), { duplicate: 31, repo: 'me/test-three' },
@@ -1301,14 +1293,6 @@ test('filing a moved post names its player, ends with the copy line and pings th
   await handle(await signed(submit()), { ...env, STATE: fakeKv({ 'thread:700': JSON.stringify({ skipped: MOVED_HERE }) }) }, orphanCtx, { fetch: orphan, installationToken: async () => 'inst' });
   assert.deepEqual(await Promise.all(orphanCtx.jobs), [{ refused: 'copy-record' }]);
   assert.equal(orphan.find('POST', /\/issues$/).length, 0);
-
-  // A damaged move record: the reply says what deleting it would leave.
-  const damaged = fakeFetch(discordRoutes(githubRoutes()));
-  const damagedCtx = ctxFor();
-  await handle(await signed(submit()), { ...env, STATE: fakeKv({ 'movedfrom:700': '{"from":"x"}' }) }, damagedCtx, { fetch: damaged, installationToken: async () => 'inst' });
-  assert.deepEqual(await Promise.all(damagedCtx.jobs), [{ refused: 'record' }]);
-  assert.equal(damaged.find('PATCH', /\/webhooks\//)[0].body.content,
-    "Nothing was created: this post's saved record is damaged (movedfrom:700). A bot admin can correct that KV key by hand (deleting it leaves this post refused as a copy for good); then send the post again.");
 
   // No STATE bound: no record can show the move, so an old post someone
   // unlocked is known by the bot's note, and the copy's refusal names the
@@ -2287,11 +2271,6 @@ test('a move refused before the new post changes nothing and says why', async ()
     }, /^Nothing was moved: the post's first message was deleted, so there is nothing to copy\.$/],
     ['the bot\'s copy whose record is not readable yet', (s) => { s.first = { ...s.first, webhook_id: '61', application_id: 'app' }; },
       /^Nothing was moved: this post is a copy the bot moved here, and its record movedfrom:700 is not readable yet\. /],
-    ['a damaged move record', (s) => { s.kv = { 'movedfrom:700': '{"from":"x"}' }; },
-      /^Nothing was moved: this post's saved record is damaged \(movedfrom:700\)\. A bot admin can correct that KV key by hand \(deleting it leaves this post refused as a copy for good\); then move the post again\.$/],
-    ['a damaged moved-away record', (s) => { s.kv = { 'movedto:700': '{"to":"x"}' }; },
-      /^Nothing was moved: this post's saved record is damaged \(movedto:700\)\. A bot admin can correct that KV key by hand \(deleting it lets the old post be sent or moved again once someone unlocks it\); then move the post again\.$/],
-    ['a damaged filing record', (s) => { s.kv = { 'issue:700': '{' }; }, /^Nothing was moved: this post's saved record is damaged \(issue:700\)\. A bot admin can delete that KV key; then move the post again\.$/],
     ['a saved issue that cannot be checked', (s) => {
       s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-one', number: 40, key: 'ONE' }) };
       s.extra = [['GET', /api\.github\.com\/repos\/me\/test-one\/issues\/40$/, () => new Response('{}', { status: 404 })]];
