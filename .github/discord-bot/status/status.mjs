@@ -255,11 +255,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   async function recordsOf(n) {
     const shipped = [];
     const told = [];
-    // The staff checklist record, one per issue, and the address of a bot
-    // comment that carries a checklist marker, or the record's visible line,
-    // that the parser cannot read.
+    // The staff checklist record, one per issue.
     const ckRecords = [];
-    const ckDamaged = [];
     for (let page = 1; ; page++) {
       const batch = await gh.call('GET', `/repos/${repo}/issues/${n}/comments?per_page=100&page=${page}`);
       for (const c of batch) {
@@ -269,7 +266,6 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         if (checklistForum) {
           const ck = parseChecklist(c);
           if (ck) ckRecords.push(ck);
-          else if (/<!--\s*discord-checklist|^Staff checklist thread:/.test(body)) ckDamaged.push(c.html_url || '');
         }
         const sh = /<!--\s*discord-shipped-in:\s*(\S+)\s+fixes:\s*([0-9a-f,]*)\s*-->/.exec(body);
         if (sh) shipped.push({ tag: sh[1], fixes: sh[2].split(',').filter(Boolean) });
@@ -294,7 +290,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       }
       if (batch.length < 100) {
         const checklist = ckRecords.find((r) => r.threadId) || ckRecords[0] || null;
-        return { shipped, told, checklist, checklistDamaged: checklist ? null : ckDamaged[0] || null };
+        return { shipped, told, checklist };
       }
     }
   }
@@ -306,27 +302,15 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // for a close as completed, the one kind whose fix is used.
   async function lastClose(n, wantFix = false) {
     let last = null;
-    let undone = false;
     for (let page = 1; ; page++) {
       const batch = await gh.call('GET', `/repos/${repo}/issues/${n}/events?per_page=100&page=${page}`);
-      for (const e of batch) {
-        if (e.event === 'closed') {
-          last = e;
-          undone = false;
-        } else if (e.event === 'reopened' && last) {
-          undone = true;
-        }
-      }
+      for (const e of batch) if (e.event === 'closed') last = e;
       if (batch.length < 100) break;
     }
     if (!last) return null;
-    // `at` (when the event says the close happened) and `undone` (a reopen
-    // is listed after it) let the checklist tell the issue's current close
-    // from an older one while newer events are not listed yet.
-    const at = Date.parse(last.created_at) || 0;
     const here = last.commit_id && (!last.commit_url || String(last.commit_url).includes(`/repos/${repo}/commits/`));
-    if (here) return { id: last.id, sha: last.commit_id, at, undone };
-    return { id: last.id, sha: wantFix && !last.commit_id ? await closerSha(n) : null, at, undone };
+    if (here) return { id: last.id, sha: last.commit_id };
+    return { id: last.id, sha: wantFix && !last.commit_id ? await closerSha(n) : null };
   }
 
   // A merged PR closes its issues with a `closed` event that carries no
@@ -412,9 +396,6 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     return st;
   }
 
-  // How much older than the issue's `closed_at` its newest listed close
-  // event may be and still be that close: GitHub stamps both at the close.
-  const CLOSE_SLACK_MS = 60 * 1000;
   // GitHub label names match in any letter case, as the workflow's `if` does.
   const acceptedLabel = (name) => String(name || '').toLowerCase() === LABELS.accepted;
   // Accepted shows only while the issue is open; once closed, the status tag
@@ -422,38 +403,28 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   const wantedAccepted = (issue) => issue.state === 'open' && (issue.labels || []).some((l) => acceptedLabel(l.name || l));
 
   // The issue's state as releasedState gives it, read only: a fix a release
-  // already holds is taken as shipped, and no ship record is written. A
-  // release run's own `proof` (its compare showed the pushed tag holds
-  // `proof.fix`) is taken first, with no read that could fail or lag.
-  async function peekState(n, proof = null) {
+  // already holds is taken as shipped, and no ship record is written.
+  async function peekState(n) {
     const st = await stateOf(n);
     if (!st.fix || st.shippedIn) return st;
-    const held = proof && proof.fix === st.fix ? proof.tag : await releaseHolding(n, st.fix, false);
+    const held = await releaseHolding(n, st.fix, false);
     return held ? { ...st, shippedIn: held } : st;
   }
 
   // What the issue's checklist thread should show, from its state and its
-  // public status, and whether the bot still files the issue. `closeKnown`
-  // is false for a closed issue whose current close event the read does not
-  // show yet: none, one a listed reopen undid, or one older than the issue's
-  // own close time (a reopen and a new close not listed yet). It gives no
-  // archive key, which must not be taken as a reopen, nor an old close's
-  // key, so no checklist write is made until the issue's next event or
-  // sweep reads it.
+  // public status, and whether the bot still files the issue.
   function wantFrom(st, status) {
     const name = checklistStatus(status, st.issue.state_reason);
     const marker = parseMarker(st.issue.body);
-    const closedAt = Date.parse(st.issue.closed_at || '') || 0;
-    const closeKnown = st.issue.state !== 'closed' || !!(st.close && !st.close.undone && st.close.at >= closedAt - CLOSE_SLACK_MS);
     return {
-      st, issue: st.issue, name, key: closeKnown ? checklistKey(name, st.close) : null, eligible: eligible(st.issue), closeKnown,
+      st, issue: st.issue, name, key: checklistKey(name, st.close), eligible: eligible(st.issue),
       accepted: wantedAccepted(st.issue),
       postId: marker ? marker.threadId : null,
     };
   }
 
-  async function wanted(n, proof = null) {
-    const st = await peekState(n, proof);
+  async function wanted(n) {
+    const st = await peekState(n);
     return wantFrom(st, wantedStatus(st, st.issue.state === 'open' ? await prsFor(n) : []));
   }
 
@@ -681,9 +652,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
 
   // The sweep's Accepted-only repair, on an open issue GitHub wants at
   // Triaged only. It reads no records, claims no note and moves no status.
-  // `readIn` is the forum the sweep's own read of this post showed, with
-  // Accepted.
-  async function repairAccepted(n, readIn) {
+  async function repairAccepted(n) {
     const issue = await gh.getIssue(repo, n);
     if (!eligible(issue)) return;
     if (issue.state !== 'open' || wantedStatus({ issue }, await prsFor(n)) !== STATUS.triaged) {
@@ -694,16 +663,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const want = wantedAccepted(issue);
     let r;
     try {
-      // An Accepted tag deleted since the sweep's own read of this post's
-      // forum is left to the next sweep's read, which names it; any other
-      // gap this read finds (the post changed meanwhile to one in another
-      // forum) is named, the post archived or not.
-      r = await discord.fixAccepted(threadId, want, {
-        onForum: (forumId, tags) => {
-          checkStatusTags(forumId, tags, STATUS_NAMES);
-          if (want && !hasTag(tags, ACCEPTED) && forumId !== readIn) setupProblem(noAcceptedLine(forumId));
-        },
-      });
+      r = await discord.fixAccepted(threadId, want, { onForum: (forumId, tags) => checkStatusTags(forumId, tags, STATUS_NAMES) });
     } catch (e) {
       if (!postGone(e, threadId)) throw e;
       log(`#${n}: Discord post is gone (${e.message.slice(0, 120)})`);
@@ -774,9 +734,6 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // The issues a PR or release run took up, also those whose ship record or
   // sync failed first: each still gets its checklist thread updated.
   const touched = new Set();
-  // A release run's proof that its tag holds an issue's fix, kept for the
-  // checklist when the ship record write fails and the tag list lags.
-  const proven = new Map();
 
   // One issue's failure is logged and the rest still run; the job fails at the end.
   async function each(numbers, fn) {
@@ -881,9 +838,6 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           const st = await stateOf(n);
           if (st.fix && !st.shippedIn) {
             if (await tagContains(st.fix, target)) {
-              // Kept at once, so a failed lookup or record write after it
-              // cannot lose what the compare proved.
-              proven.set(n, { fix: st.fix, tag });
               // The oldest release holding the fix is named, as on every other
               // path; this tag when the tag list does not show it yet.
               const held = (await releaseHolding(n, st.fix, false)) || tag;
@@ -1165,7 +1119,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       }
       if (fix && accFix && !unread && !playerStop) {
         try {
-          await repairAccepted(n, post.parentId);
+          await repairAccepted(n);
         } catch (e) {
           errors.push(e.message);
           noteRefusal(e);
@@ -1232,7 +1186,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   if (checklist && (PR_EVENTS.has(eventName) || eventName === 'push')) {
     for (const n of new Set([...touched, ...handled])) {
       try {
-        await checklist.mirror(n, proven.get(n) || null);
+        await checklist.mirror(n);
       } catch (e) {
         log(`#${n}: staff checklist: ${e.message}`);
         ckFailed.push(n);

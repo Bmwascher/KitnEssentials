@@ -16,7 +16,6 @@ const MAX_LABELS = 10;
 const OWN = new Set([...CHECKLIST_NAMES, ACCEPTED].map((s) => s.toLowerCase()));
 // One copy each, so a job's error and the sweep's line for the same case
 // never drift apart.
-const CLOSE_UNREAD = 'the issue is closed but its close event is not readable yet';
 const noTag = (name) => `checklist forum has no "${name}" tag`;
 const notOurs = (n) => `#${n}: no longer an issue the bot filed; its checklist thread is left as it is`;
 // The first message's player post line, as `firstMessage` writes it.
@@ -73,26 +72,17 @@ export function parseChecklist(c) {
 // A Discord error's body can hold any text, a staff tag's name included, and
 // the Actions log is public: an error leaving the runner keeps only each
 // request and its status.
-// The causes a writer keeps beside its first error, each named in the run's error.
-const ALSO = [['rearchiveError', 'the re-archive failed too'], ['keyError', 'clearing the archive key failed too'], ['recordError', 'setting the record back to pending failed too']];
-const brief = (e) => {
-  // A Discord error is told from its request's fields, with the bot's own
-  // "not JSON" note, never from its message; any other error's message is
-  // the bot's own or GitHub's.
-  const one = (x) => {
-    const d = x && x.discord;
-    if (d) return `Discord ${d.method} ${d.path} -> ${d.status}${d.notJson ? ' (the answer was not JSON)' : ''}`;
-    return String((x && x.message) || x || '');
-  };
-  return one(e) + ALSO.map(([k, what]) => (e && e[k] ? `; ${what}: ${one(e[k])}` : '')).join('');
+// A Discord error is told from its request's fields, with the bot's own
+// "not JSON" note, never from its message; any other error's message is the
+// bot's own or GitHub's.
+const brief = (x) => {
+  const d = x && x.discord;
+  if (d) return `Discord ${d.method} ${d.path} -> ${d.status}${d.notJson ? ' (the answer was not JSON)' : ''}`;
+  return String((x && x.message) || x || '');
 };
-// The request records (method, path, status) hold no answer body, so they
-// are kept, the first error's and each kept cause's: the status script names
-// a refusal from them.
-const scrub = (e) => Object.assign(new Error(brief(e)), {
-  discord: e.discord,
-  also: ALSO.map(([k]) => e[k] && e[k].discord).filter(Boolean),
-});
+// The request record (method, path, status) holds no answer body, so it is
+// kept: the status script names a refusal from it.
+const scrub = (e) => Object.assign(new Error(brief(e)), { discord: e.discord });
 const scrubbed = (fn) => async (...args) => {
   try {
     return await fn(...args);
@@ -101,11 +91,9 @@ const scrubbed = (fn) => async (...args) => {
   }
 };
 
-// The checklist's writers. `wanted(n, proof)` reads GitHub without writing
-// and gives the thread's status name, its Accepted state, its archive key,
-// whether the close it is keyed on is the issue's current one, whether the
-// bot still files the issue, and the issue's records; `proof` is a release
-// run's own `{ fix, tag }` when the tag list may not show that tag yet.
+// The checklist's writers. `wanted(n)` reads GitHub without writing and
+// gives the thread's status name, its Accepted state, its archive key,
+// whether the bot still files the issue, and the issue's records.
 // `records(n)` gives the records alone.
 export function checklistRunner({ gh, discord, repo, forumId, wanted, records, botIssue, log, now, settleTries, owedMs, noteRefusal, setupProblem, sweeping }) {
   const plan = (w) => (applied, available) => planTags(applied, available, w.name, { names: CHECKLIST_NAMES, accepted: w.accepted, dropOther: false });
@@ -142,7 +130,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
   // archived for; then a finished close's archive is made. Each Discord
   // write comes before its key write, so a failure leaves a key that
   // differs from GitHub's, which the sweep names.
-  async function mirrorTags(n, rec, proof = null) {
+  async function mirrorTags(n, rec) {
     const id = rec.threadId;
     const onThread = async (fn) => {
       try {
@@ -153,12 +141,11 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       }
     };
     for (let i = 0; i < settleTries; i++) {
-      const w = await wanted(n, proof);
+      const w = await wanted(n);
       if (!w.eligible) {
         log(notOurs(n));
         return;
       }
-      if (!w.closeKnown) throw new Error(CLOSE_UNREAD);
       let cur = await current(rec);
       const reopen = !w.key && !!cur.archived;
       let r;
@@ -166,20 +153,6 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
         r = await onThread(() => discord.setTags(id, forumId, plan(w), { open: reopen, onForum: sweeping ? undefined : (fid, tags) => checkTags(w, fid, tags, [w.name]) }));
       } catch (e) {
         noteRefusal(scrub(e));
-        // A finished thread the write may have left open owes its archive
-        // again. The re-archive may have landed with its answer lost, so the
-        // thread is read first: one shown archived keeps its key, and a later
-        // staff reply is never archived over for it.
-        // Only the thread's own channel is read: its archived flag is all
-        // this needs.
-        if (e.rearchive && w.key && cur.archived === w.key) {
-          const seen = await discord.call('GET', `/channels/${id}`).catch((r) => {
-            noteRefusal(r);
-            return null;
-          });
-          const archived = !!(seen && seen.thread_metadata && seen.thread_metadata.archived);
-          if (!archived) await write(cur, { archived: null }).catch((k) => Object.assign(e, { keyError: k }));
-        }
         throw e;
       }
       if (reopen) {
@@ -202,8 +175,8 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       if (!sweeping && shown.tags) checkTags(w, shown.parentId, shown.tags, [w.name]);
       const back = plan(w)(shown.applied, shown.available);
       if (back.missing) throw new Error(noTag(w.name));
-      const again = await wanted(n, proof);
-      if (sameTags(back.tags, shown.applied) && again.eligible && again.closeKnown && again.name === w.name && again.accepted === w.accepted && again.key === w.key) {
+      const again = await wanted(n);
+      if (sameTags(back.tags, shown.applied) && again.eligible && again.name === w.name && again.accepted === w.accepted && again.key === w.key) {
         if (back.full) log(`#${n}: no free tag slot for "${w.name}" on the checklist thread`);
         if (back.noRoom) log(`#${n}: no free tag slot for Accepted on the checklist thread`);
         if (w.accepted && back.noAccepted) log(`#${n}: the checklist forum has no Accepted tag`);
@@ -217,9 +190,9 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
   // none is ever opened here, and an issue with none costs one read. A
   // thread id staff entered by hand is left for the issue's next checklist
   // job, which checks it first.
-  async function mirror(n, proof = null) {
+  async function mirror(n) {
     const rec = (await records(n)).checklist;
-    if (rec && rec.threadId && rec.linked) await mirrorTags(n, rec, proof);
+    if (rec && rec.threadId && rec.linked) await mirrorTags(n, rec);
   }
 
   // The checklist job: a record and a thread when there is none yet, then
@@ -228,12 +201,6 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     if (!(await botIssue(n))) return;
     const w = await wanted(n);
     if (!w.eligible) return;
-    // Before any write: a thread opened or taken now could not be archived
-    // for a close GitHub does not show yet.
-    if (!w.closeKnown) throw new Error(CLOSE_UNREAD);
-    // A record whose marker no longer parses is not "no record": a new one
-    // could make a second thread. Nothing is written until staff mend it.
-    if (!w.st.records.checklist && w.st.records.checklistDamaged) throw new Error(damagedLine(w.st.records.checklistDamaged));
     let rec = w.st.records.checklist;
     if (rec && rec.threadId && !rec.linked) {
       rec = await confirm(n, w, rec);
@@ -264,32 +231,18 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
   // `pending` makes the next job create at once, so it is offered only for
   // a record staff are sure has no thread; `creating` sends the job to look
   // for one first.
-  // The marker is quoted as inline code: the job summary is Markdown, which
-  // would hide it as an HTML comment.
-  const damagedLine = (url) => `the staff checklist record (${url}) cannot be read: mend it so its hidden marker line reads \`<!-- discord-checklist: THREAD-ID guild: SERVER-ID -->\`, with the thread's id and its server's id. `
-    + 'If you are not sure a thread was made for it, put "creating" in place of THREAD-ID, and the issue\'s next event looks for one. '
-    + 'Put "pending" there, or delete the comment, only once you are sure no thread was made for it; the issue\'s next event then opens one';
 
-  // Every opener write first reads GitHub again, after its Discord reads:
-  // an issue that stopped being the bot's, or closed with its close event
-  // not readable yet, gets no write, and its next event or the sweep
-  // settles it. It gives that read, or null.
+  // The opener's write first reads GitHub again, after its Discord read: an
+  // issue that stopped being the bot's gets no write, and its next event or
+  // the sweep settles it. It gives that read, or null.
   async function stillOpenable(n) {
     const again = await wanted(n);
     if (!again.eligible) {
       log(notOurs(n));
       return null;
     }
-    if (!again.closeKnown) throw new Error(CLOSE_UNREAD);
     return again;
   }
-
-  // A `creating` record whose create was never sent, or was refused, goes
-  // back to `pending`, so the next job opens at once. A failed set-back is
-  // kept beside the cause, which may name the permission to fix.
-  const setBack = (rec, e) => write(rec, { state: 'pending' }).catch((r) => {
-    Object.assign(e, { recordError: r });
-  });
 
   // For a `pending` record only: no create can have reached Discord yet.
   async function create(n, rec) {
@@ -302,40 +255,21 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     };
     const ready = await stillOpenable(n);
     if (!ready) return null;
-    tagsFor(ready, forum);
+    const tags = tagsFor(ready, forum);
     // Marked just before the create, with the forum it goes to, so a lost
     // answer is searched for there.
     const trying = { ...rec, state: 'creating', guildId, forumId, since: now(), issueUrl: ready.issue.html_url };
     await write(rec, trying);
-    // The save is a request of its own, so GitHub is read once more, then
-    // the forum, last, so a status tag renamed meanwhile is seen; the thread
-    // is planned from both. No create has gone out yet: a stop here sets the
-    // record back.
-    let cur;
-    let tags;
-    try {
-      cur = await stillOpenable(n);
-      if (cur) tags = tagsFor(cur, await discord.getChannel(forumId));
-    } catch (e) {
-      await setBack(trying, e);
-      throw e;
-    }
-    if (!cur) {
-      await write(trying, { state: 'pending' });
-      return null;
-    }
     let made;
     try {
-      made = await discord.createThread(forumId, { name: threadName(n, cur.issue.title), content: firstMessage(cur, guildId), tagIds: tags });
+      made = await discord.createThread(forumId, { name: threadName(n, ready.issue.title), content: firstMessage(ready, guildId), tagIds: tags });
     } catch (e) {
-      // A refusal made nothing: the next job opens at once, with no search.
+      // A refusal made nothing: back to `pending`, so the next job opens at
+      // once, with no search.
       const status = answeredStatus(e, 'POST', `/channels/${forumId}/threads`) || 0;
-      if (status >= 400 && status < 500) await setBack(trying, e);
+      if (status >= 400 && status < 500) await write(trying, { state: 'pending' });
       throw e;
     }
-    // An answer with no thread id says nothing of what was made: the record
-    // stays `creating`, so the next job looks for the thread.
-    if (!made || !/^\d+$/.test(String(made.id))) throw new Error('the create was answered with no thread id; the issue\'s next event looks for the thread');
     await write(trying, { state: made.id });
     return { ...trying, state: made.id, threadId: made.id, linked: true };
   }
@@ -426,16 +360,8 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     const rec = w.st.records.checklist;
     const at = now();
     const here = rec && rec.threadId ? place(rec.guildId, rec.threadId) : null;
-    // No checklist write is made until the close is readable, so nothing
-    // else is judged; listed with or without a record, as a first open can
-    // have failed on it.
-    if (!w.closeKnown) {
-      parts.push(`${CLOSE_UNREAD}: the checklist ${here ? `thread (${here})` : rec ? `record (${rec.url})` : 'thread'} is checked at the next sweep`);
-      return { parts, repair: false, unread: null };
-    }
     if (!rec) {
-      if (w.st.records.checklistDamaged) parts.push(damagedLine(w.st.records.checklistDamaged));
-      else if (w.issue.state === 'open') parts.push("no staff checklist thread (the issue's next event, a close, a reopen, or the accepted label added or removed, opens one)");
+      if (w.issue.state === 'open') parts.push("no staff checklist thread (the issue's next event, a close, a reopen, or the accepted label added or removed, opens one)");
       return { parts, repair, unread: null };
     }
     if (!rec.threadId && at - rec.since > owedMs) {

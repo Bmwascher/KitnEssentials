@@ -162,12 +162,10 @@ export function discordClient(token, fetchImpl = fetch) {
     // archived or not. `from` is the status it showed. `beforeMove(from)`,
     // when given, runs once the post is known not to show the status, before
     // anything is written, even when nothing can be written.
-    // Discord takes only a whole tag list, so the forum's tags and then the
-    // post are read again just before the write, the post last so the write
-    // follows its read at once: a tag added, or a status tag renamed,
-    // meanwhile is seen, and a status another writer set meanwhile
-    // stops the write (`raced`), so the caller decides again from what the
-    // post shows. A move unarchives the post, as before. With `dropOther`
+    // Discord takes only a whole tag list, so the post is read again just
+    // before the write: a tag added meanwhile is seen, and a status another
+    // writer set meanwhile stops the write (`raced`), so the caller decides
+    // again from what the post shows. A move unarchives the post, as before. With `dropOther`
     // false, a post with no status and five other tags is left as it is
     // rather than lose one of them.
     async setStatus(threadId, statusName, beforeMove, { dropOther = true, accepted = null, onForum = () => {} } = {}) {
@@ -193,13 +191,9 @@ export function discordClient(token, fetchImpl = fetch) {
       };
       let p = plan(thread, forum.available_tags);
       if (p.skipped) return { from, skipped: p.skipped };
-      const freshForum = await call('GET', `/channels/${thread.parent_id}`);
-      seeForum(onForum, String(thread.parent_id), freshForum);
       const fresh = await call('GET', `/channels/${threadId}`);
-      // A post moved to another forum meanwhile is decided again from there.
-      if (fresh.parent_id !== thread.parent_id
-        || currentStatus(fresh.applied_tags, freshForum.available_tags, statusName) !== from) return { from, raced: true };
-      p = plan(fresh, freshForum.available_tags);
+      if (currentStatus(fresh.applied_tags, forum.available_tags, statusName) !== from) return { from, raced: true };
+      p = plan(fresh, forum.available_tags);
       if (p.skipped) return { from, skipped: p.skipped };
       const patch = { applied_tags: p.tags };
       if (archivedOf(fresh)) patch.archived = false;
@@ -209,8 +203,8 @@ export function discordClient(token, fetchImpl = fetch) {
     // The sweep's Accepted-only write. It writes only on an active post that
     // shows Triaged and no other status tag, at its first read and again just
     // before the write, and changes only the Accepted tag, so a status move
-    // that lands inside its last request is put back to Triaged alone, under
-    // the tag names last read. It never sends `archived`.
+    // that lands inside its last request is put back to Triaged alone. It
+    // never sends `archived`.
     async fixAccepted(threadId, want, { onForum = () => {} } = {}) {
       const out = (r) => ({ wrote: false, noRoom: false, noAccepted: false, archived: false, refused: false, raced: false, ...r });
       const alone = (t, avail) => triagedAlone(shownStatuses(t.applied_tags, avail));
@@ -222,14 +216,11 @@ export function discordClient(token, fetchImpl = fetch) {
       const inStep = (t, avail, q) => want === showsAccepted(t.applied_tags, avail) || sameTags(q.tags, t.applied_tags || []);
       let p = withAccepted(thread.applied_tags || [], forum.available_tags, want);
       if (inStep(thread, forum.available_tags, p)) return out({ noRoom: p.noRoom, noAccepted: p.noAccepted });
-      const freshForum = await call('GET', `/channels/${thread.parent_id}`);
-      seeForum(onForum, String(thread.parent_id), freshForum);
       const fresh = await call('GET', `/channels/${threadId}`);
-      if (fresh.parent_id !== thread.parent_id) return out({ raced: true });
       if (archivedOf(fresh)) return out({ archived: true });
-      if (!alone(fresh, freshForum.available_tags)) return out({ raced: true });
-      p = withAccepted(fresh.applied_tags || [], freshForum.available_tags, want);
-      if (inStep(fresh, freshForum.available_tags, p)) return out({ noRoom: p.noRoom, noAccepted: p.noAccepted });
+      if (!alone(fresh, forum.available_tags)) return out({ raced: true });
+      p = withAccepted(fresh.applied_tags || [], forum.available_tags, want);
+      if (inStep(fresh, forum.available_tags, p)) return out({ noRoom: p.noRoom, noAccepted: p.noAccepted });
       await call('PATCH', `/channels/${threadId}`, { applied_tags: p.tags });
       return out({ wrote: true });
     },
@@ -248,10 +239,7 @@ export function discordClient(token, fetchImpl = fetch) {
     // and a plan whose status tag the forum lacks writes no tags. An
     // archived thread must be opened to change its tags; it is archived
     // again in the next request unless `open` asks to leave it open (a
-    // reopen overtook the close it was archived for). A refused first write
-    // changed nothing. Any other failure may have opened the thread before
-    // its answer was lost, so the re-archive is still sent; when it cannot
-    // be made, the error is thrown marked `rearchive`.
+    // reopen overtook the close it was archived for).
     // `onForum(forumId, tags)` sees the forum read once the thread is
     // confirmed in that forum, before any write can fail: a forum the thread
     // is not in has nothing to fix for it.
@@ -268,24 +256,8 @@ export function discordClient(token, fetchImpl = fetch) {
       const archived = archivedOf(thread);
       const retag = !p.missing && !sameTags(p.tags, applied);
       if (!retag && !(open && archived)) return { ...p, wrote: false, archived };
-      const keep = archived && !open;
-      const rearchive = () => call('PATCH', path, { archived: true });
-      try {
-        await call('PATCH', path, { ...(retag ? { applied_tags: p.tags } : {}), ...(archived ? { archived: false } : {}) });
-      } catch (e) {
-        const status = answeredStatus(e, 'PATCH', path) || 0;
-        if (!keep || (status >= 400 && status < 500)) throw e;
-        // Both causes are kept: the re-archive's may name the permission to fix.
-        const again = await rearchive().then(() => null, (r) => r);
-        throw again ? Object.assign(e, { rearchive: true, rearchiveError: again }) : e;
-      }
-      if (keep) {
-        try {
-          await rearchive();
-        } catch (e) {
-          throw Object.assign(e, { rearchive: true });
-        }
-      }
+      await call('PATCH', path, { ...(retag ? { applied_tags: p.tags } : {}), ...(archived ? { archived: false } : {}) });
+      if (archived && !open) await call('PATCH', path, { archived: true });
       return { ...p, wrote: true, archived };
     },
     // A thread's parent, its tags, its own forum's tags and its archive state.
