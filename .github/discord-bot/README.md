@@ -382,7 +382,7 @@ title keeps this shape.
 
 One post gets one issue, across every repo in `REPOS`. Before filing, the bot
 reads the issue the post's saved filing record names, then searches every
-configured repo twice for the post's hidden line; a match anywhere answers
+configured repo once for the post's hidden line; a match anywhere answers
 "Already tracked" and files nothing, and a check that fails, or a token the
 bot cannot get, files nothing and names the repo to try again for. A saved issue that answers "not found" (404) also files
 nothing: GitHub answers the same for an issue the app can no longer see, so
@@ -475,16 +475,13 @@ order, so a post with a status and four repo tags keeps no client tag; the
 queue card still names the client.
 
 **Refusals.** Each answers "Nothing was moved: ..." and changes nothing: a
-post already moved (its record, or the bot's note in the locked post, says
-where), or locked; a move into a forum `FORUMS` no longer lists, or into
-one deleted since the form opened; a post, or its first
-message, that was deleted; a post being filed or moved (the lock); a saved
+post already moved (its record says where), or locked; a move into a forum
+`FORUMS` no longer lists, or into one deleted since the form opened; a post, or its first message, that was deleted; a post being filed or moved (the lock); a saved
 record that cannot be read; a saved issue that cannot be checked; a forum list that cannot
 be read; the bot lacking Manage Webhooks in the target forum; no `STATE`
 namespace bound; a copy the bot made whose move record is not readable yet
-(wait a minute and move again); a first message the bot sees nothing in
-while the Message Content setting is off or cannot be read (turn it on:
-developer portal > Bot > Privileged Gateway Intents). Send to GitHub on the old post answers
+(wait a minute and move again). Send to GitHub on an old post whose record
+KV shows answers
 "Nothing was created: this post was moved to <link>; send that one.", and
 on such a copy it asks to wait a minute too. Every button and command, Send
 to GitHub's included, answers only in the server `GUILD_ID` names: anywhere
@@ -508,8 +505,8 @@ The bot does not retry them, and there is no repair procedure: each state
 below is known and accepted. What you see in each:
 
 - **The old post's record** (`record movedto:<old post id>`). The old post
-  can be sent or moved again once someone unlocks it, and the scan may
-  greet it if its lock also failed. Leave it locked; if it is unlocked,
+  can be sent again, and moved again once someone unlocks it, and the scan
+  may greet it if its lock also failed. Leave it locked; if it is unlocked,
   close it again.
 - **The queue card** (`queue card for the new post`). The card still shows
   the old post; its buttons answer that the post moved. Right-click the
@@ -552,21 +549,20 @@ starts with an @mention of them.
 **Calls.** Workers' free plan allows 50 `fetch` calls a run; KV calls are
 not counted here. A move with one repo, which `LOCK_REPO` also names, the
 webhook already made, a queue card to edit and a first message a player
-posted makes 19 (the GitHub token takes two, its search for an issue runs
-twice, as a filing's does, and the post's last 100 messages are read for
-the bot's own note and "now tracked" reply). A `LOCK_REPO` of another repo adds two,
+posted makes 18 (the GitHub token takes two, its search for an issue runs
+once, as a filing's does, and the post's last 100 messages are read for
+the bot's "now tracked" reply). A `LOCK_REPO` of another repo adds two,
 for its own token; moving a moved copy saves one, the member read. It adds one per file it
 tries to download, whether or not the download works; one the first time a
 forum's webhook is made; one when Discord refuses the card's edit and a new
 card is posted (a post with no card posts one instead of the edit, at no
-extra cost); one when the first message shows the bot nothing, to read
-the Message Content setting; and one when the post's messages hold one that
-starts as the bot's note or "now tracked" reply, to read the bot's own id.
-Each further repo searched costs four (its
-token's two and one per search), plus one per search for each further 100
-`from-discord` issues updated there since the post was made. With ten files
-and two repos, 17 calls are left: about 800 such issues past the first 100
-in each repo, in the two repos together (about 400 in each); past that,
+extra cost); and one when the post's messages hold one that starts as the
+bot's "now tracked" reply, to read the bot's own id. Each further repo
+searched costs three (its token's two and its search), plus one for each
+further 100 `from-discord` issues updated there since the post was made.
+With ten files and two repos, 19 calls are left: about 1,900 such issues
+past the first 100 in each repo, in the two repos together (about 950 in
+each); past that,
 the last steps fail and are reported. If KV calls
 count too, the figure grows by six (four reads, two writes). The live bot
 runs on the paid plan.
@@ -745,12 +741,10 @@ reopened, and the `accepted` label added or removed. The workflow's
 whole thread in step with GitHub. PR and release runs and the sweep
 update a thread that exists, but never open one. An issue filed before this
 version, or one whose open failed, gets its thread at its next such event, or
-when its failed checklist job is re-run. If Discord made a thread but its
-answer was lost, the next job looks for it in the forum the create went to,
-by the bot's own first message naming the issue, and takes it when exactly
-one bot thread matches. The bot never makes a second thread for the issue's
-"Staff checklist thread" comment; anything else leaves it "not confirmed"
-for staff (see the sweep).
+when its failed checklist job is re-run. If Discord may have made a thread
+but its answer was lost, the bot never makes a second thread for the
+issue's "Staff checklist thread" comment: it leaves it "not confirmed" for
+staff (see the sweep).
 
 **Archiving.** A thread is archived when its issue is finished (Shipped,
 Done, Won't fix, Duplicate), once per close: the issue's "Staff checklist
@@ -768,11 +762,9 @@ out of step. With `SWEEP_MODE=fix` it repairs tags and archive state; it
 never opens a thread. For a thread not confirmed after a lost create answer,
 the sweep links the forum the create went to and the issue's addresses.
 With more than one bot thread whose first message names the issue, keep the
-oldest and delete the rest, and the next event takes it. If the job still
-fails, put the thread's id in place of "creating" in the issue's "Staff
-checklist thread" comment; the next event takes it only when the thread is
-in the forum the create went to and its first message is the bot's for
-that issue. If there is none, delete that comment only once you are sure no
+oldest and delete the rest. Put the thread's id in place of "creating" in
+the issue's "Staff checklist thread" comment, and the next event takes it.
+If there is none, delete that comment only once you are sure no
 thread in the forum is this issue's: one whose first message was deleted
 can be, and its name started "#<issue number> " unless someone renamed it.
 The issue's next event then opens a new thread. If you are not sure, leave
@@ -805,6 +797,9 @@ Accepted on purpose; each line says how you would notice it.
 - The bot needs its `STATE` KV namespace bound; without it a filing cannot
   tell a moved post from its records, so an unlocked old post or a reply in
   the bot's copy can be filed. `/bot-check` names a missing binding.
+- A filing knows a post was moved away only from its `movedto:` record. In
+  about the minute before KV shows that record, or when its save failed,
+  Send to GitHub on the old post files it; close the extra issue by hand.
 - A send or move form left open across a deploy of a new version is
   submitted as the new version reads it; send or move again if it answers
   oddly.
@@ -1045,8 +1040,8 @@ Accepted on purpose; each line says how you would notice it.
   the search and its place in GitHub's issue list shifts between two pages.
   The search takes a second or two.
 - On Workers' free plan a run may make 50 outgoing calls. A filing whose
-  repos together hold more than about 1,600 `from-discord` issues updated
-  since the post was made (about 1,700 with `RENAME_POSTS` at `0`) can use
+  repos together hold more than about 3,200 `from-discord` issues updated
+  since the post was made (about 3,400 with `RENAME_POSTS` at `0`) can use
   them all. The post's rename and the card update come last and go unmade
   first; with more issues the filing can run out before it answers the
   moderator and releases its lock: the moderator may see no result, and
@@ -1139,12 +1134,15 @@ Accepted on purpose; each line says how you would notice it.
   to Done, say). Nothing is lost.
 - A closed issue filed before this version gets no checklist thread and is
   not listed; a reopen or an `accepted` label change opens one.
-- A checklist thread whose create answer was lost is taken only when the
-  bot's search finds exactly one bot thread naming the issue. It stays "not
-  confirmed", with its job red, when the search finds none or several, its
-  reads fail, more than 20 threads were made since, or the archived listing
-  stops short. The bot never creates again for it; the sweep lists it and
-  says what staff do (see Staff checklist).
+- A checklist thread whose create answer was lost stays "not confirmed",
+  with its job red, until staff put its id in the record comment. The bot
+  never creates again for it; the sweep lists it and says what staff do
+  (see Staff checklist).
+- The bot trusts the thread id in a "Staff checklist thread" comment as
+  written. An id staff put in by hand, or a comment copied from another
+  issue, is taken without a check: the bot then writes tags to that thread.
+  Never copy that comment between issues, and check an id before you put
+  it in.
 - Adding or removing the `accepted` label changes nothing at once. The post
   gets the change at its next status change, or at a fix-mode sweep while it
   is not archived and shows Triaged alone. The same holds for a post whose
@@ -1185,15 +1183,6 @@ Accepted on purpose; each line says how you would notice it.
   and the sweep's line says to send it by hand if it is still needed. The
   post keeps Triaged and Accepted while the close's tag is still missing:
   the sweep lists it and skips the move until the tag is added.
-- If a second bot thread names the same issue and is reopened and archived
-  again in the seconds the bot's search reads Discord's lists, the search
-  can miss it and take the other; the missed thread is then listed nowhere.
-  Delete it by hand.
-- A second bot thread naming the same issue that was made more than a
-  minute before the lost create is outside the search, so the search can
-  take the newer one alone, and the older is listed nowhere. Only a
-  "Staff checklist thread" comment deleted while its thread still existed
-  leaves one. Delete it by hand.
 - A staff reply in the moment between the bot's re-archive landing, with
   its answer lost, and the bot's read of the thread just after can be
   archived over by the next run. The moment is one request long; another
@@ -1221,11 +1210,6 @@ Accepted on purpose; each line says how you would notice it.
   and the job is red; the issue's next event or a fix-mode sweep archives it.
 - An edit to the "Staff checklist thread" comment saved in the moment the bot
   rewrites it can be lost: you see your edit gone; make it again.
-- Two issues filed from one post (only after its filing record was cleared
-  and the post sent again) share that post, so if one issue's "Staff
-  checklist thread" comment is copied into the other, the bot can take the
-  first issue's thread for the second. Never copy that comment between
-  issues; delete the copy, and the issue's next event opens its own thread.
 - `/bot-check` and the daily setup check cannot see the Actions settings; a
   status run or the sweep names a bad one as a red run.
 - GitHub shows no job summary at all for a step whose summary passes 1 MiB.

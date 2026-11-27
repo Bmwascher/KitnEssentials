@@ -602,46 +602,6 @@ test('CT5: a checklist tag write reads the forum, then the thread, and keeps the
   }
 });
 
-test('CT6: the search lists the forum\'s threads made since a time, from the active list, the archived list and the active list again', async () => {
-  const at = (ms) => String(BigInt(ms - 1420070400000) << 22n);
-  const T0 = Date.parse('2026-11-20T00:00:00Z');
-  const old = { id: at(T0 - 60000), parent_id: '950' };
-  const fresh = { id: at(T0 + 2000), parent_id: '950' };
-  const other = { id: at(T0 + 3000), parent_id: '900' };
-  // Unarchived between the first active read and the archived read.
-  const moved = { id: at(T0 + 1000), parent_id: '950', thread_metadata: { archived: true, archive_timestamp: new Date(T0 + 5000).toISOString() } };
-  let reads = 0;
-  const f = fakeFetch([
-    ['GET', /\/guilds\/800\/threads\/active$/, () => ({ threads: ++reads === 1 ? [old, fresh, other] : [fresh, moved, other] })],
-    ['GET', /\/channels\/950\/threads\/archived\/public/, () => ({ threads: [], has_more: false })],
-  ]);
-  const r = await discordClient('t', f).threadsSince('800', '950', T0, 2);
-  assert.deepEqual(r.threads.map((t) => t.id).sort(), [fresh.id, moved.id].sort());
-  assert.equal(r.complete, true);
-  const g = fakeFetch([
-    ['GET', /\/guilds\/800\/threads\/active$/, () => ({ threads: [] })],
-    ['GET', /\/channels\/950\/threads\/archived\/public/, () => ({ threads: [moved], has_more: true })],
-  ]);
-  assert.equal((await discordClient('t', g).threadsSince('800', '950', T0, 1)).complete, false, 'the archived pages ran out first');
-  const k = fakeFetch([
-    ['GET', /\/guilds\/800\/threads\/active$/, () => ({ threads: [] })],
-    ['GET', /\/channels\/950\/threads\/archived\/public/, () => ({ threads: [], has_more: true })],
-  ]);
-  assert.equal((await discordClient('t', k).threadsSince('800', '950', T0, 2)).complete, false, 'a page that says more follow but gives no time to go on from');
-  // Two threads archived at the same time fall either side of a page boundary.
-  const arc = (ms, stampMs) => ({ id: at(ms), parent_id: '950', thread_metadata: { archived: true, archive_timestamp: new Date(stampMs).toISOString() } });
-  const tied = [arc(T0 + 1000, T0 + 9000), arc(T0 + 2000, T0 + 8000), arc(T0 + 3000, T0 + 8000)];
-  const h = fakeFetch([
-    ['GET', /\/channels\/950\/threads\/archived\/public/, (b, url) => {
-      const before = /before=([^&]+)/.exec(url);
-      const rest = before ? tied.filter((t) => t.thread_metadata.archive_timestamp < decodeURIComponent(before[1])) : tied;
-      return { threads: rest.slice(0, 2), has_more: rest.length > 2 };
-    }],
-  ]);
-  const listed = await discordClient('t', h).archivedThreads('950', T0, 3, { ties: true });
-  assert.deepEqual(listed.threads.map((t) => t.id), tied.map((t) => t.id), 'with ties, a tie across the page boundary is not skipped, and nothing is listed twice');
-});
-
 test('CT7: a Discord error\'s status is read only from its own request\'s prefix, never from the body after it', () => {
   for (const [why, msg, want] of [
     ['its own refusal', 'Discord POST /channels/950/threads -> 400 {"message":"x"}', 400],

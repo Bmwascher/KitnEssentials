@@ -3,12 +3,6 @@
 import { CHECKLIST_NAMES, ACCEPTED, planTags, sameTags, threadName, discordText, hasTag, tagLine, acceptedLine } from '../src/core.js';
 import { postGone, answeredStatus } from '../src/discord.js';
 
-// The search for a thread a lost create answer made: it reads threads made
-// since a minute before the try, through two archived pages and 20 first
-// messages at most.
-const SEARCH_BACK_MS = 60 * 1000;
-const SEARCH_PAGES = 2;
-const MAX_CANDIDATES = 20;
 // GitHub caps a title at 256 characters; with at most ten labels named, the
 // first message stays far inside Discord's 2000.
 const MAX_LABELS = 10;
@@ -18,8 +12,6 @@ const OWN = new Set([...CHECKLIST_NAMES, ACCEPTED].map((s) => s.toLowerCase()));
 // never drift apart.
 const noTag = (name) => `checklist forum has no "${name}" tag`;
 const notOurs = (n) => `#${n}: no longer an issue the bot filed; its checklist thread is left as it is`;
-// The first message's player post line, as `firstMessage` writes it.
-const POST_LINE = /^Player post: https:\/\/discord\.com\/channels\/\d+\/(\d+)$/;
 
 const link = (guildId, threadId) => `https://discord.com/channels/${guildId}/${threadId}`;
 // A link needs the server's id; a record with none yet (an id put in a
@@ -30,25 +22,18 @@ const field = (body, name) => (new RegExp(`<!--\\s*discord-checklist-${name}:\\s
 
 // The record. `state` is the thread's id, or `pending` (no thread yet) or
 // `creating` (a create may have gone out). `forumId` is the forum the create
-// was sent to, so a lost answer is searched for there; `since` is when that
-// try began, `issueUrl` the issue's address then (a transfer changes it),
+// was sent to, where staff look for a lost answer's thread; `since` is when
+// that try began, `issueUrl` the issue's address then (a transfer changes it),
 // and `archived` the key of the close the bot archived the thread for.
-export function checklistBody({ id, state, guildId, forumId = '', since, issueUrl, archived = null }) {
+export function checklistBody({ state, guildId, forumId = '', since, issueUrl, archived = null }) {
   const thread = /^\d+$/.test(String(state));
   return [
     `Staff checklist thread: ${thread ? link(guildId, state) : 'opening'}`,
     '',
     `<!-- discord-checklist: ${state} guild: ${guildId || 'none'} -->`,
-    // Written by the bot alone, for an id it made or checked, and bound to
-    // this comment. Staff mending the marker or the visible line, or copying
-    // a checked record into another issue's comment, never write it, so
-    // their id is checked before any thread write.
-    ...(thread ? [`<!-- discord-checklist-linked: ${state} comment: ${id} -->`] : []),
     ...(forumId ? [`<!-- discord-checklist-forum: ${forumId} -->`] : []),
     `<!-- discord-checklist-since: ${since} -->`,
-    // A record with no saved address has no line. A record copied from
-    // another issue names that issue's address, so a thread is taken only
-    // when its first message also names this issue's player post.
+    // A record with no saved address has no line.
     ...(issueUrl ? [`<!-- discord-checklist-issue: ${issueUrl} -->`] : []),
     ...(archived ? [`<!-- discord-checklist-archived: ${archived} -->`] : []),
   ].join('\n');
@@ -62,9 +47,6 @@ export function parseChecklist(c) {
   const guildId = m[2] === 'none' ? '' : m[2];
   return {
     id: c.id, url: c.html_url || '', state: m[1], threadId, guildId,
-    // False for a thread id staff put in the marker by hand, a record
-    // copied from another comment, or a comment a transfer renumbered.
-    linked: !!threadId && field(body, 'linked') === `${threadId} comment: ${c.id}`,
     forumId: field(body, 'forum') || '', since: Number(field(body, 'since')) || 0, issueUrl: field(body, 'issue'), archived: field(body, 'archived'),
   };
 }
@@ -113,7 +95,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
   async function current(rec) {
     const r = parseChecklist(await gh.call('GET', commentPath(rec)));
     if (!r) throw new Error(`the staff checklist record lost its marker (${rec.url})`);
-    if (r.state !== rec.state || r.linked !== !!rec.linked) throw new Error(`the staff checklist record changed during this run (${rec.url}); the issue's next event checks it`);
+    if (r.state !== rec.state) throw new Error(`the staff checklist record changed during this run (${rec.url}); the issue's next event checks it`);
     return r;
   }
   // `rec` is the record as this run last read or wrote it; `over` is the
@@ -187,12 +169,10 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
   }
 
   // PR and release runs and the sweep keep a thread that exists in step;
-  // none is ever opened here, and an issue with none costs one read. A
-  // thread id staff entered by hand is left for the issue's next checklist
-  // job, which checks it first.
+  // none is ever opened here, and an issue with none costs one read.
   async function mirror(n) {
     const rec = (await records(n)).checklist;
-    if (rec && rec.threadId && rec.linked) await mirrorTags(n, rec);
+    if (rec && rec.threadId) await mirrorTags(n, rec);
   }
 
   // The checklist job: a record and a thread when there is none yet, then
@@ -202,21 +182,20 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     const w = await wanted(n);
     if (!w.eligible) return;
     let rec = w.st.records.checklist;
-    if (rec && rec.threadId && !rec.linked) {
-      rec = await confirm(n, w, rec);
-      if (!rec) return;
-    }
     if (!rec) {
       const at = now();
       const body = checklistBody({ state: 'pending', guildId: '', since: at, issueUrl: w.issue.html_url });
       const c = await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body });
       rec = { id: c.id, url: c.html_url || '', state: 'pending', threadId: null, guildId: '', forumId: '', since: at, issueUrl: w.issue.html_url, archived: null };
     }
-    if (!rec.threadId) rec = rec.state === 'creating' ? await adopt(n, w, rec) : await create(n, rec);
+    // A `creating` record may have a thread already, so the bot never
+    // creates again for it: staff settle it from the sweep's line.
+    if (rec.state === 'creating') throw new Error(`staff checklist thread not confirmed (${rec.url}); see the sweep`);
+    if (!rec.threadId) rec = await create(n, rec);
     if (rec) await mirrorTags(n, rec);
   }
 
-  // What the thread mirrors, and the line the search matches (`Issue: <url>`).
+  // What the thread mirrors.
   const firstMessage = (w, guildId) => {
     const kinds = (w.issue.labels || []).map((l) => l.name || l).filter((l) => /^(type|client): /.test(l)).slice(0, MAX_LABELS);
     return [
@@ -227,10 +206,6 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       'The bot sets the status and Accepted tags from GitHub; every other tag is yours.',
     ].join('\n');
   };
-
-  // `pending` makes the next job create at once, so it is offered only for
-  // a record staff are sure has no thread; `creating` sends the job to look
-  // for one first.
 
   // The opener's write first reads GitHub again, after its Discord read: an
   // issue that stopped being the bot's gets no write, and its next event or
@@ -256,8 +231,8 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     const ready = await stillOpenable(n);
     if (!ready) return null;
     const tags = tagsFor(ready, forum);
-    // Marked just before the create, with the forum it goes to, so a lost
-    // answer is searched for there.
+    // Marked just before the create, with the forum it goes to, so staff
+    // know where to look for a lost answer's thread.
     const trying = { ...rec, state: 'creating', guildId, forumId, since: now(), issueUrl: ready.issue.html_url };
     await write(rec, trying);
     let made;
@@ -265,87 +240,13 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       made = await discord.createThread(forumId, { name: threadName(n, ready.issue.title), content: firstMessage(ready, guildId), tagIds: tags });
     } catch (e) {
       // A refusal made nothing: back to `pending`, so the next job opens at
-      // once, with no search.
+      // once.
       const status = answeredStatus(e, 'POST', `/channels/${forumId}/threads`) || 0;
       if (status >= 400 && status < 500) await write(trying, { state: 'pending' });
       throw e;
     }
     await write(trying, { state: made.id });
-    return { ...trying, state: made.id, threadId: made.id, linked: true };
-  }
-
-  // Whether a thread's first message is the bot's and names this issue: one
-  // of its addresses (`issue.urls`) and the player post it was filed from.
-  // The post comes from the issue's own body, so a transfer keeps it and a
-  // record copied from another issue cannot change it. A thread whose first
-  // message is gone names nothing.
-  async function namesIssue(threadId, me, issue) {
-    const first = await discord.getMessage(threadId, threadId).catch((e) => {
-      if (answeredStatus(e, 'GET', `/channels/${threadId}/messages/${threadId}`) === 404) return null;
-      throw e;
-    });
-    if (!first || !first.author || first.author.id !== me.id) return false;
-    const said = String(first.content || '').split('\n');
-    return said.some((l) => l.startsWith('Issue: ') && issue.urls.has(l.slice('Issue: '.length)))
-      && said.some((l) => (POST_LINE.exec(l) || [])[1] === issue.postId);
-  }
-  // The issue's address now and the one its record saved at the try, and its post.
-  const issueOf = (w, rec) => ({ urls: new Set([w.issue.html_url, rec.issueUrl].filter(Boolean)), postId: w.postId });
-  // A record read with no saved address (a first `pending` post, or one staff
-  // mended) takes the issue's address now, so a later transfer still finds
-  // its thread.
-  const address = (seen, w) => (seen.issueUrl ? {} : { issueUrl: w.issue.html_url });
-
-  // A create whose answer was lost may have made a thread. It is found by
-  // the bot's own first message naming the issue, never by name, which staff
-  // can change. Every listed thread is read, or no match counts: an unread
-  // one may be the match.
-  async function search(rec, issue) {
-    try {
-      const list = await discord.threadsSince(rec.guildId, rec.forumId || forumId, rec.since - SEARCH_BACK_MS, SEARCH_PAGES);
-      if (!list.complete) return { why: 'the archived listing stops short' };
-      if (list.threads.length > MAX_CANDIDATES) return { why: `more than ${MAX_CANDIDATES} threads were made since` };
-      const me = await discord.me();
-      const matches = [];
-      for (const t of list.threads) if (await namesIssue(t.id, me, issue)) matches.push(t.id);
-      if (matches.length > 1) return { why: `${matches.length} bot threads name the issue` };
-      return matches.length ? { id: matches[0] } : { why: 'no bot thread names the issue' };
-    } catch (e) {
-      return { why: brief(e) };
-    }
-  }
-
-  // A thread id staff put in the record by hand passes the same check as an
-  // adopted thread: it sits in the forum the create went to, its first
-  // message is the bot's and names the issue, and GitHub still allows the
-  // write. The record is then written in full, so its line links the thread.
-  async function confirm(n, w, rec) {
-    // Only a gone thread is a wrong id; any other failed read is thrown, so
-    // a re-run can retry it and staff are not told to undo a right id.
-    const ch = await discord.call('GET', `/channels/${rec.threadId}`).catch((e) => {
-      if (postGone(e, rec.threadId)) return null;
-      throw e;
-    });
-    const inForum = !!ch && String(ch.parent_id) === String(rec.forumId || forumId);
-    if (!inForum || !(await namesIssue(rec.threadId, await discord.me(), issueOf(w, rec)))) {
-      throw new Error(`the staff checklist record (${rec.url}) names thread ${rec.threadId}, which is not the bot's thread for this issue in the forum its create went to: put back the right id, or "creating"`);
-    }
-    if (!(await stillOpenable(n))) return null;
-    // A `pending` record has no server or forum yet; the thread gives both,
-    // so the saved link works.
-    await write(rec, (seen) => ({ ...(seen.guildId ? {} : { guildId: String(ch.guild_id) }), ...(seen.forumId ? {} : { forumId }), ...address(seen, w) }));
-    return { ...rec, linked: true };
-  }
-
-  // For a `creating` record. It never creates: only exactly one match is
-  // taken, so the bot never makes a second thread for a record, and anything
-  // else is left for staff through the sweep.
-  async function adopt(n, w, rec) {
-    const s = await search(rec, issueOf(w, rec));
-    if (!s.id) throw new Error(`staff checklist thread not confirmed (${s.why}); see the sweep`);
-    if (!(await stillOpenable(n))) return null;
-    await write(rec, (seen) => ({ state: s.id, ...address(seen, w) }));
-    return { ...rec, state: s.id, threadId: s.id, linked: true };
+    return { ...trying, state: made.id, threadId: made.id };
   }
 
   // The sweep's checklist lines for one issue, each saying what staff
@@ -372,10 +273,10 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
         // The thread was named for the issue's number at the try, which a
         // transfer changes.
         const named = (/\/issues\/(\d+)$/.exec(rec.issueUrl || '') || [])[1] || n;
-        parts.push(`staff checklist thread not confirmed (${rec.url}): the issue's next event, or a re-run of its failed checklist job, looks for it. `
-          + `If this stays, look in the checklist forum ${place(rec.guildId, rec.forumId || forumId)} for the bot's threads whose first message names ${urls} and the player post ${place(rec.guildId, w.postId)}. `
-          + 'With more than one, keep the oldest and delete the rest, and the next event takes it. '
-          + 'If the job still fails (too many threads made since, or the listing stops short), put the thread\'s id in place of "creating" in that comment, and the next event checks it and takes it. '
+        parts.push(`staff checklist thread not confirmed (${rec.url}): a create may have made one, and the bot never creates again for this record. `
+          + `Look in the checklist forum ${place(rec.guildId, rec.forumId || forumId)} for the bot's threads whose first message names ${urls} and the player post ${place(rec.guildId, w.postId)}. `
+          + 'With more than one, keep the oldest and delete the rest. '
+          + 'Put the thread\'s id in place of "creating" in that comment, and the next event takes it. '
           + `If there is none, delete that comment only once you are sure no thread there is this issue's: a thread whose first message was deleted can be, and its name started "#${named} " unless someone renamed it. `
           + 'Then the next event opens a new thread. If you are not sure, leave the comment, and this line stays');
       } else {
@@ -383,10 +284,6 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
       }
     }
     if (!rec.threadId) return { parts, repair, unread: null };
-    if (!rec.linked) {
-      parts.push(`staff checklist thread ${here} is not confirmed yet (${rec.url}): its id was put in by hand, or the record was copied or renumbered. The issue's next event checks that it is the bot's thread for this issue and takes it`);
-      return { parts, repair: false, unread: null };
-    }
     // The key against GitHub's, whatever Discord's archived flag says. It is
     // listed once the thread read shows a repair can reach the thread.
     let keyPart = null;

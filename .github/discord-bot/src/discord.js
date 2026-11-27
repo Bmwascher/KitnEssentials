@@ -1,5 +1,5 @@
 // Minimal Discord REST client. `fetchImpl` is injectable so tests never hit the network.
-import { nextAppliedTags, currentStatus, otherTags, sameTags, snowflakeMs, planTags, withAccepted, shownStatuses, triagedAlone, showsAccepted, statusOf, forumTags } from './core.js';
+import { nextAppliedTags, currentStatus, otherTags, sameTags, planTags, withAccepted, shownStatuses, triagedAlone, showsAccepted, statusOf, forumTags } from './core.js';
 
 const API = 'https://discord.com/api/v10';
 const USER_AGENT = 'DiscordBot (https://github.com, 1.0)';
@@ -61,29 +61,20 @@ export function discordClient(token, fetchImpl = fetch) {
 
   // One forum's archived threads, newest first, back to those archived at
   // `since` (epoch ms), up to a few pages. `cut` is the archive time it
-  // stopped at when the page limit came first, or, with `ties`, true when
-  // a page said more follow but gave no time to go on from. Discord's
-  // `before` is exclusive, so a thread archived at the same time as a
-  // page's last one can be skipped; the daily check accepts that for its count of posts.
-  // With `ties`, for the search, which needs every thread more than many,
-  // each next page starts a millisecond later, repeats are dropped by id,
-  // and a page that brings nothing new ends the listing as cut short.
-  async function archivedThreads(forumId, since, pages, { ties = false } = {}) {
+  // stopped at when the page limit came first. Discord's `before` is
+  // exclusive, so a thread archived at the same time as a page's last one
+  // can be skipped; the daily check accepts that for its count of posts.
+  async function archivedThreads(forumId, since, pages) {
     const out = [];
-    const seen = ties ? new Set() : null;
     let before = '';
     for (let page = 0; page < pages; page++) {
       const arch = await call('GET', `/channels/${forumId}/threads/archived/public?limit=50${before}`);
       const threads = arch.threads || [];
-      const fresh = ties ? threads.filter((t) => !seen.has(t.id)) : threads;
-      if (ties) for (const t of fresh) seen.add(t.id);
-      out.push(...fresh);
+      out.push(...threads);
       const oldest = threads.at(-1);
       const stamp = oldest && oldest.thread_metadata && oldest.thread_metadata.archive_timestamp;
-      if (ties && arch.has_more && !stamp) return { threads: out, cut: true };
       if (!arch.has_more || !stamp || Date.parse(stamp) < since) return { threads: out, cut: null };
-      if (ties && !fresh.length) break;
-      before = `&before=${encodeURIComponent(ties ? new Date(Date.parse(stamp) + 1).toISOString() : stamp)}`;
+      before = `&before=${encodeURIComponent(stamp)}`;
     }
     return { threads: out, cut: out.at(-1).thread_metadata.archive_timestamp };
   }
@@ -268,22 +259,5 @@ export function discordClient(token, fetchImpl = fetch) {
     createThread: (forumId, { name, content, tagIds }) => call('POST', `/channels/${forumId}/threads`, {
       name, applied_tags: tagIds, message: { content, allowed_mentions: { parse: [] } },
     }),
-    // A forum's threads made at or after `sinceMs`: the active list, the
-    // archived list back to that time, then the active list again, merged. A
-    // thread that moves once between the lists while they are read is in one
-    // of them; one that moves twice can be missed. A thread archived before
-    // `sinceMs` was made before it too. `complete` is false when the
-    // archived pages ran out first.
-    async threadsSince(guildId, forumId, sinceMs, pages) {
-      const byId = new Map();
-      const take = (list) => {
-        for (const t of list || []) if (t.parent_id === forumId && snowflakeMs(t.id) >= sinceMs) byId.set(t.id, t);
-      };
-      take((await call('GET', `/guilds/${guildId}/threads/active`)).threads);
-      const arch = await archivedThreads(forumId, sinceMs, pages, { ties: true });
-      take(arch.threads);
-      take((await call('GET', `/guilds/${guildId}/threads/active`)).threads);
-      return { threads: [...byId.values()], complete: !arch.cut };
-    },
   };
 }
