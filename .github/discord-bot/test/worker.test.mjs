@@ -1278,35 +1278,6 @@ test('filing a moved post names its player, ends with the copy line and pings th
   await handle(await signed(submit()), { ...env, STATE: fakeKv({ 'thread:700': JSON.stringify({ skipped: MOVED_HERE }) }) }, orphanCtx, { fetch: orphan, installationToken: async () => 'inst' });
   assert.deepEqual(await Promise.all(orphanCtx.jobs), [{ refused: 'copy-record' }]);
   assert.equal(orphan.find('POST', /\/issues$/).length, 0);
-
-  // No STATE bound: no record can show the move, so an old post someone
-  // unlocked is known by the bot's note, and the copy's refusal names the
-  // missing binding instead of a wait.
-  const unbound = fakeFetch(discordRoutes(githubRoutes([], [
-    ['GET', /\/channels\/700\/messages\?limit=100$/, () => [{ id: 'n1', author: { id: 'b', bot: true }, content: 'This post moved to https://discord.com/channels/1/990 (moved by Mod).' }]],
-    ['GET', /\/users\/@me$/, () => ({ id: 'b' })],
-  ])));
-  const unboundCtx = ctxFor();
-  await handle(await signed(submit()), env, unboundCtx, { fetch: unbound, installationToken: async () => 'inst' });
-  assert.deepEqual(await Promise.all(unboundCtx.jobs), [{ refused: 'moved' }]);
-  assert.equal(unbound.find('POST', /\/issues$/).length, 0);
-  const unboundCopy = fakeFetch(discordRoutes(githubRoutes([], [
-    ['GET', /\/channels\/700\/messages\/700$/, () => ({ id: '700', content: 'My bags overlap', webhook_id: '61', application_id: 'app', author: { id: '61', username: 'Pat' }, attachments: [] })],
-  ])));
-  const unboundCopyCtx = ctxFor();
-  await handle(await signed(earlyForm), env, unboundCopyCtx, { fetch: unboundCopy, installationToken: async () => 'inst' });
-  assert.deepEqual(await Promise.all(unboundCopyCtx.jobs), [{ refused: 'copy-record' }]);
-  assert.equal(unboundCopy.find('PATCH', /\/webhooks\//)[0].body.content,
-    'Nothing was created: this post is a copy the bot moved here, and its record movedfrom:700 cannot be read: no STATE namespace is bound (/bot-check names it).');
-  // A reply in that copy: with no scan record to read, its first message
-  // shows the copy, and the same refusal holds.
-  const unboundReply = fakeFetch(discordRoutes(githubRoutes([], [
-    ['GET', /\/channels\/700\/messages\/700$/, () => ({ id: '700', content: 'My bags overlap', webhook_id: '61', application_id: 'app', author: { id: '61', username: 'Pat' }, attachments: [] })],
-  ])));
-  const unboundReplyCtx = ctxFor();
-  await handle(await signed(submit()), env, unboundReplyCtx, { fetch: unboundReply, installationToken: async () => 'inst' });
-  assert.deepEqual(await Promise.all(unboundReplyCtx.jobs), [{ refused: 'copy-record' }]);
-  assert.equal(unboundReply.find('POST', /\/issues$/).length, 0);
 });
 
 test('with no STATE bound, a player\'s message with the "now tracked" text costs a filing no read of the bot\'s user', async () => {

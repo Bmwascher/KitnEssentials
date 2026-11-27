@@ -847,12 +847,10 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
       return { refused: 'record' };
     }
     // A post moved away: its record, else, on a locked post, the move's note.
-    // While STATE is bound only a locked post is read, so other filings cost
-    // nothing more; with none bound no record can show a move, and someone
-    // may have unlocked the old post, so every post is read. The lock is read
-    // as archivedOf reads the archive flag.
+    // Only a locked post is read, so other filings cost nothing more. The
+    // lock is read as archivedOf reads the archive flag.
     const movedAway = movedTo ? `https://discord.com/channels/${interaction.guild_id}/${movedTo.to}`
-      : !kv || (thread.thread_metadata && thread.thread_metadata.locked) ? (await ownNotes(discord, threadId)).away : null;
+      : thread.thread_metadata && thread.thread_metadata.locked ? (await ownNotes(discord, threadId)).away : null;
     if (movedAway) {
       await followup(`Nothing was created: this post was moved to ${movedAway}; send that one.`);
       return { refused: 'moved' };
@@ -912,15 +910,11 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     // elsewhere within a minute, or the save failed or never ran): filing it
     // would name the webhook as the player, or tie an issue to a copy no
     // record links. The first message tells it, and for a reply the scan's
-    // record; with no STATE bound a reply's filing reads the first message
-    // (none when deleted).
+    // record.
     const botCopy = messageId === threadId ? isBotCopy(first.message, interaction.application_id)
-      : kv ? !!rec && rec.skipped === MOVED_HERE
-        : isBotCopy((await discord.readMessage(threadId, threadId)).message, interaction.application_id);
+      : !!rec && rec.skipped === MOVED_HERE;
     if (!movedFrom && botCopy) {
-      await followup(kv
-        ? `Nothing was created: this post is a copy the bot moved here, and its record movedfrom:${threadId} is not readable yet. Wait a minute, then send it again.`
-        : `Nothing was created: this post is a copy the bot moved here, and its record movedfrom:${threadId} cannot be read: no STATE namespace is bound (/bot-check names it).`);
+      await followup(`Nothing was created: this post is a copy the bot moved here, and its record movedfrom:${threadId} is not readable yet. Wait a minute, then send it again.`);
       return { refused: 'copy-record' };
     }
     // A moved post's first message is the bot's copy: the move's record
