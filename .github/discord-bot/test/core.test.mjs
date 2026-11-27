@@ -804,7 +804,7 @@ test('REPO_TAGS reads as tag name to key in any letter case, and a post\'s tags 
   ]) assert.equal(C.repoFromTags(names, tags), want, why);
   assert.deepEqual(C.plainTags(['Bug', 'UI', 'kitn', 'Retail'], tags), ['Bug', 'Retail'], 'repo tags left out in any letter case');
   assert.deepEqual(C.parseRepoTags('{"UI":"ONE","ui":"TWO","Kitn":"KE"}'), { kitn: 'KE' }, 'one name in two letter cases for two keys gives neither');
-  for (const raw of ['', '  ', '{"UI":', '["UI"]', '{"UI":1}', 'null', undefined, { toString: null }]) assert.deepEqual(C.parseRepoTags(raw), {}, String(typeof raw));
+  for (const raw of ['', '  ', '{"UI":', '["UI"]', '{"UI":1}', 'null', undefined]) assert.deepEqual(C.parseRepoTags(raw), {}, String(typeof raw));
 });
 
 test('a webhook name drops discord and clyde until none is left, keeps other marks, and cuts at 80 units without splitting a character', () => {

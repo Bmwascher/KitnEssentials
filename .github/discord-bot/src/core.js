@@ -757,7 +757,7 @@ export const OWN_TAG_NAMES = new Set([...STATUS_NAMES, ACCEPTED].map((s) => s.to
 
 // REPO_TAGS: {"<tag name>":"<REPOS key>"}, the tag that marks a post's repo,
 // keyed here by the tag's name in lower case, its key read as normRepoKey
-// reads a key. A value that is blank, has no text form, or is not of that
+// reads a key. A value that is blank or is not of that
 // shape gives none: Send to GitHub loses only its pre-fill, and the setup
 // check names it. The bot's own tag names are left out, and so is a name
 // that two entries, in two letter cases, give two keys: which one the map

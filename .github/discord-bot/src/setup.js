@@ -19,26 +19,11 @@ const forumSetting = (env) => (blank(env.FORUMS) && !blank(env.FORUM_CHANNEL_IDS
 // Every setting the Worker reads.
 const SETTINGS = ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID',
   'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'RENAME_POSTS', 'DISCORD_PUBLIC_KEY', 'DISCORD_BOT_TOKEN', 'GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY'];
-// Their readers call string methods on these two, so only a string is read.
-const STRINGS = ['DISCORD_PUBLIC_KEY', 'GITHUB_APP_PRIVATE_KEY'];
-// The settings no reader can read: a JSON variable such as {"toString":null}
-// has no text form, and the two keys must be strings, null included. The
-// Worker stops at its entry points on any of them, since a reader that took
-// one as unset would act on a setting it was never given.
-export function unreadableSettings(env) {
-  return SETTINGS.filter((k) => {
-    const v = env[k];
-    if (v === undefined) return false;
-    if (STRINGS.includes(k)) return typeof v !== 'string';
-    if (v === null) return false;
-    try { String(v); return false; } catch { return true; }
-  });
-}
-// The settings as the checks read them: an unreadable one unset, and a falsy
-// one unset, as every reader reads it.
-const readable = (env, bad) => {
+// The settings as the checks read them: a falsy one unset, as every reader
+// reads it.
+const readable = (env) => {
   const out = { ...env };
-  for (const k of SETTINGS) if (!env[k] || bad.includes(k)) delete out[k];
+  for (const k of SETTINGS) if (!env[k]) delete out[k];
   return out;
 };
 // owner/repo within GitHub's name limits.
@@ -56,9 +41,8 @@ const shown = (v) => {
 // One line per broken setting, each naming the setting and its fix. With
 // `bindings`, the STATE namespace must be bound too.
 export function configProblems(raw, { bindings = true } = {}) {
-  const bad = unreadableSettings(raw);
-  const env = readable(raw, bad);
-  const out = bad.map((k) => `${k} is not text: set it as text. The checks below read it as unset.`);
+  const env = readable(raw);
+  const out = [];
   let repos = null;
   let badKeys = [];
   try {
@@ -91,14 +75,7 @@ export function configProblems(raw, { bindings = true } = {}) {
       out.push('FORUMS is not valid JSON: set it to JSON keyed by forum channel id, like {"111":{}}.');
     } else {
       for (const id of Object.keys(raw)) if (!digits(id)) out.push(`FORUMS key ${shown(id)} is not a channel id.`);
-      const textless = Object.entries(raw).filter(([, v]) => v && typeof v === 'object'
-        && ['client', 'type', 'template'].some((k) => v[k] !== null && typeof v[k] === 'object'));
-      for (const [id] of textless) out.push(`FORUMS entry ${shown(id)}: "client", "type" and "template" must each be text, like "template":"https://discord.com/channels/...".`);
-      // The reader turns those fields into text, which throws on an object
-      // with no text form (named above); an object it can read, it reads.
-      let read = null;
-      try { read = parseForums(env); } catch { forumsRead = false; }
-      for (const [id, v] of Object.entries(read || {})) {
+      for (const [id, v] of Object.entries(parseForums(env))) {
         if (v.badTemplate) out.push(`FORUMS entry ${shown(id)}: its "template" is not a message link (right-click the template message › Copy Message Link).`);
       }
     }
@@ -123,11 +100,7 @@ export function configProblems(raw, { bindings = true } = {}) {
     try { t = JSON.parse(String(env.TEMPLATES)); } catch { /* named below */ }
     if (!isTemplates(t)) out.push('TEMPLATES is not valid: set it to JSON like {"Bug":["Addon version"]}, or leave it unset for the defaults.');
   }
-  // REPO_TAGS is not among SETTINGS: one with no text form only loses Send to
-  // GitHub's pre-fill, so it stops nothing, and is named here. It is read
-  // from the raw settings, which `readable` leaves it in.
-  let repoTagsText = '';
-  try { repoTagsText = String(raw.REPO_TAGS ?? ''); } catch { out.push('REPO_TAGS is not text: set it as text. The checks below read it as unset.'); }
+  const repoTagsText = String(raw.REPO_TAGS ?? '');
   if (repoTagsText.trim()) {
     let t = null;
     try { t = JSON.parse(repoTagsText); } catch { /* named below */ }
@@ -287,7 +260,7 @@ function secretProblems(env) {
 // `mod` is 'ok' only when the moderator channel is a text channel of this
 // server where the bot can post; otherwise it says why.
 export async function setupCheck(raw, deps, { deadline, probe = null }) {
-  const env = readable(raw, unreadableSettings(raw));
+  const env = readable(raw);
   const problems = [...configProblems(raw), ...secretProblems(env)];
   let passed = 0;
   const ok = (cond, line) => {

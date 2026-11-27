@@ -16,7 +16,7 @@ import {
 import { discordClient, postGone, archivedOf } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
 import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch, AWAY_START, MOVED_HERE, isReceipt } from './scan.js';
-import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems, unreadableSettings, MESSAGE_CONTENT } from './setup.js';
+import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems, MESSAGE_CONTENT } from './setup.js';
 
 export const COMMAND_NAME = 'Send to GitHub';
 export const CHECK_COMMAND = 'bot-check';
@@ -1408,23 +1408,22 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
 // GUILD_ID that names none, before it reads anything else. A setup problem
 // is shown to staff only (`staff`); anyone else gets the entry point's own
 // refusal (`no`). /bot-check says the same in its own words.
-function elsewhere(env, bad, interaction, staff, no) {
-  const home = bad.includes('GUILD_ID') ? '' : String(env.GUILD_ID ?? '');
+function elsewhere(env, interaction, staff, no) {
+  const home = String(env.GUILD_ID ?? '');
   if (!isDiscordId(home)) return staff() ? reply("The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).") : reply(no);
   return String(interaction.guild_id ?? '') === home ? null : reply('This only works on posts in the forums the bot is set up for.');
 }
 
 // The checks a button press or form submit makes first, in order: the
-// server, the ids, readable settings, a config that reads, and the caller.
+// server, the ids, a config that reads, and the caller.
 // `noRoles` is the reply to a member who is not a moderator while no role is
 // approved; with `forums`, a config naming no player forum is not set up.
 // Returns the reply, or the config and the custom id's parts.
-function gate(interaction, env, bad, roles, { no, badIds = BAD_IDS, noRoles: none = '', forums = false }) {
-  const away = elsewhere(env, bad, interaction, () => allowed(interaction.member, { roles: roles() }), no);
+function gate(interaction, env, { no, badIds = BAD_IDS, noRoles: none = '', forums = false }) {
+  const away = elsewhere(env, interaction, () => allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }), no);
   if (away) return { answer: away };
   const ids = parseCustomId(interaction.data.custom_id);
   if (!ids) return { answer: reply(badIds) };
-  if (bad.length) return { answer: allowed(interaction.member, { roles: roles() }) ? notSetUp(env) : reply(no) };
   const cfg = configOr(env);
   if (!cfg) return { answer: allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env) : reply(no) };
   if (none && !cfg.roles.length && !canUse(interaction.member)) return { answer: reply(none) };
@@ -1446,24 +1445,18 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
 
   const interaction = JSON.parse(body);
   if (interaction.type === 1) return json({ type: 1 });
-  // A setting no reader can read: past the caller check, each entry point
-  // answers with the not-set-up reply, and nothing reads the settings.
-  const bad = unreadableSettings(env);
-  const roles = () => (bad.includes('APPROVED_ROLE_IDS') ? [] : parseRoleIds(env.APPROVED_ROLE_IDS));
 
   if (interaction.type === 2 && interaction.data.name === COMMAND_NAME) {
-    const away = elsewhere(env, bad, interaction, () => canUse(interaction.member), 'Only moderators and admins can send posts to GitHub.');
+    const away = elsewhere(env, interaction, () => canUse(interaction.member), 'Only moderators and admins can send posts to GitHub.');
     if (away) return away;
     if (!canUse(interaction.member)) return reply('Only moderators and admins can send posts to GitHub.');
-    if (bad.length) return notSetUp(env);
     return openForm(interaction, env, deps, { threadId: interaction.channel_id, messageId: interaction.data.target_id, deadline: t0 + FORM_BY_MS });
   }
 
   if (interaction.type === 2 && interaction.data.name === MOVE_COMMAND) {
-    const away = elsewhere(env, bad, interaction, () => canUse(interaction.member), 'Only moderators and admins can move posts.');
+    const away = elsewhere(env, interaction, () => canUse(interaction.member), 'Only moderators and admins can move posts.');
     if (away) return away;
     if (!canUse(interaction.member)) return reply('Only moderators and admins can move posts.');
-    if (bad.length) return notSetUp(env);
     const cfg = configOr(env);
     if (!cfg || !cfg.forums.length) return notSetUp(env);
     return openMoveForm(interaction, env, deps, cfg, { threadId: interaction.channel_id, deadline: t0 + FORM_BY_MS });
@@ -1473,16 +1466,15 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     if (!canUse(interaction.member)) return reply('Only moderators and admins can check the bot setup.');
     // Fails closed: a moderator of another server the bot is in neither
     // posts here nor reads this setup, also when GUILD_ID is broken.
-    const guild = bad.includes('GUILD_ID') ? '' : String(env.GUILD_ID ?? '');
+    const guild = String(env.GUILD_ID ?? '');
     if (!isDiscordId(guild)) return reply("The bot's GUILD_ID is not set to a server id, so it can check nothing. Fix it in the Worker's settings.");
     if (String(interaction.guild_id) !== guild) return reply('This command checks only the server the bot is set up for.');
-    if (bad.length) return notSetUp(env);
     ctx.waitUntil(runCheck(interaction, env, deps, t0));
     return json({ type: 5, data: { flags: EPHEMERAL } });
   }
 
   if (interaction.type === 3 && String(interaction.data.custom_id).startsWith(`${SEND_BUTTON}:`)) {
-    const { answer, cfg, ids } = gate(interaction, env, bad, roles, { no: NOT_ALLOWED, noRoles: noRoles(COMMAND_NAME) });
+    const { answer, cfg, ids } = gate(interaction, env, { no: NOT_ALLOWED, noRoles: noRoles(COMMAND_NAME) });
     if (answer) return answer;
     // A press on a post already filed answers at once and opens no form.
     const answered = await pressCheck(interaction, env, deps, cfg, ids.threadId, t0, ctx);
@@ -1498,14 +1490,14 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
   }
 
   if (interaction.type === 3 && String(interaction.data.custom_id).startsWith(`${MOVE_BUTTON}:`)) {
-    const { answer, cfg, ids } = gate(interaction, env, bad, roles, { no: NOT_ALLOWED_MOVE, badIds: BAD_MOVE_IDS, noRoles: noRoles(MOVE_COMMAND), forums: true });
+    const { answer, cfg, ids } = gate(interaction, env, { no: NOT_ALLOWED_MOVE, badIds: BAD_MOVE_IDS, noRoles: noRoles(MOVE_COMMAND), forums: true });
     if (answer) return answer;
     // The Move button is on queue cards only, so the press carries its card.
     return openMoveForm(interaction, env, deps, cfg, { threadId: ids.threadId, cardId: interaction.message.id, deadline: t0 + FORM_BY_MS });
   }
 
   if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('gh:')) {
-    const { answer, cfg } = gate(interaction, env, bad, roles, { no: NOT_ALLOWED, forums: true });
+    const { answer, cfg } = gate(interaction, env, { no: NOT_ALLOWED, forums: true });
     if (answer) return answer;
     const v = modalValues(interaction.data);
     const problems = [];
@@ -1520,7 +1512,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
   }
 
   if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('mv:')) {
-    const { answer, cfg } = gate(interaction, env, bad, roles, { no: NOT_ALLOWED_MOVE, badIds: BAD_MOVE_IDS, forums: true });
+    const { answer, cfg } = gate(interaction, env, { no: NOT_ALLOWED_MOVE, badIds: BAD_MOVE_IDS, forums: true });
     if (answer) return answer;
     // A filing works with no namespace bound, but a move's records are what
     // link the two posts: without them nothing refuses the old one.
@@ -1542,15 +1534,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
 }
 
 export async function scheduled(controller, env, ctx, deps = { fetch: (...a) => fetch(...a) }) {
-  // The daily setup check reads the settings through its own copy and names
-  // the unreadable ones. The scan and the daily list would act on them, so
-  // they do nothing: no marker moves and no card is given up.
   if (controller.cron === CRONS.setup) return setupDaily(env, deps);
-  const bad = unreadableSettings(env);
-  if (bad.length) {
-    (deps.log || console.log)(`${bad.join(', ')} ${bad.length > 1 ? 'are' : 'is'} not text: the ${controller.cron === CRONS.daily ? 'daily list' : 'scan'} did not run.`);
-    return null;
-  }
   if (controller.cron === CRONS.daily) return daily(env, deps);
   return scan(env, deps);
 }

@@ -28,7 +28,6 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
     ['a REPOS key holding a space', { REPOS: '{"AB CD":"me/one"}' }, /^REPOS key "AB CD" is not made of letters and digits/],
     ['a REPOS key holding a bracket', { REPOS: '{"U]I":"me/one"}' }, /^REPOS key "U\]I" is not made of letters and digits/],
     ['an empty REPOS key', { REPOS: '{"":"me/one"}' }, /^REPOS key "" is not made of letters and digits/],
-    ['a FORUMS value with no text form, which the reader would throw on', { FORUMS: '{"900":{"template":{"toString":null}}}' }, /^FORUMS entry 900: "client", "type" and "template" must each be text/],
     ['a broken template beside a forum field that is an object the reader still reads', { FORUMS: '{"900":{"client":{}},"901":{"template":"typo"}}' }, /^FORUMS entry 901: its "template" is not a message link/],
     ['a REPOS entry past GitHub name limits', { REPOS: `{"KE":"me/${'r'.repeat(101)}"}` }, /^REPOS entry KE is not owner\/repo\.$/],
     ['an id longer than any Discord id', { MOD_CHANNEL_ID: '1'.repeat(21) }, /^MOD_CHANNEL_ID is not a channel id/],
@@ -84,12 +83,6 @@ test('ST1: configProblems names each broken setting as the code reads it, in one
     'REPOS entry ||KE|| is not owner/repo.',
     "LOCK_REPO is empty while REPOS names more than one repo: set it to the repo that holds every filing's lock.",
   ]);
-  // A JSON variable with no text form throws wherever it is turned into
-  // text. The list is written here, not taken from the checker.
-  for (const k of ['REPOS', 'LOCK_REPO', 'FORUMS', 'FORUM_CHANNEL_IDS', 'GUILD_ID', 'TEMPLATES', 'APPROVED_ROLE_IDS', 'MOD_CHANNEL_ID', 'QUEUE_CHANNEL_ID', 'CHECKLIST_FORUM_ID', 'STALE_DAYS', 'RENAME_POSTS', 'REPO_TAGS']) {
-    const lines = configProblems({ ...CLEAN, [k]: { toString: null } });
-    assert.ok(lines.includes(`${k} is not text: set it as text. The checks below read it as unset.`), `${k} with no text form: ${lines.join(' | ')}`);
-  }
   for (const [why, over] of [
     ['a key with a line break', { REPOS: `{"a\\nb${'x'.repeat(200)}":"me/one"}` }],
     ['a forum key of 300 digits with a broken template', { FORUMS: `{"${'9'.repeat(300)}":{"template":"x"}}` }],
@@ -183,8 +176,6 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
       /^Could not check me\/one \(GitHub GET \/repos\/me\/one\/installation -> 500/],
     ['a missing public key', (s) => { s.env = { DISCORD_PUBLIC_KEY: '' }; }, /^DISCORD_PUBLIC_KEY is not the 64-character public key/],
     ['a public key of the wrong form', (s) => { s.env = { DISCORD_PUBLIC_KEY: 'z'.repeat(64) }; }, /^DISCORD_PUBLIC_KEY is not the 64-character public key/],
-    ['a public key that is not a string, which the verifier cannot read', (s) => { s.env = { DISCORD_PUBLIC_KEY: ['a'.repeat(64)] }; }, /^DISCORD_PUBLIC_KEY is not text/],
-    ['a private key bound to null, which the key reader cannot read', (s) => { s.env = { GITHUB_APP_PRIVATE_KEY: null }; }, /^GITHUB_APP_PRIVATE_KEY is not text/],
     ["a public key of another app than the token's", (s) => { s.app = { ...s.app, verify_key: 'b'.repeat(64) }; },
       /^DISCORD_PUBLIC_KEY and DISCORD_BOT_TOKEN belong to different Discord apps\. In the developer portal, open the bot's app and set both from it/],
     ['a broken GUILD_ID: the application group still runs', (s) => { s.env = { GUILD_ID: 'x' }; s.app = { flags: 0 }; }, /^The Message Content setting is off/],
@@ -201,12 +192,6 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
       /^The GitHub checks \(install, permissions and labels\) did not run: fix GITHUB_APP_ID or GITHUB_APP_PRIVATE_KEY above, then run the check again\.$/],
     ['no REPOS and no LOCK_REPO: the GitHub group says it did not run', (s) => { s.env = { REPOS: '' }; },
       /^The GitHub checks \(install, permissions and labels\) did not run: fix REPOS above, then run the check again\.$/],
-    ['a FORUMS value with no text form: named, and every group still runs', (s) => { s.env = { FORUMS: '{"900":{"template":{"toString":null}}}' }; s.installs['me/one'] = refusal(404); },
-      /^me\/one: the GitHub App is not installed there \(404\)\./],
-    ['a FORUMS value with no text form: the forum checks say they did not run', (s) => { s.env = { FORUMS: '{"900":{"template":{"toString":null}}}' }; },
-      /^The forum checks \(permissions, tags and template messages\) did not run: fix FORUMS above, then run the check again\.$/],
-    ['a setting with no text form: named, and every group still runs', (s) => { s.env = { STALE_DAYS: { toString: null } }; s.installs['me/one'] = refusal(404); },
-      /^me\/one: the GitHub App is not installed there \(404\)\./],
     ['an empty forum list: the forum checks say they did not run', (s) => { s.env = { FORUMS: '{}' }; },
       /^The forum checks \(permissions, tags and template messages\) did not run: fix FORUMS above, then run the check again\.$/],
     ['FORUM_CHANNEL_IDS naming no id: the forum checks name that setting', (s) => { s.env = { FORUMS: '', FORUM_CHANNEL_IDS: 'abc' }; },
@@ -380,7 +365,6 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
     ['the application read failing (500)', (s) => { s.app = refusal(500); }, ['server', 'template', 'github']],
     ['the template read answered 204', (s) => { s.template = new Response(null, { status: 204 }); }, ['github']],
     ['the template read failing (500)', (s) => { s.template = refusal(500); }, ['github']],
-    ['a STALE_DAYS with no text form', (s) => { s.env = { STALE_DAYS: { toString: null } }; }, ['server', 'app', 'template', 'github']],
   ]) {
     const r = await checkOf((s) => { edit(s); for (const k of after) later[k][0](s); });
     for (const k of after) assert.ok(r.problems.some((l) => later[k][1].test(l)), `${why}: the ${k} checks still run: ${r.problems.join(' | ')}`);
