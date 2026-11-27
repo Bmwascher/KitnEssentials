@@ -191,7 +191,7 @@ const CALL_MS = 5000;
 const LABEL_PAGES = 3;
 // The Message Content intent: the first bit for a bot in 100 or more
 // servers, the second for one in fewer.
-export const MESSAGE_CONTENT = (1n << 18n) | (1n << 19n);
+const MESSAGE_CONTENT = (1n << 18n) | (1n << 19n);
 const NEEDS = {
   forum: {
     'View Channel': PERMS.viewChannel, 'Send Messages in Threads': PERMS.sendMessagesInThreads,

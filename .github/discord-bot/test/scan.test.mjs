@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scan as runScan, daily, GREETING, CRONS, readStrict } from '../src/scan.js';
+import { scan as runScan, daily, GREETING, CRONS } from '../src/scan.js';
 import { MESSAGES } from '../src/core.js';
 
 // A scan that does not really wait out KV's one write a second per key; the

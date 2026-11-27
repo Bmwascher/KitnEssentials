@@ -11,7 +11,7 @@ import {
   templateNote, parseCustomId, templateLabels, filedCard, cardHead, BY_RIGHT_CLICK,
   parseRepoTags, repoFromTags, plainTags, usableRepoKeys,
   MOVE_BUTTON, CLIENT_NAMES, cutUnits,
-  queueCard, movedTags, webhookName, avatarUrl, SELECT_MAX, isBotCopy,
+  queueCard, movedTags, webhookName, avatarUrl, isBotCopy,
 } from './core.js';
 import { discordClient, postGone, archivedOf } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';

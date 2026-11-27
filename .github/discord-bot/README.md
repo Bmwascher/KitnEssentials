@@ -123,7 +123,7 @@ that run (Re-run failed jobs, or Re-run all jobs for a run that passed), and
 the message goes out, even if another run has moved the post in the meantime.
 A message is never sent twice by the bot, except in the rare race under Known
 limits. GitHub allows re-runs for 30 days from the
-run's first attempt. Once the run has ended, an owed message that no re-run
+run's first attempt. Once the note is ten minutes old, an owed message that no re-run
 could send (its post is gone, or what it says is no longer true) is listed,
 and a fix-mode sweep marks it `Dropped`. A message the bot dropped was never
 sent, so if the same news comes true again (a PR back from draft), the bot
@@ -285,19 +285,6 @@ below).
   set up for."; neither sees the setup line. While the Worker can read its
   settings, a press on a post already filed still answers "Already tracked"
   first.
-- **A setting the Worker cannot read** stops the bot until it is fixed: a
-  setting saved as a JSON value with no text form, or a
-  `DISCORD_PUBLIC_KEY` or `GITHUB_APP_PRIVATE_KEY` that is not text (a JSON
-  `null` included). While it stands, new posts get no greeting and no queue
-  card, the daily list of waiting posts is not posted, and nothing is filed:
-  a moderator who right-clicks a post or runs `/bot-check`, and a moderator
-  or a member of an approved role who presses a card or submits the form, is
-  told privately "The bot is not set up yet:" and the setting's name.
-  `/bot-check` runs no checks then. The daily setup check still runs
-  and names it, in the moderator channel when it can post there, otherwise
-  in the Worker's log. Once the setting is fixed, the scan greets and cards
-  the open posts made meanwhile; a post archived or locked meanwhile gets no
-  card (Known limits).
 - **Filing** into a forum without the `Triaged` tag still files the issue.
   When the bot tries to set `Triaged` on a post with no status and cannot,
   the moderator's reply includes "tag not set" with the reason, among its
@@ -369,12 +356,8 @@ Each key in `REPOS` must be made of letters and digits only: A to Z, a to
 z and 0 to 9. With any other key the bot files nothing and answers that it
 is not set up, naming the first problem it finds: the key, unless an
 earlier one comes first, such as a `GUILD_ID` that is unset or not a server
-id, or a setting with no text form. The setup check writes a line for every
-such key, within its usual display limits; while a setting has no text
-form, `/bot-check` names that setting instead, and the daily setup check
-names the keys. A `DISCORD_PUBLIC_KEY` with no text form fails the
-signature check of every request, so the bot answers nothing, `/bot-check`
-included, and only the daily setup check names it and the keys.
+id. The setup check writes a line for every such key, within its usual
+display limits.
 
 When a new issue is created, the bot renames the post to the same text, cut
 to Discord's 100 characters, normally inside the title (a module of many
@@ -495,8 +478,8 @@ queue card still names the client.
 post already moved (its record, or the bot's note in the locked post, says
 where), or locked; a move into a forum `FORUMS` no longer lists, or into
 one deleted since the form opened; a post, or its first
-message, that was deleted; a post being filed or moved (the lock); a damaged
-saved record; a saved issue that cannot be checked; a forum list that cannot
+message, that was deleted; a post being filed or moved (the lock); a saved
+record that cannot be read; a saved issue that cannot be checked; a forum list that cannot
 be read; the bot lacking Manage Webhooks in the target forum; no `STATE`
 namespace bound; a copy the bot made whose move record is not readable yet
 (wait a minute and move again); a first message the bot sees nothing in
@@ -603,40 +586,15 @@ ids, so nothing is posted twice:
    back without that field, keeping every other field as it was:
    `npx wrangler@3 kv key put --binding=STATE "thread:<post id>" '<the record without "issue">'`
 
-A record the bot calls damaged is empty, not JSON, or not a record the bot
-writes: a filing record whose repo is not `owner/name` or whose issue number
-is not a positive whole number, or a scan record with a field of the wrong
-kind (a `tries` written as text, a `tracked` that is not a message id). A
-damaged `issue:<post id>` holds nothing to keep: delete it as in step 1. A
-damaged `thread:<post id>` may still hold the greeting's and card's ids:
-read it (step 2), and if it is JSON, write it back (step 3) with only its
-`greeting`, `buttonless` and `card` fields, keeping each that looks right (a
-`greeting` or `card` is a message id, `buttonless` is `true`); otherwise
-delete it the same way as step 1. The post scan never writes over a damaged
-record: it gives that post no greeting and no card, and the next daily
-alert names it; a scan record that still cannot be read an hour after its
-post was made is named the same way. Deleting `thread:<post id>` loses the
-card's id, so a later filing by right-click leaves that card live; press it
-once to mark it filed.
-
-A move writes two more records, both the Worker's: `movedfrom:<new post id>`
-(the old post, the player and the queue card) and `movedto:<old post id>`
-(the new post). A damaged one is corrected by hand, not deleted: without
-`movedfrom:` the new post is refused for sending and moving for good, and
-without `movedto:` the old post can be sent or moved again once someone
-unlocks it (as in When a move stops partway).
-
-The scan's own keys are checked too. If `scan:since`, the time the bot
-started, is damaged, the scan stops rather than start again from now, which
-would pass over every waiting post, and the daily alert says so. Put back a
-time in milliseconds since 1970 (`node -e "console.log(Date.now())"` prints
-the current one) with
-`npx wrangler@3 kv key put --binding=STATE "scan:since" "<time>"`: the
-current time skips every post made before it, and an earlier one lets the
-scan greet the open posts made since. A damaged `scan:state` is rebuilt by
-the next scan, and the daily alert says so: posts the scan gave up on
-before may be missing from it. A damaged `daily:named` makes the next daily
-alert say that some posts it names may have been named before.
+The bot's KV records are written by the bot alone and read as it wrote
+them (Known limits). Deleting `thread:<post id>` loses the card's id, so a
+later filing by right-click leaves that card live; press it once to mark it
+filed. A move writes two more records, both the Worker's:
+`movedfrom:<new post id>` (the old post, the player and the queue card) and
+`movedto:<old post id>` (the new post); without `movedfrom:` the new post is
+refused for sending and moving for good, and without `movedto:` the old
+post can be sent or moved again once someone unlocks it (as in When a move
+stops partway).
 
 ## Changing the lock repo
 
@@ -835,6 +793,21 @@ checklist job, run alongside.
 
 Accepted on purpose; each line says how you would notice it.
 
+- The bot trusts its own KV records (`thread:`, `issue:`, `movedfrom:`,
+  `movedto:`, `scan:` and `daily:named`) to hold what it wrote. A record
+  edited by hand into another shape can make the scan, a filing or a move
+  fail with an error in the Worker log; delete or rewrite it as the bot
+  wrote it (Clearing a filing record).
+- A setting saved as a JSON value with no text form, or a
+  `DISCORD_PUBLIC_KEY` or `GITHUB_APP_PRIVATE_KEY` that is not text, is not
+  checked for: requests fail with an error in the Worker log. Save each
+  setting as plain text.
+- The bot needs its `STATE` KV namespace bound; without it a filing cannot
+  tell a moved post from its records, so an unlocked old post or a reply in
+  the bot's copy can be filed. `/bot-check` names a missing binding.
+- A send or move form left open across a deploy of a new version is
+  submitted as the new version reads it; send or move again if it answers
+  oddly.
 - A move copies the first message's text and files only: a sticker, a poll
   or an embed is not copied, and a file over 20 MiB, or past 24 MiB in all,
   stays on the old post.
@@ -870,11 +843,9 @@ Accepted on purpose; each line says how you would notice it.
 - A post the scan fails to greet in 30 runs in a row (server errors included),
   about 30 minutes at one scan a minute, is given up on; the daily alert names
   it.
-- If the scan cannot save its state in the run that gives up on a deleted
-  post, the next daily alert can name that post once more.
-- If the scan cannot save its state in the run that gives up on a post that
-  refuses the bot (403), and the post is locked or archived before the next
-  scan, the daily alert never names it.
+- A post the scan gave up on can be named again by the scan's saved problem
+  paragraph in the next daily alert, and one whose give-up the scan could not
+  save in its state is not named at all.
 - A post can rarely get two greetings when two scans overlap (a scan that runs
   longer than a minute).
 - A queue card can stay live on a filed post, or a post can get two cards:
@@ -933,7 +904,8 @@ Accepted on purpose; each line says how you would notice it.
 - A Discord link in a PR to a post whose issue is in another repo, or that
   was never filed, makes no merge-plan comment: the workflow knows only its
   own repo's issues. A `Refs #N`, or a closing keyword GitHub does not list,
-  whose issue has since been transferred to another repo gets no line either.
+  whose issue has since been transferred to another repo is named as if it
+  were still here.
 - The merge plan reads `#N` and `owner/repo#N` after a keyword, the forms
   GitHub documents, not an issue's URL: a `Refs` or closing keyword followed
   by a URL gets no line of its own. GitHub's own list of closing issues still
@@ -962,8 +934,8 @@ Accepted on purpose; each line says how you would notice it.
 - The merge plan follows the PR's own events: a Development sidebar link, or
   an issue closed or relabeled, shows at the PR's next event. A closing
   keyword in a commit message is not shown, and neither is a post's status.
-- The merge plan of a PR with more than 100 closing references is not
-  updated; the merge-plan job's log says why.
+- The merge plan of a PR with more than 100 closing references names only
+  the first 100.
 - A merge-plan comment write that times out may still be applied by GitHub
   after the job has moved on, and a job stopped partway (an error, or its time
   limit) may have edited one copy and not another. The PR can then show an
@@ -991,7 +963,9 @@ Accepted on purpose; each line says how you would notice it.
 - An owed message goes out only when someone re-runs the run that owes it, even
   if another run has moved the post since; until then the sweep lists it with
   that run's link. GitHub allows re-runs for 30 days from the run's first
-  attempt, and 50 at most; after that the sweep says so, and a person sends
+  attempt; the sweep counts from the note, so a note from a late attempt can
+  be held past that window, and after 50 re-runs the sweep still points to
+  the run. Once the note is 30 days old the sweep says so, and a person sends
   the message by hand if it is still needed. A
   re-run reads the comments of every bot issue once, to find what it owes.
 - A message whose send may have gone out but whose note could not then be
@@ -1033,7 +1007,8 @@ Accepted on purpose; each line says how you would notice it.
   language word, keeps its characters; the bot writes its fence lines. An
   indented fence, or one in a list or quote, shows as plain text, and so does
   inline code: its backticks show, and a `*` or a backslash inside can rarely
-  be read as formatting. A diagram word such as `mermaid` is dropped. Code
+  be read as formatting. A diagram word such as `mermaid` is kept, so GitHub
+  draws that block. Code
   indented by four spaces is escaped like text, so `<` shows as `&lt;` there.
 - Text between two dollar signs with no space inside them, such as `$a$`, can
   show as a math formula. What is inside stays escaped text.
@@ -1063,16 +1038,12 @@ Accepted on purpose; each line says how you would notice it.
   the issue loses its `from-discord` label in that minute and the post is
   sent again. A move of such a post is refused while the bot's "now
   tracked" reply is among the post's last 100 messages; a send is not.
-- With no `STATE` namespace bound, Send to GitHub knows a moved post only
-  from Discord, so two cases are filed: an old post someone unlocked whose
-  note "This post moved to ..." is no longer among its last 100 messages,
-  and a reply in the bot's copy once the copy's first message was deleted.
-- With no saved filing record, the bot searches every configured repo twice
+- With no saved filing record, the bot searches every configured repo once
   before filing. An issue moved between two configured repos while it
-  searches can still be missed, and a second issue made. So can one in a repo
+  searches can be missed, and a second issue made. So can one in a repo
   with more than 100 issues labeled `from-discord`, when labels change during
-  both searches and its place in GitHub's issue list shifts between two pages
-  each time. Each search takes a second or two.
+  the search and its place in GitHub's issue list shifts between two pages.
+  The search takes a second or two.
 - On Workers' free plan a run may make 50 outgoing calls. A filing whose
   repos together hold more than about 1,600 `from-discord` issues updated
   since the post was made (about 1,700 with `RENAME_POSTS` at `0`) can use
@@ -1086,11 +1057,6 @@ Accepted on purpose; each line says how you would notice it.
   record was not saved (or not yet seen) and whose reply is further back
   than that, can still get a card; pressing it answers "Already tracked" and
   marks it filed.
-- If the scan gives up on a post and then fails to save its own state, it
-  names that post again only when it next visits it. A post archived, locked
-  or deleted in that minute is not visited, so the daily alert misses it; an
-  archived one can still reach the daily list of waiting posts after
-  `STALE_DAYS`, within that list's limits (above).
 - If the daily alert went out but saving which posts it named then fails,
   the next daily alert names those posts again.
 - A post the scan keeps failing on holds back its progress for up to 30 runs
@@ -1101,17 +1067,6 @@ Accepted on purpose; each line says how you would notice it.
   read the same old lock's time and both delete it, one after the other, the
   second can delete a new lock a filing took in the seconds between, and two
   filings can then make two issues.
-- Some saved values the bot could not have written still pass its checks: a
-  scan record's `greeting`, `card` or `tracked` that is text but no message
-  id (such a `tracked` counts the post as filed), a `daily:named` entry that
-  is text but no post id, a filing record's `by` that is not text (a card can
-  then read "by true"), a `scan:since` of `Infinity` (the scan then reads no
-  post while it keeps running), or a scan error time far in the future (the
-  daily check then stops before its alert). A damaged `daily:named` on a day
-  with no give-ups is replaced without a word. Writing back a damaged scan
-  record with only its `greeting`, `buttonless` and `card` (above) drops an
-  older record's `issue`, so a later filing finds that issue only by its
-  hidden line.
 - The daily alert's count of give-ups is not exact. A give-up saved just
   after a daily check, whose first alert the moderator channel refuses, can
   expire (after two days) before the check that would name it again. An
@@ -1120,9 +1075,8 @@ Accepted on purpose; each line says how you would notice it.
   30th try, with a queue channel set, is named as a given-up queue card
   though no card was tried. If `daily:named` cannot be read, that day's
   alert, scan warning and list of waiting posts are not sent.
-- An older post already done, between older posts still owed a card, spends
-  a record read outside the share the scan keeps for their cards, so the last
-  older card can wait a run. Cards already in the
+- A run of new posts can spend the scan's KV reads before older posts'
+  card retries, so those cards wait a run. Cards already in the
   queue channel whose record writes keep failing take the scan's card slots
   every run until a write works, and newer posts' cards wait meanwhile.
 - Do not rename, swap or add the bot's tags (the status tags and `Accepted`,
@@ -1165,10 +1119,10 @@ Accepted on purpose; each line says how you would notice it.
   that is archived again, or an open issue's thread that is archived. A
   staff reply reopens the thread for good.
 - If the bot's re-archive of a finished checklist thread fails after a tag
-  change, and the record write after it fails too, or the job is stopped
-  between the tag change and the re-archive, or Discord applies a timed-out
-  tag change after the re-archive, the thread may stay open and nothing
-  lists it; the run is red in Actions. One click archives it.
+  change, or the job is stopped between the tag change and the re-archive,
+  or Discord applies a timed-out tag change after the re-archive, the thread
+  may stay open and nothing lists it; the run is red in Actions. One click
+  archives it.
 - If the bot's re-archive fails after it changed the tags of an open issue's
   thread that Discord had archived for inactivity, the thread stays open and
   nothing lists it; the run is red in Actions, and Discord archives it again
@@ -1308,8 +1262,11 @@ Accepted on purpose; each line says how you would notice it.
 - The moderator channel check sees only `@everyone`: a role that players
   hold and that is allowed into the channel is not found.
 - The checks trust the fields Discord and GitHub document as always
-  present. A failed read, an empty answer or a missing optional field is
-  "could not check", never a pass.
+  present, and the bot checks a setting `/bot-check` covers only there, not
+  again at each use. A failed read, an empty answer or a missing optional
+  field is "could not check", never a pass.
+- A player name that looks like `#12`, `GH-12`, a commit hash or a URL can
+  show as a link in the issue's Reporter row.
 
 ## Tests
 
