@@ -15,7 +15,7 @@ import {
 } from './core.js';
 import { discordClient, postGone, archivedOf } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
-import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch, AWAY_START, MOVED_HERE, isReceipt } from './scan.js';
+import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch, MOVED_HERE, isReceipt } from './scan.js';
 import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems } from './setup.js';
 
 export const COMMAND_NAME = 'Send to GitHub';
@@ -475,24 +475,15 @@ async function postRecords(kv, id, ms) {
   return { thread, saved: issue || (thread && thread.issue) || null, movedFrom, movedTo };
 }
 
-// This bot's own messages among a post's last 100 that say what became of
-// it: `away`, the new post's link in its move note, and, with `receipts`,
-// `receipt`, its "now tracked" reply; each null when absent. The bot's user
-// is read only when a message starts as one asked for: the filing asks for
-// the note alone, so a player's message with the reply's text adds no call
-// that could fail it. The move posts its note before it locks the post, so
-// the note holds while KV does not show the movedto: record (not yet, or
-// never, when its save failed); the reply says the post was filed when
-// neither its filing record nor the from-discord label finds its issue.
-// Another bot's text proves nothing.
-async function ownNotes(discord, threadId, { receipts = false } = {}) {
-  const isAway = (m) => String(m.content || '').startsWith(AWAY_START);
-  const said = (await discord.call('GET', `/channels/${threadId}/messages?limit=100`))
-    .filter((m) => isAway(m) || (receipts && isReceipt(m)));
-  const me = said.length ? (await discord.me()).id : null;
-  const mine = said.filter((m) => m.author.id === me);
-  const note = mine.find(isAway);
-  return { away: note ? note.content.slice(AWAY_START.length).split(' ')[0] : null, receipt: mine.find(isReceipt) || null };
+// This bot's "now tracked" reply among a post's last 100 messages, or null:
+// it says the post was filed when neither its filing record nor the
+// from-discord label finds its issue. The bot's user is read only when a
+// message starts as the reply does. Another bot's text proves nothing.
+async function ownReceipt(discord, threadId) {
+  const said = (await discord.call('GET', `/channels/${threadId}/messages?limit=100`)).filter(isReceipt);
+  if (!said.length) return null;
+  const me = (await discord.me()).id;
+  return said.find((m) => m.author.id === me) || null;
 }
 
 // A press on a post already filed answers "Already tracked" at once, and the
@@ -846,13 +837,8 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
       await followup("Nothing was created: could not read this post's saved record just now. Try again.");
       return { refused: 'record' };
     }
-    // A post moved away: its record, else, on a locked post, the move's note.
-    // Only a locked post is read, so other filings cost nothing more. The
-    // lock is read as archivedOf reads the archive flag.
-    const movedAway = movedTo ? `https://discord.com/channels/${interaction.guild_id}/${movedTo.to}`
-      : thread.thread_metadata && thread.thread_metadata.locked ? (await ownNotes(discord, threadId)).away : null;
-    if (movedAway) {
-      await followup(`Nothing was created: this post was moved to ${movedAway}; send that one.`);
+    if (movedTo) {
+      await followup(`Nothing was created: this post was moved to https://discord.com/channels/${interaction.guild_id}/${movedTo.to}; send that one.`);
       return { refused: 'moved' };
     }
     // An old greeting: the one pressed in the post, or the record's when it
@@ -1125,12 +1111,6 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       return await refuse("could not read this post's saved record just now. Try again", 'record');
     }
     if (records.movedTo) return await refuse(`this post was already moved to ${link(records.movedTo.to)}`, 'moved');
-    // The bot's move locks the old post, and Discord shows a lock at once,
-    // unlike KV's records: a move repeated within KV's minute stops here. The
-    // bot's note there says where it went when its record was not saved. An
-    // unlocked post's note refuses nothing: someone unlocked it to move it.
-    const own = await ownNotes(discord, oldId, { receipts: true });
-    if (old.thread_metadata.locked && own.away) return await refuse(`this post was already moved to ${own.away}`, 'moved');
     // A filed post is refused before a locked one's advice: unlocking it
     // would not let it move.
     const found = await findIssue(cfg, records.saved, oldId, tokenFor, prep);
@@ -1145,8 +1125,9 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     // Filed, though neither search finds its issue: a filing record never
     // saved or deleted, and the issue's label removed or the issue moved
     // outside REPOS. Moving it would leave that issue on the locked post.
-    if (own.receipt) {
-      return await refuse(`the bot's "now tracked" reply in this post (${link(oldId)}/${own.receipt.id}) says it was sent to GitHub, though its issue was not found by its filing record or the from-discord label; moving filed posts comes in a later update. If that issue was deleted, delete that reply, then move the post again`, 'filed');
+    const receipt = await ownReceipt(discord, oldId);
+    if (receipt) {
+      return await refuse(`the bot's "now tracked" reply in this post (${link(oldId)}/${receipt.id}) says it was sent to GitHub, though its issue was not found by its filing record or the from-discord label; moving filed posts comes in a later update. If that issue was deleted, delete that reply, then move the post again`, 'filed');
     }
     if (old.thread_metadata.locked) return await refuse('the post is locked: a moderator can unlock it, then move it', 'locked');
 

@@ -144,11 +144,10 @@ export const hasButton = (m, postId) => buttons(m).some((c) => c.custom_id === `
 const isCardFor = (m, postId, me, guildId) => !!m.author && m.author.id === me
   && (hasButton(m, postId) || buttons(m).some((c) => c.url === `https://discord.com/channels/${guildId}/${postId}`));
 
-// How the Worker's "now tracked" reply starts, its moved message in a post a
-// move made, and its note in a post a move took away.
+// How the Worker's "now tracked" reply starts, and its moved message in a
+// post a move made.
 const TRACKED_START = MESSAGES.tracked('\u0000', 0).split('\u0000')[0];
 const MOVED_START = MESSAGES.movedHere({ from: '\u0000', by: '', reporter: { name: '' } }).split('\u0000')[0];
-export const AWAY_START = MESSAGES.movedTo({ to: '\u0000', by: '' }).split('\u0000')[0];
 // The skip a post the bot moved here is saved with; the Worker refuses to
 // file a reply in a post whose record says it.
 export const MOVED_HERE = 'a post the bot moved here';

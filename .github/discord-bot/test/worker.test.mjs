@@ -1236,29 +1236,6 @@ test('filing a moved post names its player, ends with the copy line and pings th
   assert.equal(old.find('PATCH', /\/webhooks\//)[0].body.content, 'Nothing was created: this post was moved to https://discord.com/channels/1/990; send that one.');
   assert.equal(old.find('POST', /\/issues$/).length, 0);
 
-  // The old post before KV shows its movedto: record here: locked, with the move's note.
-  const lockedOld = fakeFetch(discordRoutes(githubRoutes([], [
-    ['GET', /\/channels\/700$/, () => ({ id: '700', parent_id: '900', name: 'x', applied_tags: [], thread_metadata: { locked: true, archived: true } })],
-    ['GET', /\/channels\/700\/messages\?limit=100$/, () => [{ id: 'n1', author: { id: 'b', bot: true }, content: 'This post moved to https://discord.com/channels/1/990 (moved by Mod).' }]],
-    ['GET', /\/users\/@me$/, () => ({ id: 'b' })],
-  ])));
-  const lockedCtx = ctxFor();
-  await handle(await signed(submit()), { ...env, STATE: fakeKv() }, lockedCtx, { fetch: lockedOld, installationToken: async () => 'inst' });
-  assert.deepEqual(await Promise.all(lockedCtx.jobs), [{ refused: 'moved' }]);
-  assert.equal(lockedOld.find('PATCH', /\/webhooks\//)[0].body.content, 'Nothing was created: this post was moved to https://discord.com/channels/1/990; send that one.');
-  assert.equal(lockedOld.find('POST', /\/issues$/).length, 0);
-
-  // The same text from another bot in a locked post refuses nothing.
-  const otherBot = fakeFetch(discordRoutes(githubRoutes([], [
-    ['GET', /\/channels\/700$/, () => ({ id: '700', parent_id: '900', name: 'x', applied_tags: [], thread_metadata: { locked: true, archived: false } })],
-    ['GET', /\/channels\/700\/messages\?limit=100$/, () => [{ id: 'n1', author: { id: 'other', bot: true }, content: 'This post moved to https://discord.com/channels/1/990 (moved by Mod).' }]],
-    ['GET', /\/users\/@me$/, () => ({ id: 'b' })],
-    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, () => ({ number: 18, html_url: 'u/18' })],
-  ])));
-  const otherCtx = ctxFor();
-  await handle(await signed(submit()), { ...env, STATE: fakeKv() }, otherCtx, { fetch: otherBot, installationToken: async () => 'inst' });
-  assert.equal((await Promise.all(otherCtx.jobs))[0].created, 18);
-
   // The bot's copy whose record KV does not show yet: refused, not filed as the webhook.
   const early = fakeFetch(discordRoutes(githubRoutes([], [
     ['GET', /\/channels\/700\/messages\/700$/, () => ({ id: '700', content: 'My bags overlap', webhook_id: '61', application_id: 'app', author: { id: '61', username: 'Pat' }, attachments: [] })],
@@ -2013,15 +1990,6 @@ test('a move refused before the new post changes nothing and says why', async ()
     ['a post already moved', (s) => { s.kv = { 'movedto:700': '{"to":"990"}' }; }, /^Nothing was moved: this post was already moved to https:\/\/discord\.com\/channels\/1\/990\.$/],
     ['a post already moved, which the move locked', (s) => { s.kv = { 'movedto:700': '{"to":"990"}' }; s.post.thread_metadata.locked = true; },
       /^Nothing was moved: this post was already moved to https:\/\/discord\.com\/channels\/1\/990\.$/],
-    // Its movedto: record was not saved: the bot's note in the locked post says where.
-    ['a post the bot moved and locked, with no record', (s) => {
-      s.post.thread_metadata.locked = true;
-      s.said = [{ id: 'm9', content: 'This post moved to https://discord.com/channels/1/990 (moved by helper).', author: { id: 'b' } }];
-    }, /^Nothing was moved: this post was already moved to https:\/\/discord\.com\/channels\/1\/990\.$/],
-    ['a locked post whose move note someone else wrote', (s) => {
-      s.post.thread_metadata.locked = true;
-      s.said = [{ id: 'm9', content: 'This post moved to https://discord.com/channels/1/990 (moved by helper).', author: { id: '42' } }];
-    }, /^Nothing was moved: the post is locked: a moderator can unlock it, then move it\.$/],
     ['a filed post', FILED, /^This post is already tracked as ONE #40 \(https:\/\/github\.com\/me\/test-one\/issues\/40\); moving filed posts comes in a later update\.$/],
     ['a filed post with no record, found by its marker', (s) => {
       s.two = [{ number: 12, html_url: 'https://github.com/me/test-two/issues/12', repository_url: 'https://api.github.com/repos/me/test-two', body: '<!-- discord-thread: 700 reporter: 42 -->' }];
