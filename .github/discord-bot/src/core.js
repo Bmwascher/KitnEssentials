@@ -41,6 +41,10 @@ export function checklistKey(name, close) {
   return CHECKLIST_FINISHED.has(name) && close ? `${name}:${close.id}` : null;
 }
 
+// The account the status workflow comments as (GITHUB_TOKEN). Only its
+// records count: anyone can comment on a public issue.
+export const BOT_LOGIN = 'github-actions[bot]';
+
 export const LABELS = {
   fromDiscord: 'from-discord',
   pendingRelease: 'pending-release',
