@@ -193,6 +193,22 @@ export function buildTitle({ repoKey, client, type, module, title }) {
   return `[${repoKey}] [${client}] [${type}] [${mod}] ${titleText(title)}`;
 }
 
+// A title of the bot's shape, `[KEY] [Client] [Type] [Module] Title`, as its
+// key, client and type and the rest from the module on; null for any other
+// title (one a maintainer retitled).
+export function splitTitle(title) {
+  const m = /^\[([A-Za-z0-9]+)\] \[([^\]]*)\] \[([^\]]*)\] (\[[^\]]*\] .*)$/s.exec(String(title || ''));
+  return m ? { repoKey: m[1], client: m[2], type: m[3], rest: m[4] } : null;
+}
+
+// A moved issue's title: the new key, client and type, a null type keeping
+// the title's own, and the module and text exactly as written; null for a
+// title not of the bot's shape.
+export function movedTitle(title, { repoKey, client, type }) {
+  const t = splitTitle(title);
+  return t ? `[${repoKey}] [${client}] [${type || t.type}] ${t.rest}` : null;
+}
+
 // The title as the issue gets it. The form's check uses it too, so a title
 // of direction marks alone is empty.
 export const titleText = (title) => oneLine(title).trim();
@@ -379,22 +395,51 @@ export function parseMarker(body) {
   return { threadId: m[1], reporterId: m[2] && m[2] !== 'unknown' ? m[2] : null };
 }
 
-// The id of the message the issue was filed from, or null for an issue filed
-// before the bot wrote it. Only the bot's footer counts: the line directly
-// before the thread marker that ends the body, since an older body may quote
-// such a line in its report.
 // The line a moved post's copy adds before the footer: the filed message was
 // posted by the bot's webhook, so a reply to it pings no one. Player text
 // cannot hold it (neutralize).
 export const COPY_MARK = '<!-- discord-copy -->';
+const MARKER_LINE = /^<!--\s*discord-thread:\s*\d+(?:\s+reporter:\s*(?:\d+|unknown))?\s*-->\s*$/;
+const MESSAGE_LINE = /^<!-- discord-message: (\d+) -->$/;
+
+// The bot's footer as lines: the last marker line, with the filed-message
+// line and the copy line when they stand directly before it. A maintainer's
+// text may follow it; an older body may quote such lines above it.
+function footerOf(lines) {
+  let end = -1;
+  lines.forEach((l, i) => { if (MARKER_LINE.test(l)) end = i; });
+  if (end < 0) return null;
+  let start = end;
+  const message = start > 0 ? MESSAGE_LINE.exec(lines[start - 1]) : null;
+  if (message) start--;
+  const copy = !!message && start > 0 && lines[start - 1] === COPY_MARK;
+  if (copy) start--;
+  return { start, end, id: message ? message[1] : null, copy };
+}
+
 // The footer's filed message id, and whether the copy line sits directly
-// before the footer; null with no footer.
+// before it; null with no footer, or a footer with no message line (an issue
+// filed before the bot wrote it).
 export function parseFiledMessage(body) {
-  const text = lf(body);
-  const m = /(?:^|\n)<!-- discord-message: (\d+) -->\n<!-- discord-thread: \d+ reporter: (?:\d+|unknown) -->\s*$/.exec(text);
-  if (!m) return null;
-  const before = text.slice(0, m.index);
-  return { id: m[1], copy: before === COPY_MARK || before.endsWith(`\n${COPY_MARK}`) };
+  const f = footerOf(lf(body).split('\n'));
+  return f && f.id ? { id: f.id, copy: f.copy } : null;
+}
+
+// The issue's body once its post moved to `newId`: the bot's footer is
+// replaced where it stands by a line naming the new post and its mover, then
+// a copy footer naming the new post with the old marker's reporter. Every
+// other line stays as written. A body with no marker gets both at its end.
+export function movedBody(body, { guildId, newId, mover }) {
+  const lines = lf(body).split('\n');
+  const f = footerOf(lines);
+  const at = f ? f.start : lines.length;
+  const reporterId = f ? parseMarker(lines[f.end]).reporterId : null;
+  const added = [
+    `Moved to [the new post](https://discord.com/channels/${guildId}/${newId}) by ${personCell(mover)}.`,
+    COPY_MARK, `<!-- discord-message: ${newId} -->`, marker({ threadId: newId, reporterId }),
+  ];
+  const gap = at > 0 && lines[at - 1].trim() !== '' ? [''] : [];
+  return [...lines.slice(0, at), ...gap, ...added, ...(f ? lines.slice(f.end + 1) : [])].join('\n');
 }
 
 // `reporter` and `sender` are { name, username, id }, any part missing;

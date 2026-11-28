@@ -775,6 +775,54 @@ test('an issue filed from a moved post\'s copy ends with the copy footer, which 
   assert.deepEqual(C.parseFiledMessage(filed), { id: '990', copy: true });
 });
 
+test('a filed move rewrites only the bot\'s footer and adds a Moved to line where it stood', () => {
+  const MOD = { name: 'moddy', username: 'moddy', id: '5' };
+  const MOVE = 'Moved to [the new post](https://discord.com/channels/1/990) by [moddy](https://discord.com/users/5) (`moddy`).';
+  const FOOT = ['<!-- discord-copy -->', '<!-- discord-message: 990 -->'];
+  const moved = (body, over = {}) => C.movedBody(body, { guildId: '1', newId: '990', mover: MOD, ...over });
+  const filed = C.buildBody({ content: 'see https://discord.com/channels/1/700', reporter: { name: 'Pat', id: '42' }, sender: MOD,
+    threadUrl: 'https://discord.com/channels/1/700', attachments: [{}], threadId: '700', messageId: '700' });
+  const above = filed.split('\n').slice(0, -2);
+  const once = moved(filed);
+  assert.equal(once, [...above, MOVE, ...FOOT, '<!-- discord-thread: 990 reporter: 42 -->'].join('\n'), 'every line above the footer kept, the old links included');
+  assert.deepEqual(C.parseMarker(once), { threadId: '990', reporterId: '42' });
+  assert.deepEqual(C.parseFiledMessage(once), { id: '990', copy: true });
+  const MOVE2 = MOVE.replace('990', '991');
+  assert.equal(moved(once, { newId: '991' }), [...above, MOVE, '', MOVE2, '<!-- discord-copy -->', '<!-- discord-message: 991 -->', '<!-- discord-thread: 991 reporter: 42 -->'].join('\n'),
+    'a second move: the first line stays, the copy footer is replaced');
+  const footer = (id, rep) => [`<!-- discord-message: ${id} -->`, `<!-- discord-thread: ${id} reporter: ${rep} -->`].join('\n');
+  const newFooter = (rep) => [...FOOT, `<!-- discord-thread: 990 reporter: ${rep} -->`].join('\n');
+  for (const [why, below] of [
+    ['a maintainer note', 'Note from staff.'],
+    ['an open fence left unclosed', '```\nstack trace'],
+    ['a fence opened two spaces in, closed at column one', '  ```\ncode\n```'],
+    ['an HTML comment left unclosed', '<!-- staff note'],
+  ]) {
+    const body = `> report\n\n${footer('800', 'unknown')}\n${below}`;
+    assert.equal(moved(body), `> report\n\n${MOVE}\n${newFooter('unknown')}\n${below}`, why);
+  }
+  assert.equal(moved(`> report\r\n\r\n${footer('800', '42').replace(/\n/g, '\r\n')}\r\nNote\r\nline two`),
+    moved(`> report\n\n${footer('800', '42')}\nNote\nline two`), 'a CRLF body reads as its LF form');
+  assert.equal(moved('> report\n<!-- discord-thread: 700 reporter: 42 -->'), `> report\n\n${MOVE}\n${newFooter('42')}`, 'an older footer, the marker alone');
+  assert.equal(moved('Hand-written body'), `Hand-written body\n\n${MOVE}\n${newFooter('unknown')}`, 'no marker: the footer added at the end');
+});
+
+test('the filed message is read from the last marker\'s footer, wherever it stands', () => {
+  assert.deepEqual(C.parseFiledMessage('> r\n\n<!-- discord-message: 800 -->\n<!-- discord-thread: 700 reporter: 42 -->\nA note below.'), { id: '800', copy: false });
+  const moved = C.movedBody('> r\n\n<!-- discord-message: 800 -->\n<!-- discord-thread: 700 reporter: 42 -->\nA note below.', { guildId: '1', newId: '990', mover: { name: 'm' } });
+  assert.deepEqual(C.parseFiledMessage(moved), { id: '990', copy: true });
+});
+
+test('a moved issue\'s title gets the new key, client and type, and keeps its module and text as written', () => {
+  const t = '[KE] [Retail] [Bug] [iOS] Bags overlap';
+  for (const [why, title, parts, want] of [
+    ['the three prefix groups', t, { repoKey: 'UI', client: 'All', type: 'Feature' }, '[UI] [All] [Feature] [iOS] Bags overlap'],
+    ['a null type keeps the title\'s', t, { repoKey: 'UI', client: 'All', type: null }, '[UI] [All] [Bug] [iOS] Bags overlap'],
+    ['a hand title', 'Bags overlap', { repoKey: 'UI', client: 'All', type: 'Bug' }, null],
+  ]) assert.equal(C.movedTitle(title, parts), want, why);
+  assert.deepEqual(C.splitTitle(t), { repoKey: 'KE', client: 'Retail', type: 'Bug', rest: '[iOS] Bags overlap' });
+});
+
 test('a moved post keeps the tags the new forum has and gets its client tags, five at most in order', () => {
   const FROM = [
     { id: 'f-retail', name: 'Retail' }, { id: 'f-bug', name: 'Bug' }, { id: 'f-tri', name: 'Triaged' }, { id: 'f-acc', name: 'Accepted' },
