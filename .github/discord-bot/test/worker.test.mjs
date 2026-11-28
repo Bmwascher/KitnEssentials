@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, createVerify } from 'node:crypto';
-import { handle, COMMAND_NAME, CHECK_COMMAND, scheduled, privateText } from '../src/worker.js';
+import { handle, COMMAND_NAME, CHECK_COMMAND, ADD_COMMAND, scheduled, privateText } from '../src/worker.js';
 import { CRONS, MOVED_HERE } from '../src/scan.js';
 import { importAppKey, appJwt } from '../src/github.js';
 import { MESSAGES } from '../src/core.js';
@@ -1148,7 +1148,7 @@ test('one lock per post: a filing into the second repo takes its lock in LOCK_RE
     // A filing that holds the lock may be between its last search and its create, or GitHub may still apply its create: the advice frees only a lock an hour old.
     if (held) {
       assert.match(f.find('PATCH', /\/webhooks\//)[0].body.content,
-        /another send or move of this post is running, or one stopped partway\. Wait a few minutes, then send it again\. If it still says this and no issue for this post appears in any repo the bot files into, delete the label discord-lock-700 in me\/test-one, but only if the time in its description is more than an hour ago or it shows no time\. A send ends within 30 seconds and GitHub times out a request after 10 seconds, so the hour is a wide margin past both\. Then send the post again\.$/, why);
+        /another send, move or add of this post is running, or one stopped partway\. Wait a few minutes, then send it again\. If it still says this and no issue for this post appears in any repo the bot files into, delete the label discord-lock-700 in me\/test-one, but only if the time in its description is more than an hour ago or it shows no time\. A send ends within 30 seconds and GitHub times out a request after 10 seconds, so the hour is a wide margin past both\. Then send the post again\.$/, why);
     }
   }
 });
@@ -2039,7 +2039,7 @@ test('a member read that stalls does not hold the webhook lookup: the post moves
 });
 
 test('a move refused before the new post changes nothing and says why', async () => {
-  const RECEIPT = /^Nothing was moved: the bot's "now tracked" reply in this post \(https:\/\/discord\.com\/channels\/1\/700\/m8\) says it was sent to GitHub, though its issue was not found by its filing record or the from-discord label, so the bot cannot move it\. If that issue was deleted, delete that reply, then move the post again\.$/;
+  const RECEIPT = /^Nothing was moved: the bot's reply in this post \(https:\/\/discord\.com\/channels\/1\/700\/m8\) says it is tracked on GitHub, though its issue was not found by its filing record or the from-discord label, so the bot cannot move it\. If that issue was deleted, delete that reply, then move the post again\.$/;
   for (const [why, edit, want, envOver = {}] of [
     ['a locked post', (s) => { s.post.thread_metadata.locked = true; }, /^Nothing was moved: the post is locked: a moderator can unlock it, then move it\.$/],
     ['a post already moved', (s) => { s.kv = { 'movedto:700': '{"to":"990"}' }; }, /^Nothing was moved: this post was already moved to https:\/\/discord\.com\/channels\/1\/990\.$/],
@@ -2055,6 +2055,11 @@ test('a move refused before the new post changes nothing and says why', async ()
     ['the bot\'s reply that starts with the player\'s mention, as on a moved copy', (s) => {
       s.said = [{ id: 'm8', content: `<@42> ${MESSAGES.tracked('ONE', 40)}`, author: { id: 'b' } }];
     }, RECEIPT],
+    ['the bot\'s added reply with no record', (s) => {
+      s.said = [{ id: 'm8', content: MESSAGES.added({ key: 'ONE', number: 40, original: 'https://discord.com/channels/1/5', bug: false }), author: { id: 'b' } }];
+    }, RECEIPT],
+    ['a post added to an issue', (s) => { s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-one', number: 12, key: 'ONE', by: '<@5>', added: true }) }; },
+      /^Nothing was moved: this post was added to ONE #12 as a repeat report, so it stays here\.$/],
     ['a locked post with the bot\'s reply (the filed refusal, not the unlock advice)', (s) => {
       s.post.thread_metadata.locked = true;
       s.said = [{ id: 'm8', content: MESSAGES.tracked('ONE', 40), author: { id: 'b' } }];
@@ -2065,7 +2070,7 @@ test('a move refused before the new post changes nothing and says why', async ()
       /^Nothing was moved: <#901> is not a forum of this server, so nothing is posted there\. \/bot-check names the FORUMS entry to fix\.$/],
     ['a deleted post', (s) => { s.post = () => new Response('{"message":"Unknown Channel"}', { status: 404 }); }, /^Nothing was moved: the post was deleted\.$/],
     ['a send or move of the post running', (s) => { s.claim = () => new Response('{"errors":[{"code":"already_exists"}]}', { status: 422 }); },
-      /^Nothing was moved: another send or move of this post is running, or one stopped partway\. .*Then move the post again\.$/],
+      /^Nothing was moved: another send, move or add of this post is running, or one stopped partway\. .*Then move the post again\.$/],
     ['a lock GitHub did not confirm', (s) => { s.claim = () => { throw new Error('Network connection lost.'); }; },
       /^Nothing was moved: GitHub did not confirm the lock discord-lock-700 in me\/test-one \(Network connection lost\.\)\. Wait a few minutes, then move the post again; /],
     ['the first message deleted', (s) => { s.first = () => new Response('{"message":"Unknown Message"}', { status: 404 }); }, /^Nothing was moved: the post's first message was deleted, so there is nothing to copy\.$/],
@@ -2543,4 +2548,252 @@ test('Send to GitHub on a moved filed post finds its issue by the move\'s record
   await Promise.all(ctx.jobs);
   assert.equal(f.find('PATCH', /\/webhooks\//)[0].body.content, `Already tracked: ONE #40 ${ISSUE_URL}`);
   assert.equal(f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, card, 'the card the move wrote');
+});
+
+// Add to issue: post 701 (first message by Pat, 42) added to ONE #12, whose
+// original post is 700 (Ann, 41).
+const ADD_ENV = { ...env, QUEUE_CHANNEL_ID: '556', APPROVED_ROLE_IDS: '77' };
+const ADD_HELPER = { permissions: '0', roles: ['77'], user: { id: '8', username: 'helper' } };
+const ISSUE_12 = {
+  number: 12, state: 'open', labels: [{ name: 'from-discord' }, { name: 'type: bug' }], user: { login: 'app[bot]' },
+  body: 'report\n<!-- discord-message: 700 -->\n<!-- discord-thread: 700 reporter: 41 -->',
+  html_url: 'https://github.com/me/test-one/issues/12', repository_url: 'https://api.github.com/repos/me/test-one',
+};
+const reportOn = (n, post, player, login = 'app[bot]') => ({ user: { login }, body: `Report ${n} of this problem: x\n\n<!-- discord-report: ${post} player: ${player} -->` });
+function addWorld(edit = () => {}) {
+  const s = {
+    kv: {}, issue: ISSUE_12, comments: [reportOn(2, '690', '43'), reportOn(3, '691', '44'), reportOn(9, '692', '45', 'someone')],
+    first: { id: '701', content: 'Same bags bug', author: { id: '42', username: 'pat', global_name: 'Pat' } },
+    reply: { id: '801', content: 'me too', author: { id: '46', username: 'sam', global_name: 'Sam' } },
+    comment: () => new Response('{}', { status: 201 }), claim: () => new Response('{}', { status: 201 }),
+    send: () => ({ id: 'r1' }), tag: () => ({}), extra: [], one: () => [], two: () => [],
+  };
+  edit(s);
+  const f = fakeFetch([
+    ...s.extra,
+    ['GET', /\/channels\/701$/, () => ({ id: '701', parent_id: '900', name: 'bags', applied_tags: ['t-retail', 't-bug'] })],
+    ['GET', /\/channels\/900$/, () => FORUM],
+    ['GET', /\/channels\/701\/messages\/701$/, () => (typeof s.first === 'function' ? s.first() : s.first)],
+    ['GET', /\/channels\/701\/messages\/801$/, () => s.reply],
+    ['PATCH', /\/channels\/701$/, (b) => s.tag(b)],
+    ['POST', /\/channels\/701\/messages$/, (b) => s.send(b)],
+    ['PATCH', /\/channels\/701\/messages\/g1$/, () => ({})],
+    ['PATCH', /\/channels\/556\/messages\/\d+$/, () => ({})],
+    ['PATCH', /\/webhooks\//, () => ({})],
+    ['GET', /api\.github\.com\/repos\/me\/test-one\/issues\?state=all.*labels=from-discord/, () => s.one()],
+    ['GET', /api\.github\.com\/repos\/me\/test-two\/issues\?state=all.*labels=from-discord/, () => s.two()],
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/labels$/, () => s.claim()],
+    ['DELETE', /api\.github\.com\/repos\/me\/test-one\/labels\/discord-lock-701$/, () => null],
+    ['GET', /api\.github\.com\/repos\/me\/test-one\/issues\/\d+\/comments/, () => s.comments],
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues\/\d+\/comments$/, (b) => s.comment(b)],
+    ['GET', /api\.github\.com\/repos\/me\/test-one\/issues\/\d+$/, () => (typeof s.issue === 'function' ? s.issue() : s.issue)],
+  ]);
+  return { s, f };
+}
+const addSubmit = ({ member = MOD, number = '#12', repo = 'ONE', id = 'ai:701:701:96' } = {}) => ({
+  type: 5, member, guild_id: '1', channel_id: '556', application_id: 'app', token: 'atok',
+  data: { custom_id: id, components: [
+    ...(repo ? [{ type: 18, component: { type: 3, custom_id: 'repo', values: [repo] } }] : []),
+    { type: 18, component: { type: 4, custom_id: 'number', value: number } },
+  ] },
+});
+async function runAdd(w, interaction = addSubmit(), envOver = {}) {
+  const kv = fakeKv(w.s.kv);
+  const ctx = ctxFor();
+  const r = await handle(await signed(interaction), { ...ADD_ENV, STATE: kv, ...envOver }, ctx, { fetch: w.f, installationToken: async () => 'inst', log: () => {} });
+  const out = await Promise.all(ctx.jobs);
+  const told = (w.f.find('PATCH', /\/webhooks\//).at(-1) || { body: {} }).body.content;
+  return { r, out, told, kv };
+}
+const ASK = ' If you can, open Report a Problem in game and paste its text here.';
+const ADDED_BUG = `This is the same problem as ONE #12, first reported in https://discord.com/channels/1/700. We've added your report to it, and we'll ping you in that post with each update.${ASK}`;
+const commentPosts = (f) => f.find('POST', /issues\/12\/comments$/);
+const released = (f) => f.find('DELETE', /discord-lock-701$/).length;
+
+test('the Add form opens for staff, by right-click or card press, and for no one else', async () => {
+  const click = (member) => ({ type: 2, member, channel_id: '701', data: { name: ADD_COMMAND, target_id: '801' } });
+  const press = (member) => ({ type: 3, member, channel_id: '556', message: { id: '96' }, data: { custom_id: 'add:701' } });
+  for (const [why, interaction, envOver, want] of [
+    ["a moderator's right-click, on the targeted message", click(MOD), {}, { id: 'ai:701:801:0', fields: ['repo', 'number'] }],
+    ["an approved role's card press, with the card's id", press(ADD_HELPER), {}, { id: 'ai:701:701:96', fields: ['repo', 'number'] }],
+    ['one usable repo: no Repo field', press(MOD), { REPOS: '{"ONE":"me/test-one"}' }, { id: 'ai:701:701:96', fields: ['number'] }],
+    ["a player's card press", press(PLAYER), {}, 'Only moderators and approved roles can send posts to GitHub.'],
+    ["a player's right-click", click(PLAYER), {}, 'Only moderators and admins can add posts to issues.'],
+    ['a post outside the forums', click(MOD), { FORUM_CHANNEL_IDS: '901' }, 'This only works on posts in the forums the bot is set up for.'],
+    ['FORUMS unset, a card press', press(MOD), { FORUM_CHANNEL_IDS: '' }, /^The bot is not set up yet: /],
+  ]) {
+    const w = addWorld();
+    const j = await (await handle(await signed(interaction), { ...ADD_ENV, ...envOver }, ctxFor(), { fetch: w.f })).json();
+    if (typeof want === 'string') assert.equal(j.data.content, want, why);
+    else if (want instanceof RegExp) { assert.match(j.data.content, want, why); assert.equal(w.f.calls.length, 0, `${why}: no call`); }
+    else {
+      assert.equal(j.type, 9, why);
+      assert.equal(j.data.custom_id, want.id, why);
+      assert.deepEqual(j.data.components.map((c) => c.component.custom_id), want.fields, why);
+    }
+  }
+});
+
+test('an Add form with a bad number or no repo, or with FORUMS unset, starts no job', async () => {
+  for (const [why, interaction, envOver, want] of [
+    ['a number that is not one', addSubmit({ number: 'abc' }), {}, 'Nothing was added. Type the issue number, like 12. Press the button or right-click the post to try again.'],
+    ['no repo picked', addSubmit({ repo: '' }), {}, 'Nothing was added. Pick a repo the bot files into. Press the button or right-click the post to try again.'],
+    ['FORUMS unset', addSubmit(), { FORUM_CHANNEL_IDS: '' }, /^The bot is not set up yet: /],
+  ]) {
+    const w = addWorld();
+    const ctx = ctxFor();
+    const j = await (await handle(await signed(interaction), { ...ADD_ENV, ...envOver }, ctx, { fetch: w.f })).json();
+    if (want instanceof RegExp) assert.match(j.data.content, want, why); else assert.equal(j.data.content, want, why);
+    assert.equal(ctx.jobs.length, 0, why);
+  }
+});
+
+test('an add comments once on the issue, then closes the post, tells the player and the moderator, and marks the card', async () => {
+  for (const [why, edit, interaction, envOver, want] of [
+    ['a card press on a bug', () => {}, addSubmit(), {}, { player: '42', target: '701', text: ADDED_BUG, card: '96' }],
+    ['a right-click add of a reply, to a feature issue', (s) => {
+      s.issue = { ...ISSUE_12, labels: [{ name: 'from-discord' }, { name: 'type: feature' }] };
+      s.kv = { 'thread:701': JSON.stringify({ greeting: 'g1', buttonless: true, card: '97' }) };
+    }, addSubmit({ id: 'ai:701:801:0' }), {}, { player: '46', target: '801', text: ADDED_BUG.replace(ASK, ''), card: '97' }],
+    ['a moved copy by right-click, its card only in movedfrom:', (s) => {
+      s.kv = { 'movedfrom:701': JSON.stringify({ from: '690', reporter: { name: 'Pat', id: '42', username: 'pat' }, card: '98' }) };
+      s.first = { ...s.first, webhook_id: '61', author: { id: '61', username: 'Pat' } };
+    }, addSubmit({ id: 'ai:701:701:0' }), {}, { player: '42', target: '701', text: `<@42> ${ADDED_BUG}`, card: '98', ping: ['42'] }],
+    ["a webhook's post", (s) => { s.first = { ...s.first, webhook_id: '61', author: { id: '61', username: 'Hook' } }; }, addSubmit(), {},
+      { player: 'unknown', target: '701', text: ADDED_BUG, card: '96' }],
+    ['a closed issue whose fix waits for a release', (s) => { s.issue = { ...ISSUE_12, state: 'closed', labels: [...ISSUE_12.labels, { name: 'pending-release' }] }; }, addSubmit(), {},
+      { player: '42', target: '701', text: ADDED_BUG, card: '96' }],
+    ['one repo, "12" and no Repo field', () => {}, addSubmit({ repo: '', number: '12' }), { REPOS: '{"ONE":"me/test-one"}' },
+      { player: '42', target: '701', text: ADDED_BUG, card: '96' }],
+  ]) {
+    const w = addWorld(edit);
+    const { out, told, kv } = await runAdd(w, interaction, envOver);
+    const posts = commentPosts(w.f);
+    assert.equal(posts.length, 1, `${why}: one comment`);
+    assert.ok(posts[0].body.body.startsWith('Report 4 of this problem: [the Discord post](https://discord.com/channels/1/701), from '), why);
+    assert.ok(posts[0].body.body.endsWith(`\n\n<!-- discord-report: 701 player: ${want.player} -->`), why);
+    assert.equal(w.f.calls.filter((c) => /issues\/12/.test(c.url) && c.method !== 'GET' && !/comments$/.test(c.url)).length, 0, `${why}: no other write to the issue`);
+    assert.deepEqual(JSON.parse(kv.m.get('issue:701')), { repo: 'me/test-one', number: 12, key: 'ONE', by: '<@5>', added: true }, why);
+    assert.deepEqual(w.f.find('PATCH', /\/channels\/701$/)[0].body.applied_tags, ['t-retail', 't-bug', 's-closed'], why);
+    const sent = w.f.find('POST', /\/channels\/701\/messages$/)[0].body;
+    assert.equal(sent.content, want.text, why);
+    assert.equal(sent.message_reference.message_id, want.target, why);
+    assert.deepEqual(sent.allowed_mentions.users, want.ping || [], why);
+    assert.equal(told, 'Added to ONE #12 as report 4: https://github.com/me/test-one/issues/12', why);
+    const card = w.f.find('PATCH', new RegExp(`/channels/556/messages/${want.card}$`));
+    assert.equal(card.length, 1, `${why}: the card`);
+    assert.match(card[0].body.content, /\n\*\*Added to ONE #12\*\* by <@5>$/, why);
+    const order = w.f.calls.map((c) => (/comments$/.test(c.url) && c.method === 'POST' ? 'comment' : /\/channels\/701$/.test(c.url) && c.method === 'PATCH' ? 'tag'
+      : /\/channels\/701\/messages$/.test(c.url) ? 'reply' : /webhooks/.test(c.url) ? 'moderator' : /discord-lock-701$/.test(c.url) ? 'release' : /\/channels\/556\//.test(c.url) ? 'card' : null)).filter(Boolean);
+    assert.deepEqual(order, ['comment', 'tag', 'reply', 'moderator', 'release', 'card'], why);
+    assert.equal(out[0].added, 12, why);
+  }
+});
+
+test('an add refused changes nothing and says why', async () => {
+  const filedIn = (repo) => [{ number: 9, body: '<!-- discord-thread: 701 reporter: 42 -->', html_url: `https://github.com/${repo}/issues/9`, repository_url: `https://api.github.com/repos/${repo}` }];
+  for (const [why, edit, want, release = 1] of [
+    ['another action holds the lock', (s) => { s.claim = () => new Response('{"errors":[{"code":"already_exists"}]}', { status: 422 }); },
+      /^Nothing was added: another send, move or add of this post is running, or one stopped partway\. /, 0],
+    ['GitHub did not confirm the lock', (s) => { s.claim = () => new Response('{}', { status: 500 }); },
+      /^Nothing was added: GitHub did not confirm the lock discord-lock-701 in me\/test-one /, 0],
+    ['a post already added', (s) => { s.kv = { 'issue:701': JSON.stringify({ repo: 'me/test-one', number: 12, key: 'ONE', added: true }) }; },
+      /^Nothing was added: this post was already added to ONE #12\.$/],
+    ['a post already filed', (s) => { s.kv = { 'issue:701': JSON.stringify({ repo: 'me/test-one', number: 9, key: 'ONE' }) }; },
+      /^Nothing was added: this post is already filed as ONE #9\. If it is the same problem as another issue, close ONE #9 on GitHub as a duplicate of it; its post then gets the Duplicate message\.$/],
+    ['an older scan record with no key', (s) => { s.kv = { 'thread:701': JSON.stringify({ issue: { repo: 'me/test-two', number: 9 } }) }; },
+      /^Nothing was added: this post is already filed as TWO #9\. /],
+    ['no record, its marker found in the other repo', (s) => { s.two = () => filedIn('me/test-two'); }, /^Nothing was added: this post is already filed as TWO #9\. /],
+    ["no record, the other repo's list failing", (s) => { s.two = () => new Response('{}', { status: 500 }); }, /^Nothing was added: could not check me\/test-two for this post /],
+    ['a post moved away', (s) => { s.kv = { 'movedto:701': '{"to":"990"}' }; }, /^Nothing was added: this post was moved to https:\/\/discord\.com\/channels\/1\/990; add that one\.$/],
+    ['the message deleted', (s) => { s.first = () => new Response('{"message":"Unknown Message"}', { status: 404 }); },
+      /^Nothing was added: the message to add was deleted; a moderator can open the post and right-click another message › Apps › Add to issue\.$/],
+    ['no such issue', (s) => { s.issue = () => new Response('{}', { status: 404 }); }, /^Nothing was added: ONE #12 was not found in me\/test-one\.$/],
+    ['a closed issue with no fix waiting', (s) => { s.issue = { ...ISSUE_12, state: 'closed', labels: [...ISSUE_12.labels, { name: 'shipped' }] }; },
+      /^Nothing was added: ONE #12 is closed, and no fix for it is waiting for a release\. If the problem is back, send this post on its own\.$/],
+    ['a labeled issue with no marker', (s) => { s.issue = { ...ISSUE_12, body: 'by hand' }; }, /^Nothing was added: ONE #12 was not filed by the bot from a Discord post, so it has no post to follow\.$/],
+    ['a marker and no from-discord label', (s) => { s.issue = { ...ISSUE_12, labels: [{ name: 'type: bug' }] }; }, /was not filed by the bot from a Discord post/],
+    ['a closed issue not the bot\'s', (s) => { s.issue = { ...ISSUE_12, state: 'closed', labels: [] }; }, /was not filed by the bot from a Discord post/],
+    ['an issue answered from another repo', (s) => { s.issue = { ...ISSUE_12, number: 3, repository_url: 'https://api.github.com/repos/me/test-two' }; },
+      /^Nothing was added: ONE #12 is now me\/test-two #3: pick that repo and number\.$/],
+  ]) {
+    const w = addWorld(edit);
+    const { told } = await runAdd(w);
+    assert.match(told, want, why);
+    assert.equal(commentPosts(w.f).length, 0, `${why}: no comment`);
+    assert.equal(w.f.find('POST', /\/channels\/701\/messages$/).length, 0, `${why}: no reply`);
+    assert.equal(released(w.f), release, `${why}: the lock`);
+  }
+});
+
+test("an add's comment that GitHub refused, never started or did not confirm changes the post in no way; one applied goes on", async () => {
+  for (const [why, comment, deps, want, goes] of [
+    ['a 422', () => new Response('{"message":"bad"}', { status: 422 }), {}, /^Nothing was added: GitHub refused the comment on ONE #12 \(/, false],
+    ['a 500', () => new Response('{}', { status: 500 }), {}, /^Nothing was added: GitHub did not confirm the comment on ONE #12 \(.*\), so it may be there\. Check the issue: if this post's report comment is there, ask a maintainer to delete it, then add the same message to the same issue again\.$/, false],
+    ['no answer', () => { throw new Error('Network connection lost.'); }, {}, /^Nothing was added: GitHub did not confirm the comment on ONE #12 \(Network connection lost\.\), so it may be there\./, false],
+    ['a 201 whose body is not JSON', () => new Response('not json', { status: 201 }), {}, /^Added to ONE #12 as report 4: https:\/\/github\.com\/me\/test-one\/issues\/12$/, true],
+  ]) {
+    const w = addWorld((s) => { s.comment = comment; });
+    const { told, kv } = await runAdd(w, addSubmit(), deps);
+    assert.match(told, want, why);
+    assert.equal(kv.m.has('issue:701'), goes, `${why}: the record`);
+    assert.equal(w.f.find('PATCH', /\/channels\/701$/).length, goes ? 1 : 0, `${why}: the tag`);
+    assert.equal(w.f.find('POST', /\/channels\/701\/messages$/).length, goes ? 1 : 0, `${why}: the reply`);
+    assert.equal(released(w.f), 1, `${why}: the lock is released`);
+  }
+  // A call that never started: the job's budget is spent before the comment,
+  // by a slow read of the issue's comments.
+  const late = addWorld();
+  const kv = fakeKv();
+  const ctx = ctxFor();
+  const slow = (url, init) => (/comments\?/.test(url) ? new Promise((done) => setTimeout(() => done(late.f(url, init)), 80)) : late.f(url, init));
+  await handle(await signed(addSubmit()), { ...ADD_ENV, STATE: kv }, ctx, { fetch: slow, installationToken: async () => 'inst', log: () => {}, budgetMs: 60, callMs: 200 });
+  await Promise.all(ctx.jobs);
+  assert.match(late.f.find('PATCH', /\/webhooks\//).at(-1).body.content, /^Nothing was added: out of time before /, 'a comment with no time left');
+  assert.equal(commentPosts(late.f).length, 0, 'the comment never started');
+  assert.equal(kv.m.has('issue:701'), false);
+});
+
+test("an add's steps after the comment each run, and the moderator's reply names those not done", async () => {
+  const fullKv = () => { const k = fakeKv(); k.put = async () => { throw new Error('KV down'); }; return k; };
+  const noClosed = { ...FORUM, available_tags: FORUM.available_tags.filter((t) => t.name !== 'Closed') };
+  for (const [why, edit, envKv, want] of [
+    ['the record put throwing', () => {}, fullKv, /\(post record not saved: KV down\)$/],
+    ['the tag write answering 403', (s) => { s.tag = () => new Response('{}', { status: 403 }); }, null, /\(tag not set: .*403/],
+    ['a forum with no Closed tag', (s) => { s.extra = [['GET', /\/channels\/900$/, () => noClosed]]; }, null, /\(tag not set: forum has no "Closed" tag\)$/],
+    ["the player's reply answering 500", (s) => { s.send = () => new Response('{}', { status: 500 }); }, null, /\(note in the post may not have been sent: .*500/],
+    ["the player's reply answering 403, the greeting taking it", (s) => {
+      s.send = () => new Response('{}', { status: 403 });
+      s.kv = { 'thread:701': JSON.stringify({ greeting: 'g1', buttonless: true }) };
+    }, null, /^Added to ONE #12 as report 4: https:\/\/github\.com\/me\/test-one\/issues\/12$/],
+  ]) {
+    const w = addWorld(edit);
+    const kv = envKv ? envKv() : fakeKv(w.s.kv);
+    const ctx = ctxFor();
+    await handle(await signed(addSubmit()), { ...ADD_ENV, STATE: kv }, ctx, { fetch: w.f, installationToken: async () => 'inst', log: () => {} });
+    await Promise.all(ctx.jobs);
+    assert.match(w.f.find('PATCH', /\/webhooks\//).at(-1).body.content, want, why);
+    assert.equal(w.f.find('POST', /\/channels\/701\/messages$/).length, 1, `${why}: the reply is tried`);
+    assert.equal(w.f.find('PATCH', /\/channels\/556\/messages\/96$/).length, 1, `${why}: the card step runs`);
+    if (why.includes('greeting')) assert.equal(w.f.find('PATCH', /\/channels\/701\/messages\/g1$/)[0].body.content, ADDED_BUG, why);
+  }
+});
+
+test('Send and Move on an added post answer that it was added, and read no issue', async () => {
+  const rec = { 'issue:700': JSON.stringify({ repo: 'me/test-one', number: 12, key: 'ONE', by: '<@5>', added: true }) };
+  const SAID = 'Nothing was created: this post was added to ONE #12 as a repeat report: https://github.com/me/test-one/issues/12';
+  // Right-click Send.
+  const f1 = fakeFetch(discordRoutes(githubRoutes()));
+  const c1 = ctxFor();
+  await handle(await signed(submit()), { ...env, STATE: fakeKv(rec) }, c1, { fetch: f1, installationToken: async () => 'inst' });
+  await Promise.all(c1.jobs);
+  assert.equal(f1.find('PATCH', /\/webhooks\//)[0].body.content, SAID);
+  assert.equal(f1.find('GET', /issues\/12$/).length, 0, 'send: no issue read');
+  assert.equal(f1.find('POST', /repos\/me\/test-one\/issues$/).length, 0, 'send: no create');
+  // A card press that still offers Send.
+  const f2 = fakeFetch(discordRoutes());
+  const press = { type: 3, member: MOD, channel_id: '556', message: { id: '96' }, data: { custom_id: 'send:700' } };
+  const j = await (await handle(await signed(press), { ...env, STATE: fakeKv(rec) }, ctxFor(), { fetch: f2, installationToken: async () => 'inst' })).json();
+  assert.equal(j.data.content, SAID);
+  assert.equal(f2.calls.length, 0, 'press: no call');
 });

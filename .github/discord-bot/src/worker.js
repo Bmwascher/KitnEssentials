@@ -5,13 +5,14 @@
 // filed answers "Already tracked" instead of opening the form. Submitting the
 // form files the issue and replies to the filed message in the post.
 import {
-  STATUS, MESSAGES, PERMS, packGroups, postLines, taken, oneHop, isDiscordId, THREAD_TYPES, buildTitle, fitName, buildBody, labelsFor, cleanPostTitle, personName, staffRef, titleText, statusOf,
+  STATUS, MESSAGES, PERMS, parseMarker, packGroups, postLines, taken, oneHop, isDiscordId, THREAD_TYPES, buildTitle, fitName, buildBody, labelsFor, cleanPostTitle, personName, staffRef, titleText, statusOf,
   guessFromTags, normClient, normType, normRepoKey, parseRepos, timedFetch,
   parseForums, parseRoleIds, parseTemplates, templateCheck, templateGaps,
   templateNote, parseCustomId, templateLabels, filedCard, cardHead, BY_RIGHT_CLICK,
   parseRepoTags, repoFromTags, plainTags, usableRepoKeys,
   MOVE_BUTTON, CLIENT_NAMES, cutUnits, splitTitle, movedTitle, movedBody, BOT_LOGIN,
   queueCard, movedTags, webhookName, avatarUrl, isBotCopy,
+  ADD_BUTTON, LABELS, hasLabel, eligible, reportComment, ownReports,
 } from './core.js';
 import { checklistFirst, parseChecklist } from '../status/checklist.mjs';
 import { discordClient, postGone, archivedOf } from './discord.js';
@@ -22,6 +23,7 @@ import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems } from '.
 export const COMMAND_NAME = 'Send to GitHub';
 export const CHECK_COMMAND = 'bot-check';
 export const MOVE_COMMAND = 'Move post';
+export const ADD_COMMAND = 'Add to issue';
 // The setup check ends by 20 s from the request's arrival and its posts by
 // 22 s, leaving the private reply its own time before REPORT_BY_MS. The
 // posts have their own share of calls, so a run stays within 50 requests.
@@ -461,9 +463,9 @@ async function tellTracked(discord, log, { threadId, messageId, text, old, greet
 // only the Open post link. It goes after the lock's release; a failed edit
 // is logged, and a press on the card later answers "Already tracked" and
 // marks it.
-async function markCard(discord, cfg, log, { cardId, guildId, postId, head, key, number, by }) {
+async function markCard(discord, cfg, log, { cardId, guildId, postId, head, key, number, by, added = false }) {
   if (!cardId || !cfg.queue) return;
-  await discord.call('PATCH', `/channels/${cfg.queue}/messages/${cardId}`, filedCard({ guildId, postId, head, key, number, by }))
+  await discord.call('PATCH', `/channels/${cfg.queue}/messages/${cardId}`, filedCard({ guildId, postId, head, key, number, by, added }))
     .catch((e) => log(`queue card ${cardId} not updated: ${e.message.slice(0, 200)}`));
 }
 
@@ -499,6 +501,10 @@ function couldNotCheck(cfg, saved, postId, why, done) {
   const what = key !== saved.repo ? `${key} #${saved.number} in ${saved.repo}` : `${saved.repo} #${saved.number}`;
   return `Could not check ${what} (${why}): it may be gone, or the app may have lost access there. ${done} If it is gone, a bot admin can clear this post's filing record (the KV key issue:${postId}, or the "issue" field of thread:${postId} for a post filed before this version), and the post can then be sent again.`;
 }
+
+// A post added to an issue as a repeat report, as Send names it.
+const recordKeyOf = (cfg, saved) => saved.key || keyOf(cfg, saved.repo);
+const addedText = (cfg, saved) => `this post was added to ${recordKeyOf(cfg, saved)} #${saved.number} as a repeat report: https://github.com/${saved.repo}/issues/${saved.number}`;
 
 // A post's four records, read side by side and waited on for at most `ms`:
 // the scan's, the filing's, and the two a move writes.
@@ -548,6 +554,7 @@ async function pressCheck(interaction, env, deps, cfg, postId, t0, ctx) {
     log(`press check failed after ${Date.now() - t0} ms: ${e.message.slice(0, 200)}`);
     return again;
   }
+  if (saved && saved.added) return reply(`Nothing was created: ${addedText(cfg, saved)}`);
   let issue = null;
   let foundIn = null;
   let fromSaved = false;
@@ -853,13 +860,13 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
       // send cannot tell whose it is, so it advises no deletion: a later
       // send's busy reply gives the one safe advice.
       if (!unknownOutcome(e)) throw e;
-      await followup(`Nothing was created: GitHub did not confirm the lock ${lockLabel(threadId)} in ${cfg.lockRepo} (${e.message.slice(0, 200)}). Wait a few minutes, then send the post again; if that says another send is running, follow its advice.`);
+      await followup(`Nothing was created: GitHub did not confirm the lock ${lockLabel(threadId)} in ${cfg.lockRepo} (${e.message.slice(0, 200)}). Wait a few minutes, then send the post again; if that says another send, move or add is running, follow its advice.`);
       return { error: e.message, uncertain: 'lock' };
     }
     if (!locked) {
       // The holder may be between its last search and its create, so no
       // issue shows yet: only a lock older than any send may be deleted.
-      await followup(`Nothing was created: another send or move of this post is running, or one stopped partway. Wait a few minutes, then send it again. If it still says this and no issue for this post appears in any repo the bot files into, ${clearAdvice(threadId, cfg.lockRepo)}`);
+      await followup(`Nothing was created: another send, move or add of this post is running, or one stopped partway. Wait a few minutes, then send it again. If it still says this and no issue for this post appears in any repo the bot files into, ${clearAdvice(threadId, cfg.lockRepo)}`);
       return { busy: true };
     }
     // The post's records, read under the lock side by side within KV_MS
@@ -876,6 +883,10 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     if (movedTo) {
       await followup(`Nothing was created: this post was moved to https://discord.com/channels/${interaction.guild_id}/${movedTo.to}; send that one.`);
       return { refused: 'moved' };
+    }
+    if (saved && saved.added) {
+      await followup(`Nothing was created: ${addedText(cfg, saved)}`);
+      return { refused: 'added' };
     }
     // An old greeting: the one pressed in the post, or the record's when it
     // was written before greetings lost their button.
@@ -1135,11 +1146,11 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       locked = await githubClient(lockToken, prep).claimThread(cfg.lockRepo, oldId);
     } catch (e) {
       if (!unknownOutcome(e)) throw e;
-      await followup(`Nothing was moved: GitHub did not confirm the lock ${lockLabel(oldId)} in ${cfg.lockRepo} (${e.message.slice(0, 200)}). Wait a few minutes, then move the post again; if that says another send or move is running, follow its advice.`);
+      await followup(`Nothing was moved: GitHub did not confirm the lock ${lockLabel(oldId)} in ${cfg.lockRepo} (${e.message.slice(0, 200)}). Wait a few minutes, then move the post again; if that says another send, move or add is running, follow its advice.`);
       return { uncertain: 'lock' };
     }
     if (!locked) {
-      await followup(`Nothing was moved: another send or move of this post is running, or one stopped partway. Wait a few minutes, then move it again. If it still says this, ${clearAdvice(oldId, cfg.lockRepo, 'move')}`);
+      await followup(`Nothing was moved: another send, move or add of this post is running, or one stopped partway. Wait a few minutes, then move it again. If it still says this, ${clearAdvice(oldId, cfg.lockRepo, 'move')}`);
       return { busy: true };
     }
 
@@ -1158,6 +1169,9 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       return await refuse("could not read this post's saved record just now. Try again", 'record');
     }
     if (records.movedTo) return await refuse(`this post was already moved to ${link(records.movedTo.to)}`, 'moved');
+    if (records.saved && records.saved.added) {
+      return await refuse(`this post was added to ${recordKeyOf(cfg, records.saved)} #${records.saved.number} as a repeat report, so it stays here`, 'added');
+    }
     const found = await findIssue(cfg, records.saved, oldId, tokenFor, prep);
     if (found.unclear) {
       await followup(couldNotCheck(cfg, records.saved, oldId, found.unclear, 'Nothing was moved.'));
@@ -1190,7 +1204,7 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       // outside REPOS. Moving it would leave that issue on the locked post.
       const receipt = await ownReceipt(discord, oldId);
       if (receipt) {
-        return await refuse(`the bot's "now tracked" reply in this post (${link(oldId)}/${receipt.id}) says it was sent to GitHub, though its issue was not found by its filing record or the from-discord label, so the bot cannot move it. If that issue was deleted, delete that reply, then move the post again`, 'filed');
+        return await refuse(`the bot's reply in this post (${link(oldId)}/${receipt.id}) says it is tracked on GitHub, though its issue was not found by its filing record or the from-discord label, so the bot cannot move it. If that issue was deleted, delete that reply, then move the post again`, 'filed');
       }
     }
     if (old.thread_metadata.locked) return await refuse('the post is locked: a moderator can unlock it, then move it', 'locked');
@@ -1477,6 +1491,164 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
 // GUILD_ID that names none, before it reads anything else. A setup problem
 // is shown to staff only (`staff`); anyone else gets the entry point's own
 // refusal (`no`). /bot-check says the same in its own words.
+// The Add to issue form: the issue number, and the repo when there is a choice.
+async function openAddForm(interaction, env, deps, cfg, { threadId, messageId, cardId = '', deadline }) {
+  const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, deadline));
+  const post = await formPost(interaction, discord, threadId);
+  if (post.answer) return post.answer;
+  if (!cfg.forums.includes(post.ch.parent_id)) return reply('This only works on posts in the forums the bot is set up for.');
+  const keys = usableRepoKeys(cfg.repos);
+  return json({
+    type: 9,
+    data: {
+      custom_id: `ai:${threadId}:${messageId}:${cardId || '0'}`,
+      title: 'Add to issue',
+      components: [
+        ...(keys.length > 1 ? [select('repo', 'Repo', keys.map((k) => [k, k]), null)] : []),
+        input('number', 'Issue number', '', { max: 10, placeholder: '12' }),
+      ],
+    },
+  });
+}
+
+// The Add form's repo key and issue number, or the problem.
+function addTarget(cfg, v) {
+  const keys = usableRepoKeys(cfg.repos);
+  const key = keys.length > 1 ? normRepoKey(v.repo, cfg.repos) : keys[0];
+  const m = /^#?(\d{1,9})$/.exec(String(v.number || '').trim());
+  if (!keys.includes(key)) return { problem: 'Pick a repo the bot files into.' };
+  if (!m) return { problem: 'Type the issue number, like 12.' };
+  return { key, number: Number(m[1]) };
+}
+
+// Adds a post to an issue the bot filed, as a repeat report: one comment on
+// the issue, then the post's record, its Closed tag, the player's reply and
+// the moderator's, as a filing does; the lock's release and the card last.
+export async function addToIssue(interaction, env, deps, t0, { key, number }) {
+  const cfg = config(env);
+  const { threadId, messageId, cardId } = parseCustomId(interaction.data.custom_id);
+  const user = interaction.member.user;
+  const filer = staffRef(user);
+  const log = deps.log || console.error;
+  const { callMs = CALL_MS, budgetMs = FILE_BUDGET_MS, kvMs = KV_MS } = deps;
+  const f = timedFetch(deps.fetch, callMs, t0 + budgetMs);
+  const discord = discordClient(env.DISCORD_BOT_TOKEN, f);
+  const followup = followupFor(interaction, deps, log, t0);
+  const { tokenFor, access } = githubAccess(env, deps, f);
+  const repo = cfg.repos[key];
+  const refuse = async (why, kind) => {
+    await followup(`Nothing was added: ${why}`);
+    return { refused: kind };
+  };
+  let ghRelease;
+  let locked = false;
+  let rec = null;
+  let movedFrom = null;
+  let cardAfter = null;
+  try {
+    const gh = githubClient(await access(repo), f);
+    const lockToken = await access(cfg.lockRepo);
+    ghRelease = githubClient(lockToken, timedFetch(deps.fetch, TAIL_MS, t0 + RELEASE_BY_MS));
+    const thread = await discord.getChannel(threadId);
+    try {
+      locked = await githubClient(lockToken, f).claimThread(cfg.lockRepo, threadId);
+    } catch (e) {
+      if (!unknownOutcome(e)) throw e;
+      await followup(`Nothing was added: GitHub did not confirm the lock ${lockLabel(threadId)} in ${cfg.lockRepo} (${e.message.slice(0, 200)}). Wait a few minutes, then add the post again; if that says another send, move or add is running, follow its advice.`);
+      return { uncertain: 'lock' };
+    }
+    if (!locked) {
+      await followup(`Nothing was added: another send, move or add of this post is running, or one stopped partway. Wait a few minutes, then add it again. If it still says this and no issue for this post appears in any repo the bot files into, ${clearAdvice(threadId, cfg.lockRepo, 'add')}`);
+      return { busy: true };
+    }
+    let saved;
+    let movedTo;
+    ({ thread: rec, saved, movedFrom, movedTo } = await postRecords(env.STATE, threadId, kvMs));
+    if (movedTo) return await refuse(`this post was moved to https://discord.com/channels/${interaction.guild_id}/${movedTo.to}; add that one.`, 'moved');
+    let filed = saved ? { key: recordKeyOf(cfg, saved), number: saved.number } : null;
+    if (saved && saved.added) return await refuse(`this post was already added to ${filed.key} #${filed.number}.`, 'added');
+    if (!filed) {
+      // A filing can be missing its record while its issue exists.
+      const hit = await searchRepos(Object.values(cfg.repos), threadId, tokenFor, f);
+      if (hit) {
+        const at = whereIs(hit.issue, hit.repo);
+        filed = { key: keyOf(cfg, at.repo), number: at.number };
+      }
+    }
+    if (filed) {
+      return await refuse(`this post is already filed as ${filed.key} #${filed.number}. If it is the same problem as another issue, close ${filed.key} #${filed.number} on GitHub as a duplicate of it; its post then gets the Duplicate message.`, 'filed');
+    }
+
+    const { message } = await discord.readMessage(threadId, messageId);
+    if (!message) return await refuse('the message to add was deleted; a moderator can open the post and right-click another message › Apps › Add to issue.', 'message');
+    const author = message.author || {};
+    const copy = movedFrom && messageId === threadId ? movedFrom.reporter : null;
+    const player = copy ? { name: copy.name, username: copy.username, id: copy.id }
+      : { name: personName(author, null), username: author.username, id: message.webhook_id ? null : author.id };
+
+    let issue;
+    try {
+      issue = await gh.getIssue(repo, number);
+    } catch (e) {
+      if (statusOf(e) === 404 || statusOf(e) === 410) return await refuse(`${key} #${number} was not found in ${repo}.`, 'not-found');
+      throw e;
+    }
+    const at = whereIs(issue, repo);
+    if (!sameRepo(at.repo, repo)) return await refuse(`${key} #${number} is now ${at.repo} #${at.number}: pick that repo and number.`, 'transferred');
+    if (!eligible(issue)) return await refuse(`${key} #${number} was not filed by the bot from a Discord post, so it has no post to follow.`, 'not-bot');
+    if (issue.state === 'closed' && !hasLabel(issue, LABELS.pendingRelease)) {
+      return await refuse(`${key} #${number} is closed, and no fix for it is waiting for a release. If the problem is back, send this post on its own.`, 'closed');
+    }
+    const report = ownReports(issue, await gh.comments(repo, number)).length + 2;
+    const body = reportComment({
+      number: report, guildId: interaction.guild_id, postId: threadId, player,
+      by: { name: personName(user, interaction.member), username: user.username, id: user.id },
+    });
+    try {
+      await gh.call('POST', `/repos/${repo}/issues/${number}/comments`, { body });
+    } catch (e) {
+      if (!e.applied) {
+        if (refusal4xx(e)) return await refuse(`GitHub refused the comment on ${key} #${number} (${e.message.slice(0, 200)}).`, 'comment');
+        if (!unknownOutcome(e)) throw e;
+        return await refuse(`GitHub did not confirm the comment on ${key} #${number} (${e.message.slice(0, 200)}), so it may be there. Check the issue: if this post's report comment is there, ask a maintainer to delete it, then add the same message to the same issue again.`, 'comment-unknown');
+      }
+    }
+
+    const notes = [];
+    try {
+      await within(kvMs, saveIssueRecord(env.STATE, threadId, { repo, number, key, by: filer, added: true }));
+    } catch (e) { notes.push(`post record not saved: ${e.message.slice(0, 200)}`); }
+    const tagger = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, callMs, t0 + TAG_BY_MS));
+    try {
+      const status = await tagger.setStatus(threadId, STATUS.closed);
+      if (status.skipped) notes.push(`tag not set: ${status.skipped}`);
+    } catch (e) { notes.push(`tag not set: ${e.message.slice(0, 300)}`); }
+    const teller = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, callMs, t0 + TRACKED_BY_MS));
+    const original = `https://discord.com/channels/${interaction.guild_id}/${parseMarker(issue.body).threadId}`;
+    notes.push(...await tellTracked(teller, log, {
+      threadId, messageId, text: MESSAGES.added({ key, number, original, bug: hasLabel(issue, 'type: bug') }),
+      old: rec && rec.greeting && !rec.buttonless ? rec.greeting : '', greeting: rec && rec.greeting, ping: copy && copy.id ? copy.id : null,
+    }));
+    await followup(`Added to ${key} #${number} as report ${report}: ${issue.html_url}${notes.length ? ` (${notes.join('; ')})` : ''}`);
+    cardAfter = { cardId: cardId || (rec && rec.card) || (movedFrom && movedFrom.card) || '', head: cardHead(thread.parent_id, threadId), key, number, by: filer, added: true };
+    return { added: number, report, notes };
+  } catch (e) {
+    await followup(`Nothing was added: ${e.message.slice(0, 1500)}`);
+    return { error: e.message };
+  } finally {
+    if (locked) {
+      try { await ghRelease.releaseThread(cfg.lockRepo, threadId); } catch (e) { log(`lock ${lockLabel(threadId)} not released: ${e.message}`); }
+    }
+    if (cardAfter && cfg.queue) {
+      const closing = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, TAIL_MS, t0 + RELEASE_BY_MS));
+      const kvLeft = Math.min(kvMs, t0 + RELEASE_BY_MS - Date.now());
+      const latest = cardAfter.cardId || kvLeft <= 0 ? null : await within(kvLeft, readStrict(env.STATE, `thread:${threadId}`))
+        .catch((e) => { log(`card lookup failed, so the record read earlier is used: ${e.message.slice(0, 200)}`); return rec; });
+      await markCard(closing, cfg, log, { ...cardAfter, cardId: cardAfter.cardId || (latest && latest.card) || '', guildId: interaction.guild_id, postId: threadId });
+    }
+  }
+}
+
 function elsewhere(env, interaction, staff, no) {
   const home = String(env.GUILD_ID ?? '');
   if (!isDiscordId(home)) return staff() ? reply("The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).") : reply(no);
@@ -1529,6 +1701,31 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     const cfg = configOr(env);
     if (!cfg || !cfg.forums.length) return notSetUp(env);
     return openMoveForm(interaction, env, deps, cfg, { threadId: interaction.channel_id, deadline: t0 + FORM_BY_MS });
+  }
+
+  if (interaction.type === 2 && interaction.data.name === ADD_COMMAND) {
+    const away = elsewhere(env, interaction, () => canUse(interaction.member), 'Only moderators and admins can add posts to issues.');
+    if (away) return away;
+    if (!canUse(interaction.member)) return reply('Only moderators and admins can add posts to issues.');
+    const cfg = configOr(env);
+    if (!cfg || !cfg.forums.length) return notSetUp(env);
+    return openAddForm(interaction, env, deps, cfg, { threadId: interaction.channel_id, messageId: interaction.data.target_id, deadline: t0 + FORM_BY_MS });
+  }
+
+  if (interaction.type === 3 && String(interaction.data.custom_id).startsWith(`${ADD_BUTTON}:`)) {
+    const { answer, cfg, ids } = gate(interaction, env, { no: NOT_ALLOWED, noRoles: noRoles(ADD_COMMAND), forums: true });
+    if (answer) return answer;
+    // On queue cards only: the form adds the post's first message.
+    return openAddForm(interaction, env, deps, cfg, { threadId: ids.threadId, messageId: ids.threadId, cardId: interaction.message.id, deadline: t0 + FORM_BY_MS });
+  }
+
+  if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('ai:')) {
+    const { answer, cfg } = gate(interaction, env, { no: NOT_ALLOWED, forums: true });
+    if (answer) return answer;
+    const target = addTarget(cfg, modalValues(interaction.data));
+    if (target.problem) return reply(`Nothing was added. ${target.problem} Press the button or right-click the post to try again.`);
+    ctx.waitUntil(addToIssue(interaction, env, deps, t0, target));
+    return json({ type: 5, data: { flags: EPHEMERAL } });
   }
 
   if (interaction.type === 2 && interaction.data.name === CHECK_COMMAND) {
