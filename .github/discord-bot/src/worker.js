@@ -10,7 +10,7 @@ import {
   parseForums, parseRoleIds, parseTemplates, templateCheck, templateGaps,
   templateNote, parseCustomId, templateLabels, filedCard, cardHead, BY_RIGHT_CLICK,
   parseRepoTags, repoFromTags, plainTags, usableRepoKeys,
-  MOVE_BUTTON, CLIENT_NAMES, cutUnits,
+  MOVE_BUTTON, CLIENT_NAMES, cutUnits, splitTitle,
   queueCard, movedTags, webhookName, avatarUrl, isBotCopy,
 } from './core.js';
 import { discordClient, postGone, archivedOf } from './discord.js';
@@ -207,18 +207,40 @@ async function formPost(interaction, discord, threadId) {
   return { ch };
 }
 
+// The key a saved issue is named by, when the Move form's dropdown offers
+// it: the record's own while REPOS still maps it to the record's repo, else
+// the repo's first. Null otherwise, and with no record.
+function recordKey(cfg, keys, saved) {
+  if (!saved) return null;
+  const key = sameRepo(cfg.repos[saved.key], saved.repo) ? saved.key : keyOf(cfg, saved.repo);
+  return keys.includes(key) ? key : null;
+}
+
+// The client of a post named as its issue's title, else null.
+function postClient(name) {
+  const t = splitTitle(name);
+  return t ? normClient(t.client) : null;
+}
+
 // The Move form, answered within FORM_BY_MS as openForm is. The forums it
 // offers, and their names, come from the server's channel list, so its
-// failure opens no form. It reads no record: the move's job does, and
-// refuses a post already filed or moved. `cfg` is the config its route
-// read, naming at least one player forum.
+// failure opens no form. With two or more usable keys it offers the repo,
+// pre-selected from the post's filing record, read beside the channel list;
+// a read that fails or ends late pre-selects none, which keeps the repo. The
+// custom id carries the key and the client it pre-selected, so the job keeps
+// what staff left as shown. `cfg` is the config its route read, naming at
+// least one player forum.
 async function openMoveForm(interaction, env, deps, cfg, { threadId, cardId = '', deadline }) {
   const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, deadline));
   const post = await formPost(interaction, discord, threadId);
   if (post.answer) return post.answer;
   const { ch } = post;
   if (!cfg.forums.includes(ch.parent_id)) return reply('This only works on posts in the forums the bot is set up for.');
-  const channels = await discord.call('GET', `/guilds/${interaction.guild_id}/channels`).catch(() => null);
+  const keys = usableRepoKeys(cfg.repos);
+  const [channels, saved] = await Promise.all([
+    discord.call('GET', `/guilds/${interaction.guild_id}/channels`).catch(() => null),
+    keys.length > 1 ? postRecords(env.STATE, threadId, Math.max(0, deadline - Date.now())).then((r) => r.saved, () => null) : null,
+  ]);
   if (!channels) return reply('Could not read the forums just now. Try again.');
   const others = moveTargets(cfg, channels, ch.parent_id);
   if (!others.length) return reply('There is no other forum to move this post to.');
@@ -230,14 +252,18 @@ async function openMoveForm(interaction, env, deps, cfg, { threadId, cardId = ''
   // A post read from the interaction alone may carry no tag list.
   const tagIds = ch.applied_tags || [];
   const tagNames = tagsIn(channels, ch.parent_id).filter((t) => tagIds.includes(t.id)).map((t) => t.name);
+  const shownKey = recordKey(cfg, keys, saved) || '';
+  const shownClient = postClient(ch.name) || cfg.forumInfo[ch.parent_id].client || guessFromTags(plainTags(tagNames, cfg.repoTags)).client || '';
   return json({
     type: 9,
     data: {
-      custom_id: `mv:${threadId}${cardId ? `:${cardId}` : ''}`,
+      custom_id: `mv:${threadId}:${cardId || '0'}:${shownKey}:${shownClient}`,
       title: 'Move post',
       components: [
         select('forum', 'Move to', others.map((id) => [id, shown(id)]), others.length === 1 ? others[0] : null),
-        select('client', 'Client', CLIENT_NAMES.map((c) => [c, c]), cfg.forumInfo[ch.parent_id].client || guessFromTags(plainTags(tagNames, cfg.repoTags)).client,
+        ...(keys.length > 1 ? [select('repo', 'Repo', keys.map((k) => [k, k]), shownKey,
+          { required: false, description: 'Used only for a post already on GitHub; another repo moves its issue there' })] : []),
+        select('client', 'Client', CLIENT_NAMES.map((c) => [c, c]), shownClient,
           { required: false, description: 'Used for a forum with no client of its own' }),
       ],
     },

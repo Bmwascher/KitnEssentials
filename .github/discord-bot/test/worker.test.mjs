@@ -1659,8 +1659,8 @@ const movePress = (member = HELPER) => ({ type: 3, member, guild_id: '1', channe
 
 test('the Move form offers the other forums of this server, pre-selects what it can, and refuses where it cannot move', async () => {
   for (const [why, req, edit, envOver, want] of [
-    ['a card press', movePress(), null, {}, { custom: 'mv:700:96', forum: undefined, client: 'Retail' }],
-    ['a right-click', moveClick(), null, {}, { custom: 'mv:700', forum: undefined, client: 'Retail' }],
+    ['a card press', movePress(), null, {}, { custom: 'mv:700:96::Retail', forum: undefined, client: 'Retail' }],
+    ['a right-click', moveClick(), null, {}, { custom: 'mv:700:0::Retail', forum: undefined, client: 'Retail' }],
     ['one other forum: chosen', moveClick(), null, { FORUMS: '{"900":{"client":"Retail"},"901":{}}' }, { forum: '901' }],
     // FORUMS is outside data: an id there may be a channel of another
     // server, which this server's list lacks, or not be a forum.
@@ -1687,15 +1687,50 @@ test('the Move form offers the other forums of this server, pre-selects what it 
   }
   const w = moveWorld();
   const j = await (await handle(await signed(movePress()), { ...MOVE_ENV, STATE: w.kv }, ctxFor(), { fetch: w.f })).json();
-  const [forum, client, ...more] = j.data.components;
+  const field = (id) => j.data.components.find((c) => c.component.custom_id === id);
   assert.equal(j.data.title, 'Move post');
-  assert.deepEqual(forum.component.options.map((o) => [o.value, o.label]), [['901', '#feedback'], ['902', '#forever-bugs']], 'the other forums, by name');
-  assert.deepEqual([client.component.required, client.description], [false, 'Used for a forum with no client of its own']);
-  assert.deepEqual(more, [], 'no repo: the move takes none');
+  assert.deepEqual(field('forum').component.options.map((o) => [o.value, o.label]), [['901', '#feedback'], ['902', '#forever-bugs']], 'the other forums, by name');
+  assert.deepEqual([field('client').component.required, field('client').description], [false, 'Used for a forum with no client of its own']);
   // Two forums of one name: each label carries its forum's id.
   const twin = moveWorld((s) => { s.channels = CHANNELS.map((c) => (c.id === '901' || c.id === '902' ? { ...c, name: 'bugs' } : c)); });
   const t = await (await handle(await signed(movePress()), { ...MOVE_ENV, STATE: twin.kv }, ctxFor(), { fetch: twin.f })).json();
   assert.deepEqual(t.data.components[0].component.options.map((o) => o.label), ['#bugs (901)', '#bugs (902)']);
+});
+
+test('the Move form pre-selects the repo from the filing record and the client from the post\'s name, and carries both in its id', async () => {
+  const TWO = JSON.stringify({ repo: 'me/test-two', number: 12, key: 'TWO' });
+  const DUO_REPOS = '{"ONE":"me/test-one","TWO":"me/test-two","DUO":"me/test-two"}';
+  for (const [why, kv, envOver, want, after = null] of [
+    ['the record\'s key', { 'issue:700': TWO }, {}, { repo: 'TWO', custom: 'mv:700:0:TWO:Retail' }],
+    ['an alias key that still names its repo', { 'issue:700': JSON.stringify({ repo: 'me/test-two', number: 12, key: 'DUO' }) }, { REPOS: DUO_REPOS }, { repo: 'DUO', custom: 'mv:700:0:DUO:Retail' }],
+    ['the scan record\'s issue', { 'thread:700': JSON.stringify({ issue: JSON.parse(TWO) }) }, {}, { repo: 'TWO', custom: 'mv:700:0:TWO:Retail' }],
+    ['no record', {}, {}, { repo: undefined, custom: 'mv:700:0::Retail' }],
+    ['a record read that fails', {}, {}, { repo: undefined, custom: 'mv:700:0::Retail' }, (w) => { w.kv.get = async () => { throw new Error('KV down'); }; }],
+    ['a record read slower than the form', {}, {}, { repo: undefined, custom: 'mv:700:0::Retail' }, (w) => { w.kv.get = () => new Promise(() => {}); }],
+    ['a record whose repo no key names', { 'issue:700': JSON.stringify({ repo: 'owner/three', number: 9, key: 'THREE' }) }, {}, { repo: undefined, custom: 'mv:700:0::Retail' }],
+    ['one usable key: no Repo field', { 'issue:700': TWO }, { REPOS: '{"ONE":"me/test-one"}' }, { fields: ['forum', 'client'], custom: 'mv:700:0::Retail' }],
+    ['no usable key: no Repo field', {}, { REPOS: '{"old":"me/test-one"}' }, { fields: ['forum', 'client'], custom: 'mv:700:0::Retail' }],
+    ['the field order with two keys', {}, {}, { fields: ['forum', 'repo', 'client'] }],
+  ]) {
+    const w = moveWorld((s) => { s.kv = kv; });
+    if (after) after(w);
+    const j = await (await handle(await signed(moveClick()), { ...MOVE_ENV, STATE: w.kv, ...envOver }, ctxFor(), { fetch: w.f, log: () => {} })).json();
+    assert.equal(j.type, 9, why);
+    if ('custom' in want) assert.equal(j.data.custom_id, want.custom, why);
+    if ('repo' in want) assert.equal(formValues(j).repo, want.repo, why);
+    if (want.fields) assert.deepEqual(j.data.components.map((c) => c.component.custom_id), want.fields, why);
+  }
+  const repo = (await (await handle(await signed(moveClick()), { ...MOVE_ENV, STATE: moveWorld().kv }, ctxFor(), { fetch: moveWorld().f })).json())
+    .data.components.find((c) => c.component.custom_id === 'repo');
+  assert.deepEqual([repo.label, repo.component.required, repo.description, repo.component.options.map((o) => o.value)],
+    ['Repo', false, 'Used only for a post already on GitHub; another repo moves its issue there', ['ONE', 'TWO']]);
+  // The client: the post named as its issue's title shows the issue's client.
+  for (const [why, name, client] of [['a post named as its issue', '[ONE] [All] [Bug] [UI] Title', 'All'], ['any other name', 'Bags overlap', 'Retail']]) {
+    const w = moveWorld((s) => { s.post.name = name; });
+    const j = await (await handle(await signed(movePress()), { ...MOVE_ENV, STATE: w.kv }, ctxFor(), { fetch: w.f })).json();
+    assert.equal(formValues(j).client, client, why);
+    assert.equal(j.data.custom_id, `mv:700:96::${client}`, why);
+  }
 });
 
 test('every entry point refuses another server, or a GUILD_ID that names none, before reading anything', async () => {
