@@ -993,6 +993,10 @@ Accepted on purpose; each line says how you would notice it.
     about that many keys.
   - A title a maintainer rewrote out of the bot's shape: the move cannot
     read the issue's client from it, so the form's client applies.
+  - With `RENAME_POSTS` at `0`, a filed post with no client tag, in a forum
+    with no client of its own, shows Client blank on the Move form; moved
+    to another such forum, it asks staff to pick the client, and a client
+    other than the issue's changes it.
   - A transfer slow enough to use most of the move's 12-second preparation
     leaves more files on the old post.
   - A title a maintainer lengthened to near GitHub's 256 characters can make
