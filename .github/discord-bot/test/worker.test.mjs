@@ -1654,6 +1654,7 @@ function moveWorld(edit = () => {}) {
     ['DELETE', /api\.github\.com\/repos\/me\/test-one\/labels\/discord-lock-700$/, () => null],
     // A filed post's issue (`s.issue`), its comments, the target repo, the
     // transfer, the issue's edits and its checklist thread 960.
+    ['GET', /api\.github\.com\/repos\/me\/test-two\/issues\/7$/, () => answerOf(s.moved ? s.moved() : s.issue)],
     ['GET', /api\.github\.com\/repos\/me\/test-(one|two)\/issues\/\d+$/, () => (s.issue ? answerOf(s.issue) : new Response('{}', { status: 404 }))],
     ['GET', /api\.github\.com\/repos\/me\/test-(one|two)\/issues\/\d+\/comments\?/, () => answerOf(s.comments || [])],
     ['GET', /api\.github\.com\/repos\/me\/test-two$/, () => answerOf(s.repo || { node_id: 'R_2' })],
@@ -2247,6 +2248,31 @@ test('a filed post moved to another repo transfers its issue first, and everythi
   assert.deepEqual(JSON.parse(kv.m.get('issue:990')), { repo: 'me/test-two', number: 7, key: 'TWO', by: '<@5>' });
   assert.match(f.find('PATCH', /\/channels\/960\/messages\/960$/)[0].body.content, new RegExp(`\nIssue: ${reEscape(TWO_URL)}\n`));
   assert.match(f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, /\*\*Filed as TWO #7\*\* by <@5>$/);
+});
+
+test('after a transfer the labels wait for GitHub to copy the issue\'s labels, then change', async () => {
+  for (const [why, reads, want] of [
+    // The copy lands on the third read: the removal comes after it.
+    ['a copy that lands late', [[], [{ name: 'from-discord' }], null], 3],
+    // A copy that never shows within the wait: the labels change anyway.
+    ['a copy that never shows', Array(9).fill([]), 6],
+  ]) {
+    let n = 0;
+    const slept = [];
+    const w = filedWorld((s) => {
+      s.gql = TRANSFERRED;
+      s.moved = () => {
+        const labels = reads[n++];
+        return { ...filedIssue({ number: 7 }), ...(labels ? { labels } : {}) };
+      };
+    });
+    const { told } = await runMove(w, filedSubmit({ repo: 'TWO' }), {}, { sleep: async (ms) => { slept.push(ms); } });
+    assert.equal(told, `${MOVED} TWO #7: ${TWO_URL} (transferred from ONE #40)`, why);
+    assert.equal(n, want, `${why}: reads of the moved issue`);
+    assert.deepEqual(slept, Array(want - 1).fill(1000), `${why}: a second between reads`);
+    assert.deepEqual(labelCalls(w.f), ['-type: bug', '+type: feature'], why);
+    assert.ok(at(w.f, 'GET', /test-two\/issues\/7$/) < at(w.f, 'DELETE', /test-two\/issues\/7\/labels\//), `${why}: read before the removal`);
+  }
 });
 
 test('a filed post keeps its old name when the title is not the bot\'s, and the title still follows when renaming is off', async () => {

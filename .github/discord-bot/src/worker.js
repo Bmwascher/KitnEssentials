@@ -67,6 +67,11 @@ const TEMPLATE_MS = 2000;
 const MOVE_PREP_BY_MS = 12000;
 const MOVE_CREATE_BY_MS = 18000;
 const MOVE_REST_BY_MS = 23000;
+// GitHub copies a transferred issue's labels after it answers the transfer
+// (5 s late in the live trial): the move reads the issue up to this many
+// times, this far apart, until the old labels are there.
+const LABEL_COPY_READS = 6;
+const LABEL_COPY_PAUSE_MS = 1000;
 // Discord takes 20 MiB per file and 25 MiB per request; 1 MiB of the request
 // is left for the message and the multipart framing.
 const COPY_FILE_MAX = 20 * 1024 * 1024;
@@ -1090,6 +1095,7 @@ async function findIssue(cfg, saved, postId, tokenFor, f) {
 // and the reply names each one not done, with both posts' links: the old
 // post is locked, so a second move cannot redo it.
 export async function movePost(interaction, env, deps, t0 = Date.now()) {
+  const sleep = deps.sleep || ((ms) => new Promise((done) => setTimeout(done, ms)));
   const cfg = config(env);
   const { threadId: oldId, cardId, shownKey, shownClient } = parseCustomId(interaction.data.custom_id);
   const v = modalValues(interaction.data);
@@ -1419,6 +1425,12 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       const add = want.filter((l) => !labelNames.includes(l));
       // `labels` follows each call that went through, for the checklist.
       await step('issue labels', async () => {
+        // A label removed before the copy lands comes back with it.
+        for (let i = 1; transferTo; i++) {
+          const now = (await gh.getIssue(at.repo, at.number)).labels.map((l) => l.name);
+          if (labelNames.every((l) => now.includes(l)) || i === LABEL_COPY_READS) break;
+          await sleep(LABEL_COPY_PAUSE_MS);
+        }
         for (const l of drop) {
           await ghLater.removeLabel(at.repo, at.number, l);
           labels = labels.filter((x) => x !== l);

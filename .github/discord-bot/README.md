@@ -492,7 +492,9 @@ card shows "Filed as KEY #n" with **Move** and **Open post**. The reply is
 it. GitHub moves issues only between repos of one owner, never from a
 private repo to a public one; it keeps a milestone only when the target has
 one of the same name and due date, and the bot makes in the target any label
-it lacks. The GitHub App needs Contents: Read and write as well as Issues on
+it lacks. GitHub copies the labels a few seconds after it answers, so
+before it changes the client and type labels the bot reads the issue again,
+once a second for up to five seconds, until the old labels are there. The GitHub App needs Contents: Read and write as well as Issues on
 both repos (Checking the setup). After the bot found the issue, every reply
 that moved nothing ends by saying where it is, "The issue is KEY #n in
 owner/repo (link)."; a refusal before that, such as a busy post, names no
