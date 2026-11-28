@@ -2256,6 +2256,8 @@ test('after a transfer the labels wait for GitHub to copy the issue\'s labels, t
     ['a copy that lands late', [[], [{ name: 'from-discord' }], null], 3],
     // A copy that never shows within the wait: the labels change anyway.
     ['a copy that never shows', Array(9).fill([]), 6],
+    // GitHub reads label names in any letter case.
+    ['a copy whose labels differ in case', [[{ name: 'From-Discord' }, { name: 'Type: Bug' }, { name: 'Client: Retail' }]], 1],
   ]) {
     let n = 0;
     const slept = [];

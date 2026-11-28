@@ -494,8 +494,8 @@ private repo to a public one; it keeps a milestone only when the target has
 one of the same name and due date, and the bot makes in the target any label
 it lacks. GitHub copies the labels a few seconds after it answers, so
 before it changes the client and type labels the bot reads the issue again,
-once a second for up to five seconds, until the old labels are there. The GitHub App needs Contents: Read and write as well as Issues on
-both repos (Checking the setup). After the bot found the issue, every reply
+once a second for up to five seconds, until the old labels are there. The
+GitHub App needs Contents: Read and write as well as Issues on both repos (Checking the setup). After the bot found the issue, every reply
 that moved nothing ends by saying where it is, "The issue is KEY #n in
 owner/repo (link)."; a refusal before that, such as a busy post, names no
 issue. A transfer GitHub refused (an HTTP 4xx, or its missing-permission
@@ -661,9 +661,10 @@ each); past that,
 the last steps fail and are reported. If KV calls
 count too, the figure grows by six (four reads, two writes). The live bot
 runs on the paid plan. These figures are for a post not yet filed. A filed
-post's move skips the "now tracked" read and makes up to 11 more: with a
-transfer, the issue's comments (one more for each full page of 100), the target's token (two) and repo, the
-transfer, the issue edit, up to three label calls and the checklist
+post's move skips the "now tracked" read and makes up to 17 more: with a
+transfer, the issue's comments (one more for each full page of 100), the
+target's token (two) and repo, the transfer, up to six reads of the moved
+issue's labels, the issue edit, up to three label calls and the checklist
 thread's two; and one more KV write.
 
 ## Clearing a filing record
@@ -1001,6 +1002,9 @@ Accepted on purpose; each line says how you would notice it.
     other than the issue's changes it.
   - A transfer slow enough to use most of the move's 12-second preparation
     leaves more files on the old post.
+  - A transfer whose labels GitHub has not copied within five seconds: the
+    move changes the labels anyway, and a client or type label it removed
+    can come back with the copy; remove it by hand.
   - A title a maintainer lengthened to near GitHub's 256 characters can make
     the issue edit fail after a move; the reply names "issue link to the new
     post", and status messages keep going to the old post.
