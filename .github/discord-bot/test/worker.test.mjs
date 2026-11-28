@@ -2274,7 +2274,8 @@ test('after a transfer the labels wait for GitHub to copy the issue\'s labels, t
     assert.deepEqual(slept, Array(want - 1).fill(1000), `${why}: a second between reads`);
     assert.deepEqual(labelCalls(w.f), ['-type: bug', '+type: feature'], why);
     const lastRead = w.f.calls.map((c) => c.method === 'GET' && /test-two\/issues\/7$/.test(c.url)).lastIndexOf(true);
-    assert.ok(lastRead < at(w.f, 'DELETE', /test-two\/issues\/7\/labels\//), `${why}: every read before the removal`);
+    const firstWrite = w.f.calls.findIndex((c) => /test-two\/issues\/7\/labels/.test(c.url));
+    assert.ok(firstWrite >= 0 && lastRead < firstWrite, `${why}: every read before any label write`);
   }
 });
 
@@ -2347,6 +2348,12 @@ test('a filed move with nothing to change in the title or labels writes neither,
   await runMove(w, filedSubmit(), { FORUMS: '{"900":{"client":"Retail","type":"Bug"},"901":{"client":"Retail","type":"Bug"},"902":{}}' });
   assert.equal('title' in w.f.find('PATCH', /\/issues\/40$/)[0].body, false);
   assert.deepEqual(labelCalls(w.f), []);
+  // After a transfer with no label to remove, the copy is not waited for:
+  // only a removal can be undone by it.
+  const moved = filedWorld((s) => { s.gql = TRANSFERRED; }, { labels: [{ name: 'type: bug' }, { name: 'client: retail' }] });
+  await runMove(moved, filedSubmit({ repo: 'TWO' }), { FORUMS: '{"900":{"client":"Retail","type":"Bug"},"901":{"client":"Retail","type":"Bug"},"902":{}}' });
+  assert.equal(moved.f.find('GET', /test-two\/issues\/7$/).length, 0, 'no read of the moved issue');
+  assert.deepEqual(labelCalls(moved.f), []);
 });
 
 test('a filed post found another way moves with that issue, and a locked one says where the issue is', async () => {

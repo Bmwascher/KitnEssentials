@@ -1426,7 +1426,7 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       // `labels` follows each call that went through, for the checklist.
       await step('issue labels', async () => {
         // A label removed before the copy lands comes back with it.
-        for (let i = 1; transferTo; i++) {
+        for (let i = 1; transferTo && drop.length; i++) {
           const now = (await gh.getIssue(at.repo, at.number)).labels.map((l) => l.name.toLowerCase());
           if (labelNames.every((l) => now.includes(l.toLowerCase())) || i === LABEL_COPY_READS) break;
           await sleep(LABEL_COPY_PAUSE_MS);
