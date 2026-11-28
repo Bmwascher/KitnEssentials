@@ -240,7 +240,7 @@ async function openMoveForm(interaction, env, deps, cfg, { threadId, cardId = ''
   const keys = usableRepoKeys(cfg.repos);
   const [channels, saved] = await Promise.all([
     discord.call('GET', `/guilds/${interaction.guild_id}/channels`).catch(() => null),
-    keys.length > 1 ? postRecords(env.STATE, threadId, Math.max(0, deadline - Date.now())).then((r) => r.saved, () => null) : null,
+    keys.length > 1 ? postRecords(env.STATE, threadId, deadline - Date.now()).then((r) => r.saved, () => null) : null,
   ]);
   if (!channels) return reply('Could not read the forums just now. Try again.');
   const others = moveTargets(cfg, channels, ch.parent_id);
@@ -1420,7 +1420,7 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
         await later.call('PATCH', `/channels/${t}`, { archived: false }).catch(done);
         await later.call('PATCH', `/channels/${t}/messages/${t}`, {
           content: checklistFirst({ title, issueUrl: at.url, guildId, postId: newId, labels }), allowed_mentions: { parse: [] },
-        }).catch(done);
+        });
       });
     }
     // At most ten short lines: the reply never nears Discord's length.

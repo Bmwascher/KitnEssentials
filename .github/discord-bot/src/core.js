@@ -201,7 +201,7 @@ export function buildTitle({ repoKey, client, type, module, title }) {
 // key, client and type and the rest from the module on; null for any other
 // title (one a maintainer retitled).
 export function splitTitle(title) {
-  const m = /^\[([A-Za-z0-9]+)\] \[([^\]]*)\] \[([^\]]*)\] (\[[^\]]*\] .*)$/s.exec(String(title || ''));
+  const m = /^\[([A-Za-z0-9]+)\] \[([^\]]*)\] \[([^\]]*)\] (\[[^\]]*\] .*)$/s.exec(title);
   return m ? { repoKey: m[1], client: m[2], type: m[3], rest: m[4] } : null;
 }
 

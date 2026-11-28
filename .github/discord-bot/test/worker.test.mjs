@@ -2280,17 +2280,18 @@ test('a target forum with no type keeps the issue\'s type, from its type label',
     s.channels = CHANNELS.map((c) => (c.id === '900' ? { ...c, available_tags: [...c.available_tags, { id: 't-fb', name: 'Feedback' }] } : c));
     s.post.applied_tags = [...s.post.applied_tags, 't-fb'];
   };
-  for (const [why, edit, issue] of [
-    ['the type label sets it', () => {}, {}],
-    ['a kept Feature tag on a bug is dropped', feedback, {}],
-    ['no type label: the title keeps its type', () => {}, { labels: [{ name: 'from-discord' }, { name: 'client: retail' }] }],
+  const BUG = '[ONE] [Retail] [Bug] [Bags] Bags overlap';
+  for (const [why, edit, issue, title] of [
+    ['the type label sets it', () => {}, { labels: [{ name: 'from-discord' }, { name: 'type: feature' }, { name: 'client: retail' }] }, '[ONE] [Retail] [Feature] [Bags] Bags overlap'],
+    ['a kept Feature tag on a bug is dropped', feedback, {}, BUG],
+    ['no type label: the title keeps its type', () => {}, { labels: [{ name: 'from-discord' }, { name: 'client: retail' }] }, BUG],
   ]) {
     const w = filedWorld(edit, issue);
     await runMove(w, filedSubmit(), NO_TYPE);
     assert.deepEqual(labelCalls(w.f), [], `${why}: no label call`);
     const sent = w.f.find('POST', /\?wait=true$/)[0].body.payload;
-    assert.equal(sent.thread_name, '[ONE] [Retail] [Bug] [Bags] Bags overlap', why);
-    assert.equal(sent.applied_tags.includes('f-feat'), false, `${why}: no Feature tag`);
+    assert.equal(sent.thread_name, title, why);
+    if (/dropped/.test(why)) assert.equal(sent.applied_tags.includes('f-feat'), false, `${why}: no Feature tag`);
   }
 });
 

@@ -960,8 +960,8 @@ Accepted on purpose; each line says how you would notice it.
   - A Move form left open while a deploy changes `REPOS`: a Repo field left
     as shown still keeps the repo, but a picked key is read under the new
     `REPOS`, so a remapped key transfers the issue to its new repo, and a
-    removed key is refused as "could not get access" before anything
-    changes.
+    removed key keeps the issue in its repo with that key's name in its
+    title, record, card and reply.
   - A status message a workflow run still owes (its note written, its send
     failed) cannot be sent by re-running that run once the issue is in
     another repo: send it by hand and mark the note (top of this README).
