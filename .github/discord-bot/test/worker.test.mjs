@@ -121,14 +121,26 @@ test('submitting files the issue, tags the post Triaged and tells the player', a
   assert.match(created.body, /\n\| Filed by \| \[moddy\]\(https:\/\/discord\.com\/users\/5\) \(`moddy`\) \|\n/);
   assert.match(created.body, /\n\| Discord post \| \[Open the post\]\(https:\/\/discord\.com\/channels\/1\/700\) \|\n/);
   assert.match(created.body, /\n<!-- discord-message: 800 -->\n<!-- discord-thread: 700 reporter: 42 -->$/);
-  assert.deepEqual(created.labels, ['from-discord', 'type: bug', 'client: retail']);
+  assert.deepEqual(created.labels, ['from-discord', 'type: bug', 'client: retail', 'player-report']);
 
   assert.deepEqual(f.find('PATCH', /\/channels\/700$/)[0].body, { applied_tags: ['t-retail', 't-bug', 's-tri'] });
   const msg = f.find('POST', /\/channels\/700\/messages$/)[0].body;
-  assert.match(msg.content, /tracked as ONE #17/);
+  assert.equal(msg.content, "Thanks! This is now tracked as ONE #17. We'll post here when a fix is being tested and when it ships. If you can, open Report a Problem in game and paste its text here.");
   assert.deepEqual(msg.message_reference, { message_id: '800', fail_if_not_exists: false });
   assert.deepEqual(msg.allowed_mentions, { parse: [], users: [], replied_user: true });
   assert.match(f.find('PATCH', /\/webhooks\/app\/itok/)[0].body.content, /Created ONE #17/);
+});
+
+test('a feature filing carries player-report and the plain receipt', async () => {
+  let created;
+  const f = fakeFetch(discordRoutes(githubRoutes([], [
+    ['POST', /api\.github\.com\/repos\/me\/test-one\/issues$/, (b) => { created = b; return { number: 17, html_url: 'https://github.com/me/test-one/issues/17' }; }],
+  ])));
+  const ctx = ctxFor();
+  await handle(await signed(submit({ type: 'feature' })), env, ctx, { fetch: f, installationToken: async () => 'inst' });
+  await Promise.all(ctx.jobs);
+  assert.deepEqual(created.labels, ['from-discord', 'type: feature', 'client: retail', 'player-report']);
+  assert.equal(f.find('POST', /\/channels\/700\/messages$/)[0].body.content, "Thanks! This is now tracked as ONE #17. We'll post here when a fix is being tested and when it ships.");
 });
 
 test('sending the same post twice points at the first issue', async () => {
@@ -491,7 +503,7 @@ test('a create that answered late is found again: the player gets the reply, the
   assert.deepEqual(JSON.parse(kv.m.get('issue:700')), { repo: 'me/test-one', number: 17, key: 'ONE', by: '<@5>' }, 'the filing is recorded');
   const [receipt, ...more] = base.find('POST', /\/channels\/700\/messages$/);
   assert.deepEqual(more, [], 'one receipt');
-  assert.equal(receipt.body.content, MESSAGES.tracked('ONE', 17), 'the player is told');
+  assert.equal(receipt.body.content, MESSAGES.tracked('ONE', 17, 'Bug'), 'the player is told');
   assert.deepEqual(receipt.body.message_reference, { message_id: '800', fail_if_not_exists: false });
   assert.equal(base.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, '~~**New post in <#900>:** <#700>~~\n**Filed as ONE #17** by <@5>', 'the card is marked filed, its first line the post\'s mention');
   const pos = (method, re) => at(base, method, re);
@@ -798,7 +810,7 @@ test('filing replies to the filed message with a ping, leaves the greeting alone
     assert.deepEqual(res, { created: 17, notes: [] }, why);
     const [sent, ...more] = f.find('POST', /\/channels\/700\/messages$/);
     assert.deepEqual(more, [], why);
-    assert.equal(sent.body.content, MESSAGES.tracked('ONE', 17), why);
+    assert.equal(sent.body.content, MESSAGES.tracked('ONE', 17, 'Bug'), why);
     assert.deepEqual(sent.body.message_reference, { message_id: messageId, fail_if_not_exists: false }, why);
     assert.deepEqual(sent.body.allowed_mentions, { parse: [], users: [], replied_user: true }, why);
     assert.equal(f.calls.filter((c) => /\/messages\/951$/.test(c.url)).length, 0, `${why}: the greeting is left alone`);
@@ -821,17 +833,17 @@ test('an old button greeting is retired once the reply exists, and becomes the n
     ['the delete and the strip are refused', WITH_BUTTON, [['DELETE', /\/messages\/950$/, refusal], ['PATCH', /\/messages\/950$/, refusal]], 1, { components: [] }, [/^the old button was not removed: .*403/]],
     ['an earlier receipt shows no button: left alone', RECEIPT, [], 0, null, []],
     ['the reply is refused: the greeting becomes the note', WITH_BUTTON, [['POST', /\/channels\/700\/messages$/, refusal]], 0,
-      { content: MESSAGES.tracked('ONE', 17), components: [], allowed_mentions: { parse: [] } }, []],
+      { content: MESSAGES.tracked('ONE', 17, 'Bug'), components: [], allowed_mentions: { parse: [] } }, []],
     // The reply may exist: a second receipt would repeat it.
     ['the reply has an unknown outcome: nothing is edited', WITH_BUTTON, [['POST', /\/channels\/700\/messages$/, () => new Response('{}', { status: 500 })]], 0,
       null, [/^note in the post may not have been sent: .*500/]],
     // An edit whose answer was lost may have made the greeting the note.
     ['the reply is refused and the edit has an unknown outcome', WITH_BUTTON, [['POST', /\/channels\/700\/messages$/, refusal], ['PATCH', /\/messages\/950$/, () => new Response('{}', { status: 500 })]], 0,
-      { content: MESSAGES.tracked('ONE', 17), components: [], allowed_mentions: { parse: [] } }, [/^note in the post may not have been sent: .*500/]],
+      { content: MESSAGES.tracked('ONE', 17, 'Bug'), components: [], allowed_mentions: { parse: [] } }, [/^note in the post may not have been sent: .*500/]],
     ['the reply fails with a 500 whose answer quotes " -> 403 ": nothing is edited', WITH_BUTTON, [['POST', /\/channels\/700\/messages$/, () => new Response('upstream said -> 403 x', { status: 500 })]], 0,
       null, [/^note in the post may not have been sent: .*500/]],
     ['the reply is refused and the edit fails with a 500 whose answer quotes " -> 403 "', WITH_BUTTON, [['POST', /\/channels\/700\/messages$/, refusal], ['PATCH', /\/messages\/950$/, () => new Response('upstream said -> 403 x', { status: 500 })]], 0,
-      { content: MESSAGES.tracked('ONE', 17), components: [], allowed_mentions: { parse: [] } }, [/^note in the post may not have been sent: .*500/]],
+      { content: MESSAGES.tracked('ONE', 17, 'Bug'), components: [], allowed_mentions: { parse: [] } }, [/^note in the post may not have been sent: .*500/]],
   ]) {
     const kv = fakeKv({ 'thread:700': JSON.stringify({ greeting: '950' }) });
     const f = fakeFetch(discordRoutes(githubRoutes([], [

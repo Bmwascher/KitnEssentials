@@ -51,6 +51,7 @@ export const LABELS = {
   shipped: 'shipped',
   needsInfo: 'needs-info',
   accepted: 'accepted',
+  playerReport: 'player-report',
 };
 
 // Every label the bot or the status workflow sets: [name, color, description].
@@ -65,6 +66,7 @@ export const LABEL_DEFS = [
   [LABELS.pendingRelease, 'f9a03f', 'Fixed in dev, ships with the next release tag'],
   [LABELS.shipped, '0e8a16', 'Released'],
   [LABELS.accepted, '1d76db', 'Staff plan to do this (sets the Accepted tag)'],
+  [LABELS.playerReport, 'd4c5f9', 'Reported by a player through Discord; not reproduced yet'],
 ];
 
 export const PERMS = {
@@ -470,6 +472,7 @@ export function labelsFor({ type, client }) {
   const out = [LABELS.fromDiscord];
   if (type) out.push(`type: ${type.toLowerCase()}`);
   if (client) out.push(`client: ${client.toLowerCase()}`);
+  out.push(LABELS.playerReport);
   return out;
 }
 
@@ -712,8 +715,10 @@ export function isRelease(name, pattern) {
   return pattern.test(name) && !PRERELEASE.test(name);
 }
 
+const REPORT_ASK = ' If you can, open Report a Problem in game and paste its text here.';
+
 export const MESSAGES = {
-  tracked: (key, n) => `Thanks! This is now tracked as ${key} #${n}. We'll post here when a fix is being tested and when it ships.`,
+  tracked: (key, n, type) => `Thanks! This is now tracked as ${key} #${n}. We'll post here when a fix is being tested and when it ships.${type === 'Bug' ? REPORT_ASK : ''}`,
   inProgress: () => "**In progress.** A fix for this is being worked on and tested. We'll post here when it's done.",
   fixed: () => "**Fixed!** The fix will be in the next update. We'll post here when that update is out.",
   shipped: (repoFullName, tag) => `**Out now in ${repoDisplay(repoFullName, tag)}.** Update your addons, and let us know here if you still see the problem.`,

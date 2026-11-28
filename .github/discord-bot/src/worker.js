@@ -1000,7 +1000,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
       await within(kvMs, saveIssueRecord(kv, threadId, { repo, number: issue.number, key: repoKey, by: filer }));
     } catch (e) { notes.push(`post record not saved: ${e.message.slice(0, 200)}`); }
     notes.push(...await tellTracked(teller, log, {
-      threadId, messageId, text: MESSAGES.tracked(repoKey, issue.number), old: oldGreeting, greeting: greetingId || (rec && rec.greeting), ping: copyId,
+      threadId, messageId, text: MESSAGES.tracked(repoKey, issue.number, type), old: oldGreeting, greeting: greetingId || (rec && rec.greeting), ping: copyId,
     }));
     await followup(`Created ${repoKey} #${issue.number}: ${issue.html_url}${notes.length ? ` (${notes.join('; ')})` : ''}${gapText()}`);
     cardAfter = { cardId, head, key: repoKey, number: issue.number, by: filer };
@@ -1022,7 +1022,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
           .catch((err) => late.push(`post record not saved: ${err.message.slice(0, 200)}`));
         const tail = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, TAIL_MS, t0 + TRACKED_BY_MS));
         late.push(...await tellTracked(tail, log, {
-          threadId, messageId, text: MESSAGES.tracked(repoKey, found.number), old: oldGreeting, greeting: greetingId || (rec && rec.greeting), ping: copyId,
+          threadId, messageId, text: MESSAGES.tracked(repoKey, found.number, type), old: oldGreeting, greeting: greetingId || (rec && rec.greeting), ping: copyId,
         }));
         await followup(`Created ${repoKey} #${found.number}: ${found.html_url} (GitHub answered late; the post's status tag comes from the issue's first workflow run${late.length ? `; ${late.join('; ')}` : ''})${gapText()}`);
         cardAfter = { cardId, head: thread ? cardHead(thread.parent_id, threadId) : '', key: repoKey, number: found.number, by: filer };
