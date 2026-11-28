@@ -88,15 +88,15 @@ the one the issue was filed from, so Discord pings the reporter even when
 their notifications are set to only @mentions. An issue filed before this
 version replies to the post's first message, with a ping, only when that
 message is the reporter's; otherwise the message goes out with no reply and no
-ping, beyond the added players its last line names. If Discord refuses the reply, the message goes out once as a plain
-message, which loses the reply's ping only (every @mention in it, the
-reporter's and the added players', still pings), and the log says so: the
-workflow run's for a status message, the Worker's for "now tracked" and the
-Add reply. If Discord refuses "now tracked" or the Add reply
-in any other way, the bot turns its greeting in the post into that note
-instead, and the moderator's reply says when the note was not sent, or may
-not have been. A message whose note was written before
-this version goes out in that note's own words. The issue's first workflow
+ping, beyond the added players its last line names. If Discord refuses the
+reply, the message goes out once as a plain message, which loses the reply's
+ping only (every @mention in it, the reporter's and the added players', still
+pings), and the log says so: the workflow run's for a status message, the
+Worker's for "now tracked" and the Add reply. If Discord refuses "now
+tracked" or the Add reply in any other way, the bot turns its greeting in the
+post into that note instead, and the moderator's reply says when the note was
+not sent, or may not have been. A message whose note was written before this
+version goes out in that note's own words. The issue's first workflow
 run, about a minute after filing, sets the status GitHub calls for when the
 bot could not.
 
@@ -1592,6 +1592,8 @@ Accepted on purpose; each line says how you would notice it.
   - A moved copy added within a minute of its move, before its move record
     is readable, is credited to the webhook's name and its player is not
     mentioned.
+  - An issue whose Discord post was deleted can still be added to; its
+    added players are promised pings in a post that is gone, and get none.
 
 ## Tests
 

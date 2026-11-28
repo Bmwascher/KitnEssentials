@@ -502,8 +502,8 @@ function couldNotCheck(cfg, saved, postId, why, done) {
   return `Could not check ${what} (${why}): it may be gone, or the app may have lost access there. ${done} If it is gone, a bot admin can clear this post's filing record (the KV key issue:${postId}, or the "issue" field of thread:${postId} for a post filed before this version), and the post can then be sent again.`;
 }
 
-// A post added to an issue as a repeat report, as Send names it.
 const recordKeyOf = (cfg, saved) => saved.key || keyOf(cfg, saved.repo);
+// A post added to an issue as a repeat report, as Send names it.
 const addedText = (cfg, saved) => `this post was added to ${recordKeyOf(cfg, saved)} #${saved.number} as a repeat report: https://github.com/${saved.repo}/issues/${saved.number}`;
 
 // A post's four records, read side by side and waited on for at most `ms`:
