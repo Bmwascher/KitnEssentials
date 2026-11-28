@@ -113,7 +113,7 @@ export function githubClient(token, fetchImpl = fetch) {
       });
       if (out.errors && out.errors.length) {
         const [first] = out.errors;
-        throw Object.assign(new Error(String(first.message || first.type)), { refused: first.type === 'FORBIDDEN' && !(out.data && out.data.transferIssue) });
+        throw Object.assign(new Error(first.message), { refused: first.type === 'FORBIDDEN' && !(out.data && out.data.transferIssue) });
       }
       const { number, url } = out.data.transferIssue.issue;
       return { number, url };

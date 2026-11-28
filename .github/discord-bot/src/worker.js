@@ -1294,7 +1294,7 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     // A filed post's type is the forum's, else its issue's type label's, else
     // unknown, which keeps the issue's. Its client, in a forum with none of
     // its own and left as the form showed it, is the issue's title's.
-    const labelNames = issue ? (issue.labels || []).map((l) => l.name || l) : [];
+    const labelNames = issue ? issue.labels.map((l) => l.name) : [];
     let type = target.type;
     if (issue) {
       type = type || normType((labelNames.find((l) => /^type: /.test(l)) || '').slice(6));
@@ -1416,7 +1416,6 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     if (checklist) {
       const t = checklist.threadId;
       const done = (e) => { if (!taken(e)) throw e; };
-      // Discord edits no message in an archived thread, so the move opens it.
       await step('staff checklist thread', async () => {
         await later.call('PATCH', `/channels/${t}`, { archived: false }).catch(done);
         await later.call('PATCH', `/channels/${t}/messages/${t}`, {
