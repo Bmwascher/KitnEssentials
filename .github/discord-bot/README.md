@@ -21,7 +21,12 @@ post's card is marked filed too. A greeting from an earlier version that still
 shows its own button keeps working; once the reply exists, the bot deletes it,
 or removes its button if it may not delete it. The card also has a **Move**
 button, and moderators can right-click > **Apps > Move post**, to move a post
-to another player forum (see Moving a post).
+to another player forum (see Moving a post). Its **Add to issue** button (an
+approved role or a moderator) and the right-click **Apps > Add to issue**
+(moderators) add a repeat report to an issue the bot already filed, in place
+of a second issue (see Adding a repeat report). For a bug, "now tracked" also
+asks the player to paste the text of the addon's in-game Report a Problem
+window in the post; the bot does not copy it to GitHub.
 
 The greeting and the card go out in the same scan: new posts are greeted
 first, then cards still owed by older posts go out, then the new posts'
@@ -72,14 +77,22 @@ unknown (a report a webhook posted) pings no one, as before the move. The
 needs-info message is not a reply, as always: it mentions the reporter in
 the new post.
 
+On an issue with repeat reports added (see Adding a repeat report), every
+message in the original post ends with one line, "Also reported by @A @B.",
+naming each added player whose report comment that run had read and whom the
+message does not already @mention; each of them is pinged. With no one left
+to name, the message has no such line.
+
 "Now tracked" and every status message are replies to the reporter's message,
 the one the issue was filed from, so Discord pings the reporter even when
 their notifications are set to only @mentions. An issue filed before this
 version replies to the post's first message, with a ping, only when that
 message is the reporter's; otherwise the message goes out with no reply and no
 ping. If Discord refuses the reply, the message goes out once as a plain
-message, with no ping, and the log says so: the workflow run's for a status
-message, the Worker's for "now tracked". If Discord refuses "now tracked"
+message, which loses the reply's ping only (every @mention in it, the
+reporter's and the added players', still pings), and the log says so: the
+workflow run's for a status message, the Worker's for "now tracked" and the
+Add reply. If Discord refuses "now tracked" or the Add reply
 in any other way, the bot turns its greeting in the post into that note
 instead, and the moderator's reply says when the note was not sent, or may
 not have been. A message whose note was written before
@@ -358,6 +371,13 @@ directly above the hidden lines, "Moved to (the new post) by (moderator).",
 oldest first, each linking the post that move made, and rewrites the hidden
 lines to name the new post.
 
+Each new issue gets the labels `from-discord`, its `type:` and `client:`
+labels, and `player-report` (came from a player, not reproduced yet). The
+bot adds `player-report` once, at filing, and never again; a maintainer
+removes it once the problem is reproduced. Each repeat report added to the
+issue is a comment of the bot's, "Report N of this problem", with a hidden
+line naming the post and the player; leave those comments as they are.
+
 The issue's title is built from the form: `[KE] [Retail] [Bug] [Bags] Bank tab
 icons overlap`. That is the repo key, the client, the type, the module, and
 then the title. Each word of the module gets an upper-case first letter
@@ -435,7 +455,9 @@ a link and a mention they cannot open. The bot cannot tell who can see a
 forum, so it does not check this.
 
 Queue cards posted before this version have no Move button: a member of
-an approved role asks a moderator, who right-clicks the post.
+an approved role asks a moderator, who right-clicks the post. Cards posted
+before the Add to issue version have no Add to issue button either: a
+moderator right-clicks the message.
 
 A filed post moves too, and its issue follows it (below). A post that holds
 the bot's "now tracked" reply among its last 100 messages is refused when
@@ -667,6 +689,74 @@ transfer, the issue's comments (one more for each full page of 100), the
 target's token (two) and repo, the transfer, up to six reads of the moved
 issue's labels, the issue edit, up to three label calls and the checklist
 thread's two; and one more KV write.
+
+## Adding a repeat report
+
+A post about a problem that already has an issue the bot filed is added to
+that issue instead of being filed again. Whoever can file can add: a member
+of an approved role (or a moderator) presses **Add to issue** on the post's
+queue card, which adds the post's first message, and a moderator can
+right-click any message in the post > **Apps > Add to issue**, which adds
+that message. A player gets the Send button's refusal. The form asks for the
+issue number ("12" or "#12"), and for the repo when `REPOS` has two or more
+keys.
+
+The issue must be one the bot filed from a Discord post, in the repo picked,
+and open, or closed with its fix waiting for a release (the `pending-release`
+label, the "Fixed, next update" state), so its added players get the "Out
+now" message too. Each other answer adds nothing and says why: an issue not
+found in that repo; one now in another repo ("pick that repo and number");
+one the bot did not file from a Discord post (a hand-made issue or a pull
+request); any other closed issue ("If the problem is back, send this post on
+its own": reopening an issue drops its fix, so no "Out now" would go out). A
+post already added, already filed (by its record, or by its issue's hidden
+line when it has none), moved away, being sent, moved or added, or whose
+message was deleted since the form opened is refused too.
+
+An add makes, in order:
+
+- one comment on the issue, "Report N of this problem: (the post), from
+  (player), added by (moderator).", where the issue's own post is report 1
+  and N counts the bot's earlier report comments. Only comments by the
+  account that filed the issue count, since anyone can comment on a public
+  issue. The issue's title, body and labels do not change;
+- the post's record (`issue:<post id>`, marked `added`);
+- the post's Closed tag;
+- one reply to the player's message: "This is the same problem as KE #12,
+  first reported in (the original post). We've added your report to it, and
+  we'll ping you in that post with each update.", with the Report a Problem
+  request for a bug. On a moved post's copy it starts with the player's
+  mention;
+- the moderator's reply, "Added to KE #12 as report N" with the issue's
+  address, naming any step above not done;
+- then, as after a filing, the lock's release and the queue card, "Added to
+  KE #12", with only Open post. A failed release or card edit goes to the
+  Worker log.
+
+When GitHub refuses the comment, or the add runs out of time before it, the
+post is not changed. When GitHub does not confirm it (no answer, a 5xx), the
+reply says it may be there: if this post's report comment is on the issue,
+a maintainer deletes it, then the same message is added to the same issue
+again.
+
+The added post gets no status messages of its own. Its player is named in
+every later message of the original post (see the top of this README), a
+player whose post a webhook made excepted. Send to GitHub on an added post
+answers "this post was added to KE #12 as a repeat report", and Move refuses
+it ("so it stays here").
+
+A post already sent to GitHub as its own issue cannot be added. Close its
+issue on GitHub as a duplicate of the other one: its post gets the
+Duplicate message, which links the other report when that issue is in the
+same repo and its post can be read. Its player gets no later pings from the
+other issue. If that matters once live, the follow-up is to let Add take a
+filed post whose own issue is closed as a duplicate.
+
+To undo an add to the wrong issue, by hand: a maintainer deletes the post's
+report comment, a bot admin deletes `issue:<post id>` (as in Clearing a
+filing record), and a moderator deletes the bot's reply; the post can then
+be added again. A post whose saved issue was deleted on GitHub, which Add
+answers as already filed, is freed the same way, by clearing its record.
 
 ## Clearing a filing record
 
@@ -1460,6 +1550,42 @@ Accepted on purpose; each line says how you would notice it.
   it: the form guesses from the post's tags instead, and a move goes by the
   post's own tags.
   Write each as plain text, like `"type":"Feature"`.
+- Repeat reports (Adding a repeat report), each left as it is:
+  - A send or a second add of a post before KV shows its add's record can
+    file the added post or add it twice, since an add writes no hidden line
+    on GitHub: close the extra issue, or delete the extra report comment. An
+    add after a send is caught by the search for the issue's hidden line.
+  - Two adds to one issue at the same moment can get the same N.
+  - A report comment GitHub did not confirm, and applied only after staff
+    checked and added the post again, leaves two report comments for one
+    post: N counts one too many, and the player is mentioned once when both
+    name the same player. A maintainer deletes the extra comment.
+  - A status message whose run read the issue's comments before an add
+    wrote its report comment goes out without that player; the next message
+    names them.
+  - A report comment deleted on GitHub lowers later numbers, and its player
+    is no longer mentioned once it was their last one on the issue.
+  - With more than about 80 added players on one issue, a status message
+    passes Discord's 2,000 characters: Discord refuses it, its note is
+    marked Unconfirmed and the run fails.
+  - An added post's record keeps the key and number of the add, so after the
+    original post moves the issue to another repo, Send on the added post
+    names the old ones.
+  - An added post whose record was not saved ("post record not saved"), or
+    added with no `STATE` bound (nothing says so), can be sent or added
+    again.
+  - An issue closed in the seconds between the add's read of it and its
+    comment still gets the comment, and the add reports success.
+  - For about a minute after a fix commit closes an issue, until that
+    close's status run sets `pending-release`, or after a close run that
+    failed, Add refuses it as having no fix waiting; add the post again in a
+    minute, or once the run is fixed and re-run.
+  - An added post's card whose edit failed (the Worker log has `queue card
+    ... not updated`) still offers its buttons: Send answers that the post
+    was added, and Add that it was already added.
+  - A moved copy added within a minute of its move, before its move record
+    is readable, is credited to the webhook's name and its player is not
+    mentioned.
 
 ## Tests
 
@@ -1529,9 +1655,9 @@ KitnEssentials) before the real ones. Roughly 45 minutes.
    after every deploy (step 10).
 6. **Point Discord at it.** Developer portal > General Information >
    Interactions Endpoint URL = that URL. Discord checks it on save.
-7. **Register the commands** (the right-click Send to GitHub and Move post,
-   and `/bot-check`) on the test server only, and again after updating to a
-   version that adds one (the register command sends all three):
+7. **Register the commands** (the right-click Send to GitHub, Add to issue
+   and Move post, and `/bot-check`) on the test server only, and again after
+   updating to a version that adds one (the register command sends all four):
    `DISCORD_APP_ID=... DISCORD_BOT_TOKEN=... DISCORD_GUILD_ID=<test server id> npm run register`
 8. **Labels:** `GITHUB_TOKEN=<a token with repo access> npm run labels <you>/<test-repo>`
 9. **Status workflow in the test repo:** copy `.github/discord-bot/` and
@@ -1607,7 +1733,10 @@ Worker is deployed: the workflow runs its own repo's default branch, and an
 older copy reads the issue's hidden lines only at the body's end, so after
 a move of an issue with a maintainer's note below them it would find no
 footer and post the message plainly in the new post, with no ping. For this repo that is the merge; for
-each other repo, a copy. With more than one repo in
+each other repo, a copy. An older copy also leaves added players out of
+status messages. For the Add to issue version, also run `npm run register`
+again, and `npm run labels` for each repo in `REPOS` before the deploy, so
+`player-report` exists. With more than one repo in
 `REPOS`, set `LOCK_REPO` to the repo that holds every filing's lock label,
 whichever repo it files into; until it is set, nothing is filed. Before
 changing it, follow "Changing the lock repo" above. Set its push trigger to that repo's release tags, and the repo
