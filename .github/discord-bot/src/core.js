@@ -41,6 +41,10 @@ export function checklistKey(name, close) {
   return CHECKLIST_FINISHED.has(name) && close ? `${name}:${close.id}` : null;
 }
 
+// The account the status workflow comments as (GITHUB_TOKEN). Only its
+// records count: anyone can comment on a public issue.
+export const BOT_LOGIN = 'github-actions[bot]';
+
 export const LABELS = {
   fromDiscord: 'from-discord',
   pendingRelease: 'pending-release',
@@ -191,6 +195,22 @@ const capWords = (s) => s.replace(/(^|\s)(\S)/gu, (m, space, first) => {
 export function buildTitle({ repoKey, client, type, module, title }) {
   const mod = capWords(oneLine(module).replace(/[[\]]/g, '').trim()) || 'General';
   return `[${repoKey}] [${client}] [${type}] [${mod}] ${titleText(title)}`;
+}
+
+// A title of the bot's shape, `[KEY] [Client] [Type] [Module] Title`, as its
+// key, client and type and the rest from the module on; null for any other
+// title (one a maintainer retitled).
+export function splitTitle(title) {
+  const m = /^\[([A-Za-z0-9]+)\] \[([^\]]*)\] \[([^\]]*)\] (\[[^\]]*\] .*)$/s.exec(title);
+  return m ? { repoKey: m[1], client: m[2], type: m[3], rest: m[4] } : null;
+}
+
+// A moved issue's title: the new key, client and type, a null type keeping
+// the title's own, and the module and text exactly as written; null for a
+// title not of the bot's shape.
+export function movedTitle(title, { repoKey, client, type }) {
+  const t = splitTitle(title);
+  return t ? `[${repoKey}] [${client}] [${type || t.type}] ${t.rest}` : null;
 }
 
 // The title as the issue gets it. The form's check uses it too, so a title
@@ -379,22 +399,51 @@ export function parseMarker(body) {
   return { threadId: m[1], reporterId: m[2] && m[2] !== 'unknown' ? m[2] : null };
 }
 
-// The id of the message the issue was filed from, or null for an issue filed
-// before the bot wrote it. Only the bot's footer counts: the line directly
-// before the thread marker that ends the body, since an older body may quote
-// such a line in its report.
 // The line a moved post's copy adds before the footer: the filed message was
 // posted by the bot's webhook, so a reply to it pings no one. Player text
 // cannot hold it (neutralize).
 export const COPY_MARK = '<!-- discord-copy -->';
+const MARKER_LINE = /^<!--\s*discord-thread:\s*\d+(?:\s+reporter:\s*(?:\d+|unknown))?\s*-->\s*$/;
+const MESSAGE_LINE = /^<!-- discord-message: (\d+) -->$/;
+
+// The bot's footer as lines: the last marker line, with the filed-message
+// line and the copy line when they stand directly before it. A maintainer's
+// text may follow it; an older body may quote such lines above it.
+function footerOf(lines) {
+  let end = -1;
+  lines.forEach((l, i) => { if (MARKER_LINE.test(l)) end = i; });
+  if (end < 0) return null;
+  let start = end;
+  const message = start > 0 ? MESSAGE_LINE.exec(lines[start - 1]) : null;
+  if (message) start--;
+  const copy = !!message && start > 0 && lines[start - 1] === COPY_MARK;
+  if (copy) start--;
+  return { start, end, id: message ? message[1] : null, copy };
+}
+
 // The footer's filed message id, and whether the copy line sits directly
-// before the footer; null with no footer.
+// before it; null with no footer, or a footer with no message line (an issue
+// filed before the bot wrote it).
 export function parseFiledMessage(body) {
-  const text = lf(body);
-  const m = /(?:^|\n)<!-- discord-message: (\d+) -->\n<!-- discord-thread: \d+ reporter: (?:\d+|unknown) -->\s*$/.exec(text);
-  if (!m) return null;
-  const before = text.slice(0, m.index);
-  return { id: m[1], copy: before === COPY_MARK || before.endsWith(`\n${COPY_MARK}`) };
+  const f = footerOf(lf(body).split('\n'));
+  return f && f.id ? { id: f.id, copy: f.copy } : null;
+}
+
+// The issue's body once its post moved to `newId`: the bot's footer is
+// replaced where it stands by a line naming the new post and its mover, then
+// a copy footer naming the new post with the old marker's reporter. Every
+// other line stays as written. A body with no marker gets both at its end.
+export function movedBody(body, { guildId, newId, mover }) {
+  const lines = lf(body).split('\n');
+  const f = footerOf(lines);
+  const at = f ? f.start : lines.length;
+  const reporterId = f ? parseMarker(lines[f.end]).reporterId : null;
+  const added = [
+    `Moved to [the new post](https://discord.com/channels/${guildId}/${newId}) by ${personCell(mover)}.`,
+    COPY_MARK, `<!-- discord-message: ${newId} -->`, marker({ threadId: newId, reporterId }),
+  ];
+  const gap = at > 0 && lines[at - 1].trim() !== '' ? [''] : [];
+  return [...lines.slice(0, at), ...gap, ...added, ...(f ? lines.slice(f.end + 1) : [])].join('\n');
 }
 
 // `reporter` and `sender` are { name, username, id }, any part missing;
@@ -530,8 +579,10 @@ export function planTags(current, available, statusName, { names = STATUS_NAMES,
 // disagrees with the forum's own type goes, and is never added. Discord takes
 // five: the status tag, a repo tag per key, a tag per client and Accepted come
 // first, then the rest in the post's order. `applied` is absent on a thread
-// read that carries no tag list.
-export function movedTags({ applied = [], from, to, client, fixedClient, fixedType, repoTags }) {
+// read that carries no tag list. A filed post passes its issue's `repoKey`:
+// a repo tag of another key goes, and the forum's first tag of that key is
+// added when no kept tag names it.
+export function movedTags({ applied = [], from, to, client, fixedClient, fixedType, repoTags, repoKey = null }) {
   const target = new Map();
   for (const t of to) if (!target.has(t.name.toLowerCase())) target.set(t.name.toLowerCase(), t.id);
   const oldTags = new Map(from.map((t) => [t.id, t.name.toLowerCase()]));
@@ -546,8 +597,13 @@ export function movedTags({ applied = [], from, to, client, fixedClient, fixedTy
   // The post and its forum's tags are read in separate calls, so a tag
   // removed from the forum between them names nothing.
   const kept = applied.map((id) => oldTags.get(id)).filter((n) => n !== undefined && target.has(n)
-    && !(covers(n).length && client !== 'All' && kind(n).client !== client) && typeFits(n));
+    && !(covers(n).length && client !== 'All' && kind(n).client !== client) && typeFits(n)
+    && !(repoKey && repoOf(n) && repoOf(n) !== repoKey));
   const added = [];
+  if (repoKey && !kept.some((n) => repoOf(n) === repoKey)) {
+    const tag = [...target.keys()].find((n) => repoOf(n) === repoKey);
+    if (tag) added.push(tag);
+  }
   if (!fixedClient) {
     const need = (client === 'All' ? ['Retail', 'Forever'] : [client]).filter((c) => !kept.some((n) => covers(n).includes(c)));
     // Send to GitHub guesses the type from the tags, so an added tag naming
@@ -671,9 +727,10 @@ export const MESSAGES = {
   needsInfo: (uid) => `${uid ? `<@${uid}> ` : ''}Could you add a bit more detail? A screenshot, your addon version and the steps to make it happen help a lot.`,
   // The bot's message in a moved post's new post. Only the reporter is
   // pinged (allowed_mentions); the mover's mention pings no one.
-  movedHere: ({ from, by, reporter, left, cut }) => [
+  movedHere: ({ from, by, reporter, left, cut, tracked = null }) => [
     `Moved here from ${from} by ${shownStaff(by)}.`,
     `First posted by ${reporter.id ? `<@${reporter.id}>` : discordText(reporter.name)}.`,
+    tracked ? `Tracked as ${tracked.key} #${tracked.number}.` : '',
     left ? `${left} file(s) could not be copied (too large, or not downloaded); they are on the original post.` : '',
     cut ? 'The first message was too long to copy whole; the full text is on the original post.' : '',
   ].filter(Boolean).join(' '),
@@ -779,8 +836,10 @@ export const plainTags = (names, repoTags) => names.filter((n) => !own(repoTags,
 
 // The custom ids of the send button ("send:<post>"), its form
 // ("gh:<post>:<message>[:<button message or 0>[:<queue card>]]"), the move
-// button ("move:<post>") and the move form ("mv:<post>[:<queue card>]"). Their
-// parts go into API paths, so they are taken only when every part is digits.
+// button ("move:<post>") and the move form ("mv:<post>:<queue card or
+// 0>:<repo key>:<client>", the key and the client it pre-selected, either
+// empty; "mv:<post>[:<queue card>]" from an older form). Their id parts go
+// into API paths, so they are taken only when every one is digits.
 export const SEND_BUTTON = 'send';
 export const MOVE_BUTTON = 'move';
 export function parseCustomId(id) {
@@ -793,6 +852,8 @@ export function parseCustomId(id) {
   if (m) return { kind: 'move', threadId: m[1] };
   m = /^mv:(\d+)(?::(\d+))?$/.exec(s);
   if (m) return { kind: 'moveForm', threadId: m[1], cardId: m[2] || '' };
+  m = new RegExp(`^mv:(\\d+):(\\d+):([A-Za-z0-9]{0,${REPO_KEY_MAX}}):(${CLIENT_NAMES.join('|')}|)$`).exec(s);
+  if (m) return { kind: 'moveForm', threadId: m[1], cardId: m[2] !== '0' ? m[2] : '', shownKey: m[3], shownClient: m[4] };
   return null;
 }
 
@@ -857,13 +918,14 @@ export function queueCard({ guildId, forumId, postId, author, client, type, star
 // older card names the post as text there), or cardHead for the post. A card
 // an older version sent may still show a live link or a direction mark
 // there, so the head goes on one line with its links broken. `by`, the
-// filer, is left out when unknown.
+// filer, is left out when unknown. Move stays: a filed post moves with its
+// issue.
 export function filedCard({ guildId, postId, head, key, number, by }) {
   return {
     content: `~~${noLinks(oneLine(head))}~~\n**Filed as ${key} #${number}**${by ? ` by ${shownStaff(by)}` : ''}`,
     allowed_mentions: { parse: [] },
     flags: SUPPRESS_EMBEDS,
-    components: [{ type: 1, components: [openPost(guildId, postId)] }],
+    components: [{ type: 1, components: [moveButton(postId), openPost(guildId, postId)] }],
   };
 }
 

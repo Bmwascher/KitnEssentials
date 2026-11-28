@@ -39,6 +39,19 @@ export function checklistBody({ state, guildId, forumId = '', since, issueUrl, a
   ].join('\n');
 }
 
+// A thread's first message: what it mirrors. A move rewrites it with the
+// same text.
+export function checklistFirst({ title, issueUrl, guildId, postId, labels }) {
+  const kinds = (labels || []).map((l) => l.name || l).filter((l) => /^(type|client): /.test(l)).slice(0, MAX_LABELS);
+  return [
+    `**${discordText(title)}**`,
+    `Issue: ${issueUrl}`,
+    `Player post: https://discord.com/channels/${guildId}/${postId}`,
+    ...(kinds.length ? [kinds.join(' · ')] : []),
+    'The bot sets the status and Accepted tags from GitHub; every other tag is yours.',
+  ].join('\n');
+}
+
 export function parseChecklist(c) {
   const body = norm(c);
   const m = /<!--\s*discord-checklist:\s*(\d+|pending|creating)\s+guild:\s*(\d+|none)\s*-->/.exec(body);
@@ -188,17 +201,7 @@ export function checklistRunner({ gh, discord, repo, forumId, wanted, records, b
     if (rec) await mirrorTags(n, rec);
   }
 
-  // What the thread mirrors.
-  const firstMessage = (w, guildId) => {
-    const kinds = (w.issue.labels || []).map((l) => l.name || l).filter((l) => /^(type|client): /.test(l)).slice(0, MAX_LABELS);
-    return [
-      `**${discordText(w.issue.title)}**`,
-      `Issue: ${w.issue.html_url}`,
-      `Player post: https://discord.com/channels/${guildId}/${w.postId}`,
-      ...(kinds.length ? [kinds.join(' · ')] : []),
-      'The bot sets the status and Accepted tags from GitHub; every other tag is yours.',
-    ].join('\n');
-  };
+  const firstMessage = (w, guildId) => checklistFirst({ title: w.issue.title, issueUrl: w.issue.html_url, guildId, postId: w.postId, labels: w.issue.labels });
 
   // The opener's write first reads GitHub again, after its Discord read: an
   // issue that stopped being the bot's gets no write, and its next event or

@@ -333,6 +333,10 @@ test('button and form ids parse only when every id part is digits', () => {
   assert.deepEqual(C.parseCustomId('move:700'), { kind: 'move', threadId: '700' });
   assert.deepEqual(C.parseCustomId('mv:700'), { kind: 'moveForm', threadId: '700', cardId: '' });
   assert.deepEqual(C.parseCustomId('mv:700:96'), { kind: 'moveForm', threadId: '700', cardId: '96' });
+  // The form carries the repo key and the client it pre-selected; a 0 card part means none.
+  for (const [id, cardId, shownKey, shownClient] of [
+    ['mv:700:96:KE:All', '96', 'KE', 'All'], ['mv:700:0:KE:Retail', '', 'KE', 'Retail'], ['mv:700:96::Forever', '96', '', 'Forever'], ['mv:700:96:KE:', '96', 'KE', ''],
+  ]) assert.deepEqual(C.parseCustomId(id), { kind: 'moveForm', threadId: '700', cardId, shownKey, shownClient }, id);
   for (const bad of ['send:7a', 'send:', 'gh:700', 'gh:700:800:950:1:2', 'gh:700:800:0:96x', 'gh:7/0:800', 'xx:700:800', '', undefined,
     'move:7a', 'move:', 'mv:', 'mv:700:', 'mv:700:96:1', 'mv:7/0']) {
     assert.equal(C.parseCustomId(bad), null, String(bad));
@@ -373,7 +377,7 @@ test('a queue card names the post and its poster by Discord mention, pinging no 
     const filed = C.filedCard({ guildId: '1', postId: '700', head, key: 'ONE', number: 10, by });
     assert.equal(filed.content, `~~**New post in <#900>:** <#700>~~\n${line}`, line);
     assert.deepEqual([filed.allowed_mentions, filed.flags], [{ parse: [] }, 4], line);
-    assert.deepEqual(filed.components[0].components.map((b) => [b.label, b.url]), [['Open post', 'https://discord.com/channels/1/700']], line);
+    assert.deepEqual(filed.components[0].components.map((b) => [b.label, b.custom_id, b.url]), [['Move', 'move:700', undefined], ['Open post', undefined, 'https://discord.com/channels/1/700']], line);
   }
   // A username shows in its code span on one line, with no direction mark.
   assert.equal(C.queueCard({ ...post, author: { name: 'k', username: 'ki\u202Era`', id: '42' } }).content, '**New post in <#900>:** <#700>\nby <@42> (`kira`)');
@@ -775,6 +779,59 @@ test('an issue filed from a moved post\'s copy ends with the copy footer, which 
   assert.deepEqual(C.parseFiledMessage(filed), { id: '990', copy: true });
 });
 
+test('a filed move rewrites only the bot\'s footer and adds a Moved to line where it stood', () => {
+  const MOD = { name: 'moddy', username: 'moddy', id: '5' };
+  const MOVE = 'Moved to [the new post](https://discord.com/channels/1/990) by [moddy](https://discord.com/users/5) (`moddy`).';
+  const FOOT = ['<!-- discord-copy -->', '<!-- discord-message: 990 -->'];
+  const moved = (body, over = {}) => C.movedBody(body, { guildId: '1', newId: '990', mover: MOD, ...over });
+  const filed = C.buildBody({ content: 'see https://discord.com/channels/1/700', reporter: { name: 'Pat', id: '42' }, sender: MOD,
+    threadUrl: 'https://discord.com/channels/1/700', attachments: [{}], threadId: '700', messageId: '700' });
+  const above = filed.split('\n').slice(0, -2);
+  const once = moved(filed);
+  assert.equal(once, [...above, MOVE, ...FOOT, '<!-- discord-thread: 990 reporter: 42 -->'].join('\n'), 'every line above the footer kept, the old links included');
+  assert.deepEqual(C.parseMarker(once), { threadId: '990', reporterId: '42' });
+  assert.deepEqual(C.parseFiledMessage(once), { id: '990', copy: true });
+  const MOVE2 = MOVE.replace('990', '991');
+  assert.equal(moved(once, { newId: '991' }), [...above, MOVE, '', MOVE2, '<!-- discord-copy -->', '<!-- discord-message: 991 -->', '<!-- discord-thread: 991 reporter: 42 -->'].join('\n'),
+    'a second move: the first line stays, the copy footer is replaced');
+  const footer = (id, rep) => [`<!-- discord-message: ${id} -->`, `<!-- discord-thread: ${id} reporter: ${rep} -->`].join('\n');
+  const newFooter = (rep) => [...FOOT, `<!-- discord-thread: 990 reporter: ${rep} -->`].join('\n');
+  for (const [why, below] of [
+    ['a maintainer note', 'Note from staff.'],
+    ['an open fence left unclosed', '```\nstack trace'],
+    ['a fence opened two spaces in, closed at column one', '  ```\ncode\n```'],
+    ['an HTML comment left unclosed', '<!-- staff note'],
+  ]) {
+    const body = `> report\n\n${footer('800', 'unknown')}\n${below}`;
+    assert.equal(moved(body), `> report\n\n${MOVE}\n${newFooter('unknown')}\n${below}`, why);
+  }
+  assert.equal(moved(`> report\r\n\r\n${footer('800', '42').replace(/\n/g, '\r\n')}\r\nNote\r\nline two`),
+    moved(`> report\n\n${footer('800', '42')}\nNote\nline two`), 'a CRLF body reads as its LF form');
+  assert.equal(moved('> report\n<!-- discord-thread: 700 reporter: 42 -->'), `> report\n\n${MOVE}\n${newFooter('42')}`, 'an older footer, the marker alone');
+  assert.equal(moved('Hand-written body'), `Hand-written body\n\n${MOVE}\n${newFooter('unknown')}`, 'no marker: the footer added at the end');
+});
+
+test('the filed message is read from the last marker\'s footer, wherever it stands', () => {
+  assert.deepEqual(C.parseFiledMessage('> r\n\n<!-- discord-message: 800 -->\n<!-- discord-thread: 700 reporter: 42 -->\nA note below.'), { id: '800', copy: false });
+  const moved = C.movedBody('> r\n\n<!-- discord-message: 800 -->\n<!-- discord-thread: 700 reporter: 42 -->\nA note below.', { guildId: '1', newId: '990', mover: { name: 'm' } });
+  assert.deepEqual(C.parseFiledMessage(moved), { id: '990', copy: true });
+  // A report that copies bot lines above its own footer.
+  const quote = 'Copied from an older report:\n<!-- discord-message: 111 -->\n<!-- discord-thread: 222 reporter: 9 -->\n\n';
+  const quoted = `${quote}<!-- discord-message: 800 -->\n<!-- discord-thread: 700 reporter: 42 -->`;
+  assert.deepEqual(C.parseFiledMessage(quoted), { id: '800', copy: false });
+  assert.ok(C.movedBody(quoted, { guildId: '1', newId: '990', mover: { name: 'm' } }).startsWith(quote), 'the quoted lines stay as written');
+});
+
+test('a moved issue\'s title gets the new key, client and type, and keeps its module and text as written', () => {
+  const t = '[KE] [Retail] [Bug] [iOS] Bags overlap';
+  for (const [why, title, parts, want] of [
+    ['the three prefix groups', t, { repoKey: 'UI', client: 'All', type: 'Feature' }, '[UI] [All] [Feature] [iOS] Bags overlap'],
+    ['a null type keeps the title\'s', t, { repoKey: 'UI', client: 'All', type: null }, '[UI] [All] [Bug] [iOS] Bags overlap'],
+    ['a hand title', 'Bags overlap', { repoKey: 'UI', client: 'All', type: 'Bug' }, null],
+  ]) assert.equal(C.movedTitle(title, parts), want, why);
+  assert.deepEqual(C.splitTitle(t), { repoKey: 'KE', client: 'Retail', type: 'Bug', rest: '[iOS] Bags overlap' });
+});
+
 test('a moved post keeps the tags the new forum has and gets its client tags, five at most in order', () => {
   const FROM = [
     { id: 'f-retail', name: 'Retail' }, { id: 'f-bug', name: 'Bug' }, { id: 'f-tri', name: 'Triaged' }, { id: 'f-acc', name: 'Accepted' },
@@ -864,6 +921,10 @@ test('a moved post keeps the tags the new forum has and gets its client tags, fi
       to: [...TO, { id: 't-one2', name: 'One alias' }, { id: 't-one3', name: 'One third' }],
       fixedClient: null, client: 'All', repoTags: C.parseRepoTags('{"ONE":"ONE","One alias":"ONE","One third":"ONE"}'),
     }, ['t-tri', 't-one', 't-retail', 't-forever', 't-acc']],
+    // A filed move passes the issue's key: its repo tag follows the issue.
+    ['with repoKey, a repo tag of another key dropped, the key tag added', ['f-one', 'f-staff'], { repoKey: 'TWO' }, ['t-two', 't-staff']],
+    ['with repoKey, the key tag kept, not doubled', ['f-one', 'f-staff'], { repoKey: 'ONE' }, ['t-one', 't-staff']],
+    ['with repoKey, no tag for the key adds none', ['f-one', 'f-staff'], { repoKey: 'THREE' }, ['t-staff']],
   ]) assert.deepEqual(C.movedTags({ ...base, ...over, applied }), want, why);
 });
 
@@ -872,6 +933,8 @@ test('a moved post\'s card mentions the mover, and the moved messages link both 
   assert.equal(C.queueCard({ ...post, author: { name: 'k', username: 'kira', id: '42' }, moved: '<@8>' }).content, '**New post in <#900>:** <#700>\nby <@42> (`kira`)\nMoved by <@8>');
   assert.equal(C.MESSAGES.movedHere({ from: 'https://discord.com/channels/1/700', by: '<@8>', reporter: { name: 'Pat', id: '42' } }),
     'Moved here from https://discord.com/channels/1/700 by <@8>. First posted by <@42>.');
+  assert.equal(C.MESSAGES.movedHere({ from: 'L', by: '<@8>', reporter: { name: 'Pat', id: '42' }, tracked: { key: 'KE', number: 12 } }),
+    'Moved here from L by <@8>. First posted by <@42>. Tracked as KE #12.');
   assert.equal(C.MESSAGES.movedHere({ from: 'L', by: '<@8>', reporter: { name: '**Hook**' }, left: 2, cut: true }),
     'Moved here from L by <@8>. First posted by \\*\\*Hook\\*\\*. 2 file(s) could not be copied (too large, or not downloaded); they are on the original post. The first message was too long to copy whole; the full text is on the original post.');
   assert.equal(C.MESSAGES.movedTo({ to: 'https://discord.com/channels/1/990', by: '<@8>' }), 'This post moved to https://discord.com/channels/1/990 (moved by <@8>).');

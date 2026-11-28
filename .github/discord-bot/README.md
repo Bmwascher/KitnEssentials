@@ -66,6 +66,11 @@ it along:
 On a post the bot moved (see Moving a post), "now tracked" and every status
 message also start with an @mention of the reporter, who is pinged: the
 copied message was posted by the bot's webhook, so a reply to it pings no one.
+After a filed post moves, its status messages reply to the copy in the new
+post and @mention the reporter the issue names. An issue whose reporter is
+unknown (a report a webhook posted) pings no one, as before the move. The
+needs-info message is not a reply, as always: it mentions the reporter in
+the new post.
 
 "Now tracked" and every status message are replies to the reporter's message,
 the one the issue was filed from, so Discord pings the reporter even when
@@ -258,7 +263,9 @@ below).
     app;
   - for each repo in `REPOS` and `LOCK_REPO`, once in any letter case, the
     GitHub App's install, its Issues permission and, for a filing repo, the
-    bot's labels.
+    bot's labels; when `REPOS` names two or more repos, also each filing
+    repo's Contents: Read and write, which moving a filed post to another
+    repo needs.
 
   The result goes to `MOD_CHANNEL_ID`, one line per problem with its fix,
   but only when the check found that channel to be a text channel of this
@@ -341,10 +348,15 @@ it, each as their server name linked to their Discord profile, with their
 username (a webhook's post shows its name alone), and a link to the post. The
 quoted report follows, then the attachment count and the template check. The
 issue keeps those names, usernames and Discord ids as they were at filing; a
-maintainer removes them by editing the issue. Two hidden lines at the end name
-the filed message and the post; leave them in place. An issue filed from a
-moved post's copy ends with three: the first marks the copy, so status
-messages @mention the reporter (see Moving a post).
+maintainer removes them by editing the issue. Two hidden lines after the
+report name the filed message and the post; leave them in place. They stand
+together where the bot wrote them: at the end, unless a maintainer added a
+note below them, which then follows them. An issue filed from a moved post's
+copy has three: the first marks the copy, so status messages @mention the
+reporter (see Moving a post). Each move of a filed post adds a visible line
+directly above the hidden lines, "Moved to (the new post) by (moderator).",
+oldest first, each linking the post that move made, and rewrites the hidden
+lines to name the new post.
 
 The issue's title is built from the form: `[KE] [Retail] [Bug] [Bags] Bank tab
 icons overlap`. That is the repo key, the client, the type, the module, and
@@ -403,6 +415,8 @@ An issue moved in from another repo arrives as a new issue: its `opened`
 event does nothing (no message, no tag change, no checklist thread). Its
 post is settled by its next status event (a close, a reopen, a PR or a
 release) or the sweep, and its checklist thread by its next checklist event.
+When the bot's own move transferred it, the move has already relinked the
+post and rewritten the checklist thread's first message.
 
 ## Moving a post
 
@@ -423,32 +437,80 @@ forum, so it does not check this.
 Queue cards posted before this version have no Move button: a member of
 an approved role asks a moderator, who right-clicks the post.
 
-Only a post not yet sent to GitHub moves. A filed post answers "This post is
-already tracked as KEY #n (link); moving filed posts comes in a later
-update." and nothing changes. A post that holds the bot's "now tracked"
-reply among its last 100 messages is refused too when the bot cannot find
-its issue (its filing record was never saved or was deleted, and the issue
-lost its `from-discord` label or left `REPOS`); the answer links that reply.
-If that issue was deleted, delete the reply, then move the post again.
+A filed post moves too, and its issue follows it (below). A post that holds
+the bot's "now tracked" reply among its last 100 messages is refused when
+the bot cannot find its issue (its filing record was never saved or was
+deleted, and the issue lost its `from-discord` label or left `REPOS`), so
+the bot cannot move it; the answer links that reply. If that issue was
+deleted, delete the reply, then move the post again.
 
-The form has two dropdowns:
+The form has these dropdowns:
 
 - **Move to**: the other forums in `FORUMS` that are forums of this server,
   chosen already when there is only one.
+- **Repo**: only when `REPOS` has two or more keys the dropdowns can offer,
+  and used only for a post already on GitHub. It is pre-filled from the
+  post's filing record: the key the post was filed under while it still
+  names that repo, else the repo's first key. Leaving it as shown keeps the
+  issue where it is, even when the record names a repo the issue has since
+  left. Another key for the same repo changes only the key. Another repo
+  moves the issue there (a transfer on GitHub), unless the issue is closed:
+  a closed issue keeps its repo, and moving its post to another repo is
+  refused. On a post not yet filed the field is ignored, and Send to GitHub
+  on the new post picks the repo, its dropdown pre-filled from the post's
+  one repo tag (`REPO_TAGS`).
 - **Client**: optional, read only for a forum with no client of its own.
   Moving into such a forum with no client chosen answers "Nothing was moved.
-  Pick a client: ..." and changes nothing.
+  Pick a client: ..." and changes nothing. On a post named as its issue's
+  title (the filing renames it), it shows the issue's client; left as shown,
+  a filed post keeps its issue's client, and another choice changes it.
 
-It has no repo: the post has no issue yet. Send to GitHub on the new post
-picks the repo, its dropdown pre-filled from the post's one repo tag
-(`REPO_TAGS`), else empty so staff must pick; with one repo it is always
-selected.
+**A filed post.** A repo change without a forum change is not a move: transfer
+the issue on GitHub. A filed move changes on the issue:
+
+- the title's prefix: the key, the client and the type, the module and the
+  title's text kept as written. A title not of the bot's shape is kept, and
+  the new post takes the old post's name;
+- its `client:` and `type:` labels, never `from-discord`. A forum with no
+  type of its own keeps the issue's type, from its `type:` label;
+- its hidden lines, now naming the new post, so status messages go there,
+  and one "Moved to (the new post) by (moderator)." line above them. The
+  rest of the body stays as written, so its links still open the old post,
+  which says where the post went;
+- the post's filing record (`issue:<new post id>`);
+- the first message of its staff checklist thread, to name the new post,
+  the issue's title and address and its labels. The thread is opened to
+  edit it and left open.
+
+The new post's tags carry the repo tag of the issue's key (a tag of another
+key is dropped), the moved message adds "Tracked as KEY #n.", and the queue
+card shows "Filed as KEY #n" with **Move** and **Open post**. The reply is
+"Moved to <new post> from <old post>. KEY #n: <issue link>", with
+"(transferred from OLDKEY #m)" after a transfer.
+
+**The transfer** comes before the new post is made, the last write before
+it. GitHub moves issues only between repos of one owner, never from a
+private repo to a public one; it keeps a milestone only when the target has
+one of the same name and due date, and the bot makes in the target any label
+it lacks. GitHub copies the labels a few seconds after it answers, so
+before it removes a client or type label the bot reads the issue again,
+up to six times a second apart, until the old labels are there. The
+GitHub App needs Contents: Read and write as well as Issues on both repos
+(Checking the setup). After the bot found the issue, every reply
+that moved nothing ends by saying where it is, "The issue is KEY #n in
+owner/repo (link)."; a refusal before that, such as a busy post, names no
+issue. A transfer GitHub refused (an HTTP 4xx, or its missing-permission
+answer) leaves the issue in its repo and names the permission. A transfer
+GitHub did not confirm (no answer, a 5xx, a stop at its deadline, an answer
+the bot cannot read, or another GitHub error) says instead where the issue
+was last known and that it may now be in the target repo.
 
 Discord cannot move a thread, so the bot makes a new post in the chosen
 forum through a webhook it makes there, named `Post mover`, and reuses
 after; one someone deletes is made again at the next move. The player sees:
 
-- the new post, with the old post's name, its first message's text and
+- the new post, with the old post's name (a filed post's is rebuilt from
+  its issue's new title while renaming is on), its first message's text and
   files, under their server name and avatar with Discord's APP badge. Only
   the first message is copied, not the conversation;
 - the bot's message in it, "Moved here from <old post> by @mover. First
@@ -457,12 +519,13 @@ after; one someone deletes is made again at the next move. The player sees:
   locked and archived. It stays readable.
 
 The new post gets no greeting. The old post's queue card is edited to show
-the new post, with its buttons and "Moved by @mover"; a post with no card
+the new post, with its buttons and "Moved by @mover" (a filed post's shows
+"Filed as KEY #n" instead); a post with no card
 yet, or whose card Discord will not edit, gets a new card for the new post.
 
 **Tags.** The new post keeps every tag of the old post whose name, in any
 letter case, the new forum has, a repo tag included; none is added for a
-repo. A client tag that disagrees with the post's client is dropped, and a
+repo, except a filed post's (above). A client tag that disagrees with the post's client is dropped, and a
 forum with no client of its own gets its tags for that client (All gives
 both, or one tag naming both when the forum has it). A tag added so names
 no type, or the post's own: the forum's, else the one its kept tags name.
@@ -475,7 +538,9 @@ order, so a post with a status and four repo tags keeps no client tag; the
 queue card still names the client.
 
 **Refusals.** Each answers "Nothing was moved: ..." and changes nothing: a
-post already moved (its record says where), or locked; a move into a forum
+post already moved (its record says where), or locked; a closed issue moved
+to another repo; a transfer GitHub refused, or whose target repo the bot
+cannot reach or read; an issue whose comments cannot be read; a move into a forum
 `FORUMS` no longer lists, or into one deleted since the form opened; a post, or its first message, that was deleted; a post being filed or moved (the lock); a saved
 record that cannot be read; a saved issue that cannot be checked; a forum list that cannot
 be read; the bot lacking Manage Webhooks in the target forum; no `STATE`
@@ -487,20 +552,29 @@ on such a copy it asks to wait a minute too. Every button and command, Send
 to GitHub's included, answers only in the server `GUILD_ID` names: anywhere
 else, or while `GUILD_ID` is unset, it is refused before anything is read.
 
-**Before the new post exists**, every failure answers "Nothing was moved"
-and leaves both posts as they were, and moving again finishes the job. The
-forum's `Post mover` webhook may have been made; the next move uses it.
+**Before the new post exists**, every failure answers "Nothing was moved",
+or "Nothing confirmed" when GitHub or Discord did not answer a write (then
+the lock stays), and leaves the old post as it was; after a create Discord
+did not answer, a copy may exist in the target forum. The forum's `Post mover` webhook may
+have been made; the next move uses it. A transfer may have gone through
+first: the reply then says where the issue now is, and the next form's Repo
+field, left as shown, keeps it there.
 
 ### When a move stops partway
 
 A move makes the new post, then does six things: saves the old post's
 record, moves the queue card, saves the new post's record, posts the moved
-message, posts the note in the old post, and locks the old post. While
+message, posts the note in the old post, and locks the old post. A filed
+post's move does four more: it saves the filing record and edits the issue
+right after the old post's record, and sets the labels and edits the
+checklist thread after the old post's lock. While
 `QUEUE_CHANNEL_ID` is unset, the card step is skipped with no line and no
 card is touched. The reply is "Moved to <new post> from <old post>." when
 every step it ran is done. Otherwise
 it is "The move stopped partway: <new post> was made from <old post>. Not
 done:", then one line for each that failed, and the Worker log says why.
+A step whose write GitHub or Discord did not answer is listed too, though
+it may have gone through; a later step reads the state as it last knew it.
 The bot does not retry them, and there is no repair procedure: each state
 below is known and accepted. What you see in each:
 
@@ -531,6 +605,29 @@ below is known and accepted. What you see in each:
   is not greeted. Do not delete a post in that forum on
   the strength of this message alone: another post can share the title and
   the player's name.
+- **The filing record** (`record issue:<new post id>`). Send to GitHub on
+  the new post still answers "Already tracked", finding the issue by its
+  hidden lines, once the issue link step was done.
+- **The issue link** (`issue link to the new post`). The issue's body and
+  title still name the old post, so status messages go there. With the
+  filing record also not done, Send to GitHub on the new post files a
+  second issue; close it by hand.
+- **The labels** (`issue labels`). The client or type labels named stay,
+  or are missing.
+- **The checklist thread** (`staff checklist thread`). Its first message
+  still names the old post and address. The thread stays linked to the
+  issue, and its tags keep following it.
+- **A transfer refused** (an HTTP 4xx, or GitHub's missing-permission
+  answer): nothing moved, the issue stays in its repo, and the lock is
+  released.
+- **A transfer not confirmed** ("Nothing confirmed: GitHub did not confirm
+  the transfer of ..."): the issue may be in either repo, and the old
+  post's lock label stays until someone deletes it as the busy reply says.
+  The move after that reads where the issue is.
+- **A move stopped after a transfer** (the new post refused, or not
+  answered): the issue is in the new repo and the old post was not
+  changed, though an unanswered create may have left a copy; its
+  checklist thread stays linked, since its record comment moved with it.
 - **No reply at all** (the Worker was stopped, or the reply failed): any of
   the states above may hold. Look at both posts before acting.
 
@@ -564,7 +661,12 @@ past the first 100 in each repo, in the two repos together (about 1,000 in
 each); past that,
 the last steps fail and are reported. If KV calls
 count too, the figure grows by six (four reads, two writes). The live bot
-runs on the paid plan.
+runs on the paid plan. These figures are for a post not yet filed. A filed
+post's move skips the "now tracked" read and makes up to 17 more: with a
+transfer, the issue's comments (one more for each full page of 100), the
+target's token (two) and repo, the transfer, up to six reads of the moved
+issue's labels, the issue edit, up to three label calls and the checklist
+thread's two; and one more KV write.
 
 ## Clearing a filing record
 
@@ -716,7 +818,12 @@ Setup:
 4. Make the `accepted` label:
    `GITHUB_TOKEN=<a token with repo access> npm run labels <owner>/<repo>`
 5. Set the repository variable `CHECKLIST_FORUM_ID` to the forum's id. Until
-   then nothing here runs.
+   then nothing here runs. Every repo in `REPOS` that runs the workflow sets
+   it to the same forum as the Worker's `CHECKLIST_FORUM_ID`: an issue that
+   moves between repos keeps its one thread. A repo with another forum fails
+   its checklist job on a transferred issue's thread, naming the thread, and
+   a repo with the variable unset keeps no thread in step. The bot cannot
+   read a repository variable, so it cannot check this.
 
 **Tags.** The bot owns those eight tags; every other tag is staff's. The
 status tag follows the issue: Triaged, In progress (a member's PR will close
@@ -751,7 +858,8 @@ thread" comment notes which close it was archived for. A staff reply reopens
 an archived thread, and the bot leaves it open until the issue closes again.
 A reopened issue's thread is opened again. A tag change by the bot keeps a
 thread's archive state, so a thread Discord archived for inactivity stays
-archived.
+archived. A move of the issue's post does not: it opens the thread to edit
+its first message and leaves it open (Known limits).
 
 **The sweep** lists each checklist problem with the thread's link and what to
 do: an open issue with no thread, a thread not opened or not confirmed, an
@@ -828,12 +936,85 @@ Accepted on purpose; each line says how you would notice it.
   - A filing's card edit or rename that lands after a move of the same post:
     the card points back at the old post, or the old post is reopened.
     Right-click the new post; archive the old post again.
+  - A status run on a filed post's issue during its move: its message goes
+    to the old post.
+  - A maintainer's edit to the issue's title, body or labels in the seconds
+    between the move's read and its write: the move's write can undo it.
+  - A reply sent in the new post before its filing record is saved: Send to
+    GitHub on it can file a second issue. Close it by hand.
 - On the free plan a move counts `fetch` calls only toward the 50 a run
   allows (see Moving a post); if KV calls count too, the figure there grows
   by six.
 - A moved post's wait for the daily list of waiting posts starts again at
   the move: the list counts from the post's creation, the new post is new,
   and the locked old post is not listed. A move is a staff touch.
+- A filed post's repo cannot change while it stays in its forum: transfer
+  the issue on GitHub.
+- A checklist thread keeps its name (`#<old number> ...`) after its issue
+  is transferred.
+- A move of a filed post opens its checklist thread to edit it and leaves it
+  open, an archived one included, so a finished issue's thread shows in the
+  active list until Discord archives it again for inactivity.
+- A moved copy whose filing record was not saved or was deleted, and whose
+  issue then lost `from-discord` or left `REPOS`, moves as a post not yet
+  filed, as a send of it files it again.
+- The bot expects every `REPOS` value in `owner/repo` form, which
+  `/bot-check` reports; another value can stop the Move form or a move
+  before anything changes. The issue's hidden bot lines (the
+  `discord-copy`, `discord-message` and `discord-thread` lines, which stand
+  together below the last "Moved to" line, or below the bot's own text
+  before any move, and above any note a maintainer added below them) must
+  not be edited, removed or copied: a body with no `discord-thread` line
+  gets the bot's lines back on a move, which brings the issue back into the
+  status and checklist jobs.
+- Rare cases of a filed move, each left as it is:
+  - A Move form left open while a deploy changes `REPOS`: a Repo field left
+    as shown still keeps the repo, but a picked key is read under the new
+    `REPOS`, so a remapped key transfers the issue to its new repo, and a
+    removed key keeps the issue in its repo with that key's name in its
+    title, record, card and reply.
+  - A status message a workflow run still owes (its note written, its send
+    failed) cannot be sent by re-running that run once the issue is in
+    another repo: send it by hand and mark the note (top of this README).
+  - An issue in a repo no `REPOS` key names (transferred there by hand)
+    keeps that repo on a move, with the repo's name in place of a key in the
+    title, record, card and replies.
+  - A repo with two keys: a later Send to GitHub names its issue by the
+    repo's first key, and a saved key `/bot-check` names as not usable is
+    not pre-selected but is kept when the repo is kept.
+  - Two keys for a repo's former and current names count as two repos:
+    picking the other name's key tries a transfer (refused for a closed
+    issue), and the setup checks ask for Contents write. `/bot-check`
+    already names a moved repo.
+  - An issue with two type labels keeps the first one's type on a move, and
+    the other label is removed.
+  - A checklist record that does not parse is not relinked, and the move's
+    reply does not name it. One whose thread id staff changed by hand has
+    that thread's first message rewritten when the bot wrote it, and gives
+    the `staff checklist thread` line otherwise.
+  - More than 25 usable `REPOS` keys: the Move form does not open, since
+    Discord takes at most 25 options in a dropdown; the setup checks warn
+    about that many keys.
+  - A title a maintainer rewrote out of the bot's shape: the move cannot
+    read the issue's client from it, so the form's client applies.
+  - With `RENAME_POSTS` at `0`, a filed post with no client tag, in a forum
+    with no client of its own, shows Client blank on the Move form; moved
+    to another such forum, it asks staff to pick the client, and a client
+    other than the issue's changes it.
+  - A transfer slow enough to use most of the move's 12-second preparation
+    leaves more files on the old post.
+  - A transfer whose labels GitHub has not copied by the sixth read: the
+    move changes the labels anyway, and a client or type label it removed
+    can come back with the copy; remove it by hand.
+  - The staff checklist thread keeps the name it was made with: after a
+    move, or a retitle on GitHub, its name shows the old issue number or
+    title, while its first message shows the current ones.
+  - A title a maintainer lengthened to near GitHub's 256 characters can make
+    the issue edit fail after a move; the reply names "issue link to the new
+    post", and status messages keep going to the old post.
+  - Markup a maintainer opened above the bot's hidden lines and closed below
+    them, such as a `<pre>` block, also encloses the "Moved to" line, which
+    then shows as plain text.
 
 - A message whose send failed is never sent again automatically: the sweep
   lists it as unconfirmed, and a person decides.
@@ -1321,7 +1502,9 @@ KitnEssentials) before the real ones. Roughly 45 minutes.
      bot's setup results and alerts there name its settings.
    `/bot-check` (step 10) checks all of these.
 4. **GitHub App.** github.com/settings/apps > New GitHub App: no webhook,
-   Repository permissions **Issues: Read and write**, Metadata: Read. Create,
+   Repository permissions **Issues: Read and write**, Metadata: Read, and,
+   when `REPOS` will name more than one repo, **Contents: Read and write**
+   (moving a filed post to another repo transfers its issue). Create,
    generate a private key (a `.pem` downloads), note the App ID, then
    Install App on the test repo only.
 5. **Worker.** In this folder: `npx wrangler@3 login`, then
@@ -1417,7 +1600,14 @@ default branch only. A copy whose code lives on another branch must make
 that branch the repository's default.
 
 Each repo the bot files into needs its own copy of `discord-status.yml` and
-this folder, and the GitHub App installed. With more than one repo in
+this folder, and the GitHub App installed, with Contents: Read and write
+when `REPOS` names more than one repo (Stage 2 step 4). When updating, give
+every such repo this version's folder on its default branch before the
+Worker is deployed: the workflow runs its own repo's default branch, and an
+older copy reads the issue's hidden lines only at the body's end, so after
+a move of an issue with a maintainer's note below them it would find no
+footer and post the message plainly in the new post, with no ping. For this repo that is the merge; for
+each other repo, a copy. With more than one repo in
 `REPOS`, set `LOCK_REPO` to the repo that holds every filing's lock label,
 whichever repo it files into; until it is set, nothing is filed. Before
 changing it, follow "Changing the lock repo" above. Set its push trigger to that repo's release tags, and the repo

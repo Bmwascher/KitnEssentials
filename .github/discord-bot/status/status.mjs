@@ -14,7 +14,7 @@
 import { readFileSync, appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { STATUS, LABELS, MESSAGES, parseMarker, parseFiledMessage, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN, checklistStatus, checklistKey, statusOf,
-  shownStatuses, preferStatus, triagedAlone, withAccepted, showsAccepted, ACCEPTED, inlineCode, hasTag, tagLine, acceptedLine, isDiscordId, STATUS_NAMES } from '../src/core.js';
+  shownStatuses, preferStatus, triagedAlone, withAccepted, showsAccepted, ACCEPTED, inlineCode, hasTag, tagLine, acceptedLine, isDiscordId, STATUS_NAMES, BOT_LOGIN } from '../src/core.js';
 import { discordClient, postGone } from '../src/discord.js';
 import { githubClient } from '../src/github.js';
 import { checklistRunner, parseChecklist } from './checklist.mjs';
@@ -32,9 +32,7 @@ const SETTLE_TRIES = 3;
 // A tag run also looks at bot issues closed this recently, in case a close
 // run has not labeled them yet.
 const RECENT_MS = 24 * 60 * 60 * 1000;
-// The account this workflow comments as (GITHUB_TOKEN). Only its records
-// count: anyone can comment on a public issue.
-export const BOT_LOGIN = 'github-actions[bot]';
+export { BOT_LOGIN };
 const RELEASE = [LABELS.pendingRelease, LABELS.shipped];
 // Lists are followed this many pages (100 each) at most.
 const MAX_PAGES = 10;
