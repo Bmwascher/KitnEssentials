@@ -142,16 +142,20 @@ export const hasButton = (m, postId) => buttons(m).some((c) => c.custom_id === `
 const isCardFor = (m, postId, me, guildId) => !!m.author && m.author.id === me
   && (hasButton(m, postId) || buttons(m).some((c) => c.url === `https://discord.com/channels/${guildId}/${postId}`));
 
-// How the Worker's "now tracked" reply starts, and its moved message in a
-// post a move made.
+// How the Worker's "now tracked" reply and its reply to a post added to an
+// issue start, and its moved message in a post a move made.
 const TRACKED_START = MESSAGES.tracked('\u0000', 0).split('\u0000')[0];
+const ADDED_START = MESSAGES.added({ key: '\u0000' }).split('\u0000')[0];
 const MOVED_START = MESSAGES.movedHere({ from: '\u0000', by: '', reporter: { name: '' } }).split('\u0000')[0];
 // The skip a post the bot moved here is saved with; the Worker refuses to
 // file a reply in a post whose record says it.
 export const MOVED_HERE = 'a post the bot moved here';
-// The text of the Worker's "now tracked" reply, whoever wrote it. On a moved
-// post's copy it starts with the reporter's mention.
-export const isReceipt = (m) => String(m.content || '').replace(/^<@\d+> /, '').startsWith(TRACKED_START);
+// The text of the Worker's "now tracked" or added reply, whoever wrote it. On
+// a moved post's copy it starts with the reporter's mention.
+export const isReceipt = (m) => {
+  const s = String(m.content || '').replace(/^<@\d+> /, '');
+  return s.startsWith(TRACKED_START) || s.startsWith(ADDED_START);
+};
 
 // The bot's own messages among the post's last 100: its greeting (the
 // buttonless one, or an old one still showing its button), and its "now

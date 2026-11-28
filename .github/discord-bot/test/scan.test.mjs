@@ -418,16 +418,18 @@ test('new posts come first: older posts\' card retries and posts filed before th
   assert.deepEqual(carded, older.slice(0, 8), 'the card share goes to the oldest posts owed one, before the new post');
 });
 
-test('a card still owed finds the receipt of a filing whose record is missing, and goes out to no one', async () => {
-  const a = idAt(T0 + 1000);
-  const kv = started(T0, { greeted: { 900: a } });
-  await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g1', buttonless: true, tries: 1 }));
-  const receipt = { id: 'r1', author: { id: 'b', bot: true }, content: MESSAGES.tracked('ONE', 3) };
-  const f = discord({ active: [{ id: a, parent_id: '900', name: 'x' }], said: { [a]: [receipt] } });
-  await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
-  assert.deepEqual(sends(f), []);
-  assert.equal(JSON.parse(kv.m.get(`thread:${a}`)).tracked, 'r1');
-  assert.equal(stateOf(kv).through['900'], a);
+test('a card still owed finds the receipt of a filing or an add whose record is missing, and goes out to no one', async () => {
+  for (const content of [MESSAGES.tracked('ONE', 3), MESSAGES.added({ key: 'ONE', number: 3, original: 'https://discord.com/channels/1/5', bug: true })]) {
+    const a = idAt(T0 + 1000);
+    const kv = started(T0, { greeted: { 900: a } });
+    await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g1', buttonless: true, tries: 1 }));
+    const receipt = { id: 'r1', author: { id: 'b', bot: true }, content };
+    const f = discord({ active: [{ id: a, parent_id: '900', name: 'x' }], said: { [a]: [receipt] } });
+    await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
+    assert.deepEqual(sends(f), [], content);
+    assert.equal(JSON.parse(kv.m.get(`thread:${a}`)).tracked, 'r1', content);
+    assert.equal(stateOf(kv).through['900'], a, content);
+  }
 });
 
 test('a post archived while the scan reads the queue channel gets no card: the post is read after it', async () => {
