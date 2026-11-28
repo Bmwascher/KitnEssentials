@@ -356,3 +356,33 @@ test('ST3: setupCheck names each problem in one line with its fix, passes only o
     for (const k of after) assert.ok(r.problems.some((l) => later[k][1].test(l)), `${why}: the ${k} checks still run: ${r.problems.join(' | ')}`);
   }
 });
+
+test('ST9: with two or more filing repos, each repo lacking Contents write is named, which a filed move to another repo needs', async () => {
+  const CONTENTS = /: the GitHub App lacks Contents: Read and write, which moving a filed post to another repo needs\. /;
+  const write = { issues: 'write', contents: 'write' };
+  const two = (s, perms = {}) => {
+    s.env = { REPOS: '{"ONE":"me/one","TWO":"me/two"}', LOCK_REPO: 'me/one', ...s.env };
+    s.installs['me/two'] = { id: 2 };
+    s.token = { token: 't', permissions: perms.one || write };
+    s.tokens['2'] = { token: 't2', permissions: perms.two || { issues: 'write' } };
+  };
+  for (const [why, edit, named] of [
+    ['two filing repos, one granting it', (s) => two(s), ['me/two']],
+    ['one filing repo', () => {}, []],
+    ['REPOS unset, LOCK_REPO set', (s) => { s.env = { REPOS: '', LOCK_REPO: 'me/lock' }; }, []],
+    ['a LOCK_REPO-only repo beside two filing repos', (s) => {
+      s.env = { LOCK_REPO: 'me/lock' };
+      two(s);
+      s.installs['me/lock'] = { id: 3 };
+      s.tokens['3'] = { token: 't3', permissions: { issues: 'write' } };
+    }, ['me/two']],
+  ]) {
+    const { problems } = await checkOf(edit);
+    assert.deepEqual(problems.filter((l) => CONTENTS.test(l)).map((l) => l.split(':')[0]), named, why);
+  }
+  const none = await checkOf((s) => { two(s); s.token = { token: 't' }; s.tokens['2'] = { token: 't2' }; });
+  assert.deepEqual(none.problems.filter((l) => /permissions|Contents/.test(l)), [
+    "me/one: could not check the GitHub App's permissions (GitHub's answer had none).",
+    "me/two: could not check the GitHub App's permissions (GitHub's answer had none).",
+  ]);
+});

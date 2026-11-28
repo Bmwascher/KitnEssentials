@@ -480,7 +480,13 @@ export async function setupCheck(raw, deps, { deadline, probe = null }) {
     // The token's permissions are optional in GitHub's answer; a permission
     // not granted is left out of them.
     if (unset(a.permissions)) problems.push(`${name}: could not check the GitHub App's permissions (GitHub's answer had none).`);
-    else ok(a.permissions.issues === 'write', `${name}: the GitHub App lacks Issues: Read and write. Grant it in the App's settings, then accept the new permission on the installation.`);
+    else {
+      ok(a.permissions.issues === 'write', `${name}: the GitHub App lacks Issues: Read and write. Grant it in the App's settings, then accept the new permission on the installation.`);
+      // A filed post moved to another filing repo transfers its issue.
+      if (filing.size >= 2 && filing.has(repo.toLowerCase())) {
+        ok(a.permissions.contents === 'write', `${name}: the GitHub App lacks Contents: Read and write, which moving a filed post to another repo needs. Grant it in the App's settings, then accept the new permission on the installation.`);
+      }
+    }
     // A repo named only as LOCK_REPO holds nothing but the per-post lock labels.
     if (!filing.has(repo.toLowerCase())) continue;
     try {
