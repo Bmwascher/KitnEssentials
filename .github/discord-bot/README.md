@@ -506,7 +506,8 @@ Discord cannot move a thread, so the bot makes a new post in the chosen
 forum through a webhook it makes there, named `Post mover`, and reuses
 after; one someone deletes is made again at the next move. The player sees:
 
-- the new post, with the old post's name, its first message's text and
+- the new post, with the old post's name (a filed post's is rebuilt from
+  its issue's new title while renaming is on), its first message's text and
   files, under their server name and avatar with Discord's APP badge. Only
   the first message is copied, not the conversation;
 - the bot's message in it, "Moved here from <old post> by @mover. First
@@ -515,12 +516,13 @@ after; one someone deletes is made again at the next move. The player sees:
   locked and archived. It stays readable.
 
 The new post gets no greeting. The old post's queue card is edited to show
-the new post, with its buttons and "Moved by @mover"; a post with no card
+the new post, with its buttons and "Moved by @mover" (a filed post's shows
+"Filed as KEY #n" instead); a post with no card
 yet, or whose card Discord will not edit, gets a new card for the new post.
 
 **Tags.** The new post keeps every tag of the old post whose name, in any
 letter case, the new forum has, a repo tag included; none is added for a
-repo. A client tag that disagrees with the post's client is dropped, and a
+repo, except a filed post's (above). A client tag that disagrees with the post's client is dropped, and a
 forum with no client of its own gets its tags for that client (All gives
 both, or one tag naming both when the forum has it). A tag added so names
 no type, or the post's own: the forum's, else the one its kept tags name.
@@ -568,6 +570,8 @@ card is touched. The reply is "Moved to <new post> from <old post>." when
 every step it ran is done. Otherwise
 it is "The move stopped partway: <new post> was made from <old post>. Not
 done:", then one line for each that failed, and the Worker log says why.
+A step whose write GitHub or Discord did not answer is listed too, though
+it may have gone through; a later step reads the state as it last knew it.
 The bot does not retry them, and there is no repair procedure: each state
 below is known and accepted. What you see in each:
 

@@ -538,7 +538,7 @@ async function pressCheck(interaction, env, deps, cfg, postId, t0, ctx) {
   try {
     const filed = await wait(readStrict(env.STATE, `issue:${postId}`));
     const rec = filed ? null : await wait(readStrict(env.STATE, `thread:${postId}`));
-    saved = filed || (rec && rec.issue) || null;
+    saved = savedIssue(filed, rec);
   } catch (e) {
     log(`press check failed after ${Date.now() - t0} ms: ${e.message.slice(0, 200)}`);
     return again;

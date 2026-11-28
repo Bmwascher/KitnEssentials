@@ -100,7 +100,7 @@ export function githubClient(token, fetchImpl = fetch) {
         out.push(...batch);
         if (batch.length < 100) return out;
       }
-      throw new Error(`more than ${MAX_PAGES * 100} comments on ${repo} #${n}; stopping rather than skipping some`);
+      throw new Error(`at least ${MAX_PAGES * 100} comments on ${repo} #${n}; stopping rather than skipping some`);
     },
     repoNodeId: async (repo) => (await call('GET', `/repos/${repo}`)).node_id,
     // Moves an issue to another repo of the same owner, making any label

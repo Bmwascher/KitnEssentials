@@ -815,6 +815,11 @@ test('the filed message is read from the last marker\'s footer, wherever it stan
   assert.deepEqual(C.parseFiledMessage('> r\n\n<!-- discord-message: 800 -->\n<!-- discord-thread: 700 reporter: 42 -->\nA note below.'), { id: '800', copy: false });
   const moved = C.movedBody('> r\n\n<!-- discord-message: 800 -->\n<!-- discord-thread: 700 reporter: 42 -->\nA note below.', { guildId: '1', newId: '990', mover: { name: 'm' } });
   assert.deepEqual(C.parseFiledMessage(moved), { id: '990', copy: true });
+  // A report that quotes bot lines above its own footer.
+  const quote = '> <!-- discord-message: 111 -->\n> <!-- discord-thread: 222 reporter: 9 -->\n\n';
+  const quoted = `${quote}<!-- discord-message: 800 -->\n<!-- discord-thread: 700 reporter: 42 -->`;
+  assert.deepEqual(C.parseFiledMessage(quoted), { id: '800', copy: false });
+  assert.ok(C.movedBody(quoted, { guildId: '1', newId: '990', mover: { name: 'm' } }).startsWith(quote), 'the quoted lines stay as written');
 });
 
 test('a moved issue\'s title gets the new key, client and type, and keeps its module and text as written', () => {

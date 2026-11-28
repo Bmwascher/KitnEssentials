@@ -2333,9 +2333,9 @@ test('a filed post found another way moves with that issue, and a locked one say
   assert.deepEqual(JSON.parse(goneRun.kv.m.get('issue:990')), { repo: 'me/test-two', number: 13, key: 'TWO', by: null });
   assert.equal(gone.f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, '~~**New post in <#901>:** <#990>~~\n**Filed as TWO #13**');
   // No record: found by its marker, with no filer.
-  const search = filedWorld((s) => { s.kv = {}; s.one = [filedIssue()]; });
+  const search = filedWorld((s) => { s.kv = {}; s.one = []; s.two = [thirteen]; });
   const searchRun = await runMove(search, filedSubmit({ repo: null }, { custom: 'mv:700:96::Retail' }));
-  assert.equal(searchRun.told, FILED_MOVED);
+  assert.equal(searchRun.told, `${MOVED} TWO #13: https://github.com/me/test-two/issues/13`);
   assert.equal(JSON.parse(searchRun.kv.m.get('issue:990')).by, null);
   // Filed under a second key of its repo: that key throughout.
   const duo = filedWorld((s) => { s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-two', number: 40, key: 'DUO', by: '<@5>' }) }; },
@@ -2346,7 +2346,11 @@ test('a filed post found another way moves with that issue, and a locked one say
   assert.match(duo.f.find('PATCH', /\/issues\/40$/)[0].body.title, /^\[DUO\] /);
   // A locked filed post: the locked refusal, then where the issue is.
   const locked = filedWorld((s) => { s.post.thread_metadata.locked = true; });
-  assert.equal((await runMove(locked, filedSubmit())).told, `Nothing was moved: the post is locked: a moderator can unlock it, then move it.${WHERE}`);
+  const lockedRun = await runMove(locked, filedSubmit());
+  assert.equal(lockedRun.told, `Nothing was moved: the post is locked: a moderator can unlock it, then move it.${WHERE}`);
+  assert.equal(locked.f.find('POST', /\?wait=true$/).length, 0, 'locked: no new post');
+  assert.equal(locked.f.find('PATCH', /\/channels\/700$/).length, 0, 'locked: the old post is left as it is');
+  assert.equal(lockedRun.kv.m.has('movedfrom:990'), false, 'locked: no record');
 });
 
 test('a refusal after the issue is found ends by saying where it is, and nothing is transferred', async () => {
@@ -2444,6 +2448,7 @@ test('a filed move\'s step after the new post that fails is named, and the later
     }, null],
     ['a label add refused', (s) => { s.addLabels = refusal; }, 'issue labels'],
     ['the checklist message edit refused', (s) => { s.firstEdit = refusal; }, 'staff checklist thread'],
+    ['the checklist thread open answered 200 with a cut-off body', (s) => { s.open = () => new Response('{"id":', { status: 200 }); }, null],
   ]) {
     const w = filedWorld(edit);
     const { told } = await runMove(w, filedSubmit());
