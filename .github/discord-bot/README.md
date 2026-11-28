@@ -1006,6 +1006,9 @@ Accepted on purpose; each line says how you would notice it.
   - A transfer whose labels GitHub has not copied by the sixth read: the
     move changes the labels anyway, and a client or type label it removed
     can come back with the copy; remove it by hand.
+  - The staff checklist thread keeps the name it was made with: after a
+    move, or a retitle on GitHub, its name shows the old issue number or
+    title, while its first message shows the current ones.
   - A title a maintainer lengthened to near GitHub's 256 characters can make
     the issue edit fail after a move; the reply names "issue link to the new
     post", and status messages keep going to the old post.
