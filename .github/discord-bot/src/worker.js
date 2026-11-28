@@ -1485,12 +1485,6 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
   }
 }
 
-// The bot serves the one server GUILD_ID names. Its commands are registered
-// for every server it is in, and FORUMS or QUEUE_CHANNEL_ID can name another
-// server's channel, so each entry point refuses any other server, or a
-// GUILD_ID that names none, before it reads anything else. A setup problem
-// is shown to staff only (`staff`); anyone else gets the entry point's own
-// refusal (`no`). /bot-check says the same in its own words.
 // The Add to issue form: the issue number, and the repo when there is a choice.
 async function openAddForm(interaction, env, deps, cfg, { threadId, messageId, cardId = '', deadline }) {
   const discord = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, deadline));
@@ -1649,6 +1643,12 @@ export async function addToIssue(interaction, env, deps, t0, { key, number }) {
   }
 }
 
+// The bot serves the one server GUILD_ID names. Its commands are registered
+// for every server it is in, and FORUMS or QUEUE_CHANNEL_ID can name another
+// server's channel, so each entry point refuses any other server, or a
+// GUILD_ID that names none, before it reads anything else. A setup problem
+// is shown to staff only (`staff`); anyone else gets the entry point's own
+// refusal (`no`). /bot-check says the same in its own words.
 function elsewhere(env, interaction, staff, no) {
   const home = String(env.GUILD_ID ?? '');
   if (!isDiscordId(home)) return staff() ? reply("The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).") : reply(no);

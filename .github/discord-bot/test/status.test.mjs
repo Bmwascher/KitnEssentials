@@ -2173,13 +2173,16 @@ const ASK = 'Could you add a bit more detail? A screenshot, your addon version a
 
 test('a status message names each added player once, in one last line, and pings them', async () => {
   const copyBody = '## Report\n\n> hi\n\n<!-- discord-copy -->\n<!-- discord-message: 717 -->\n<!-- discord-thread: 717 reporter: 42 -->';
-  for (const [why, over, reports, step, first, also, users] of [
+  const filedBody = '## Report\n\n> hi\n\n<!-- discord-message: 333 -->\n<!-- discord-thread: 717 reporter: 42 -->';
+  for (const [why, over, reports, step, first, also, users, replied] of [
     ['a close, two players', {}, [['801', '43'], ['802', '44']], fixed, /^\*\*Fixed!\*\*/, ['43', '44'], ['43', '44']],
     ['a needs-info ask, two players', {}, [['801', '43'], ['802', '44']], askInfo, `<@42> ${ASK}`, ['43', '44'], ['42', '43', '44']],
-    ["a moved copy's close keeps the reporter first", { body: copyBody }, [['801', '43']], fixed, /^<@42> \*\*Fixed!\*\*/, ['43'], ['42', '43']],
+    ["a moved copy's close keeps the reporter first", { body: copyBody }, [['801', '43']], fixed, /^<@42> \*\*Fixed!\*\*/, ['43'], ['42', '43'], true],
     ['one player who added two posts', {}, [['801', '43'], ['802', '43']], fixed, /^\*\*Fixed!\*\*/, ['43'], ['43']],
     ["the reporter's own repeat report on a needs-info ask", {}, [['801', '42'], ['802', '43']], askInfo, `<@42> ${ASK}`, ['43'], ['42', '43']],
-    ["the reporter's own repeat report on a close", {}, [['801', '42']], fixed, /^\*\*Fixed!\*\*/, ['42'], ['42']],
+    ["the reporter's own repeat report alone on a needs-info ask", {}, [['801', '42']], askInfo, `<@42> ${ASK}`, [], ['42']],
+    ["the reporter's own repeat report on a close that replies to her", { body: filedBody }, [['801', '42']], fixed, /^\*\*Fixed!\*\*/, ['42'], ['42'], true],
+    ["the reporter's own repeat report on an older issue's close, with no reply", {}, [['801', '42']], fixed, /^\*\*Fixed!\*\*/, ['42'], ['42']],
     ['a player the bot could not name', {}, [['801', null]], fixed, /^\*\*Fixed!\*\*/, [], []],
     ['a report comment by another account', {}, [['801', '43', 'someone']], fixed, /^\*\*Fixed!\*\*/, [], []],
   ]) {
@@ -2196,7 +2199,23 @@ test('a status message names each added player once, in one last line, and pings
     assert.deepEqual(lines.filter((l) => l.startsWith('Also reported by')), line ? [line] : [], why);
     if (line) assert.equal(lines.at(-1), line, `${why}: the last line`);
     assert.deepEqual(m.allowed_mentions.users, users, why);
+    assert.equal(m.allowed_mentions.replied_user, replied, `${why}: the reply ping`);
   }
+});
+
+test('a report added after a run read the comments is left out of that message and named in the next', async () => {
+  const w = world();
+  w.issue(17);
+  report(w, 17, '801', '43');
+  let added = false;
+  w.hooks.push(['POST', /discord\.com\/api\/v10\/channels\/717\/messages$/, () => { if (!added) { added = true; report(w, 17, '802', '44'); } }]);
+  await fixed(w);
+  w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
+  await tag(w, 'v5.0.2');
+  const said = w.said('717');
+  assert.equal(said.length, 2);
+  assert.match(said[0], /\nAlso reported by <@43>\.$/);
+  assert.match(said[1], /\nAlso reported by <@43> <@44>\.$/);
 });
 
 test('a report added while a needs-info ask is written is named in it', async () => {
@@ -2206,6 +2225,9 @@ test('a report added while a needs-info ask is written is named in it', async ()
   w.hooks.push(['POST', /issues\/17\/comments$/, () => { if (!added) { added = true; report(w, 17, '801', '43'); } }]);
   await askInfo(w);
   assert.deepEqual(w.said('717'), [`<@42> ${ASK}\nAlso reported by <@43>.`]);
+  const note = w.calls.findIndex((c) => c.method === 'POST' && /issues\/17\/comments$/.test(c.url));
+  const reads = w.calls.slice(note).filter((c) => c.method === 'GET' && /issues\/17\/comments\?/.test(c.url));
+  assert.equal(reads.length, 1, "no comment page read after the claim's own");
 });
 
 test('a reply Discord refuses goes out plain with the added players still named and pinged', async () => {

@@ -838,12 +838,10 @@ export function repoFromTags(names, repoTags) {
   return keys.size === 1 ? [...keys][0] : null;
 }
 
-// A post's tag names less its repo tags: a repo tag names the repo only, so
-// it gives the forms no client or type.
 // A repeat report's comment on the issue it joins, and its hidden line: the
 // post and the player, whom status messages mention ("unknown" for a webhook).
 export function reportComment({ number, guildId, postId, player, by }) {
-  const pid = player && /^\d+$/.test(String(player.id || '')) ? player.id : 'unknown';
+  const pid = player.id || 'unknown';
   return `Report ${number} of this problem: [the Discord post](https://discord.com/channels/${guildId}/${postId}), from ${personCell(player)}, added by ${personCell(by)}.\n\n<!-- discord-report: ${postId} player: ${pid} -->`;
 }
 export function parseReport(body) {
@@ -853,14 +851,15 @@ export function parseReport(body) {
 // The report comments the bot wrote: by the account that filed the issue,
 // since anyone can comment on a public issue.
 export function ownReports(issue, comments) {
-  const login = issue.user && issue.user.login;
-  return comments.filter((c) => c.user && c.user.login === login).map((c) => parseReport(c.body)).filter(Boolean);
+  return comments.filter((c) => c.user && c.user.login === issue.user.login).map((c) => parseReport(c.body)).filter(Boolean);
 }
 
 export const hasLabel = (issue, name) => (issue.labels || []).some((l) => (l.name || l) === name);
 // The bot's own issues: the label and the marker it writes last.
 export const eligible = (issue) => hasLabel(issue, LABELS.fromDiscord) && parseMarker(issue.body) !== null;
 
+// A post's tag names less its repo tags: a repo tag names the repo only, so
+// it gives the forms no client or type.
 export const plainTags = (names, repoTags) => names.filter((n) => !own(repoTags, String(n).toLowerCase()));
 
 // The custom ids of the send button ("send:<post>"), its form

@@ -1,6 +1,6 @@
 // Registers the bot's four commands: the right-click "Send to GitHub",
-// "Add to issue" and "Move post", and the /bot-check setup check. Run once per bot, and again
-// after any changes:
+// "Add to issue" and "Move post", and the /bot-check setup check. Run once
+// per bot, and again after any changes:
 //   DISCORD_APP_ID=... DISCORD_BOT_TOKEN=... [DISCORD_GUILD_ID=...] node scripts/register.mjs
 // With DISCORD_GUILD_ID they are registered on that server only (they show up
 // instantly; use for testing). The PUT replaces every command of every type,

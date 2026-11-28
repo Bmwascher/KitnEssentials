@@ -995,7 +995,9 @@ Accepted on purpose; each line says how you would notice it.
   setting as plain text.
 - The bot needs its `STATE` KV namespace bound; without it a filing cannot
   tell a moved post from its records, so an old post or a reply in the
-  bot's copy can be filed. `/bot-check` names a missing binding.
+  bot's copy can be filed, and an add saves no record, says nothing of it,
+  and the post can be sent or added again. `/bot-check` names a missing
+  binding.
 - A filing knows a post was moved away only from its `movedto:` record. In
   about the minute before KV shows that record, or when its save failed,
   Send to GitHub on the old post files it; close the extra issue by hand.
@@ -1559,7 +1561,9 @@ Accepted on purpose; each line says how you would notice it.
   - A report comment GitHub did not confirm, and applied only after staff
     checked and added the post again, leaves two report comments for one
     post: N counts one too many, and the player is mentioned once when both
-    name the same player. A maintainer deletes the extra comment.
+    name the same player (a retry from another author's message names a
+    second player, who is mentioned too). A maintainer deletes the extra
+    comment.
   - A status message whose run read the issue's comments before an add
     wrote its report comment goes out without that player; the next message
     names them.
@@ -1571,11 +1575,11 @@ Accepted on purpose; each line says how you would notice it.
   - An added post's record keeps the key and number of the add, so after the
     original post moves the issue to another repo, Send on the added post
     names the old ones.
-  - An added post whose record was not saved ("post record not saved"), or
-    added with no `STATE` bound (nothing says so), can be sent or added
-    again.
+  - An added post whose record was not saved ("post record not saved") can
+    be sent or added again.
   - An issue closed in the seconds between the add's read of it and its
-    comment still gets the comment, and the add reports success.
+    comment still gets the comment, and the add reports success: the check
+    uses the issue as the add read it.
   - For about a minute after a fix commit closes an issue, until that
     close's status run sets `pending-release`, or after a close run that
     failed, Add refuses it as having no fix waiting; add the post again in a

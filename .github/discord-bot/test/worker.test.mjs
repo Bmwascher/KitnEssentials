@@ -2599,6 +2599,9 @@ const addSubmit = ({ member = MOD, number = '#12', repo = 'ONE', id = 'ai:701:70
 });
 async function runAdd(w, interaction = addSubmit(), envOver = {}) {
   const kv = fakeKv(w.s.kv);
+  // Each record write joins the call list, so an order check can place it.
+  const put = kv.put.bind(kv);
+  kv.put = async (key, ...rest) => { w.f.calls.push({ method: 'KV', url: `kv:${key}` }); return put(key, ...rest); };
   const ctx = ctxFor();
   const r = await handle(await signed(interaction), { ...ADD_ENV, STATE: kv, ...envOver }, ctx, { fetch: w.f, installationToken: async () => 'inst', log: () => {} });
   const out = await Promise.all(ctx.jobs);
@@ -2683,9 +2686,9 @@ test('an add comments once on the issue, then closes the post, tells the player 
     const card = w.f.find('PATCH', new RegExp(`/channels/556/messages/${want.card}$`));
     assert.equal(card.length, 1, `${why}: the card`);
     assert.match(card[0].body.content, /\n\*\*Added to ONE #12\*\* by <@5>$/, why);
-    const order = w.f.calls.map((c) => (/comments$/.test(c.url) && c.method === 'POST' ? 'comment' : /\/channels\/701$/.test(c.url) && c.method === 'PATCH' ? 'tag'
+    const order = w.f.calls.map((c) => (/comments$/.test(c.url) && c.method === 'POST' ? 'comment' : c.url === 'kv:issue:701' ? 'record' : /\/channels\/701$/.test(c.url) && c.method === 'PATCH' ? 'tag'
       : /\/channels\/701\/messages$/.test(c.url) ? 'reply' : /webhooks/.test(c.url) ? 'moderator' : /discord-lock-701$/.test(c.url) ? 'release' : /\/channels\/556\//.test(c.url) ? 'card' : null)).filter(Boolean);
-    assert.deepEqual(order, ['comment', 'tag', 'reply', 'moderator', 'release', 'card'], why);
+    assert.deepEqual(order, ['comment', 'record', 'tag', 'reply', 'moderator', 'release', 'card'], why);
     assert.equal(out[0].added, 12, why);
   }
 });
@@ -2752,6 +2755,7 @@ test("an add's comment that GitHub refused, never started or did not confirm cha
   assert.match(late.f.find('PATCH', /\/webhooks\//).at(-1).body.content, /^Nothing was added: out of time before /, 'a comment with no time left');
   assert.equal(commentPosts(late.f).length, 0, 'the comment never started');
   assert.equal(kv.m.has('issue:701'), false);
+  assert.equal(released(late.f), 1, 'the lock is released');
 });
 
 test("an add's steps after the comment each run, and the moderator's reply names those not done", async () => {
@@ -2779,7 +2783,7 @@ test("an add's steps after the comment each run, and the moderator's reply names
   }
 });
 
-test('Send and Move on an added post answer that it was added, and read no issue', async () => {
+test('Send on an added post answers that it was added, and reads no issue', async () => {
   const rec = { 'issue:700': JSON.stringify({ repo: 'me/test-one', number: 12, key: 'ONE', by: '<@5>', added: true }) };
   const SAID = 'Nothing was created: this post was added to ONE #12 as a repeat report: https://github.com/me/test-one/issues/12';
   // Right-click Send.
