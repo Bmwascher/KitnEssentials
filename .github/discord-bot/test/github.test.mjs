@@ -65,3 +65,12 @@ test('an issue\'s comments are read to the last page, and a repo\'s node id from
   assert.equal((await githubClient('t', f).comments('me/r', 5)).length, 101);
   assert.equal(await githubClient('t', f).repoNodeId('me/two'), 'R_2');
 });
+
+test('a 2xx whose body cannot be read throws marked applied; any other failure does not', async () => {
+  const cut = fakeFetch([['PATCH', /\/issues\/1$/, () => new Response('{"id":', { status: 200 })]]);
+  await assert.rejects(githubClient('t', cut).call('PATCH', '/repos/me/r/issues/1', {}), (e) => e.applied === true);
+  const lost = fakeFetch([['PATCH', /\/issues\/1$/, () => new Response(new ReadableStream({ start(c) { c.error(new TypeError('terminated')); } }), { status: 200 })]]);
+  await assert.rejects(githubClient('t', lost).call('PATCH', '/repos/me/r/issues/1', {}), (e) => e.applied === true);
+  const refused = fakeFetch([['PATCH', /\/issues\/1$/, () => new Response('no', { status: 403 })]]);
+  await assert.rejects(githubClient('t', refused).call('PATCH', '/repos/me/r/issues/1', {}), (e) => !e.applied);
+});

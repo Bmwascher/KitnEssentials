@@ -549,7 +549,8 @@ else, or while `GUILD_ID` is unset, it is refused before anything is read.
 
 **Before the new post exists**, every failure answers "Nothing was moved",
 or "Nothing confirmed" when GitHub or Discord did not answer a write (then
-the lock stays), and leaves both posts as they were. The forum's `Post mover` webhook may
+the lock stays), and leaves the old post as it was; after a create Discord
+did not answer, a copy may exist in the target forum. The forum's `Post mover` webhook may
 have been made; the next move uses it. A transfer may have gone through
 first: the reply then says where the issue now is, and the next form's Repo
 field, left as shown, keeps it there.
@@ -617,7 +618,8 @@ below is known and accepted. What you see in each:
   post's lock label stays until someone deletes it as the busy reply says.
   The move after that reads where the issue is.
 - **A move stopped after a transfer** (the new post refused, or not
-  answered): the issue is in the new repo and nothing else moved; its
+  answered): the issue is in the new repo and the old post was not
+  changed, though an unanswered create may have left a copy; its
   checklist thread stays linked, since its record comment moved with it.
 - **No reply at all** (the Worker was stopped, or the reply failed): any of
   the states above may hold. Look at both posts before acting.
@@ -654,7 +656,7 @@ the last steps fail and are reported. If KV calls
 count too, the figure grows by six (four reads, two writes). The live bot
 runs on the paid plan. These figures are for a post not yet filed. A filed
 post's move skips the "now tracked" read and makes up to 11 more: with a
-transfer, the issue's comments (one more per further 100), the target's token (two) and repo, the
+transfer, the issue's comments (one more for each full page of 100), the target's token (two) and repo, the
 transfer, the issue edit, up to three label calls and the checklist
 thread's two; and one more KV write.
 

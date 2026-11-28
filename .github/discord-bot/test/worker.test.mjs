@@ -2439,6 +2439,9 @@ test('a filed move\'s step after the new post that fails is named, and the later
     ['the record not saved', (s) => { s.putFails = 'issue:990'; }, 'record issue:990'],
     ['the issue edit refused', (s) => { s.patch = refusal; }, 'issue link to the new post'],
     ['the issue edit answered 200 with a cut-off body', (s) => { s.patch = () => new Response('{"id":', { status: 200 }); }, null],
+    ['the issue edit answered 200 and its body stream failed', (s) => {
+      s.patch = () => new Response(new ReadableStream({ start(c) { c.error(new TypeError('terminated')); } }), { status: 200 });
+    }, null],
     ['a label add refused', (s) => { s.addLabels = refusal; }, 'issue labels'],
     ['the checklist message edit refused', (s) => { s.firstEdit = refusal; }, 'staff checklist thread'],
   ]) {

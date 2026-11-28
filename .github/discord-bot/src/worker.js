@@ -242,7 +242,7 @@ async function openMoveForm(interaction, env, deps, cfg, { threadId, cardId = ''
   const [channels, saved] = await Promise.all([
     discord.call('GET', `/guilds/${interaction.guild_id}/channels`).catch(() => null),
     within(deadline - Date.now(), Promise.all(['issue', 'thread'].map((p) => readStrict(env.STATE, `${p}:${threadId}`))))
-      .then(([issue, thread]) => issue || (thread && thread.issue) || null, () => null),
+      .then(([issue, thread]) => savedIssue(issue, thread), () => null),
   ]);
   if (!channels) return reply('Could not read the forums just now. Try again.');
   const others = moveTargets(cfg, channels, ch.parent_id);
@@ -496,13 +496,15 @@ function couldNotCheck(cfg, saved, postId, why, done) {
 }
 
 // A post's four records, read side by side and waited on for at most `ms`:
-// the scan's, the filing's, and the two a move writes. `saved` is the issue
-// the post was filed as: the Worker's record, or an older scan record that
-// kept it beside the greeting.
+// the scan's, the filing's, and the two a move writes.
 async function postRecords(kv, id, ms) {
   const [thread, issue, movedFrom, movedTo] = await within(ms, Promise.all(['thread', 'issue', 'movedfrom', 'movedto'].map((p) => readStrict(kv, `${p}:${id}`))));
-  return { thread, saved: issue || (thread && thread.issue) || null, movedFrom, movedTo };
+  return { thread, saved: savedIssue(issue, thread), movedFrom, movedTo };
 }
+
+// The issue a post was filed as: the Worker's record, or an older scan
+// record that kept it beside the greeting.
+const savedIssue = (issue, thread) => issue || (thread && thread.issue) || null;
 
 // This bot's "now tracked" reply among a post's last 100 messages, or null:
 // it says the post was filed when neither its filing record nor the
@@ -1082,9 +1084,9 @@ async function findIssue(cfg, saved, postId, tokenFor, f) {
 // post's filing lock. A filed post's issue follows it: another repo than the
 // form showed transfers the issue, the last write before the new post, and
 // after the new post the issue, its record and its checklist thread are
-// rewritten for it. Before the new post exists nothing a player sees
-// changes, so every failure there moves nothing, and once the issue is
-// found every refusal says where it is. After it exists, every step runs
+// rewritten for it. Before the new post exists the old post is not
+// changed (a create Discord did not answer may still leave a copy), and
+// once the issue is found every refusal says where it is. After it exists, every step runs
 // and the reply names each one not done, with both posts' links: the old
 // post is locked, so a second move cannot redo it.
 export async function movePost(interaction, env, deps, t0 = Date.now()) {
@@ -1367,10 +1369,10 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     // the issue by either. The issue's writes use the token already held for
     // the repo it is now in.
     const gh = issue && githubClient(await access(at.repo), until(MOVE_REST_BY_MS));
-    // GitHub's client reads a 2xx body that was cut off as a SyntaxError
-    // (unknownOutcome): the write was applied, so it counts as done.
+    // A write GitHub answered 2xx but whose body could not be read was
+    // applied, so it counts as done.
     const ghLater = gh && Object.fromEntries(['call', 'removeLabel', 'addLabels'].map((m) => [m, (...a) => gh[m](...a).catch((e) => {
-      if (!(e instanceof SyntaxError)) throw e;
+      if (!e.applied) throw e;
     })]));
     let title = issue ? issue.title : '';
     if (issue) {

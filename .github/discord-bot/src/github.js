@@ -69,7 +69,8 @@ export function githubClient(token, fetchImpl = fetch) {
       const text = await res.text().catch(() => '');
       throw Object.assign(new Error(`GitHub ${method} ${path} -> ${res.status} ${text.slice(0, 300)}`), { github: { method, path, status: res.status } });
     }
-    return res.status === 204 ? null : res.json();
+    // A 2xx was applied even when its body cannot be read.
+    return res.status === 204 ? null : res.json().catch((e) => { throw Object.assign(e, { applied: true }); });
   }
   return {
     call,
