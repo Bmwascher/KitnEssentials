@@ -2056,7 +2056,7 @@ test('a move refused before the new post changes nothing and says why', async ()
       s.said = [{ id: 'm8', content: `<@42> ${MESSAGES.tracked('ONE', 40)}`, author: { id: 'b' } }];
     }, RECEIPT],
     ['the bot\'s added reply with no record', (s) => {
-      s.said = [{ id: 'm8', content: MESSAGES.added({ key: 'ONE', number: 40, original: 'https://discord.com/channels/1/5', bug: false }), author: { id: 'b' } }];
+      s.said = [{ id: 'm8', content: MESSAGES.added({ key: 'ONE', number: 40, original: 'https://discord.com/channels/1/5' }), author: { id: 'b' } }];
     }, RECEIPT],
     ['a post added to an issue', (s) => { s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-one', number: 12, key: 'ONE', by: '<@5>', added: true }) }; },
       /^Nothing was moved: this post was added to ONE #12 as a repeat report, so it stays here\.$/],
@@ -2609,7 +2609,7 @@ async function runAdd(w, interaction = addSubmit(), envOver = {}) {
   return { r, out, told, kv };
 }
 const ASK = ' If you can, open Report a Problem in game and paste its text here.';
-const ADDED_BUG = `This is the same problem as ONE #12, first reported in https://discord.com/channels/1/700. We've added your report to it, and we'll ping you in that post with each update.${ASK}`;
+const ADDED = "This is the same problem as ONE #12: https://discord.com/channels/1/700. We've added your report and will ping you there with updates.";
 const commentPosts = (f) => f.find('POST', /issues\/12\/comments$/);
 const released = (f) => f.find('DELETE', /discord-lock-701$/).length;
 
@@ -2653,21 +2653,21 @@ test('an Add form with a bad number or no repo, or with FORUMS unset, starts no 
 
 test('an add comments once on the issue, then closes the post, tells the player and the moderator, and marks the card', async () => {
   for (const [why, edit, interaction, envOver, want] of [
-    ['a card press on a bug', () => {}, addSubmit(), {}, { player: '42', target: '701', text: ADDED_BUG, card: '96' }],
+    ['a card press on a bug', () => {}, addSubmit(), {}, { player: '42', target: '701', text: ADDED, card: '96' }],
     ['a right-click add of a reply, to a feature issue', (s) => {
       s.issue = { ...ISSUE_12, labels: [{ name: 'from-discord' }, { name: 'type: feature' }] };
       s.kv = { 'thread:701': JSON.stringify({ greeting: 'g1', buttonless: true, card: '97' }) };
-    }, addSubmit({ id: 'ai:701:801:0' }), {}, { player: '46', target: '801', text: ADDED_BUG.replace(ASK, ''), card: '97' }],
+    }, addSubmit({ id: 'ai:701:801:0' }), {}, { player: '46', target: '801', text: ADDED, card: '97' }],
     ['a moved copy by right-click, its card only in movedfrom:', (s) => {
       s.kv = { 'movedfrom:701': JSON.stringify({ from: '690', reporter: { name: 'Pat', id: '42', username: 'pat' }, card: '98' }) };
       s.first = { ...s.first, webhook_id: '61', author: { id: '61', username: 'Pat' } };
-    }, addSubmit({ id: 'ai:701:701:0' }), {}, { player: '42', target: '701', text: `<@42> ${ADDED_BUG}`, card: '98', ping: ['42'] }],
+    }, addSubmit({ id: 'ai:701:701:0' }), {}, { player: '42', target: '701', text: `<@42> ${ADDED}`, card: '98', ping: ['42'] }],
     ["a webhook's post", (s) => { s.first = { ...s.first, webhook_id: '61', author: { id: '61', username: 'Hook' } }; }, addSubmit(), {},
-      { player: 'unknown', target: '701', text: ADDED_BUG, card: '96' }],
+      { player: 'unknown', target: '701', text: ADDED, card: '96' }],
     ['a closed issue whose fix waits for a release', (s) => { s.issue = { ...ISSUE_12, state: 'closed', labels: [...ISSUE_12.labels, { name: 'pending-release' }] }; }, addSubmit(), {},
-      { player: '42', target: '701', text: ADDED_BUG, card: '96' }],
+      { player: '42', target: '701', text: ADDED, card: '96' }],
     ['one repo, "12" and no Repo field', () => {}, addSubmit({ repo: '', number: '12' }), { REPOS: '{"ONE":"me/test-one"}' },
-      { player: '42', target: '701', text: ADDED_BUG, card: '96' }],
+      { player: '42', target: '701', text: ADDED, card: '96' }],
   ]) {
     const w = addWorld(edit);
     const { out, told, kv } = await runAdd(w, interaction, envOver);
@@ -2779,7 +2779,7 @@ test("an add's steps after the comment each run, and the moderator's reply names
     assert.match(w.f.find('PATCH', /\/webhooks\//).at(-1).body.content, want, why);
     assert.equal(w.f.find('POST', /\/channels\/701\/messages$/).length, 1, `${why}: the reply is tried`);
     assert.equal(w.f.find('PATCH', /\/channels\/556\/messages\/96$/).length, 1, `${why}: the card step runs`);
-    if (why.includes('greeting')) assert.equal(w.f.find('PATCH', /\/channels\/701\/messages\/g1$/)[0].body.content, ADDED_BUG, why);
+    if (why.includes('greeting')) assert.equal(w.f.find('PATCH', /\/channels\/701\/messages\/g1$/)[0].body.content, ADDED, why);
   }
 });
 

@@ -731,7 +731,7 @@ export const MESSAGES = {
   },
   needsInfo: (uid) => `${uid ? `<@${uid}> ` : ''}Could you add a bit more detail? A screenshot, your addon version and the steps to make it happen help a lot.`,
   // The reply in a post added to an issue as a repeat report.
-  added: ({ key, number, original, bug }) => `This is the same problem as ${key} #${number}, first reported in ${original}. We've added your report to it, and we'll ping you in that post with each update.${bug ? REPORT_ASK : ''}`,
+  added: ({ key, number, original }) => `This is the same problem as ${key} #${number}: ${original}. We've added your report and will ping you there with updates.`,
   alsoReported: (ids) => `Also reported by ${ids.map((id) => `<@${id}>`).join(' ')}.`,
   // The bot's message in a moved post's new post. Only the reporter is
   // pinged (allowed_mentions); the mover's mention pings no one.

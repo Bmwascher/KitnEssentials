@@ -419,7 +419,7 @@ test('new posts come first: older posts\' card retries and posts filed before th
 });
 
 test('a card still owed finds the receipt of a filing or an add whose record is missing, and goes out to no one', async () => {
-  for (const content of [MESSAGES.tracked('ONE', 3), MESSAGES.added({ key: 'ONE', number: 3, original: 'https://discord.com/channels/1/5', bug: true })]) {
+  for (const content of [MESSAGES.tracked('ONE', 3), MESSAGES.added({ key: 'ONE', number: 3, original: 'https://discord.com/channels/1/5' })]) {
     const a = idAt(T0 + 1000);
     const kv = started(T0, { greeted: { 900: a } });
     await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g1', buttonless: true, tries: 1 }));

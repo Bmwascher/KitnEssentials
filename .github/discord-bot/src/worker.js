@@ -1620,7 +1620,7 @@ async function addToIssue(interaction, env, deps, t0, { key, number }) {
     const teller = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, callMs, t0 + TRACKED_BY_MS));
     const original = `https://discord.com/channels/${interaction.guild_id}/${parseMarker(issue.body).threadId}`;
     notes.push(...await tellTracked(teller, log, {
-      threadId, messageId, text: MESSAGES.added({ key, number, original, bug: hasLabel(issue, 'type: bug') }),
+      threadId, messageId, text: MESSAGES.added({ key, number, original }),
       old: rec && rec.greeting && !rec.buttonless ? rec.greeting : '', greeting: rec && rec.greeting, ping: copy && copy.id ? copy.id : null,
     }));
     await followup(`Added to ${key} #${number} as report ${report}: ${issue.html_url}${notes.length ? ` (${notes.join('; ')})` : ''}`);

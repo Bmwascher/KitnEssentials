@@ -722,11 +722,9 @@ An add makes, in order:
   issue. The issue's title, body and labels do not change;
 - the post's record (`issue:<post id>`, marked `added`);
 - the post's Closed tag;
-- one reply to the player's message: "This is the same problem as KE #12,
-  first reported in (the original post). We've added your report to it, and
-  we'll ping you in that post with each update.", with the Report a Problem
-  request for a bug. On a moved post's copy it starts with the player's
-  mention;
+- one reply to the player's message: "This is the same problem as KE #12:
+  (the original post). We've added your report and will ping you there with
+  updates." On a moved post's copy it starts with the player's mention;
 - the moderator's reply, "Added to KE #12 as report N" with the issue's
   address, naming any step above not done;
 - then, as after a filing, the lock's release and the queue card, "Added to
