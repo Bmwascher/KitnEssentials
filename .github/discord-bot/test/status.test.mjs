@@ -2208,7 +2208,8 @@ test('a report added after a run read the comments is left out of that message a
   w.issue(17);
   report(w, 17, '801', '43');
   let added = false;
-  w.hooks.push(['POST', /discord\.com\/api\/v10\/channels\/717\/messages$/, () => { if (!added) { added = true; report(w, 17, '802', '44'); } }]);
+  // Written as the run marks its note sending: after its last comment read, before the message is built.
+  w.hooks.push(['PATCH', /issues\/comments\/\d+$/, (call) => { if (!added && /discord-sending/.test(call.body.body)) { added = true; report(w, 17, '802', '44'); } }]);
   await fixed(w);
   w.contains.set('aaaaaaa1...c-v5.0.2', 'ahead');
   await tag(w, 'v5.0.2');

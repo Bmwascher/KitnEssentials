@@ -88,7 +88,7 @@ the one the issue was filed from, so Discord pings the reporter even when
 their notifications are set to only @mentions. An issue filed before this
 version replies to the post's first message, with a ping, only when that
 message is the reporter's; otherwise the message goes out with no reply and no
-ping. If Discord refuses the reply, the message goes out once as a plain
+ping, beyond the added players its last line names. If Discord refuses the reply, the message goes out once as a plain
 message, which loses the reply's ping only (every @mention in it, the
 reporter's and the added players', still pings), and the log says so: the
 workflow run's for a status message, the Worker's for "now tracked" and the
@@ -1000,7 +1000,8 @@ Accepted on purpose; each line says how you would notice it.
   binding.
 - A filing knows a post was moved away only from its `movedto:` record. In
   about the minute before KV shows that record, or when its save failed,
-  Send to GitHub on the old post files it; close the extra issue by hand.
+  Send to GitHub on the old post files it, and Add to issue adds it; close
+  the extra issue, or delete the extra report comment, by hand.
 - A send or move form left open across a deploy of a new version is
   submitted as the new version reads it; send or move again if it answers
   oddly.
@@ -1555,8 +1556,9 @@ Accepted on purpose; each line says how you would notice it.
 - Repeat reports (Adding a repeat report), each left as it is:
   - A send or a second add of a post before KV shows its add's record can
     file the added post or add it twice, since an add writes no hidden line
-    on GitHub: close the extra issue, or delete the extra report comment. An
-    add after a send is caught by the search for the issue's hidden line.
+    in an issue's body for the search to find: close the extra issue, or
+    delete the extra report comment. An add after a send is caught by the
+    search for the issue's hidden line.
   - Two adds to one issue at the same moment can get the same N.
   - A report comment GitHub did not confirm, and applied only after staff
     checked and added the post again, leaves two report comments for one

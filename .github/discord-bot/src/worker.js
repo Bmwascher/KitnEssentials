@@ -463,7 +463,7 @@ async function tellTracked(discord, log, { threadId, messageId, text, old, greet
 // only the Open post link. It goes after the lock's release; a failed edit
 // is logged, and a press on the card later answers "Already tracked" and
 // marks it.
-async function markCard(discord, cfg, log, { cardId, guildId, postId, head, key, number, by, added = false }) {
+async function markCard(discord, cfg, log, { cardId, guildId, postId, head, key, number, by, added }) {
   if (!cardId || !cfg.queue) return;
   await discord.call('PATCH', `/channels/${cfg.queue}/messages/${cardId}`, filedCard({ guildId, postId, head, key, number, by, added }))
     .catch((e) => log(`queue card ${cardId} not updated: ${e.message.slice(0, 200)}`));
@@ -1518,7 +1518,7 @@ function addTarget(cfg, v) {
 // Adds a post to an issue the bot filed, as a repeat report: one comment on
 // the issue, then the post's record, its Closed tag, the player's reply and
 // the moderator's, as a filing does; the lock's release and the card last.
-export async function addToIssue(interaction, env, deps, t0, { key, number }) {
+async function addToIssue(interaction, env, deps, t0, { key, number }) {
   const cfg = config(env);
   const { threadId, messageId, cardId } = parseCustomId(interaction.data.custom_id);
   const user = interaction.member.user;
@@ -1624,7 +1624,7 @@ export async function addToIssue(interaction, env, deps, t0, { key, number }) {
       old: rec && rec.greeting && !rec.buttonless ? rec.greeting : '', greeting: rec && rec.greeting, ping: copy && copy.id ? copy.id : null,
     }));
     await followup(`Added to ${key} #${number} as report ${report}: ${issue.html_url}${notes.length ? ` (${notes.join('; ')})` : ''}`);
-    cardAfter = { cardId: cardId || (rec && rec.card) || (movedFrom && movedFrom.card) || '', head: cardHead(thread.parent_id, threadId), key, number, by: filer, added: true };
+    cardAfter = { cardId, head: cardHead(thread.parent_id, threadId), key, number, by: filer, added: true };
     return { added: number, report, notes };
   } catch (e) {
     await followup(`Nothing was added: ${e.message.slice(0, 1500)}`);
@@ -1636,9 +1636,11 @@ export async function addToIssue(interaction, env, deps, t0, { key, number }) {
     if (cardAfter && cfg.queue) {
       const closing = discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, TAIL_MS, t0 + RELEASE_BY_MS));
       const kvLeft = Math.min(kvMs, t0 + RELEASE_BY_MS - Date.now());
-      const latest = cardAfter.cardId || kvLeft <= 0 ? null : await within(kvLeft, readStrict(env.STATE, `thread:${threadId}`))
-        .catch((e) => { log(`card lookup failed, so the record read earlier is used: ${e.message.slice(0, 200)}`); return rec; });
-      await markCard(closing, cfg, log, { ...cardAfter, cardId: cardAfter.cardId || (latest && latest.card) || '', guildId: interaction.guild_id, postId: threadId });
+      const latest = cardAfter.cardId ? null
+        : kvLeft > 0 ? await within(kvLeft, readStrict(env.STATE, `thread:${threadId}`))
+          .catch((e) => { log(`card lookup failed, so the record read earlier is used: ${e.message.slice(0, 200)}`); return rec; }) : rec;
+      const card = cardAfter.cardId || (latest && latest.card) || (movedFrom && movedFrom.card) || '';
+      await markCard(closing, cfg, log, { ...cardAfter, cardId: card, guildId: interaction.guild_id, postId: threadId });
     }
   }
 }
