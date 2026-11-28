@@ -225,9 +225,10 @@ function postClient(name) {
 
 // The Move form, answered within FORM_BY_MS as openForm is. The forums it
 // offers, and their names, come from the server's channel list, so its
-// failure opens no form. With two or more usable keys it offers the repo,
-// pre-selected from the post's filing record, read beside the channel list;
-// a read that fails or ends late pre-selects none, which keeps the repo. The
+// failure opens no form. The post's filing record is read beside the channel
+// list: with two or more usable keys the form offers the repo, pre-selected
+// from it, and a filed post named as its issue shows the issue's client. A
+// read that fails or ends late pre-selects neither, which keeps both. The
 // custom id carries the key and the client it pre-selected, so the job keeps
 // what staff left as shown. `cfg` is the config its route read, naming at
 // least one player forum.
@@ -240,7 +241,8 @@ async function openMoveForm(interaction, env, deps, cfg, { threadId, cardId = ''
   const keys = usableRepoKeys(cfg.repos);
   const [channels, saved] = await Promise.all([
     discord.call('GET', `/guilds/${interaction.guild_id}/channels`).catch(() => null),
-    keys.length > 1 ? postRecords(env.STATE, threadId, deadline - Date.now()).then((r) => r.saved, () => null) : null,
+    within(deadline - Date.now(), Promise.all(['issue', 'thread'].map((p) => readStrict(env.STATE, `${p}:${threadId}`))))
+      .then(([issue, thread]) => issue || (thread && thread.issue) || null, () => null),
   ]);
   if (!channels) return reply('Could not read the forums just now. Try again.');
   const others = moveTargets(cfg, channels, ch.parent_id);
@@ -253,8 +255,8 @@ async function openMoveForm(interaction, env, deps, cfg, { threadId, cardId = ''
   // A post read from the interaction alone may carry no tag list.
   const tagIds = ch.applied_tags || [];
   const tagNames = tagsIn(channels, ch.parent_id).filter((t) => tagIds.includes(t.id)).map((t) => t.name);
-  const shownKey = recordKey(cfg, keys, saved) || '';
-  const shownClient = postClient(ch.name) || cfg.forumInfo[ch.parent_id].client || guessFromTags(plainTags(tagNames, cfg.repoTags)).client || '';
+  const shownKey = keys.length > 1 ? recordKey(cfg, keys, saved) || '' : '';
+  const shownClient = (saved && postClient(ch.name)) || cfg.forumInfo[ch.parent_id].client || guessFromTags(plainTags(tagNames, cfg.repoTags)).client || '';
   return json({
     type: 9,
     data: {
@@ -1364,7 +1366,12 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     // A filed post's record and issue next, so a send of the new post finds
     // the issue by either. The issue's writes use the token already held for
     // the repo it is now in.
-    const ghLater = issue && githubClient(await access(at.repo), until(MOVE_REST_BY_MS));
+    const gh = issue && githubClient(await access(at.repo), until(MOVE_REST_BY_MS));
+    // GitHub's client reads a 2xx body that was cut off as a SyntaxError
+    // (unknownOutcome): the write was applied, so it counts as done.
+    const ghLater = gh && Object.fromEntries(['call', 'removeLabel', 'addLabels'].map((m) => [m, (...a) => gh[m](...a).catch((e) => {
+      if (!(e instanceof SyntaxError)) throw e;
+    })]));
     let title = issue ? issue.title : '';
     if (issue) {
       await put(`issue:${newId}`, { repo: at.repo, number: at.number, key: at.key, by: found.by });
@@ -1408,10 +1415,17 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       const want = [`client: ${client.toLowerCase()}`, ...(type ? [`type: ${type.toLowerCase()}`] : [])];
       const drop = labelNames.filter((l) => (/^client: /.test(l) || (type && /^type: /.test(l))) && !want.includes(l));
       const add = want.filter((l) => !labelNames.includes(l));
-      if (await step('issue labels', async () => {
-        for (const l of drop) await ghLater.removeLabel(at.repo, at.number, l);
-        if (add.length) await ghLater.addLabels(at.repo, at.number, add);
-      })) labels = [...labelNames.filter((l) => !drop.includes(l)), ...add];
+      // `labels` follows each call that went through, for the checklist.
+      await step('issue labels', async () => {
+        for (const l of drop) {
+          await ghLater.removeLabel(at.repo, at.number, l);
+          labels = labels.filter((x) => x !== l);
+        }
+        if (add.length) {
+          await ghLater.addLabels(at.repo, at.number, add);
+          labels = [...labels, ...add];
+        }
+      });
     }
     if (checklist) {
       const t = checklist.threadId;

@@ -4,7 +4,7 @@ import { generateKeyPairSync, createVerify } from 'node:crypto';
 import { handle, COMMAND_NAME, CHECK_COMMAND, scheduled, privateText } from '../src/worker.js';
 import { CRONS, MOVED_HERE } from '../src/scan.js';
 import { importAppKey, appJwt } from '../src/github.js';
-import { MESSAGES, movedBody } from '../src/core.js';
+import { MESSAGES } from '../src/core.js';
 import { checklistBody, checklistFirst } from '../status/checklist.mjs';
 import { fakeFetch, fakeKv, FORUM, stall } from './fake-fetch.mjs';
 import { setupWorld } from './setup-world.mjs';
@@ -1756,12 +1756,17 @@ test('the Move form pre-selects the repo from the filing record and the client f
     .data.components.find((c) => c.component.custom_id === 'repo');
   assert.deepEqual([repo.label, repo.component.required, repo.description, repo.component.options.map((o) => o.value)],
     ['Repo', false, 'Used only for a post already on GitHub; another repo moves its issue there', ['ONE', 'TWO']]);
-  // The client: the post named as its issue's title shows the issue's client.
-  for (const [why, name, client] of [['a post named as its issue', '[ONE] [All] [Bug] [UI] Title', 'All'], ['any other name', 'Bags overlap', 'Retail']]) {
-    const w = moveWorld((s) => { s.post.name = name; });
+  // The client: a filed post named as its issue's title shows the issue's
+  // client. A post with no filing record keeps phase 1's, whatever its name.
+  for (const [why, name, kv, client] of [
+    ['a filed post named as its issue', '[ONE] [All] [Bug] [UI] Title', { 'issue:700': TWO }, 'All'],
+    ['an unfiled post with a name of that shape', '[ONE] [All] [Bug] [UI] Title', {}, 'Retail'],
+    ['any other name', 'Bags overlap', { 'issue:700': TWO }, 'Retail'],
+  ]) {
+    const w = moveWorld((s) => { s.post.name = name; s.kv = kv; });
     const j = await (await handle(await signed(movePress()), { ...MOVE_ENV, STATE: w.kv }, ctxFor(), { fetch: w.f })).json();
     assert.equal(formValues(j).client, client, why);
-    assert.equal(j.data.custom_id, `mv:700:96::${client}`, why);
+    assert.equal(j.data.custom_id, `mv:700:96:${kv['issue:700'] ? 'TWO' : ''}:${client}`, why);
   }
 });
 
@@ -2433,12 +2438,16 @@ test('a filed move\'s step after the new post that fails is named, and the later
   for (const [why, edit, line] of [
     ['the record not saved', (s) => { s.putFails = 'issue:990'; }, 'record issue:990'],
     ['the issue edit refused', (s) => { s.patch = refusal; }, 'issue link to the new post'],
+    ['the issue edit answered 200 with a cut-off body', (s) => { s.patch = () => new Response('{"id":', { status: 200 }); }, null],
     ['a label add refused', (s) => { s.addLabels = refusal; }, 'issue labels'],
     ['the checklist message edit refused', (s) => { s.firstEdit = refusal; }, 'staff checklist thread'],
   ]) {
     const w = filedWorld(edit);
     const { told } = await runMove(w, filedSubmit());
-    assert.equal(told, `${FILED_PARTWAY}\n- ${line}`, why);
+    assert.equal(told, line ? `${FILED_PARTWAY}\n- ${line}` : FILED_MOVED, why);
+    // The checklist names the labels as the calls left them: the bug label
+    // went, the feature label was refused.
+    if (/label add/.test(why)) assert.match(w.f.find('PATCH', /\/channels\/960\/messages\/960$/)[0].body.content, /\nclient: retail\nThe bot/);
     assert.equal(w.f.find('PATCH', /\/channels\/960\/messages\/960$/).length, 1, `${why}: the checklist step still runs`);
     assert.equal(w.f.find('PATCH', /\/channels\/700$/).length, 1, `${why}: the old post still locked`);
   }

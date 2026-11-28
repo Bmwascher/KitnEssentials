@@ -547,8 +547,9 @@ on such a copy it asks to wait a minute too. Every button and command, Send
 to GitHub's included, answers only in the server `GUILD_ID` names: anywhere
 else, or while `GUILD_ID` is unset, it is refused before anything is read.
 
-**Before the new post exists**, every failure answers "Nothing was moved"
-and leaves both posts as they were. The forum's `Post mover` webhook may
+**Before the new post exists**, every failure answers "Nothing was moved",
+or "Nothing confirmed" when GitHub or Discord did not answer a write (then
+the lock stays), and leaves both posts as they were. The forum's `Post mover` webhook may
 have been made; the next move uses it. A transfer may have gone through
 first: the reply then says where the issue now is, and the next form's Repo
 field, left as shown, keeps it there.
@@ -653,7 +654,7 @@ the last steps fail and are reported. If KV calls
 count too, the figure grows by six (four reads, two writes). The live bot
 runs on the paid plan. These figures are for a post not yet filed. A filed
 post's move skips the "now tracked" read and makes up to 11 more: with a
-transfer, the issue's comments, the target's token (two) and repo, the
+transfer, the issue's comments (one more per further 100), the target's token (two) and repo, the
 transfer, the issue edit, up to three label calls and the checklist
 thread's two; and one more KV write.
 
@@ -1584,8 +1585,8 @@ when `REPOS` names more than one repo (Stage 2 step 4). When updating, give
 every such repo this version's folder on its default branch before the
 Worker is deployed: the workflow runs its own repo's default branch, and an
 older copy reads the issue's hidden lines only at the body's end, so after
-a move of an issue with a maintainer's note below them it would reply to
-the copy without the reporter's ping. For this repo that is the merge; for
+a move of an issue with a maintainer's note below them it would find no
+footer and post the message plainly in the new post, with no ping. For this repo that is the merge; for
 each other repo, a copy. With more than one repo in
 `REPOS`, set `LOCK_REPO` to the repo that holds every filing's lock label,
 whichever repo it files into; until it is set, nothing is filed. Before
