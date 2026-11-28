@@ -83,7 +83,7 @@ test('each new post gets the buttonless greeting and one queue card, once', asyn
   assert.match(card.url, /\/channels\/556\/messages$/);
   // The post and its poster are Discord mentions: the scan passes the post's id and the poster's user id.
   assert.equal(card.body.content, `**New post in <#900>:** <#${post}>\nby <@42> (\`kira_99\`) · Bug · Retail`);
-  assert.deepEqual(card.body.components[0].components.map((b) => b.custom_id || b.url), [`send:${post}`, `move:${post}`, `https://discord.com/channels/1/${post}`]);
+  assert.deepEqual(card.body.components[0].components.map((b) => b.custom_id || b.url), [`send:${post}`, `add:${post}`, `move:${post}`, `https://discord.com/channels/1/${post}`]);
   assert.deepEqual(JSON.parse(kv.m.get(`thread:${post}`)), { greeting: 'm1', buttonless: true, card: 'm2' });
 });
 

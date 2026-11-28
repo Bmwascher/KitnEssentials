@@ -14,14 +14,13 @@
 import { readFileSync, appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { STATUS, LABELS, MESSAGES, parseMarker, parseFiledMessage, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN, checklistStatus, checklistKey, statusOf,
-  shownStatuses, preferStatus, triagedAlone, withAccepted, showsAccepted, ACCEPTED, inlineCode, hasTag, tagLine, acceptedLine, isDiscordId, STATUS_NAMES, BOT_LOGIN } from '../src/core.js';
+  shownStatuses, preferStatus, triagedAlone, withAccepted, showsAccepted, ACCEPTED, inlineCode, hasTag, tagLine, acceptedLine, isDiscordId, STATUS_NAMES, BOT_LOGIN,
+  hasLabel, eligible } from '../src/core.js';
 import { discordClient, postGone } from '../src/discord.js';
 import { githubClient } from '../src/github.js';
 import { checklistRunner, parseChecklist } from './checklist.mjs';
 
-const hasLabel = (issue, name) => (issue.labels || []).some((l) => (l.name || l) === name);
-// The bot's own issues: the label and the marker it writes last.
-export const eligible = (issue) => hasLabel(issue, LABELS.fromDiscord) && parseMarker(issue.body) !== null;
+export { eligible };
 const NO_ACCEPTED_SLOT = 'no free tag slot for Accepted on the post';
 const NO_ACCEPTED_TAG = 'the forum has no Accepted tag';
 // Only PRs from people with a role on the repo move a post to In progress.

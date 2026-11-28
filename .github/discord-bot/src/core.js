@@ -730,6 +730,9 @@ export const MESSAGES = {
     return `**Duplicate.** This is the same problem as ${other}, so we'll follow it there and close this one. Thanks for reporting it!`;
   },
   needsInfo: (uid) => `${uid ? `<@${uid}> ` : ''}Could you add a bit more detail? A screenshot, your addon version and the steps to make it happen help a lot.`,
+  // The reply in a post added to an issue as a repeat report.
+  added: ({ key, number, original, bug }) => `This is the same problem as ${key} #${number}, first reported in ${original}. We've added your report to it, and we'll ping you in that post with each update.${bug ? REPORT_ASK : ''}`,
+  alsoReported: (ids) => `Also reported by ${ids.map((id) => `<@${id}>`).join(' ')}.`,
   // The bot's message in a moved post's new post. Only the reporter is
   // pinged (allowed_mentions); the mover's mention pings no one.
   movedHere: ({ from, by, reporter, left, cut, tracked = null }) => [
@@ -837,6 +840,27 @@ export function repoFromTags(names, repoTags) {
 
 // A post's tag names less its repo tags: a repo tag names the repo only, so
 // it gives the forms no client or type.
+// A repeat report's comment on the issue it joins, and its hidden line: the
+// post and the player, whom status messages mention ("unknown" for a webhook).
+export function reportComment({ number, guildId, postId, player, by }) {
+  const pid = player && /^\d+$/.test(String(player.id || '')) ? player.id : 'unknown';
+  return `Report ${number} of this problem: [the Discord post](https://discord.com/channels/${guildId}/${postId}), from ${personCell(player)}, added by ${personCell(by)}.\n\n<!-- discord-report: ${postId} player: ${pid} -->`;
+}
+export function parseReport(body) {
+  const m = /<!-- discord-report: (\d+) player: (\d+|unknown) -->/.exec(String(body || ''));
+  return m ? { postId: m[1], playerId: m[2] === 'unknown' ? null : m[2] } : null;
+}
+// The report comments the bot wrote: by the account that filed the issue,
+// since anyone can comment on a public issue.
+export function ownReports(issue, comments) {
+  const login = issue.user && issue.user.login;
+  return comments.filter((c) => c.user && c.user.login === login).map((c) => parseReport(c.body)).filter(Boolean);
+}
+
+export const hasLabel = (issue, name) => (issue.labels || []).some((l) => (l.name || l) === name);
+// The bot's own issues: the label and the marker it writes last.
+export const eligible = (issue) => hasLabel(issue, LABELS.fromDiscord) && parseMarker(issue.body) !== null;
+
 export const plainTags = (names, repoTags) => names.filter((n) => !own(repoTags, String(n).toLowerCase()));
 
 // The custom ids of the send button ("send:<post>"), its form
@@ -847,10 +871,16 @@ export const plainTags = (names, repoTags) => names.filter((n) => !own(repoTags,
 // into API paths, so they are taken only when every one is digits.
 export const SEND_BUTTON = 'send';
 export const MOVE_BUTTON = 'move';
+// The add button ("add:<post>") and its form ("ai:<post>:<message>:<queue card or 0>").
+export const ADD_BUTTON = 'add';
 export function parseCustomId(id) {
   const s = String(id || '');
   let m = new RegExp(`^${SEND_BUTTON}:(\\d+)$`).exec(s);
   if (m) return { kind: 'send', threadId: m[1] };
+  m = new RegExp(`^${ADD_BUTTON}:(\\d+)$`).exec(s);
+  if (m) return { kind: 'add', threadId: m[1] };
+  m = /^ai:(\d+):(\d+):(\d+)$/.exec(s);
+  if (m) return { kind: 'addForm', threadId: m[1], messageId: m[2], cardId: m[3] !== '0' ? m[3] : '' };
   m = /^gh:(\d+):(\d+)(?::(\d+)(?::(\d+))?)?$/.exec(s);
   if (m) return { kind: 'form', threadId: m[1], messageId: m[2], greetingId: m[3] && m[3] !== '0' ? m[3] : '', cardId: m[4] || '' };
   m = new RegExp(`^${MOVE_BUTTON}:(\\d+)$`).exec(s);
@@ -912,7 +942,8 @@ export function queueCard({ guildId, forumId, postId, author, client, type, star
     allowed_mentions: { parse: [] },
     flags: SUPPRESS_EMBEDS,
     components: [{ type: 1, components: [
-      ...(starterGone ? [] : [{ type: 2, style: 1, label: 'Send to GitHub', custom_id: `${SEND_BUTTON}:${postId}` }, moveButton(postId)]),
+      ...(starterGone ? [] : [{ type: 2, style: 1, label: 'Send to GitHub', custom_id: `${SEND_BUTTON}:${postId}` },
+        { type: 2, style: 2, label: 'Add to issue', custom_id: `${ADD_BUTTON}:${postId}` }, moveButton(postId)]),
       openPost(guildId, postId),
     ] }],
   };
@@ -924,13 +955,13 @@ export function queueCard({ guildId, forumId, postId, author, client, type, star
 // an older version sent may still show a live link or a direction mark
 // there, so the head goes on one line with its links broken. `by`, the
 // filer, is left out when unknown. Move stays: a filed post moves with its
-// issue.
-export function filedCard({ guildId, postId, head, key, number, by }) {
+// issue. A post added to another issue as a repeat report does not move.
+export function filedCard({ guildId, postId, head, key, number, by, added = false }) {
   return {
-    content: `~~${noLinks(oneLine(head))}~~\n**Filed as ${key} #${number}**${by ? ` by ${shownStaff(by)}` : ''}`,
+    content: `~~${noLinks(oneLine(head))}~~\n**${added ? 'Added to' : 'Filed as'} ${key} #${number}**${by ? ` by ${shownStaff(by)}` : ''}`,
     allowed_mentions: { parse: [] },
     flags: SUPPRESS_EMBEDS,
-    components: [{ type: 1, components: [moveButton(postId), openPost(guildId, postId)] }],
+    components: [{ type: 1, components: [...(added ? [] : [moveButton(postId)]), openPost(guildId, postId)] }],
   };
 }
 

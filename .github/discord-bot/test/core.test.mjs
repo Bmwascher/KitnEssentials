@@ -333,12 +333,17 @@ test('button and form ids parse only when every id part is digits', () => {
   assert.deepEqual(C.parseCustomId('move:700'), { kind: 'move', threadId: '700' });
   assert.deepEqual(C.parseCustomId('mv:700'), { kind: 'moveForm', threadId: '700', cardId: '' });
   assert.deepEqual(C.parseCustomId('mv:700:96'), { kind: 'moveForm', threadId: '700', cardId: '96' });
+  assert.deepEqual(C.parseCustomId('add:700'), { kind: 'add', threadId: '700' });
+  // The add form carries the card id third; a 0 card part means none.
+  for (const [id, messageId, cardId] of [['ai:700:800:96', '800', '96'], ['ai:700:700:0', '700', '']]) {
+    assert.deepEqual(C.parseCustomId(id), { kind: 'addForm', threadId: '700', messageId, cardId }, id);
+  }
   // The form carries the repo key and the client it pre-selected; a 0 card part means none.
   for (const [id, cardId, shownKey, shownClient] of [
     ['mv:700:96:KE:All', '96', 'KE', 'All'], ['mv:700:0:KE:Retail', '', 'KE', 'Retail'], ['mv:700:96::Forever', '96', '', 'Forever'], ['mv:700:96:KE:', '96', 'KE', ''],
   ]) assert.deepEqual(C.parseCustomId(id), { kind: 'moveForm', threadId: '700', cardId, shownKey, shownClient }, id);
   for (const bad of ['send:7a', 'send:', 'gh:700', 'gh:700:800:950:1:2', 'gh:700:800:0:96x', 'gh:7/0:800', 'xx:700:800', '', undefined,
-    'move:7a', 'move:', 'mv:', 'mv:700:', 'mv:700:96:1', 'mv:7/0']) {
+    'move:7a', 'move:', 'mv:', 'mv:700:', 'mv:700:96:1', 'mv:7/0', 'add:7a', 'ai:700:800', 'ai:700:8x0:0']) {
     assert.equal(C.parseCustomId(bad), null, String(bad));
   }
 });
@@ -350,7 +355,7 @@ test('a queue card names the post and its poster by Discord mention, pinging no 
   assert.equal(card.content, '**New post in <#900>:** <#700>\nby <@42> (`kira_99`) · Bug · Retail');
   assert.deepEqual([card.allowed_mentions, card.flags], [{ parse: [] }, 4], 'no ping and no link preview');
   assert.deepEqual(card.components[0].components.map((b) => [b.label, b.custom_id, b.url]), [
-    ['Send to GitHub', 'send:700', undefined], ['Move', 'move:700', undefined], ['Open post', undefined, 'https://discord.com/channels/1/700'],
+    ['Send to GitHub', 'send:700', undefined], ['Add to issue', 'add:700', undefined], ['Move', 'move:700', undefined], ['Open post', undefined, 'https://discord.com/channels/1/700'],
   ]);
   // A poster with no user id (a webhook) is named as text: it cannot format, mention, link, invite, preview, or reorder or break its line.
   for (const [name, want] of [
@@ -379,6 +384,10 @@ test('a queue card names the post and its poster by Discord mention, pinging no 
     assert.deepEqual([filed.allowed_mentions, filed.flags], [{ parse: [] }, 4], line);
     assert.deepEqual(filed.components[0].components.map((b) => [b.label, b.custom_id, b.url]), [['Move', 'move:700', undefined], ['Open post', undefined, 'https://discord.com/channels/1/700']], line);
   }
+  // Added to an issue, the card offers only the post.
+  const added = C.filedCard({ guildId: '1', postId: '700', head, key: 'ONE', number: 12, by: '<@5>', added: true });
+  assert.equal(added.content, '~~**New post in <#900>:** <#700>~~\n**Added to ONE #12** by <@5>');
+  assert.deepEqual(added.components[0].components.map((b) => [b.label, b.url]), [['Open post', 'https://discord.com/channels/1/700']]);
   // A username shows in its code span on one line, with no direction mark.
   assert.equal(C.queueCard({ ...post, author: { name: 'k', username: 'ki\u202Era`', id: '42' } }).content, '**New post in <#900>:** <#700>\nby <@42> (`kira`)');
   // An older card names the post as escaped text and may show a live link or a direction mark: struck, it is not escaped again and shows neither.
@@ -1043,4 +1052,21 @@ test('inlineCode shows its text as written: no backtick inside ends the span, an
   for (const [s, out] of [['fix', '`fix`'], ['a`b', '``a`b``'], ['`a', '`` `a ``'], [' fix ', '`  fix  `'], [' fix', '` fix`']]) {
     assert.equal(inlineCode(s), out, JSON.stringify(s));
   }
+});
+
+test("a report comment round-trips its post and player, and only the issue author's count", () => {
+  const body = C.reportComment({ number: 4, guildId: '1', postId: '701', player: { name: 'P@t *x*', username: 'pat', id: '42' }, by: { name: 'moddy', username: 'moddy', id: '5' } });
+  assert.equal(body, 'Report 4 of this problem: [the Discord post](https://discord.com/channels/1/701), from [P@​t \\*x\\*](https://discord.com/users/42) (`pat`), added by [moddy](https://discord.com/users/5) (`moddy`).\n\n<!-- discord-report: 701 player: 42 -->');
+  assert.deepEqual(C.parseReport(body), { postId: '701', playerId: '42' });
+  const hook = C.reportComment({ number: 2, guildId: '1', postId: '702', player: { name: 'Hook' }, by: { name: 'm', id: '5' } });
+  assert.deepEqual(C.parseReport(hook), { postId: '702', playerId: null });
+  assert.equal(C.parseReport('no line here'), null);
+  const issue = { user: { login: 'app[bot]' } };
+  const comments = [
+    { user: { login: 'app[bot]' }, body },
+    { user: { login: 'someone' }, body: C.reportComment({ number: 3, guildId: '1', postId: '703', player: { id: '9' }, by: { id: '5' } }) },
+    { user: { login: 'app[bot]' }, body: 'a note with no hidden line' },
+    { body: hook },
+  ];
+  assert.deepEqual(C.ownReports(issue, comments), [{ postId: '701', playerId: '42' }]);
 });

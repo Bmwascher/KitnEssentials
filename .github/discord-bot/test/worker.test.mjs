@@ -1881,7 +1881,7 @@ test('an unfiled post moves: a webhook copy in the new forum, both records, the 
   assert.deepEqual(f.find('PATCH', /\/channels\/700$/)[0].body, { locked: true, archived: true });
   const card = f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body;
   assert.equal(card.content, '**New post in <#901>:** <#990>\nby <@42> (`pat`) · Feature · Retail\nMoved by <@8>');
-  assert.deepEqual(card.components[0].components.map((b) => b.custom_id || b.url), ['send:990', 'move:990', 'https://discord.com/channels/1/990']);
+  assert.deepEqual(card.components[0].components.map((b) => b.custom_id || b.url), ['send:990', 'add:990', 'move:990', 'https://discord.com/channels/1/990']);
   assert.equal(told, MOVED);
 });
 
@@ -1897,7 +1897,7 @@ test('a move with no card to edit, or whose card is gone, posts a new queue card
     assert.equal(w.f.find('PATCH', /\/channels\/556\/messages\/96$/).length, edits, why);
     const posted = w.f.find('POST', /\/channels\/556\/messages$/);
     assert.equal(posted.length, 1, why);
-    assert.deepEqual(posted[0].body.components[0].components.map((b) => b.custom_id || b.url), ['send:990', 'move:990', 'https://discord.com/channels/1/990'], why);
+    assert.deepEqual(posted[0].body.components[0].components.map((b) => b.custom_id || b.url), ['send:990', 'add:990', 'move:990', 'https://discord.com/channels/1/990'], why);
     assert.equal(JSON.parse(kv.m.get('movedfrom:990')).card, '97', `${why}: the new card is the copy's`);
   }
   // The edit and the new card both refused: the record names no card, not
