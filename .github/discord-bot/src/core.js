@@ -575,8 +575,10 @@ export function planTags(current, available, statusName, { names = STATUS_NAMES,
 // disagrees with the forum's own type goes, and is never added. Discord takes
 // five: the status tag, a repo tag per key, a tag per client and Accepted come
 // first, then the rest in the post's order. `applied` is absent on a thread
-// read that carries no tag list.
-export function movedTags({ applied = [], from, to, client, fixedClient, fixedType, repoTags }) {
+// read that carries no tag list. A filed post passes its issue's `repoKey`:
+// a repo tag of another key goes, and the forum's first tag of that key is
+// added when no kept tag names it.
+export function movedTags({ applied = [], from, to, client, fixedClient, fixedType, repoTags, repoKey = null }) {
   const target = new Map();
   for (const t of to) if (!target.has(t.name.toLowerCase())) target.set(t.name.toLowerCase(), t.id);
   const oldTags = new Map(from.map((t) => [t.id, t.name.toLowerCase()]));
@@ -591,8 +593,13 @@ export function movedTags({ applied = [], from, to, client, fixedClient, fixedTy
   // The post and its forum's tags are read in separate calls, so a tag
   // removed from the forum between them names nothing.
   const kept = applied.map((id) => oldTags.get(id)).filter((n) => n !== undefined && target.has(n)
-    && !(covers(n).length && client !== 'All' && kind(n).client !== client) && typeFits(n));
+    && !(covers(n).length && client !== 'All' && kind(n).client !== client) && typeFits(n)
+    && !(repoKey && repoOf(n) && repoOf(n) !== repoKey));
   const added = [];
+  if (repoKey && !kept.some((n) => repoOf(n) === repoKey)) {
+    const tag = [...target.keys()].find((n) => repoOf(n) === repoKey);
+    if (tag) added.push(tag);
+  }
   if (!fixedClient) {
     const need = (client === 'All' ? ['Retail', 'Forever'] : [client]).filter((c) => !kept.some((n) => covers(n).includes(c)));
     // Send to GitHub guesses the type from the tags, so an added tag naming
@@ -716,9 +723,10 @@ export const MESSAGES = {
   needsInfo: (uid) => `${uid ? `<@${uid}> ` : ''}Could you add a bit more detail? A screenshot, your addon version and the steps to make it happen help a lot.`,
   // The bot's message in a moved post's new post. Only the reporter is
   // pinged (allowed_mentions); the mover's mention pings no one.
-  movedHere: ({ from, by, reporter, left, cut }) => [
+  movedHere: ({ from, by, reporter, left, cut, tracked = null }) => [
     `Moved here from ${from} by ${shownStaff(by)}.`,
     `First posted by ${reporter.id ? `<@${reporter.id}>` : discordText(reporter.name)}.`,
+    tracked ? `Tracked as ${tracked.key} #${tracked.number}.` : '',
     left ? `${left} file(s) could not be copied (too large, or not downloaded); they are on the original post.` : '',
     cut ? 'The first message was too long to copy whole; the full text is on the original post.' : '',
   ].filter(Boolean).join(' '),
@@ -824,8 +832,10 @@ export const plainTags = (names, repoTags) => names.filter((n) => !own(repoTags,
 
 // The custom ids of the send button ("send:<post>"), its form
 // ("gh:<post>:<message>[:<button message or 0>[:<queue card>]]"), the move
-// button ("move:<post>") and the move form ("mv:<post>[:<queue card>]"). Their
-// parts go into API paths, so they are taken only when every part is digits.
+// button ("move:<post>") and the move form ("mv:<post>:<queue card or
+// 0>:<repo key>:<client>", the key and the client it pre-selected, either
+// empty; "mv:<post>[:<queue card>]" from an older form). Their id parts go
+// into API paths, so they are taken only when every one is digits.
 export const SEND_BUTTON = 'send';
 export const MOVE_BUTTON = 'move';
 export function parseCustomId(id) {
@@ -838,6 +848,8 @@ export function parseCustomId(id) {
   if (m) return { kind: 'move', threadId: m[1] };
   m = /^mv:(\d+)(?::(\d+))?$/.exec(s);
   if (m) return { kind: 'moveForm', threadId: m[1], cardId: m[2] || '' };
+  m = new RegExp(`^mv:(\\d+):(\\d+):([A-Za-z0-9]{0,${REPO_KEY_MAX}}):(${CLIENT_NAMES.join('|')}|)$`).exec(s);
+  if (m) return { kind: 'moveForm', threadId: m[1], cardId: m[2] !== '0' ? m[2] : '', shownKey: m[3], shownClient: m[4] };
   return null;
 }
 
@@ -902,13 +914,14 @@ export function queueCard({ guildId, forumId, postId, author, client, type, star
 // older card names the post as text there), or cardHead for the post. A card
 // an older version sent may still show a live link or a direction mark
 // there, so the head goes on one line with its links broken. `by`, the
-// filer, is left out when unknown.
+// filer, is left out when unknown. Move stays: a filed post moves with its
+// issue.
 export function filedCard({ guildId, postId, head, key, number, by }) {
   return {
     content: `~~${noLinks(oneLine(head))}~~\n**Filed as ${key} #${number}**${by ? ` by ${shownStaff(by)}` : ''}`,
     allowed_mentions: { parse: [] },
     flags: SUPPRESS_EMBEDS,
-    components: [{ type: 1, components: [openPost(guildId, postId)] }],
+    components: [{ type: 1, components: [moveButton(postId), openPost(guildId, postId)] }],
   };
 }
 

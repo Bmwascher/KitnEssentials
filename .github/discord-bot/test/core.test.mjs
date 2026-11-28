@@ -333,6 +333,10 @@ test('button and form ids parse only when every id part is digits', () => {
   assert.deepEqual(C.parseCustomId('move:700'), { kind: 'move', threadId: '700' });
   assert.deepEqual(C.parseCustomId('mv:700'), { kind: 'moveForm', threadId: '700', cardId: '' });
   assert.deepEqual(C.parseCustomId('mv:700:96'), { kind: 'moveForm', threadId: '700', cardId: '96' });
+  // The form carries the repo key and the client it pre-selected; a 0 card part means none.
+  for (const [id, cardId, shownKey, shownClient] of [
+    ['mv:700:96:KE:All', '96', 'KE', 'All'], ['mv:700:0:KE:Retail', '', 'KE', 'Retail'], ['mv:700:96::Forever', '96', '', 'Forever'], ['mv:700:96:KE:', '96', 'KE', ''],
+  ]) assert.deepEqual(C.parseCustomId(id), { kind: 'moveForm', threadId: '700', cardId, shownKey, shownClient }, id);
   for (const bad of ['send:7a', 'send:', 'gh:700', 'gh:700:800:950:1:2', 'gh:700:800:0:96x', 'gh:7/0:800', 'xx:700:800', '', undefined,
     'move:7a', 'move:', 'mv:', 'mv:700:', 'mv:700:96:1', 'mv:7/0']) {
     assert.equal(C.parseCustomId(bad), null, String(bad));
@@ -373,7 +377,7 @@ test('a queue card names the post and its poster by Discord mention, pinging no 
     const filed = C.filedCard({ guildId: '1', postId: '700', head, key: 'ONE', number: 10, by });
     assert.equal(filed.content, `~~**New post in <#900>:** <#700>~~\n${line}`, line);
     assert.deepEqual([filed.allowed_mentions, filed.flags], [{ parse: [] }, 4], line);
-    assert.deepEqual(filed.components[0].components.map((b) => [b.label, b.url]), [['Open post', 'https://discord.com/channels/1/700']], line);
+    assert.deepEqual(filed.components[0].components.map((b) => [b.label, b.custom_id, b.url]), [['Move', 'move:700', undefined], ['Open post', undefined, 'https://discord.com/channels/1/700']], line);
   }
   // A username shows in its code span on one line, with no direction mark.
   assert.equal(C.queueCard({ ...post, author: { name: 'k', username: 'ki\u202Era`', id: '42' } }).content, '**New post in <#900>:** <#700>\nby <@42> (`kira`)');
@@ -912,6 +916,10 @@ test('a moved post keeps the tags the new forum has and gets its client tags, fi
       to: [...TO, { id: 't-one2', name: 'One alias' }, { id: 't-one3', name: 'One third' }],
       fixedClient: null, client: 'All', repoTags: C.parseRepoTags('{"ONE":"ONE","One alias":"ONE","One third":"ONE"}'),
     }, ['t-tri', 't-one', 't-retail', 't-forever', 't-acc']],
+    // A filed move passes the issue's key: its repo tag follows the issue.
+    ['with repoKey, a repo tag of another key dropped, the key tag added', ['f-one', 'f-staff'], { repoKey: 'TWO' }, ['t-two', 't-staff']],
+    ['with repoKey, the key tag kept, not doubled', ['f-one', 'f-staff'], { repoKey: 'ONE' }, ['t-one', 't-staff']],
+    ['with repoKey, no tag for the key adds none', ['f-one', 'f-staff'], { repoKey: 'THREE' }, ['t-staff']],
   ]) assert.deepEqual(C.movedTags({ ...base, ...over, applied }), want, why);
 });
 
@@ -920,6 +928,8 @@ test('a moved post\'s card mentions the mover, and the moved messages link both 
   assert.equal(C.queueCard({ ...post, author: { name: 'k', username: 'kira', id: '42' }, moved: '<@8>' }).content, '**New post in <#900>:** <#700>\nby <@42> (`kira`)\nMoved by <@8>');
   assert.equal(C.MESSAGES.movedHere({ from: 'https://discord.com/channels/1/700', by: '<@8>', reporter: { name: 'Pat', id: '42' } }),
     'Moved here from https://discord.com/channels/1/700 by <@8>. First posted by <@42>.');
+  assert.equal(C.MESSAGES.movedHere({ from: 'L', by: '<@8>', reporter: { name: 'Pat', id: '42' }, tracked: { key: 'KE', number: 12 } }),
+    'Moved here from L by <@8>. First posted by <@42>. Tracked as KE #12.');
   assert.equal(C.MESSAGES.movedHere({ from: 'L', by: '<@8>', reporter: { name: '**Hook**' }, left: 2, cut: true }),
     'Moved here from L by <@8>. First posted by \\*\\*Hook\\*\\*. 2 file(s) could not be copied (too large, or not downloaded); they are on the original post. The first message was too long to copy whole; the full text is on the original post.');
   assert.equal(C.MESSAGES.movedTo({ to: 'https://discord.com/channels/1/990', by: '<@8>' }), 'This post moved to https://discord.com/channels/1/990 (moved by <@8>).');
