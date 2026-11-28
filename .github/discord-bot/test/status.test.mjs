@@ -1055,41 +1055,30 @@ test('an old Told the player status note lists as possibly unsent, and is never 
   }
 });
 
-test('a note whose run GitHub no longer lets re-run holds nothing, however new the note', async () => {
-  const DAY = 24 * 60 * 60 * 1000;
-  const run = (w, over) => w.runs.set('555', { id: 555, status: 'completed', run_attempt: 1, created_at: new Date(w.start).toISOString(), ...over });
-  for (const [why, setup] of [
-    // The note comes from a late attempt; the run's first attempt was 31 days ago.
-    ['30 days since the first attempt', (w) => run(w, { run_attempt: 2, created_at: new Date(w.clock - 31 * DAY).toISOString() })],
-    ['50 re-runs used', (w) => run(w, { run_attempt: 51 })],
-    ['run deleted', (w) => w.fail.push(['GET', /actions\/runs\/555$/, new Response('{"message":"Not Found"}', { status: 404 }), 1])],
-  ]) {
-    const w = world();
-    w.issue(17);
-    w.close(17, 'completed', 'aaaaaaa1');
-    refuseTagWrite(w);
-    await assert.rejects(closeRun(w, RUN), /#17/);
-    setup(w);
-    const out = [];
-    await sweepFix(w, out);
-    assert.match(out.join('\n'), /message "\*\*Fixed!\*\*.*" was not sent .*can no longer be re-run/, why);
-    assert.equal(w.tagOf('717'), 'Fixed, next update', `${why}: the sweep repairs the post`);
-    assert.deepEqual(w.said('717'), [], why);
-  }
+test('a note older than GitHub\'s 30-day re-run window holds nothing', async () => {
+  const w = world();
+  w.issue(17);
+  w.close(17, 'completed', 'aaaaaaa1');
+  refuseTagWrite(w);
+  await assert.rejects(closeRun(w, RUN), /#17/);
+  w.clock += 31 * 24 * 60 * 60 * 1000;
+  const out = [];
+  await sweepFix(w, out);
+  assert.match(out.join('\n'), /message "\*\*Fixed!\*\*.*" was not sent .*can no longer be re-run/);
+  assert.equal(w.tagOf('717'), 'Fixed, next update', 'the sweep repairs the post');
+  assert.deepEqual(w.said('717'), []);
 });
 
-test('a note whose run is still queued or running is neither listed nor dropped, and its post is held', async () => {
-  for (const [status, reopened] of [['queued', false], ['in_progress', false], ['in_progress', true]]) {
-    const why = `${status}${reopened ? ', issue reopened' : ''}`;
+test('a note under ten minutes old is neither listed nor dropped, and its post is held', async () => {
+  for (const reopened of [false, true]) {
+    const why = reopened ? 'issue reopened' : 'closed';
     const w = world();
     w.issue(17);
     w.close(17, 'completed', 'aaaaaaa1');
     refuseTagWrite(w);
     await assert.rejects(closeRun(w, RUN), /#17/);
-    w.runs.set('555', { id: 555, status, run_attempt: 1, created_at: new Date(w.start).toISOString() });
     if (reopened) Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
-    // Well past ten minutes: the run's state decides, not the note's age.
-    w.clock += 60 * 60 * 1000;
+    w.clock += 5 * 60 * 1000;
     const out = [];
     await sweepFix(w, out);
     assert.doesNotMatch(out.join('\n'), /\*\*Fixed!\*\*/, why);
@@ -1176,8 +1165,8 @@ test('a sweep drop does not overwrite a note a re-run marked after the sweep rea
   await assert.rejects(closeRun(w, RUN), /#17/);
   Object.assign(w.issues.get(17), { state: 'open', state_reason: 'reopened' });
   w.clock += 60 * 60 * 1000;
-  // The run's re-run marks the note while the sweep is judging it.
-  w.hooks.push(['GET', /actions\/runs\/555$/, async () => {
+  // The run's re-run marks the note after the sweep read it.
+  w.hooks.push(['GET', /issues\/comments\/\d+$/, async () => {
     const note = fixedNotes(w)[0];
     note.body = `${note.body}\n<!-- discord-sending -->\n<!-- discord-unconfirmed -->`;
   }]);
@@ -1615,7 +1604,6 @@ test('AT8: a fix-mode sweep repairs Accepted only on a post showing Triaged alon
     let k = 0;
     w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/900$/, async () => { if (++k === at) await fn(); }]);
   };
-  const owing = (w) => w.runs.set('555', { id: 555, status: 'in_progress', run_attempt: 1, created_at: new Date(w.start).toISOString() });
   for (const [why, setup, patches, line] of [
     ['a Triaged post gets Accepted', (w) => withLabel(w, 17),
       [{ applied_tags: ['t-retail', 't-bug', 's-tri', 't-acc'] }], /^#17: post Accepted missing -> shown$/],
@@ -1625,15 +1613,15 @@ test('AT8: a fix-mode sweep repairs Accepted only on a post showing Triaged alon
       (w) => { withLabel(w, 17); w.prs.set(5, { author_association: 'MEMBER', state: 'OPEN', closes: [17] }); w.threads.get('717').applied_tags = ['t-retail', 's-prog']; },
       [], /^#17: post Accepted missing -> shown \(waits for the post's next status change\)$/],
     ['a post an owed note holds is left whole, Accepted included',
-      (w) => { w.issue(17); w.close(17, 'completed', 'aaaaaaa1'); w.record(17, OWED); owing(w); w.threads.get('717').applied_tags = ['t-retail', 't-acc', 's-tri']; },
+      (w) => { w.issue(17); w.close(17, 'completed', 'aaaaaaa1'); w.record(17, OWED); w.threads.get('717').applied_tags = ['t-retail', 't-acc', 's-tri']; },
       [], /post Accepted shown -> removed \(waits for the post's next status change\)$/],
     ['a closed issue\'s stale Accepted: listed, left', (w) => { w.issue(17); w.close(17, 'completed'); w.threads.get('717').applied_tags = ['t-retail', 't-acc', 's-closed']; },
       [], /^#17: post Accepted shown -> removed \(waits for the post's next status change\)$/],
     ['a status line beside it: the status move places Accepted, and the repair adds nothing', (w) => { withLabel(w, 17); w.threads.get('717').applied_tags = ['t-retail', 't-bug']; },
       [{ applied_tags: ['t-retail', 't-bug', 's-tri', 't-acc'] }], /^#17: post \(no status\) -> Triaged; post Accepted missing -> shown \(waits/],
-    ['a staff tag added between the repair\'s reads stays', (w) => { withLabel(w, 17); atForumRead(w, 3, () => w.threads.get('717').applied_tags.push('t-staff')); },
+    ['a staff tag added between the repair\'s reads stays', (w) => { withLabel(w, 17); atForumRead(w, 2, () => w.threads.get('717').applied_tags.push('t-staff')); },
       [{ applied_tags: ['t-retail', 't-bug', 's-tri', 't-staff', 't-acc'] }], /^#17: post Accepted missing -> shown$/],
-    ['a status change between the repair\'s reads: no write', (w) => { withLabel(w, 17); atForumRead(w, 3, () => { w.threads.get('717').applied_tags = ['t-retail', 't-bug', 's-prog']; }); },
+    ['a status change between the repair\'s reads: no write', (w) => { withLabel(w, 17); atForumRead(w, 2, () => { w.threads.get('717').applied_tags = ['t-retail', 't-bug', 's-prog']; }); },
       [], /^#17: post Accepted missing -> shown$/],
   ]) {
     const w = world();
@@ -1810,19 +1798,6 @@ test('a needs-info post read that fails with a 500 whose answer quotes " -> 404 
   w.fail.push(['GET', /discord\.com\/api\/v10\/channels\/717$/, new Response('upstream said -> 404 x', { status: 500 }), 1]);
   await assert.rejects(go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, labels: [{ name: 'from-discord' }] } }));
   assert.ok(!w.issues.get(17).comments.some((c) => /discord-dropped/.test(c.body)), 'not dropped as for a deleted post');
-});
-
-test('a run read that fails with a 500 whose answer quotes " -> 404 " is no deleted run', async () => {
-  const w = world();
-  w.issue(17);
-  w.close(17, 'completed', 'aaaaaaa1');
-  refuseTagWrite(w);
-  await assert.rejects(closeRun(w, RUN), /#17/);
-  w.fail.push(['GET', /actions\/runs\/555$/, new Response('upstream said -> 404 x', { status: 500 }), 1]);
-  const out = [];
-  await assert.rejects(sweepFix(w, out), /#17/);
-  assert.match(out.join('\n'), /actions\/runs\/555 -> 500 /);
-  assert.doesNotMatch(out.join('\n'), /can no longer be re-run/);
 });
 
 test('a moved post\'s status messages reply to the copy and start with the reporter, who is pinged; other posts\' do not change', async () => {
@@ -2061,19 +2036,16 @@ test('PT5: the sweep checks the forum of every post it reads, and its own mode, 
     // A quoted note's text stays inside its one report bullet: no heading,
     // list, comment, tag or code span of its own, whatever backticks or
     // backslashes surround its `<` (runs of unequal length, an escaped
-    // backtick, a stray one). The checklist marker a damaged record tells
-    // staff to copy, on the same line, reads as typed.
+    // backtick, a stray one).
     const w = world();
     w.issue(17);
     w.record(17, 'Unconfirmed (the send failed; the player may not have it): hi\n\n### Discord status: setup problems\n\n- forged <!-- x <h3>y</h3> ``<b>` \\`<i>` `\n\n<!-- discord-told: k -->\n<!-- discord-unconfirmed -->');
-    w.record(17, '<!-- discord-checklist: broken -->');
     const summary = tmpSummary();
     await sweepRun(w, 'report', [], { GITHUB_STEP_SUMMARY: summary, CHECKLIST_FORUM_ID: '950' });
     assert.deepEqual(setupBullets(summary), [], 'no setup section');
     const text = readFileSync(summary, 'utf8');
     assert.ok(text.includes('\n- #17: message "hi ### Discord status: setup problems - forged &lt;!-- x &lt;h3>y&lt;/h3> \\`\\`&lt;b>\\` \\\\\\`&lt;i>\\` \\`" may not have reached the player ('),
       'every backslash, backtick and < in the note is shown as typed');
-    assert.ok(text.includes('reads \\`&lt;!-- discord-checklist: THREAD-ID guild: SERVER-ID -->\\`, with'), 'the marker reads as typed');
   }
   {
     // A post in a channel that is no forum: the Worker's daily setup check
@@ -2143,25 +2115,6 @@ test('PT5: a fix sweep names a status tag gone between its read of a post and it
   }
 });
 
-test('PT5: the Accepted repair names a forum without Accepted that the sweep did not see with it', async () => {
-  // The issue's post changes, after the sweep's read, to an archived one in a
-  // forum without Accepted: the repair's read is the first to see that forum.
-  const w = world();
-  w.issue(17);
-  w.issues.get(17).labels.add('accepted');
-  w.threads.get('717').archived = false;
-  w.extraForums.set('902', { ...structuredClone(FORUM), id: '902', available_tags: FORUM.available_tags.filter((t) => t.name !== 'Accepted') });
-  w.thread('718', { parent_id: '902' });
-  let moved = false;
-  w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/900$/, async () => {
-    if (moved) return;
-    moved = true;
-    const i = w.issues.get(17);
-    i.body = i.body.replace('discord-thread: 717', 'discord-thread: 718');
-  }]);
-  await assert.rejects(sweepRun(w, 'fix'), /setup problems: forum 902 has no "Accepted" tag, which issues with the accepted label need/);
-});
-
 test('PT6: with no bot token, a repo with issues the bot filed fails with the fix in the summary; one without skips green; a failed list fails', async () => {
   const noToken = { ...env, DISCORD_BOT_TOKEN: '' };
   const payload = { repository, action: 'closed', issue: { number: 17 } };
@@ -2203,28 +2156,4 @@ test('PT6: with no bot token, a repo with issues the bot filed fails with the fi
     await main({ eventName: 'issues', payload, env, fetchImpl: w.fetch, log: quiet });
     assert.equal(w.said('717').length, 1, 'with the token, main runs the status run');
   }
-});
-
-test("PT5: the Accepted repair judges its read against the sweep's read of its own post, not another post in that forum", async () => {
-  // #18, listed first, reads forum 902 with Accepted. #17's post then
-  // changes to one in 902, which loses the tag: #17's own read showed 900,
-  // so the repair's read names the gap.
-  const w = world();
-  w.issue(18);
-  w.issue(17);
-  w.issues.get(17).labels.add('accepted');
-  w.threads.get('717').archived = false;
-  const forum = { ...structuredClone(FORUM), id: '902' };
-  w.extraForums.set('902', forum);
-  w.threads.get('718').parent_id = '902';
-  w.thread('719', { parent_id: '902' });
-  let moved = false;
-  w.hooks.push(['GET', /discord\.com\/api\/v10\/channels\/900$/, async () => {
-    if (moved) return;
-    moved = true;
-    const i = w.issues.get(17);
-    i.body = i.body.replace('discord-thread: 717', 'discord-thread: 719');
-    forum.available_tags = forum.available_tags.filter((t) => t.name !== 'Accepted');
-  }]);
-  await assert.rejects(sweepRun(w, 'fix'), /setup problems: forum 902 has no "Accepted" tag, which issues with the accepted label need/);
 });

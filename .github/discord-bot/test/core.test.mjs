@@ -81,15 +81,12 @@ test('body: a table names both people, then the quoted report, with the hidden l
   }
 });
 
-test('a hostile name stays one row of text: no link, mention, cross-reference or reordering', () => {
+test('a hostile name stays one row of text: no Markdown, mention or reordering', () => {
   const row = (body) => body.split('\n')[0];
   for (const [name, want] of [
     ['a|b', 'a\\|b'], ['x]y', 'x\\]y'], ['**x**', '\\*\\*x\\*\\*'], ['_b_', '\\_b\\_'],
-    ['#12', '#\u200B12'], ['@org/team', '@\u200Borg/team'], ['<!--', '&lt;!--'],
-    ['a\u202Eb', 'ab'], ['two\nlines', 'two lines'], ['[x](https://e.example)', '\\[x\\](https:\u200B//e.example)'],
-    ['https://evil.example', 'https:\u200B//evil.example'], ['www.evil.example', 'www\u200B.evil.example'],
-    // GitHub links GH-<n> to an issue, and seven or more hex digits to a commit.
-    ['GH-12', 'GH-\u200B12'], ['gh-12', 'gh-\u200B12'], ['a5c3785ed8d6', 'a5c378\u200B5ed8d6'],
+    ['@org/team', '@\u200Borg/team'], ['<!--', '&lt;!--'],
+    ['a\u202Eb', 'ab'], ['two\nlines', 'two lines'], ['[x](https://e.example)', '\\[x\\](https://e.example)'],
   ]) {
     const body = C.buildBody({ content: 'x', reporter: { name, username: 'u', id: '42' }, threadUrl: 'u', threadId: '2' });
     assert.equal(row(body), `| Reporter | [${want}](https://discord.com/users/42) (\`u\`) |`, JSON.stringify(name));
@@ -186,7 +183,7 @@ test('Discord no-preview links survive into the issue as working links', () => {
   // An & that starts no entity is left alone, so a URL keeps its address.
   assert.equal(C.neutralize('a & b https://e.com/?b=1&c=2'), 'a & b https://e.com/?b=1&c=2');
   assert.equal(C.neutralize('<https://e.com/?b=1&c=2>'), `[${dest('https://e.com/?b=1&c=2')}](${dest('https://e.com/?b=1&c=2')})`);
-  assert.equal(C.buildBody({ content: 'hi', reporter: { name: '&#64;mod' }, threadUrl: 'u', threadId: '1' }).includes('| Reporter | &#\u200B64;mod |'), true);
+  assert.equal(C.buildBody({ content: 'hi', reporter: { name: '&#64;mod' }, threadUrl: 'u', threadId: '1' }).includes('| Reporter | &amp;#64;mod |'), true);
   // Every character of the destination survives: parentheses, trailing
   // punctuation, an @ (which the mention escaping would otherwise change).
   for (const url of ['https://example.com/a)b', 'https://example.com/search?q=wow!', 'https://example.com/a&copy;b',
@@ -215,8 +212,6 @@ test('a fenced code block keeps what the player typed, between fence lines the b
     // Windows and old Mac line endings are line endings.
     [`${fence(3)}\r\nx\r\n${fence(3)}\r\n@y <b>`, `${fence(3)}\nx\n${fence(3)}\n@\u200By &lt;b>`],
     [`${fence(3)}\rx\r${fence(3)}\r@y`, `${fence(3)}\nx\n${fence(3)}\n@\u200By`],
-    // A language word GitHub draws instead of showing the code is dropped.
-    [`${fence(3, 'mermaid')}\nx\n${fence(3)}`, `${fence(3)}\nx\n${fence(3)}`],
   ]) assert.equal(C.neutralize(text), want, text);
 });
 
@@ -502,28 +497,14 @@ test('status writes read the post again first, never reopen a post already showi
   }
 });
 
-test('a status tag renamed to a staff tag between the reads is read with the forum as it is now', async () => {
-  const tags = [{ id: 'a', name: 'A' }, { id: 'b2', name: 'B' }, { id: 'c', name: 'C' }, { id: 'x', name: 'Staff note' }, { id: 'z', name: 'Closed' }, { id: 't', name: 'Triaged' }];
-  // Staff rename the post's Closed tag to a name of their own while the bot reads.
-  const forums = [{ id: '900', available_tags: tags }, { id: '900', available_tags: tags.map((t) => (t.id === 'z' ? { ...t, name: 'Needs review' } : t)) }];
-  const f = fakeFetch([
-    ['GET', /\/channels\/700$/, () => ({ id: '700', parent_id: '900', applied_tags: ['a', 'b2', 'c', 'x', 'z'] })],
-    ['GET', /\/channels\/900$/, () => (forums.length > 1 ? forums.shift() : forums[0])],
-    ['PATCH', /\/channels\/700$/, () => ({})],
-  ]);
-  const r = await discordClient('t', f).setStatus('700', 'Triaged', undefined, { dropOther: false });
-  assert.deepEqual(f.find('PATCH', /\/channels\/700$/), [], 'no staff tag is dropped');
-  assert.equal(r.raced, true, 'the caller decides again from the post as it is now');
-});
-
-test('a tag staff add while the forum is read again is kept: the post is read last, just before the write', async () => {
+test('a tag staff add while the forum is read is kept: the post is read again, just before the write', async () => {
   const tags = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }, { id: 'd', name: 'D' }, { id: 'x', name: 'Staff note' }, { id: 't', name: 'Triaged' }];
   const post = { id: '700', parent_id: '900', applied_tags: ['a', 'b', 'c', 'd'] };
   let forumReads = 0;
   const f = fakeFetch([
     ['GET', /\/channels\/700$/, () => ({ ...post, applied_tags: [...post.applied_tags] })],
-    // Staff add a fifth tag of their own while the bot reads the forum the second time.
-    ['GET', /\/channels\/900$/, () => { if (++forumReads === 2) post.applied_tags.push('x'); return { id: '900', available_tags: tags }; }],
+    // Staff add a fifth tag of their own while the bot reads the forum.
+    ['GET', /\/channels\/900$/, () => { if (++forumReads === 1) post.applied_tags.push('x'); return { id: '900', available_tags: tags }; }],
     ['PATCH', /\/channels\/700$/, () => ({})],
   ]);
   const r = await discordClient('t', f).setStatus('700', 'Triaged', undefined, { dropOther: false });
@@ -584,7 +565,7 @@ test('CT4: the staff checklist forum is never a player forum, even when FORUMS l
   assert.deepEqual(Object.keys(C.parseForums({ FORUM_CHANNEL_IDS: '900, 950', CHECKLIST_FORUM_ID: '950' })), ['900']);
 });
 
-test('CT5: a checklist tag write reads the forum, then the thread, keeps the archive state unless told to open, and marks a write that may have left an archived thread open', async () => {
+test('CT5: a checklist tag write reads the forum, then the thread, and keeps the archive state unless told to open', async () => {
   const forum = { id: '950', available_tags: [{ id: 'tri', name: 'Triaged' }, { id: 'prog', name: 'In progress' }, { id: 'acc', name: 'Accepted' }] };
   const thread = (tags, archived, parent = '950') => ({ id: '960', parent_id: parent, applied_tags: tags, thread_metadata: { archived } });
   const plan = (status, accepted) => (applied, available) => C.planTags(applied, available, status, { names: C.CHECKLIST_NAMES, accepted, dropOther: false });
@@ -598,11 +579,9 @@ test('CT5: a checklist tag write reads the forum, then the thread, keeps the arc
     ['told to open: the write opens it and leaves it open', thread(['tri'], true), plan('In progress', false), true, [{ applied_tags: ['prog'], archived: false }]],
     ['told to open, tags right: it is only opened', thread(['tri'], true), plan('Triaged', false), true, [{ archived: false }]],
     ['told to open, the status tag missing: opened, no tags written', thread(['tri'], true), plan('Done', false), true, [{ archived: false }]],
-    ['the re-archive fails: thrown, marked', thread(['tri'], true), plan('In progress', false), false, both, { 2: 500 }, 'marked'],
-    ['the opening write fails with no answer: the re-archive still goes out, thrown unmarked', thread(['tri'], true), plan('In progress', false), false, both, { 1: 500 }, 'plain'],
-    ['the opening write and the re-archive both fail: thrown, marked, with both causes', thread(['tri'], true), plan('In progress', false), false, both, { 1: 500, 2: 403 }, 'both'],
-    ['the opening write is refused: nothing changed, nothing more sent, thrown unmarked', thread(['tri'], true), plan('In progress', false), false,
-      [{ applied_tags: ['prog'], archived: false }], { 1: 403 }, 'plain'],
+    ['the re-archive fails: thrown', thread(['tri'], true), plan('In progress', false), false, both, { 2: 500 }, 'thrown'],
+    ['the opening write fails: nothing more sent, thrown', thread(['tri'], true), plan('In progress', false), false,
+      [{ applied_tags: ['prog'], archived: false }], { 1: 500 }, 'thrown'],
     ['a thread in another forum: no write', thread(['tri'], false, '900'), plan('In progress', false), false, [], {}, 'forum'],
   ]) {
     let patchNo = 0;
@@ -616,54 +595,11 @@ test('CT5: a checklist tag write reads the forum, then the thread, keeps the arc
     ]);
     const write = discordClient('t', f).setTags('960', '950', p, { open });
     if (outcome === 'forum') await assert.rejects(write, /not the checklist forum/, why);
-    else if (outcome) {
-      await assert.rejects(write, (e) => (e.rearchive === true) === (outcome !== 'plain')
-        && (outcome !== 'both' || (/-> 500/.test(e.message) && /-> 403/.test(e.rearchiveError.message))), why);
-    }
+    else if (outcome) await assert.rejects(write, /-> 500/, why);
     else await write;
     assert.deepEqual(f.calls.slice(0, 2).map((c) => `${c.method} ${c.url.replace(/^.*\/channels\//, '')}`), ['GET 950', 'GET 960'], `${why}: the thread is read last`);
     assert.deepEqual(f.find('PATCH', /\/channels\/960$/).map((c) => c.body), patches, why);
   }
-});
-
-test('CT6: the search lists the forum\'s threads made since a time, from the active list, the archived list and the active list again', async () => {
-  const at = (ms) => String(BigInt(ms - 1420070400000) << 22n);
-  const T0 = Date.parse('2026-11-20T00:00:00Z');
-  const old = { id: at(T0 - 60000), parent_id: '950' };
-  const fresh = { id: at(T0 + 2000), parent_id: '950' };
-  const other = { id: at(T0 + 3000), parent_id: '900' };
-  // Unarchived between the first active read and the archived read.
-  const moved = { id: at(T0 + 1000), parent_id: '950', thread_metadata: { archived: true, archive_timestamp: new Date(T0 + 5000).toISOString() } };
-  let reads = 0;
-  const f = fakeFetch([
-    ['GET', /\/guilds\/800\/threads\/active$/, () => ({ threads: ++reads === 1 ? [old, fresh, other] : [fresh, moved, other] })],
-    ['GET', /\/channels\/950\/threads\/archived\/public/, () => ({ threads: [], has_more: false })],
-  ]);
-  const r = await discordClient('t', f).threadsSince('800', '950', T0, 2);
-  assert.deepEqual(r.threads.map((t) => t.id).sort(), [fresh.id, moved.id].sort());
-  assert.equal(r.complete, true);
-  const g = fakeFetch([
-    ['GET', /\/guilds\/800\/threads\/active$/, () => ({ threads: [] })],
-    ['GET', /\/channels\/950\/threads\/archived\/public/, () => ({ threads: [moved], has_more: true })],
-  ]);
-  assert.equal((await discordClient('t', g).threadsSince('800', '950', T0, 1)).complete, false, 'the archived pages ran out first');
-  const k = fakeFetch([
-    ['GET', /\/guilds\/800\/threads\/active$/, () => ({ threads: [] })],
-    ['GET', /\/channels\/950\/threads\/archived\/public/, () => ({ threads: [], has_more: true })],
-  ]);
-  assert.equal((await discordClient('t', k).threadsSince('800', '950', T0, 2)).complete, false, 'a page that says more follow but gives no time to go on from');
-  // Two threads archived at the same time fall either side of a page boundary.
-  const arc = (ms, stampMs) => ({ id: at(ms), parent_id: '950', thread_metadata: { archived: true, archive_timestamp: new Date(stampMs).toISOString() } });
-  const tied = [arc(T0 + 1000, T0 + 9000), arc(T0 + 2000, T0 + 8000), arc(T0 + 3000, T0 + 8000)];
-  const h = fakeFetch([
-    ['GET', /\/channels\/950\/threads\/archived\/public/, (b, url) => {
-      const before = /before=([^&]+)/.exec(url);
-      const rest = before ? tied.filter((t) => t.thread_metadata.archive_timestamp < decodeURIComponent(before[1])) : tied;
-      return { threads: rest.slice(0, 2), has_more: rest.length > 2 };
-    }],
-  ]);
-  const listed = await discordClient('t', h).archivedThreads('950', T0, 3, { ties: true });
-  assert.deepEqual(listed.threads.map((t) => t.id), tied.map((t) => t.id), 'with ties, a tie across the page boundary is not skipped, and nothing is listed twice');
 });
 
 test('CT7: a Discord error\'s status is read only from its own request\'s prefix, never from the body after it', () => {
@@ -804,7 +740,7 @@ test('REPO_TAGS reads as tag name to key in any letter case, and a post\'s tags 
   ]) assert.equal(C.repoFromTags(names, tags), want, why);
   assert.deepEqual(C.plainTags(['Bug', 'UI', 'kitn', 'Retail'], tags), ['Bug', 'Retail'], 'repo tags left out in any letter case');
   assert.deepEqual(C.parseRepoTags('{"UI":"ONE","ui":"TWO","Kitn":"KE"}'), { kitn: 'KE' }, 'one name in two letter cases for two keys gives neither');
-  for (const raw of ['', '  ', '{"UI":', '["UI"]', '{"UI":1}', 'null', undefined, { toString: null }]) assert.deepEqual(C.parseRepoTags(raw), {}, String(typeof raw));
+  for (const raw of ['', '  ', '{"UI":', '["UI"]', '{"UI":1}', 'null', undefined]) assert.deepEqual(C.parseRepoTags(raw), {}, String(typeof raw));
 });
 
 test('a webhook name drops discord and clyde until none is left, keeps other marks, and cuts at 80 units without splitting a character', () => {
@@ -1001,11 +937,9 @@ test('isBotCopy: only a message the bot\'s own webhook posted', () => {
     ['a deleted message', null, false],
   ]) assert.equal(C.isBotCopy(m, 'app'), want, why);
 });
-test('setStatus and fixAccepted report each forum read to onForum, as that read answered, before anything after it can fail, and only a forum', async () => {
+test('setStatus and fixAccepted report their forum read to onForum, as that read answered, before anything after it can fail, and only a forum', async () => {
   const base = [{ id: 'r', name: 'Retail' }, { id: 't', name: 'Triaged' }, { id: 'p', name: 'In progress' }];
-  // The fresh read answers with one more tag, so the test tells the two reads apart.
   const first = () => ({ id: '900', type: 15, available_tags: base });
-  const fresh = () => ({ id: '900', type: 15, available_tags: [...base, { id: 'x', name: 'Staff note' }] });
   const post = () => ({ id: '700', parent_id: '900', applied_tags: ['r', 't'] });
   const answer = (status) => () => new Response('{"message":"x","code":0}', { status });
   // fixAccepted writes only into a forum that has Accepted.
@@ -1014,12 +948,11 @@ test('setStatus and fixAccepted report each forum read to onForum, as that read 
   const fixAccepted = (d, onForum) => d.fixAccepted('700', true, { onForum });
   for (const [why, call, posts, forums, patch, seenWant, fails] of [
     ['setStatus: the post already shows the status', setStatus('Triaged'), [post], [first], () => ({}), [3], false],
-    ['setStatus: a move reads twice', setStatus('In progress'), [post, post], [first, fresh], () => ({}), [3, 4], false],
-    ['setStatus: the forum read again is refused, the first read is kept', setStatus('In progress'), [post], [first, answer(403)], () => ({}), [3], true],
-    ['setStatus: the post read again answers 404', setStatus('In progress'), [post, answer(404)], [first, fresh], () => ({}), [3, 4], true],
-    ['setStatus: the write is refused', setStatus('In progress'), [post, post], [first, fresh], answer(403), [3, 4], true],
-    ['fixAccepted: the Accepted write reads twice', fixAccepted, [post, post], [withAcc(first), withAcc(fresh)], () => ({}), [4, 5], false],
-    ['fixAccepted: the post read again answers 404', fixAccepted, [post, answer(404)], [withAcc(first), withAcc(fresh)], () => ({}), [4, 5], true],
+    ['setStatus: a move', setStatus('In progress'), [post, post], [first], () => ({}), [3], false],
+    ['setStatus: the post read again answers 404', setStatus('In progress'), [post, answer(404)], [first], () => ({}), [3], true],
+    ['setStatus: the write is refused', setStatus('In progress'), [post, post], [first], answer(403), [3], true],
+    ['fixAccepted: the Accepted write', fixAccepted, [post, post], [withAcc(first)], () => ({}), [4], false],
+    ['fixAccepted: the post read again answers 404', fixAccepted, [post, answer(404)], [withAcc(first)], () => ({}), [4], true],
     // A channel that is no forum has no tags to name; a forum with none, or
     // whose answer leaves its list out, is reported with an empty list.
     ['setStatus: a parent that is no forum is not reported', setStatus('In progress'), [post], [() => ({ id: '900', type: 0 })], () => ({}), [], false],

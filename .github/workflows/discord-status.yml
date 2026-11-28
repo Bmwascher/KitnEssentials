@@ -38,13 +38,10 @@ on:
     - cron: '17 3,9,15,21 * * *'
   workflow_dispatch:
 
-# actions: read lets the sweep check whether the run behind an unsent message
-# can still be re-run.
 permissions:
   contents: read
   issues: write
   pull-requests: read
-  actions: read
 
 jobs:
   status:

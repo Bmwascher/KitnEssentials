@@ -38,13 +38,10 @@ export const BOT_LOGIN = 'github-actions[bot]';
 const RELEASE = [LABELS.pendingRelease, LABELS.shipped];
 // Lists are followed this many pages (100 each) at most.
 const MAX_PAGES = 10;
-// A note with no run to ask about (the older `Told the player` form, or one
-// from a run without an id) is judged once it is this old.
+// A note is judged once it is this old: its status job has ended by then.
 const OWED_MS = 10 * 60 * 1000;
-// GitHub allows a run to be re-run for this long after its first attempt,
-// and this many times.
+// GitHub allows a run to be re-run for this long after its first attempt.
 const RERUN_MS = 30 * 24 * 60 * 60 * 1000;
-const MAX_RERUNS = 50;
 // The sweep's own checklist calls stop once they have taken this long in a
 // run, so slow checklist reads never keep later issues' player repairs from
 // the job's time limit; the issues left are named, and the next sweep
@@ -163,29 +160,27 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // The sweep's report, written after the setup section at the run's end.
   let sweepSummary = null;
   // A Discord refusal of the bot, named by the request it refused, which the
-  // client keeps apart from the answer's text; a scrubbed checklist error
-  // also carries its kept causes' requests.
+  // client keeps apart from the answer's text.
   const noteRefusal = (e) => {
-    for (const d of [e.discord, ...(e.also || [])]) {
-      if (!d) continue;
-      if (d.status === 401) {
-        setupProblem("Discord refused the bot token (401): set the repository secret DISCORD_BOT_TOKEN to the bot's current token");
-        continue;
-      }
-      if (d.status !== 403) continue;
-      // A path's ids are a marker's digits, a plain CHECKLIST_FORUM_ID, or
-      // ones Discord gave: a post's `parent_id` can be null (a marker naming
-      // a channel with no parent), which puts no id in the forum read's path.
-      // Such a refusal names nothing and still fails the run.
-      const [, ch, rest = ''] = /^\/channels\/(\d+)(\/.*)?$/.exec(d.path) || [];
-      if (!ch) continue;
-      if (d.method === 'POST' && rest === '/messages') {
-        setupProblem(`Discord refused the bot's message in post ${ch} (403): give the bot View Channel, Send Messages in Threads and Read Message History (a reply needs it) in that post's forum`);
-      } else if (rest.startsWith('/messages/')) {
-        setupProblem(`Discord refused the bot reading messages in post ${ch} (403): give the bot View Channel and Read Message History in that post's forum`);
-      } else {
-        setupProblem(`Discord refused the bot on channel ${ch} (403), a post or its forum: give the bot View Channel, Manage Threads and Send Messages in Threads in that forum`);
-      }
+    const d = e.discord;
+    if (!d) return;
+    if (d.status === 401) {
+      setupProblem("Discord refused the bot token (401): set the repository secret DISCORD_BOT_TOKEN to the bot's current token");
+      return;
+    }
+    if (d.status !== 403) return;
+    // A path's ids are a marker's digits, a plain CHECKLIST_FORUM_ID, or
+    // ones Discord gave: a post's `parent_id` can be null (a marker naming
+    // a channel with no parent), which puts no id in the forum read's path.
+    // Such a refusal names nothing and still fails the run.
+    const [, ch, rest = ''] = /^\/channels\/(\d+)(\/.*)?$/.exec(d.path) || [];
+    if (!ch) return;
+    if (d.method === 'POST' && rest === '/messages') {
+      setupProblem(`Discord refused the bot's message in post ${ch} (403): give the bot View Channel, Send Messages in Threads and Read Message History (a reply needs it) in that post's forum`);
+    } else if (rest.startsWith('/messages/')) {
+      setupProblem(`Discord refused the bot reading messages in post ${ch} (403): give the bot View Channel and Read Message History in that post's forum`);
+    } else {
+      setupProblem(`Discord refused the bot on channel ${ch} (403), a post or its forum: give the bot View Channel, Manage Threads and Send Messages in Threads in that forum`);
     }
   };
   if (runId) log(`workflow run ${runId}, attempt ${attempt}`);
@@ -255,11 +250,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   async function recordsOf(n) {
     const shipped = [];
     const told = [];
-    // The staff checklist record, one per issue, and the address of a bot
-    // comment that carries a checklist marker, or the record's visible line,
-    // that the parser cannot read.
+    // The staff checklist record, one per issue.
     const ckRecords = [];
-    const ckDamaged = [];
     for (let page = 1; ; page++) {
       const batch = await gh.call('GET', `/repos/${repo}/issues/${n}/comments?per_page=100&page=${page}`);
       for (const c of batch) {
@@ -269,7 +261,6 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         if (checklistForum) {
           const ck = parseChecklist(c);
           if (ck) ckRecords.push(ck);
-          else if (/<!--\s*discord-checklist|^Staff checklist thread:/.test(body)) ckDamaged.push(c.html_url || '');
         }
         const sh = /<!--\s*discord-shipped-in:\s*(\S+)\s+fixes:\s*([0-9a-f,]*)\s*-->/.exec(body);
         if (sh) shipped.push({ tag: sh[1], fixes: sh[2].split(',').filter(Boolean) });
@@ -294,7 +285,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       }
       if (batch.length < 100) {
         const checklist = ckRecords.find((r) => r.threadId) || ckRecords[0] || null;
-        return { shipped, told, checklist, checklistDamaged: checklist ? null : ckDamaged[0] || null };
+        return { shipped, told, checklist };
       }
     }
   }
@@ -306,27 +297,15 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // for a close as completed, the one kind whose fix is used.
   async function lastClose(n, wantFix = false) {
     let last = null;
-    let undone = false;
     for (let page = 1; ; page++) {
       const batch = await gh.call('GET', `/repos/${repo}/issues/${n}/events?per_page=100&page=${page}`);
-      for (const e of batch) {
-        if (e.event === 'closed') {
-          last = e;
-          undone = false;
-        } else if (e.event === 'reopened' && last) {
-          undone = true;
-        }
-      }
+      for (const e of batch) if (e.event === 'closed') last = e;
       if (batch.length < 100) break;
     }
     if (!last) return null;
-    // `at` (when the event says the close happened) and `undone` (a reopen
-    // is listed after it) let the checklist tell the issue's current close
-    // from an older one while newer events are not listed yet.
-    const at = Date.parse(last.created_at) || 0;
     const here = last.commit_id && (!last.commit_url || String(last.commit_url).includes(`/repos/${repo}/commits/`));
-    if (here) return { id: last.id, sha: last.commit_id, at, undone };
-    return { id: last.id, sha: wantFix && !last.commit_id ? await closerSha(n) : null, at, undone };
+    if (here) return { id: last.id, sha: last.commit_id };
+    return { id: last.id, sha: wantFix && !last.commit_id ? await closerSha(n) : null };
   }
 
   // A merged PR closes its issues with a `closed` event that carries no
@@ -412,9 +391,6 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     return st;
   }
 
-  // How much older than the issue's `closed_at` its newest listed close
-  // event may be and still be that close: GitHub stamps both at the close.
-  const CLOSE_SLACK_MS = 60 * 1000;
   // GitHub label names match in any letter case, as the workflow's `if` does.
   const acceptedLabel = (name) => String(name || '').toLowerCase() === LABELS.accepted;
   // Accepted shows only while the issue is open; once closed, the status tag
@@ -422,38 +398,28 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   const wantedAccepted = (issue) => issue.state === 'open' && (issue.labels || []).some((l) => acceptedLabel(l.name || l));
 
   // The issue's state as releasedState gives it, read only: a fix a release
-  // already holds is taken as shipped, and no ship record is written. A
-  // release run's own `proof` (its compare showed the pushed tag holds
-  // `proof.fix`) is taken first, with no read that could fail or lag.
-  async function peekState(n, proof = null) {
+  // already holds is taken as shipped, and no ship record is written.
+  async function peekState(n) {
     const st = await stateOf(n);
     if (!st.fix || st.shippedIn) return st;
-    const held = proof && proof.fix === st.fix ? proof.tag : await releaseHolding(n, st.fix, false);
+    const held = await releaseHolding(n, st.fix, false);
     return held ? { ...st, shippedIn: held } : st;
   }
 
   // What the issue's checklist thread should show, from its state and its
-  // public status, and whether the bot still files the issue. `closeKnown`
-  // is false for a closed issue whose current close event the read does not
-  // show yet: none, one a listed reopen undid, or one older than the issue's
-  // own close time (a reopen and a new close not listed yet). It gives no
-  // archive key, which must not be taken as a reopen, nor an old close's
-  // key, so no checklist write is made until the issue's next event or
-  // sweep reads it.
+  // public status, and whether the bot still files the issue.
   function wantFrom(st, status) {
     const name = checklistStatus(status, st.issue.state_reason);
     const marker = parseMarker(st.issue.body);
-    const closedAt = Date.parse(st.issue.closed_at || '') || 0;
-    const closeKnown = st.issue.state !== 'closed' || !!(st.close && !st.close.undone && st.close.at >= closedAt - CLOSE_SLACK_MS);
     return {
-      st, issue: st.issue, name, key: closeKnown ? checklistKey(name, st.close) : null, eligible: eligible(st.issue), closeKnown,
+      st, issue: st.issue, name, key: checklistKey(name, st.close), eligible: eligible(st.issue),
       accepted: wantedAccepted(st.issue),
       postId: marker ? marker.threadId : null,
     };
   }
 
-  async function wanted(n, proof = null) {
-    const st = await peekState(n, proof);
+  async function wanted(n) {
+    const st = await peekState(n);
     return wantFrom(st, wantedStatus(st, st.issue.state === 'open' ? await prsFor(n) : []));
   }
 
@@ -681,9 +647,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
 
   // The sweep's Accepted-only repair, on an open issue GitHub wants at
   // Triaged only. It reads no records, claims no note and moves no status.
-  // `readIn` is the forum the sweep's own read of this post showed, with
-  // Accepted.
-  async function repairAccepted(n, readIn) {
+  async function repairAccepted(n) {
     const issue = await gh.getIssue(repo, n);
     if (!eligible(issue)) return;
     if (issue.state !== 'open' || wantedStatus({ issue }, await prsFor(n)) !== STATUS.triaged) {
@@ -694,16 +658,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const want = wantedAccepted(issue);
     let r;
     try {
-      // An Accepted tag deleted since the sweep's own read of this post's
-      // forum is left to the next sweep's read, which names it; any other
-      // gap this read finds (the post changed meanwhile to one in another
-      // forum) is named, the post archived or not.
-      r = await discord.fixAccepted(threadId, want, {
-        onForum: (forumId, tags) => {
-          checkStatusTags(forumId, tags, STATUS_NAMES);
-          if (want && !hasTag(tags, ACCEPTED) && forumId !== readIn) setupProblem(noAcceptedLine(forumId));
-        },
-      });
+      r = await discord.fixAccepted(threadId, want, { onForum: (forumId, tags) => checkStatusTags(forumId, tags, STATUS_NAMES) });
     } catch (e) {
       if (!postGone(e, threadId)) throw e;
       log(`#${n}: Discord post is gone (${e.message.slice(0, 120)})`);
@@ -774,9 +729,6 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // The issues a PR or release run took up, also those whose ship record or
   // sync failed first: each still gets its checklist thread updated.
   const touched = new Set();
-  // A release run's proof that its tag holds an issue's fix, kept for the
-  // checklist when the ship record write fails and the tag list lags.
-  const proven = new Map();
 
   // One issue's failure is logged and the rest still run; the job fails at the end.
   async function each(numbers, fn) {
@@ -789,26 +741,6 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         noteRefusal(e);
       }
     }
-  }
-
-  // A workflow run's state, for the sweep: whether it is still going, and
-  // whether GitHub still lets it be re-run (30 days from its first attempt,
-  // 50 re-runs at most). A deleted run is neither.
-  const runs = new Map();
-  function runInfo(id) {
-    if (!runs.has(id)) {
-      runs.set(id, gh.call('GET', `/repos/${repo}/actions/runs/${id}`).then(
-        (r) => ({
-          active: r.status !== 'completed',
-          open: now() - Date.parse(r.created_at) < RERUN_MS && (r.run_attempt || 1) <= MAX_RERUNS,
-        }),
-        (e) => {
-          if (statusOf(e) === 404) return { active: false, open: false };
-          throw e;
-        },
-      ));
-    }
-    return runs.get(id);
   }
 
   async function botIssue(n) {
@@ -881,9 +813,6 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           const st = await stateOf(n);
           if (st.fix && !st.shippedIn) {
             if (await tagContains(st.fix, target)) {
-              // Kept at once, so a failed lookup or record write after it
-              // cannot lose what the compare proved.
-              proven.set(n, { fix: st.fix, tag });
               // The oldest release holding the fix is named, as on every other
               // path; this tag when the tag list does not show it yet.
               const held = (await releaseHolding(n, st.fix, false)) || tag;
@@ -1071,14 +1000,14 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       //   only after its send, so an unmarked one may have gone out: it is
       //   listed, and never held, dropped or resent.
       // - A newer note still attempted was never sent: its send marks it
-      //   first. Still true, and its run still going or still re-runnable, it
-      //   is owed: the post is left for that run from the moment the note
-      //   exists, since a re-run sends it whether or not the post moved.
+      //   first. Still true, and its run still re-runnable (judged by the
+      //   note's age), it is owed: the post is left for that run from the
+      //   moment the note exists, since a re-run sends it whether or not the
+      //   post moved.
       //   One no re-run could send is dropped: its post is gone, or its
       //   message no longer holds (a status note, whatever the post shows; a
       //   needs-info ping once the label is off).
-      // A note is judged once its run has ended (its run's state, or, with no
-      // run, the note's age).
+      // A note is judged once it is OWED_MS old.
       const owed = [];
       const stale = [];
       const seen = new Set();
@@ -1094,9 +1023,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
           continue;
         }
         if (t.state !== 'attempted' && t.state !== 'sending') continue;
-        const r = t.run ? await playerRead(() => runInfo(t.run), `run of ${t.url} not read`) : null;
-        if (noteStop) break;
-        const done = r ? !r.active : now() - t.at > OWED_MS;
+        const done = now() - t.at > OWED_MS;
+        const open = Boolean(t.run) && now() - t.at < RERUN_MS;
         // A note marked as sending may have gone out; nothing resends it.
         if (t.state === 'sending') {
           if (done) parts.push(`message "${t.text}" may not have reached the player (${t.url})`);
@@ -1108,7 +1036,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
         const dead = shown === undefined ? 'the Discord post is gone'
           : (t.status ? !stillTrue : t.key.startsWith('needs-info-') && !hasLabel(st.issue, LABELS.needsInfo)) ? 'no longer true'
             : '';
-        if (stillTrue && r && (r.active || r.open)) {
+        if (stillTrue && open) {
           if (shown !== t.status) owed.push(t);
           if (done) parts.push(`owed message "${t.text}" (${t.url}): fix the setup if needed, then re-run ${runUrl(t.run)}; a post not showing it is left as it is until then`);
         } else if (dead) {
@@ -1117,8 +1045,8 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
             parts.push(`owed message "${t.text}" ${dead === 'no longer true' ? 'is no longer true' : 'cannot be sent: the Discord post is gone'} (${t.url})`);
           }
         } else if (done) {
-          const how = !r ? '' : r.open ? `; re-run ${runUrl(t.run)} sends it while it is still true`
-            : `; its run ${runUrl(t.run)} can no longer be re-run (30 days from its first attempt, or 50 re-runs, have passed, or it was deleted), so send it by hand if it is still needed`;
+          const how = !t.run ? '' : open ? `; re-run ${runUrl(t.run)} sends it while it is still true`
+            : `; its run ${runUrl(t.run)} can no longer be re-run (30 days have passed), so send it by hand if it is still needed`;
           parts.push(`message "${t.text}" was not sent (${t.url})${how}`);
         }
       }
@@ -1165,7 +1093,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       }
       if (fix && accFix && !unread && !playerStop) {
         try {
-          await repairAccepted(n, post.parentId);
+          await repairAccepted(n);
         } catch (e) {
           errors.push(e.message);
           noteRefusal(e);
@@ -1232,7 +1160,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   if (checklist && (PR_EVENTS.has(eventName) || eventName === 'push')) {
     for (const n of new Set([...touched, ...handled])) {
       try {
-        await checklist.mirror(n, proven.get(n) || null);
+        await checklist.mirror(n);
       } catch (e) {
         log(`#${n}: staff checklist: ${e.message}`);
         ckFailed.push(n);

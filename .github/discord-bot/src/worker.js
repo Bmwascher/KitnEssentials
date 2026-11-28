@@ -11,12 +11,12 @@ import {
   templateNote, parseCustomId, templateLabels, filedCard, cardHead, BY_RIGHT_CLICK,
   parseRepoTags, repoFromTags, plainTags, usableRepoKeys,
   MOVE_BUTTON, CLIENT_NAMES, cutUnits,
-  queueCard, movedTags, webhookName, avatarUrl, SELECT_MAX, isBotCopy,
+  queueCard, movedTags, webhookName, avatarUrl, isBotCopy,
 } from './core.js';
 import { discordClient, postGone, archivedOf } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
-import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch, AWAY_START, MOVED_HERE, isReceipt } from './scan.js';
-import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems, unreadableSettings, MESSAGE_CONTENT } from './setup.js';
+import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch, MOVED_HERE, isReceipt } from './scan.js';
+import { setupCheck, setupLines, fitLines, NEEDED_BITS, configProblems } from './setup.js';
 
 export const COMMAND_NAME = 'Send to GitHub';
 export const CHECK_COMMAND = 'bot-check';
@@ -66,8 +66,6 @@ const TEMPLATE_MS = 2000;
 const MOVE_PREP_BY_MS = 12000;
 const MOVE_CREATE_BY_MS = 18000;
 const MOVE_REST_BY_MS = 23000;
-// The downloads end this long before the prep phase: the re-read's time.
-const MOVE_REREAD_MS = 2000;
 // Discord takes 20 MiB per file and 25 MiB per request; 1 MiB of the request
 // is left for the message and the multipart framing.
 const COPY_FILE_MAX = 20 * 1024 * 1024;
@@ -170,7 +168,6 @@ const input = (id, text, value, opts = {}) => label(text, {
   required: opts.required !== false, max_length: opts.max || 100,
   value: value || undefined, placeholder: opts.placeholder,
 });
-const TOO_MANY = `The form cannot open: its dropdowns hold ${SELECT_MAX} choices, and REPOS or FORUMS names more. /bot-check names which; remove some.`;
 // A select of [value, label] choices, `chosen` pre-selected when it is one.
 const select = (id, text, choices, chosen, { required = true, description } = {}) => label(text, {
   type: 3, custom_id: id, required,
@@ -178,13 +175,10 @@ const select = (id, text, choices, chosen, { required = true, description } = {}
 }, description);
 
 // A modal's answers by field id: a Label's text input (`value`) or select
-// (its first value, none when left empty), or an Action Row's text input, as
-// a form opened before this version sends it.
+// (its first value, none when left empty).
 function modalValues(data) {
   const out = {};
-  for (const row of data.components || []) {
-    for (const c of row.component ? [row.component] : row.components || []) out[c.custom_id] = c.values ? c.values[0] : c.value;
-  }
+  for (const { component: c } of data.components || []) out[c.custom_id] = c.values ? c.values[0] : c.value;
   return out;
 }
 
@@ -195,7 +189,6 @@ function repoChoice(keys, cfg, tagNames) {
   const tagged = normRepoKey(repoFromTags(tagNames, cfg.repoTags), cfg.repos);
   return keys.includes(tagged) ? tagged : keys.length === 1 ? keys[0] : null;
 }
-const NO_KEYS = 'The form cannot open: no REPOS key is usable (upper case, at most 10 characters). /bot-check names them.';
 
 // The post a form is for: the interaction's own channel when it is the post
 // with its parent and tags, else read. A card press brings no post with it,
@@ -227,14 +220,8 @@ async function openMoveForm(interaction, env, deps, cfg, { threadId, cardId = ''
   if (!cfg.forums.includes(ch.parent_id)) return reply('This only works on posts in the forums the bot is set up for.');
   const channels = await discord.call('GET', `/guilds/${interaction.guild_id}/channels`).catch(() => null);
   if (!channels) return reply('Could not read the forums just now. Try again.');
-  // FORUMS may name a category or a text channel: a message there is no
-  // forum post, and has no tags or lock to move. Its job is reached only
-  // through this form, and a channel's type never changes, so the job needs
-  // no check of its own.
-  if (!channels.some((c) => c.id === ch.parent_id && c.type === 15)) return reply('This only works on posts in the forums the bot is set up for.');
   const others = moveTargets(cfg, channels, ch.parent_id);
   if (!others.length) return reply('There is no other forum to move this post to.');
-  if (others.length > SELECT_MAX) return reply(TOO_MANY);
   const label = (id) => cutUnits(`#${channels.find((c) => c.id === id).name}`, 100);
   // Two forums can share a name, or two long names their first 100
   // characters: such a label carries the forum's id, so staff can tell
@@ -274,8 +261,6 @@ async function openForm(interaction, env, deps, { threadId, messageId, greetingI
   let guess = { ...cfg.forumInfo[ch.parent_id] };
   let tagNames = [];
   const keys = usableRepoKeys(cfg.repos);
-  if (!keys.length) return reply(NO_KEYS);
-  if (keys.length > SELECT_MAX) return reply(TOO_MANY);
   if (!guess.client || !guess.type || (keys.length > 1 && Object.keys(cfg.repoTags).length)) {
     try {
       const forum = await discord.getChannel(ch.parent_id);
@@ -490,34 +475,15 @@ async function postRecords(kv, id, ms) {
   return { thread, saved: issue || (thread && thread.issue) || null, movedFrom, movedTo };
 }
 
-// What a bot admin does with a damaged record. Deleting a move record does
-// not clear the way: without `movedfrom:` the copy is refused for good, and
-// without `movedto:` the old post is open to a send or move once unlocked.
-// So the reply says that before it says delete.
-const damagedFix = (key) => (/^movedfrom:/.test(key)
-  ? 'A bot admin can correct that KV key by hand (deleting it leaves this post refused as a copy for good)'
-  : /^movedto:/.test(key)
-    ? 'A bot admin can correct that KV key by hand (deleting it lets the old post be sent or moved again once someone unlocks it)'
-    : 'A bot admin can delete that KV key');
-
-// This bot's own messages among a post's last 100 that say what became of
-// it: `away`, the new post's link in its move note, and, with `receipts`,
-// `receipt`, its "now tracked" reply; each null when absent. The bot's user
-// is read only when a message starts as one asked for: the filing asks for
-// the note alone, so a player's message with the reply's text adds no call
-// that could fail it. The move posts its note before it locks the post, so
-// the note holds while KV does not show the movedto: record (not yet, or
-// never, when its save failed); the reply says the post was filed when
-// neither its filing record nor the from-discord label finds its issue.
-// Another bot's text proves nothing.
-async function ownNotes(discord, threadId, { receipts = false } = {}) {
-  const isAway = (m) => String(m.content || '').startsWith(AWAY_START);
-  const said = (await discord.call('GET', `/channels/${threadId}/messages?limit=100`))
-    .filter((m) => isAway(m) || (receipts && isReceipt(m)));
-  const me = said.length ? (await discord.me()).id : null;
-  const mine = said.filter((m) => m.author.id === me);
-  const note = mine.find(isAway);
-  return { away: note ? note.content.slice(AWAY_START.length).split(' ')[0] : null, receipt: mine.find(isReceipt) || null };
+// This bot's "now tracked" reply among a post's last 100 messages, or null:
+// it says the post was filed when neither its filing record nor the
+// from-discord label finds its issue. The bot's user is read only when a
+// message starts as the reply does. Another bot's text proves nothing.
+async function ownReceipt(discord, threadId) {
+  const said = (await discord.call('GET', `/channels/${threadId}/messages?limit=100`)).filter(isReceipt);
+  if (!said.length) return null;
+  const me = (await discord.me()).id;
+  return said.find((m) => m.author.id === me) || null;
 }
 
 // A press on a post already filed answers "Already tracked" at once, and the
@@ -543,7 +509,6 @@ async function pressCheck(interaction, env, deps, cfg, postId, t0, ctx) {
     const rec = filed ? null : await wait(readStrict(env.STATE, `thread:${postId}`));
     saved = filed || (rec && rec.issue) || null;
   } catch (e) {
-    if (e.damaged) return reply(`This post's saved record is damaged (${e.damaged}). Nothing was opened. A bot admin can delete that KV key; then press again.`);
     log(`press check failed after ${Date.now() - t0} ms: ${e.message.slice(0, 200)}`);
     return again;
   }
@@ -816,12 +781,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     lockGh = githubClient(lockToken, f);
     ghRelease = githubClient(lockToken, timedFetch(deps.fetch, TAIL_MS, t0 + RELEASE_BY_MS));
 
-    // The form may have been opened before the forum list changed: check again.
     thread = await discord.getChannel(threadId);
-    if (!cfg.forums.includes(thread.parent_id)) {
-      await followup('Nothing was created: this post is not in a forum the bot is set up for.');
-      return { refused: 'forum' };
-    }
 
     // Lock, then look once: any send that finished before the lock was
     // granted has left its issue to be found. The post's KV record, when it
@@ -874,20 +834,11 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     try {
       ({ thread: rec, saved, movedFrom, movedTo } = await postRecords(kv, threadId, kvMs));
     } catch (e) {
-      await followup(e.damaged
-        ? `Nothing was created: this post's saved record is damaged (${e.damaged}). ${damagedFix(e.damaged)}; then send the post again.`
-        : "Nothing was created: could not read this post's saved record just now. Try again.");
+      await followup("Nothing was created: could not read this post's saved record just now. Try again.");
       return { refused: 'record' };
     }
-    // A post moved away: its record, else, on a locked post, the move's note.
-    // While STATE is bound only a locked post is read, so other filings cost
-    // nothing more; with none bound no record can show a move, and someone
-    // may have unlocked the old post, so every post is read. The lock is read
-    // as archivedOf reads the archive flag.
-    const movedAway = movedTo ? `https://discord.com/channels/${interaction.guild_id}/${movedTo.to}`
-      : !kv || (thread.thread_metadata && thread.thread_metadata.locked) ? (await ownNotes(discord, threadId)).away : null;
-    if (movedAway) {
-      await followup(`Nothing was created: this post was moved to ${movedAway}; send that one.`);
+    if (movedTo) {
+      await followup(`Nothing was created: this post was moved to https://discord.com/channels/${interaction.guild_id}/${movedTo.to}; send that one.`);
       return { refused: 'moved' };
     }
     // An old greeting: the one pressed in the post, or the record's when it
@@ -916,10 +867,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
         return { refused: 'saved-issue' };
       }
     }
-    // A search that finds nothing runs once more before the create: an issue
-    // that shifted between two pages of a list while it was read is found
-    // the second time.
-    const existing = (await already()) || (await already());
+    const existing = await already();
     if (existing) {
       const where = whereIs(existing.issue, existing.repo);
       const elsewhere = sameRepo(where.repo, repo) ? '' : `. Nothing was created in ${repo}.`;
@@ -927,11 +875,8 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     }
 
     // The filed message may be gone since the form opened: a card cannot
-    // follow its post's first message, since the scan never edits a card. It
-    // is read for its author, then read again directly before the create,
-    // whose body takes that last read, so a message deleted while the member
-    // and the template are read files nothing. A deleted post is told apart
-    // from a deleted message.
+    // follow its post's first message, since the scan never edits a card. A
+    // deleted post is told apart from a deleted message.
     const readFiled = async (client) => {
       try {
         const { message: found } = await client.readMessage(threadId, messageId);
@@ -951,15 +896,11 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     // elsewhere within a minute, or the save failed or never ran): filing it
     // would name the webhook as the player, or tie an issue to a copy no
     // record links. The first message tells it, and for a reply the scan's
-    // record; with no STATE bound a reply's filing reads the first message
-    // (none when deleted).
+    // record.
     const botCopy = messageId === threadId ? isBotCopy(first.message, interaction.application_id)
-      : kv ? !!rec && rec.skipped === MOVED_HERE
-        : isBotCopy((await discord.readMessage(threadId, threadId)).message, interaction.application_id);
+      : !!rec && rec.skipped === MOVED_HERE;
     if (!movedFrom && botCopy) {
-      await followup(kv
-        ? `Nothing was created: this post is a copy the bot moved here, and its record movedfrom:${threadId} is not readable yet. Wait a minute, then send it again.`
-        : `Nothing was created: this post is a copy the bot moved here, and its record movedfrom:${threadId} cannot be read: no STATE namespace is bound (/bot-check names it).`);
+      await followup(`Nothing was created: this post is a copy the bot moved here, and its record movedfrom:${threadId} is not readable yet. Wait a minute, then send it again.`);
       return { refused: 'copy-record' };
     }
     // A moved post's first message is the bot's copy: the move's record
@@ -969,8 +910,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
     copyId = copy && copy.id ? copy.id : null;
     const reporterId = copy ? copyId : first.message.webhook_id ? null : author.id;
     // The member and template reads are optional, so they end a full call's
-    // time before the filing's deadline. The last read of the message and
-    // the create must both run: they share what is left, in that order.
+    // time before the filing's deadline, which the create keeps.
     const lookupsBy = t0 + budgetMs - callMs;
     // The server nickname is a nicety: any failure files with the display
     // name. A 404 is a member who left; any other failure is logged.
@@ -981,9 +921,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
       : null;
     const by = interaction.member && interaction.member.user;
     const template = await templateFields(cfg, thread.parent_id, type, env, deps, lookupsBy, log);
-    const last = await readFiled(discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, t0 + budgetMs)));
-    if (last.refused) return { refused: last.refused };
-    const { message } = last;
+    const { message } = first;
     const check = template.fields.length ? templateCheck(message.content, template.fields, (message.attachments || []).length) : [];
     gaps = templateGaps(check, template.optional);
     tmplNote = template.note;
@@ -1090,10 +1028,7 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
 }
 
 // The issue a post was filed as, for a move: the saved one when it is live,
-// else every configured repo searched. A search that finds nothing runs once
-// more, as the filing's does: an issue that shifted between two pages of a
-// list while it was read is found the second time. A saved issue that
-// cannot be checked is `unclear`, with why. `key` is the one the saved
+// else every configured repo searched. A saved issue that cannot be checked is `unclear`, with why. `key` is the one the saved
 // issue was filed under while REPOS still maps it to the issue's repo, else
 // the repo's first key.
 async function findIssue(cfg, saved, postId, tokenFor, f) {
@@ -1109,8 +1044,7 @@ async function findIssue(cfg, saved, postId, tokenFor, f) {
     if (r.issue) return found(r.issue, saved.repo, true);
     if (!r.gone) return { unclear: r.unclear };
   }
-  const search = () => searchRepos(Object.values(cfg.repos), postId, tokenFor, f);
-  const hit = (await search()) || (await search());
+  const hit = await searchRepos(Object.values(cfg.repos), postId, tokenFor, f);
   return hit ? found(hit.issue, hit.repo) : {};
 }
 
@@ -1169,23 +1103,14 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       if (!postGone(e, oldId)) throw e;
       return await refuse('the post was deleted', 'post');
     }
-    if (!cfg.forums.includes(old.parent_id)) return await refuse('this post is not in a forum the bot is set up for', 'forum');
 
     let records;
     try {
       records = await postRecords(kv, oldId, kvMs);
     } catch (e) {
-      return await refuse(e.damaged
-        ? `this post's saved record is damaged (${e.damaged}). ${damagedFix(e.damaged)}; then move the post again`
-        : "could not read this post's saved record just now. Try again", 'record');
+      return await refuse("could not read this post's saved record just now. Try again", 'record');
     }
     if (records.movedTo) return await refuse(`this post was already moved to ${link(records.movedTo.to)}`, 'moved');
-    // The bot's move locks the old post, and Discord shows a lock at once,
-    // unlike KV's records: a move repeated within KV's minute stops here. The
-    // bot's note there says where it went when its record was not saved. An
-    // unlocked post's note refuses nothing: someone unlocked it to move it.
-    const own = await ownNotes(discord, oldId, { receipts: true });
-    if (old.thread_metadata.locked && own.away) return await refuse(`this post was already moved to ${own.away}`, 'moved');
     // A filed post is refused before a locked one's advice: unlocking it
     // would not let it move.
     const found = await findIssue(cfg, records.saved, oldId, tokenFor, prep);
@@ -1200,8 +1125,9 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     // Filed, though neither search finds its issue: a filing record never
     // saved or deleted, and the issue's label removed or the issue moved
     // outside REPOS. Moving it would leave that issue on the locked post.
-    if (own.receipt) {
-      return await refuse(`the bot's "now tracked" reply in this post (${link(oldId)}/${own.receipt.id}) says it was sent to GitHub, though its issue was not found by its filing record or the from-discord label; moving filed posts comes in a later update. If that issue was deleted, delete that reply, then move the post again`, 'filed');
+    const receipt = await ownReceipt(discord, oldId);
+    if (receipt) {
+      return await refuse(`the bot's "now tracked" reply in this post (${link(oldId)}/${receipt.id}) says it was sent to GitHub, though its issue was not found by its filing record or the from-discord label; moving filed posts comes in a later update. If that issue was deleted, delete that reply, then move the post again`, 'filed');
     }
     if (old.thread_metadata.locked) return await refuse('the post is locked: a moderator can unlock it, then move it', 'locked');
 
@@ -1233,18 +1159,6 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     if (!records.movedFrom && isBotCopy(first, interaction.application_id)) {
       return await refuse(`this post is a copy the bot moved here, and its record movedfrom:${oldId} is not readable yet. Wait a minute, then move it again`, 'copy-record');
     }
-    // With Message Content off the bot sees no text and no files, so a report
-    // would be copied as an empty one. A first message the bot sees nothing
-    // in is checked against the setting; one with a sticker alone moves.
-    if (!first.content && !first.attachments.length) {
-      const app = await discord.call('GET', '/applications/@me');
-      // Discord documents the flags as optional. With none the setting is
-      // unknown, and a report copied empty would be archived: refused too.
-      const raw = app.flags_new ?? app.flags;
-      if (raw == null || (BigInt(raw) & MESSAGE_CONTENT) === 0n) {
-        return await refuse("the bot sees no text or file in the post's first message, and the Message Content setting is off or could not be read. Turn it on in the developer portal › Bot › Privileged Gateway Intents (/bot-check checks it), then move the post again", 'message-content');
-      }
-    }
     let reporter;
     if (records.movedFrom) {
       // The old post is itself a moved copy: its record names the player.
@@ -1257,8 +1171,8 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       // any failed read, gives the user's own. The read has its own short
       // call that ends a call's time before the prep phase (by 4 s with the
       // 8 s call), so one that stalls cannot take the time of the webhook
-      // lookup after it, which keeps a whole call, of the downloads (to 10 s)
-      // or of the re-read (to 12 s).
+      // lookup after it, which keeps a whole call, or of the downloads (to
+      // 12 s).
       const member = await discordClient(env.DISCORD_BOT_TOKEN, timedFetch(deps.fetch, FORM_LOOKUP_MS, t0 + MOVE_PREP_BY_MS - callMs))
         .call('GET', `/guilds/${guildId}/members/${first.author.id}`)
         .catch((e) => { if (statusOf(e) !== 404) log(`member read failed: ${e.message.slice(0, 200)}`); return null; });
@@ -1275,10 +1189,9 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
 
     // Each file in order that fits Discord's limits is downloaded; the rest,
     // and any whose download fails, is stopped or cannot start in time, stay
-    // on the old post. The downloads end MOVE_REREAD_MS before the prep
-    // phase, so a slow file cannot take the time of the first message's read
-    // below, which the create needs.
-    const download = timedFetch(deps.fetch, callMs, t0 + MOVE_PREP_BY_MS - MOVE_REREAD_MS);
+    // on the old post. The downloads end with the prep phase, so a slow file
+    // cannot take the create's time.
+    const download = timedFetch(deps.fetch, callMs, t0 + MOVE_PREP_BY_MS);
     const files = [];
     let room = COPY_MAX_BYTES;
     for (const a of first.attachments) {
@@ -1293,41 +1206,26 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       }
     }
 
-    // The first message is read again just before the create, as a filing
-    // reads its message: one deleted while the move prepared (its reads and
-    // the file downloads) is not posted again.
-    let last;
-    try {
-      last = (await discord.readMessage(oldId, oldId)).message;
-    } catch (e) {
-      if (!postGone(e, oldId)) throw e;
-      return await refuse('the post was deleted', 'post');
-    }
-    if (!last) return await refuse("the post's first message was deleted, so there is nothing to copy", 'message');
-    // The copy takes the downloaded files this read still lists, so a file
-    // the player removed meanwhile is not posted; every other file it lists,
-    // one added meanwhile included, is counted as left on the old post.
-    const copied = files.filter((x) => last.attachments.some((a) => a.id === x.id));
-    const left = last.attachments.length - copied.length;
+    const left = first.attachments.length - files.length;
 
     const type = target.type;
-    const text = last.content;
+    const text = first.content;
     const cut = text.length > MAX_REPLY;
     // Built before the create, so the catch below sees only the create's own
     // failure. A thread read may carry no tag list (movedTags' default).
     const payload = {
       thread_name: old.name,
       applied_tags: movedTags({ applied: old.applied_tags, from: tagsIn(channels, old.parent_id), to: tagsIn(channels, targetId), client, fixedClient: target.client, fixedType: target.type, repoTags: cfg.repoTags }),
-      content: cut ? `${cutUnits(text, MAX_REPLY - 1)}…` : text || (copied.length ? '' : NOTHING_TO_COPY),
+      content: cut ? `${cutUnits(text, MAX_REPLY - 1)}…` : text || (files.length ? '' : NOTHING_TO_COPY),
       username: webhookName(reporter.name, reporter.username),
       // A webhook's reporter has no avatar.
       ...(reporter.avatar ? { avatar_url: reporter.avatar } : {}),
       allowed_mentions: { parse: [] },
-      attachments: copied.map((x, i) => ({ id: i, filename: x.name, ...(x.description ? { description: x.description } : {}) })),
+      attachments: files.map((x, i) => ({ id: i, filename: x.name, ...(x.description ? { description: x.description } : {}) })),
     };
     let made;
     try {
-      made = await discordClient(env.DISCORD_BOT_TOKEN, until(MOVE_CREATE_BY_MS)).executeWebhook(hook, payload, copied);
+      made = await discordClient(env.DISCORD_BOT_TOKEN, until(MOVE_CREATE_BY_MS)).executeWebhook(hook, payload, files);
     } catch (e) {
       if (refusal4xx(e)) return await refuse(`Discord refused the new post (${e.message.slice(0, 300)})`, 'create');
       if (/^out of time before /.test(e.message)) throw e;
@@ -1370,14 +1268,9 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     // The queue card shows the new post, edited before movedfrom: so the
     // record names the card. With no card, or one Discord refuses to edit
     // (deleted), a new card is posted: the card is how an approved role, who
-    // has no right-click command, reaches the post. A queue channel outside
-    // this server gets nothing: its staff would see this server's post and
-    // could send it.
+    // has no right-click command, reaches the post.
     let card = cfg.queue ? cardId || (records.thread && records.thread.card) || (records.movedFrom && records.movedFrom.card) || '' : '';
-    if (cfg.queue && !channels.some((c) => c.id === cfg.queue)) {
-      card = '';
-      notes.push('queue card for the new post: QUEUE_CHANNEL_ID names no channel of this server (/bot-check names it)');
-    } else if (cfg.queue) {
+    if (cfg.queue) {
       const body = queueCard({ guildId, forumId: targetId, postId: newId, author: reporter, client, type, moved: mover });
       await step('queue card for the new post', async () => {
         if (card) {
@@ -1423,23 +1316,22 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
 // GUILD_ID that names none, before it reads anything else. A setup problem
 // is shown to staff only (`staff`); anyone else gets the entry point's own
 // refusal (`no`). /bot-check says the same in its own words.
-function elsewhere(env, bad, interaction, staff, no) {
-  const home = bad.includes('GUILD_ID') ? '' : String(env.GUILD_ID ?? '');
+function elsewhere(env, interaction, staff, no) {
+  const home = String(env.GUILD_ID ?? '');
   if (!isDiscordId(home)) return staff() ? reply("The bot is not set up yet: GUILD_ID is not set to the server's id (digits only, no spaces).") : reply(no);
   return String(interaction.guild_id ?? '') === home ? null : reply('This only works on posts in the forums the bot is set up for.');
 }
 
 // The checks a button press or form submit makes first, in order: the
-// server, the ids, readable settings, a config that reads, and the caller.
+// server, the ids, a config that reads, and the caller.
 // `noRoles` is the reply to a member who is not a moderator while no role is
 // approved; with `forums`, a config naming no player forum is not set up.
 // Returns the reply, or the config and the custom id's parts.
-function gate(interaction, env, bad, roles, { no, badIds = BAD_IDS, noRoles: none = '', forums = false }) {
-  const away = elsewhere(env, bad, interaction, () => allowed(interaction.member, { roles: roles() }), no);
+function gate(interaction, env, { no, badIds = BAD_IDS, noRoles: none = '', forums = false }) {
+  const away = elsewhere(env, interaction, () => allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }), no);
   if (away) return { answer: away };
   const ids = parseCustomId(interaction.data.custom_id);
   if (!ids) return { answer: reply(badIds) };
-  if (bad.length) return { answer: allowed(interaction.member, { roles: roles() }) ? notSetUp(env) : reply(no) };
   const cfg = configOr(env);
   if (!cfg) return { answer: allowed(interaction.member, { roles: parseRoleIds(env.APPROVED_ROLE_IDS) }) ? notSetUp(env) : reply(no) };
   if (none && !cfg.roles.length && !canUse(interaction.member)) return { answer: reply(none) };
@@ -1461,24 +1353,18 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
 
   const interaction = JSON.parse(body);
   if (interaction.type === 1) return json({ type: 1 });
-  // A setting no reader can read: past the caller check, each entry point
-  // answers with the not-set-up reply, and nothing reads the settings.
-  const bad = unreadableSettings(env);
-  const roles = () => (bad.includes('APPROVED_ROLE_IDS') ? [] : parseRoleIds(env.APPROVED_ROLE_IDS));
 
   if (interaction.type === 2 && interaction.data.name === COMMAND_NAME) {
-    const away = elsewhere(env, bad, interaction, () => canUse(interaction.member), 'Only moderators and admins can send posts to GitHub.');
+    const away = elsewhere(env, interaction, () => canUse(interaction.member), 'Only moderators and admins can send posts to GitHub.');
     if (away) return away;
     if (!canUse(interaction.member)) return reply('Only moderators and admins can send posts to GitHub.');
-    if (bad.length) return notSetUp(env);
     return openForm(interaction, env, deps, { threadId: interaction.channel_id, messageId: interaction.data.target_id, deadline: t0 + FORM_BY_MS });
   }
 
   if (interaction.type === 2 && interaction.data.name === MOVE_COMMAND) {
-    const away = elsewhere(env, bad, interaction, () => canUse(interaction.member), 'Only moderators and admins can move posts.');
+    const away = elsewhere(env, interaction, () => canUse(interaction.member), 'Only moderators and admins can move posts.');
     if (away) return away;
     if (!canUse(interaction.member)) return reply('Only moderators and admins can move posts.');
-    if (bad.length) return notSetUp(env);
     const cfg = configOr(env);
     if (!cfg || !cfg.forums.length) return notSetUp(env);
     return openMoveForm(interaction, env, deps, cfg, { threadId: interaction.channel_id, deadline: t0 + FORM_BY_MS });
@@ -1488,16 +1374,15 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
     if (!canUse(interaction.member)) return reply('Only moderators and admins can check the bot setup.');
     // Fails closed: a moderator of another server the bot is in neither
     // posts here nor reads this setup, also when GUILD_ID is broken.
-    const guild = bad.includes('GUILD_ID') ? '' : String(env.GUILD_ID ?? '');
+    const guild = String(env.GUILD_ID ?? '');
     if (!isDiscordId(guild)) return reply("The bot's GUILD_ID is not set to a server id, so it can check nothing. Fix it in the Worker's settings.");
     if (String(interaction.guild_id) !== guild) return reply('This command checks only the server the bot is set up for.');
-    if (bad.length) return notSetUp(env);
     ctx.waitUntil(runCheck(interaction, env, deps, t0));
     return json({ type: 5, data: { flags: EPHEMERAL } });
   }
 
   if (interaction.type === 3 && String(interaction.data.custom_id).startsWith(`${SEND_BUTTON}:`)) {
-    const { answer, cfg, ids } = gate(interaction, env, bad, roles, { no: NOT_ALLOWED, noRoles: noRoles(COMMAND_NAME) });
+    const { answer, cfg, ids } = gate(interaction, env, { no: NOT_ALLOWED, noRoles: noRoles(COMMAND_NAME) });
     if (answer) return answer;
     // A press on a post already filed answers at once and opens no form.
     const answered = await pressCheck(interaction, env, deps, cfg, ids.threadId, t0, ctx);
@@ -1513,14 +1398,14 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
   }
 
   if (interaction.type === 3 && String(interaction.data.custom_id).startsWith(`${MOVE_BUTTON}:`)) {
-    const { answer, cfg, ids } = gate(interaction, env, bad, roles, { no: NOT_ALLOWED_MOVE, badIds: BAD_MOVE_IDS, noRoles: noRoles(MOVE_COMMAND), forums: true });
+    const { answer, cfg, ids } = gate(interaction, env, { no: NOT_ALLOWED_MOVE, badIds: BAD_MOVE_IDS, noRoles: noRoles(MOVE_COMMAND), forums: true });
     if (answer) return answer;
     // The Move button is on queue cards only, so the press carries its card.
     return openMoveForm(interaction, env, deps, cfg, { threadId: ids.threadId, cardId: interaction.message.id, deadline: t0 + FORM_BY_MS });
   }
 
   if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('gh:')) {
-    const { answer, cfg } = gate(interaction, env, bad, roles, { no: NOT_ALLOWED, forums: true });
+    const { answer, cfg } = gate(interaction, env, { no: NOT_ALLOWED, forums: true });
     if (answer) return answer;
     const v = modalValues(interaction.data);
     const problems = [];
@@ -1535,7 +1420,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
   }
 
   if (interaction.type === 5 && String(interaction.data.custom_id).startsWith('mv:')) {
-    const { answer, cfg } = gate(interaction, env, bad, roles, { no: NOT_ALLOWED_MOVE, badIds: BAD_MOVE_IDS, forums: true });
+    const { answer, cfg } = gate(interaction, env, { no: NOT_ALLOWED_MOVE, badIds: BAD_MOVE_IDS, forums: true });
     if (answer) return answer;
     // A filing works with no namespace bound, but a move's records are what
     // link the two posts: without them nothing refuses the old one.
@@ -1557,15 +1442,7 @@ export async function handle(request, env, ctx, deps = { fetch: (...a) => fetch(
 }
 
 export async function scheduled(controller, env, ctx, deps = { fetch: (...a) => fetch(...a) }) {
-  // The daily setup check reads the settings through its own copy and names
-  // the unreadable ones. The scan and the daily list would act on them, so
-  // they do nothing: no marker moves and no card is given up.
   if (controller.cron === CRONS.setup) return setupDaily(env, deps);
-  const bad = unreadableSettings(env);
-  if (bad.length) {
-    (deps.log || console.log)(`${bad.join(', ')} ${bad.length > 1 ? 'are' : 'is'} not text: the ${controller.cron === CRONS.daily ? 'daily list' : 'scan'} did not run.`);
-    return null;
-  }
   if (controller.cron === CRONS.daily) return daily(env, deps);
   return scan(env, deps);
 }

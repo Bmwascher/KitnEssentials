@@ -39,10 +39,8 @@ export function world() {
     clock: Date.now(), // created_at and updated_at
     hooks: [], // [method, RegExp, fn(call)] run before a matching call is served
     fail: [], // [method, RegExp, Response | Error, times]
-    runs: new Map(), // workflow run id -> { status, run_attempt, created_at }
     ckForum: structuredClone(CHECKLIST_FORUM), // a test may take a tag away
     extraForums: new Map(), // id -> forum, beside FORUM and the checklist forum
-    archivePage: 50, // archived threads a listing page holds
   };
   w.start = w.clock;
 
@@ -166,10 +164,6 @@ export function world() {
       const status = w.contains.get(`${m[1]}...${decodeURIComponent(m[2])}`) || 'behind';
       return json({ status });
     }],
-    // A workflow run: one set in `w.runs`, else a finished first attempt
-    // from the world's start.
-    ['GET', /\/repos\/me\/one\/actions\/runs\/(\d+)$/, (m) => json(w.runs.get(m[1])
-      || { id: Number(m[1]), status: 'completed', run_attempt: 1, created_at: new Date(w.start).toISOString() })],
     ['GET', /\/repos\/me\/one\/issues\/comments\/(\d+)$/, (m) => {
       for (const i of w.issues.values()) {
         const c = i.comments.find((x) => x.id === Number(m[1]));
@@ -289,16 +283,6 @@ export function world() {
       w.threads.set(id, t);
       return json(chan(t));
     }],
-    ['GET', /discord\.com\/api\/v10\/guilds\/(\d+)\/threads\/active$/, () => json({ threads: [...w.threads.values()].filter((t) => !t.archived).map(chan) })],
-    // A forum's archived threads, newest archive first, `w.archivePage` to a page.
-    ['GET', /discord\.com\/api\/v10\/channels\/(\d+)\/threads\/archived\/public/, (m, url) => {
-      const before = decodeURIComponent((/[?&]before=([^&]+)/.exec(url) || [0, ''])[1]);
-      const all = [...w.threads.values()].filter((t) => t.archived && t.parent_id === m[1]).map(chan)
-        .sort((a, b) => Date.parse(b.thread_metadata.archive_timestamp) - Date.parse(a.thread_metadata.archive_timestamp))
-        .filter((t) => !before || t.thread_metadata.archive_timestamp < before);
-      return json({ threads: all.slice(0, w.archivePage), has_more: all.length > w.archivePage });
-    }],
-    ['GET', /discord\.com\/api\/v10\/users\/@me$/, () => json({ id: BOT_USER })],
   ];
 
   w.fetch = async (url, init = {}) => {

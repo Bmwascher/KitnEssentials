@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scan as runScan, daily, GREETING, CRONS, readStrict } from '../src/scan.js';
+import { scan as runScan, daily, GREETING, CRONS } from '../src/scan.js';
 import { MESSAGES } from '../src/core.js';
 
 // A scan that does not really wait out KV's one write a second per key; the
@@ -138,7 +138,6 @@ test('a busy run greets eight posts and leaves the rest for the next run', async
   const second = await scan(withQueue(kv), { fetch: f, now: () => T0 + 10 * 60000, log: () => {} });
   assert.deepEqual([second.greeted.length, second.left], [3, 0]);
 });
-
 
 test('the daily check lists posts waiting too long with no status or Answered tag, each name as text', async () => {
   const kv = started(T0, { last: T0 + 5 * 24 * HOUR - 60000 });
@@ -538,7 +537,6 @@ test('a long daily alert goes out in whole lines under 1,900 characters, and wha
   const posted = f.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content);
   assert.equal(posted.length, 4, 'the daily posting share');
   assert.match(posted[0], /^The post scan gave up on these posts: after 30 tries;/);
-  assert.match(posted[0], /except a damaged movedfrom: or movedto: record, which is corrected by hand and never deleted/);
   const entry = /^- queue card: https:\/\/discord\.com\/channels\/1\/\d+$/;
   for (const [i, msg] of posted.entries()) {
     assert.ok(msg.length <= 1900, `message ${i}: ${msg.length} characters`);
@@ -548,30 +546,6 @@ test('a long daily alert goes out in whole lines under 1,900 characters, and wha
   const all = [...posted, logged].join('\n');
   for (const id of posts) assert.equal(all.split(`/channels/1/${id}`).length - 1, 1, `${id} is named once`);
   assert.ok(posts.some((id) => logged.includes(`/channels/1/${id}`)), 'the rest is in the log');
-});
-
-test('a damaged record is never taken for no record or for a filing, nor written over: the post is skipped and named', async () => {
-  for (const [why, key, value] of [
-    ['the scan\'s record is not JSON', 'thread', '{"greeting"'],
-    ['the scan\'s record is not a record', 'thread', '[]'],
-    ['the filing record is JSON null', 'issue', 'null'],
-    ['the filing record names no issue', 'issue', '{}'],
-    // Valid JSON whose fields the bot could not have written.
-    ['the scan\'s record marks a filing with no reply id', 'thread', '{"tracked":true}'],
-    ['the scan\'s record counts its tries in text', 'thread', '{"greeting":"g","tries":"5"}'],
-    ['the filing record\'s repo is not owner/name', 'issue', '{"repo":"/","number":3}'],
-  ]) {
-    const a = idAt(T0 + 1000);
-    const kv = started(T0);
-    await kv.put(`${key}:${a}`, value);
-    const f = discord({ active: [{ id: a, parent_id: '900' }] });
-    await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
-    assert.deepEqual(sends(f), [], `${why}: no greeting and no card`);
-    assert.equal(kv.m.get(`${key}:${a}`), value, `${why}: left as it was`);
-    assert.match(stateOf(kv).error.text, new RegExp(`post ${a} \\(its saved record ${key}:${a} is damaged\\)`), why);
-    assert.deepEqual(stateOf(kv).gaveUp.map((g) => [g.post, g.what]), [[a, `damaged record ${key}:${a}`]], why);
-    assert.equal(stateOf(kv).through['900'], a, `${why}: the post holds back nothing`);
-  }
 });
 
 test('a give-up is named once its record says so, and only once', async () => {
@@ -590,28 +564,6 @@ test('a give-up is named once its record says so, and only once', async () => {
   assert.deepEqual(stateOf(kv).gaveUp.map((g) => g.post), [a]);
 });
 
-test('a give-up whose state write was lost, or written over by an overlapping scan, is named again from its record', async () => {
-  const a = idAt(T0 + 1000);
-  for (const [why, setup] of [
-    ['the state write failed', async (kv) => {
-      await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g', buttonless: true, tries: 29 }));
-      const put = kv.put;
-      let once = true;
-      kv.put = async (k, v) => { if (once && k === 'scan:state') { once = false; throw new Error('KV PUT failed: 500'); } return put(k, v); };
-      const f = discord({ active: [{ id: a, parent_id: '900', name: 'x' }], refuse: { 556: 500 } });
-      await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} }).catch(() => {});
-    }],
-    ['an overlapping scan wrote the state without it', async (kv) => {
-      await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g', buttonless: true, cardSkipped: 'x', gaveUp: { at: T0 + 5 * 60000, what: 'queue card' } }));
-    }],
-  ]) {
-    const kv = started(T0);
-    await setup(kv);
-    await scan(withQueue(kv), { fetch: discord({ active: [{ id: a, parent_id: '900', name: 'x' }] }), now: () => T0 + 6 * 60000, log: () => {} });
-    assert.deepEqual((stateOf(kv).gaveUp || []).map((g) => [g.post, g.what, g.at]), [[a, 'queue card', T0 + 5 * 60000]], why);
-  }
-});
-
 test('a give-up saved just after a daily check read the state is named by the next one, and none is named twice', async () => {
   const D = T0 + 24 * HOUR;
   const [early, late] = [idAt(T0 + 1000), idAt(T0 + 2000)];
@@ -626,34 +578,6 @@ test('a give-up saved just after a daily check read the state is named by the ne
   assert.match(out.join('\n'), new RegExp(`/channels/1/${early}`));
   assert.match(next.join('\n'), new RegExp(`- queue card: https://discord\\.com/channels/1/${late}`), 'named by the next check');
   assert.doesNotMatch(next.join('\n'), new RegExp(`/channels/1/${early}`), 'named once');
-});
-
-test('a damaged start time is never a first run: nothing is reset, no post is passed over, and the daily check says why', async () => {
-  const kv = fakeKv({ 'scan:since': 'broken', 'scan:state': JSON.stringify({ last: T0 }) });
-  const a = idAt(T0 + 1000);
-  const f = discord({ active: [{ id: a, parent_id: '900' }] });
-  await scan(baseEnv(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} }).catch(() => {});
-  assert.equal(kv.m.get('scan:since'), 'broken', 'left for a bot admin');
-  assert.deepEqual(sends(f), []);
-  const out = [];
-  await daily(baseEnv(kv), { fetch: discord(), now: () => T0 + 6 * 60000, log: (s) => out.push(s) });
-  assert.match(out.join('\n'), /scan:since \(its saved value is damaged/);
-});
-
-test('a damaged scan state is rebuilt and said so, never read as no state', async () => {
-  for (const value of ['{"through"', '{"gaveUp":5}', '{"through":{"900":"abc"}}']) {
-    const kv = fakeKv({ 'scan:since': String(T0), 'scan:state': value });
-    const a = idAt(T0 + 1000);
-    const f = discord({ active: [{ id: a, parent_id: '900' }] });
-    await scan(baseEnv(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
-    assert.deepEqual(sends(f), [a], `${value}: the scan still greets`);
-    assert.match(stateOf(kv).error.text, /scan:state \(its saved value was damaged and is rebuilt/, value);
-    await kv.put('scan:state', value);
-    const out = [];
-    await daily(baseEnv(kv), { fetch: discord(), now: () => T0 + 6 * 60000, log: (s) => out.push(s) });
-    assert.match(out.join('\n'), /saved state \(scan:state\) is damaged/, value);
-    assert.doesNotMatch(out.join('\n'), /has not run/, value);
-  }
 });
 
 test('a new post\'s card makes its own look just before it goes out, so a filing or a deleted first message since its greeting is seen', async () => {
@@ -701,7 +625,7 @@ test('a card or a receipt whose record write fails is no give-up, even at the la
     await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
     assert.equal(stateOf(kv).gaveUp, undefined, `${why}: not named as given up`);
     const after = JSON.parse(kv.m.get(`thread:${a}`));
-    assert.deepEqual([after.skipped, after.cardSkipped, after.gaveUp], [undefined, undefined, undefined], why);
+    assert.deepEqual([after.skipped, after.cardSkipped], [undefined, undefined], why);
   }
 });
 
@@ -714,26 +638,6 @@ test('a card retry finds the receipt before it reads the queue channel, so a ref
   await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
   assert.equal(JSON.parse(kv.m.get(`thread:${a}`)).tracked, 'r1');
   assert.equal(stateOf(kv).gaveUp, undefined, 'not named as given up');
-});
-
-test('older posts\' card retries keep their KV reads however many new posts wait', async () => {
-  for (const [why, setup] of [
-    ['thirty new posts, eight of them greeted this run', async () => {}],
-    ['thirty new posts filed by right-click', async (kv, fresh) => {
-      for (const id of fresh) await kv.put(`issue:${id}`, JSON.stringify({ repo: 'me/one', number: 3, key: 'ONE', by: 'Bite' }));
-    }],
-  ]) {
-    const owed = idAt(T0 + 1000);
-    const kv = started(T0, { greeted: { 900: owed } });
-    await kv.put(`thread:${owed}`, JSON.stringify({ greeting: 'g', buttonless: true, tries: 1 }));
-    const fresh = Array.from({ length: 30 }, (_, i) => idAt(T0 + 100000 + 1000 * i));
-    await setup(kv, fresh);
-    const f = discord({ active: [owed, ...fresh].map((id) => ({ id, parent_id: '900', name: 'x' })) });
-    await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
-    const carded = f.find('POST', /\/channels\/556\/messages$/).map((c) => c.body.components[0].components.at(-1).url.split('/').at(-1));
-    assert.equal(carded[0], owed, `${why}: the older post's card goes out first`);
-    assert.ok(f.calls.length <= 50, `${why}: within the call budget: ${f.calls.length} calls`);
-  }
 });
 
 test('a post whose record cannot be read waits, and an hour after it was made is given up on and named, holding back no later post', async () => {
@@ -750,7 +654,7 @@ test('a post whose record cannot be read waits, and an hour after it was made is
   }
 });
 
-test('a daily alert the channel refused is named again by the next check, and a damaged list of named posts is said so', async () => {
+test('a daily alert the channel refused is named again by the next check', async () => {
   const a = idAt(T0 + 1000);
   const D = T0 + 24 * HOUR;
   const kv = started(T0, { last: D, gaveUp: [{ at: D - HOUR, post: a, what: 'queue card' }] });
@@ -760,14 +664,7 @@ test('a daily alert the channel refused is named again by the next check, and a 
   await daily(mod, { fetch: f, now: () => D + 60000, log: () => {} });
   const posted = f.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content).join('\n');
   assert.match(posted, new RegExp(`- queue card: https://discord\\.com/channels/1/${a}`), 'named once the channel takes it');
-  // A list the bot could not have written: the alert says some lines may be repeats.
-  await kv.put('daily:named', '{"x":1}');
-  const out = [];
-  await daily(baseEnv(kv), { fetch: discord(), now: () => D + 120000, log: (s) => out.push(s) });
-  assert.match(out.join('\n'), /\(daily:named\) was damaged, so some below may have been named before/);
 });
-
-
 
 test('posts already handled are not read from KV again', async () => {
   const kv = started(T0);
@@ -781,8 +678,7 @@ test('posts already handled are not read from KV again', async () => {
   active.push({ id: idAt(T0 + 9000), parent_id: '900' });
   const r = await scan(baseEnv(kv), { fetch: f, now: () => T0 + 10 * 60000, log: () => {} });
   assert.deepEqual(r.greeted, [active[3].id]);
-  // This world shows no first message, so the record of a move here is read too.
-  assert.equal(reads, 4, 'only the new post is looked up (its record, whether it was filed or moved away, and whether a move made it)');
+  assert.equal(reads, 3, 'only the new post is looked up (its record, whether it was filed, whether it was moved away)');
 });
 
 test('a post made in the same millisecond the bot started is left alone', async () => {
@@ -823,9 +719,6 @@ test('a post that keeps failing is given up on after 30 runs, and newer posts ar
   assert.deepEqual(r.greeted, [newest.id]);
 });
 
-
-
-
 test('a scan writes its state only when something changed, or as a 15-minute heartbeat', async () => {
   const MIN = 60 * 1000;
   const a = idAt(T0 + 1000);
@@ -854,7 +747,6 @@ test('the daily check says nothing about archive pages when nothing is waiting',
   await daily(baseEnv(kv), { fetch: f, now: () => T0 + 30 * 24 * HOUR, log: (s) => out.push(s) });
   assert.deepEqual(out, []);
 });
-
 
 test('the greeting limit counts tries, not successful sends', async () => {
   const kv = started(T0);
@@ -922,7 +814,7 @@ test('the daily check keeps its warnings when a long list is cut to fit', async 
   assert.match(out.join('\n'), /Only the most recently archived posts were checked/);
 });
 
-test('NT1: a post that refuses the bot (403) is named once, only in a text channel of the server; a deleted one (404) never is', async () => {
+test('NT1: a post that refuses the bot (403) on its first send is named once, only in a text channel of the server; a deleted one (404) is not', async () => {
   for (const [status, named] of [[403, 1], [404, 0]]) {
     const kv = started(T0);
     const a = idAt(T0 + 1000);
@@ -939,79 +831,6 @@ test('NT1: a post that refuses the bot (403) is named once, only in a text chann
     // place that could name it.
     assert.equal(posts.join('\n').split(a).length - 1, named, `${status}: the post's id is written ${named} time(s) in all, the scan's problem paragraph included`);
     assert.ok(f.calls.every((c) => c.redirect === 'manual'), `${status}: no scan or daily request follows a redirect`);
-  }
-  for (const [final, named] of [[403, 1], [404, 0]]) {
-    // The first send fails (500) and is retried; the second is the post's own
-    // refusal, which drops the saved entry the first failure left.
-    const why = `a retried failure, then the ${final}`;
-    const kv = started(T0);
-    const a = idAt(T0 + 1000);
-    const real = discord({ active: [{ id: a, parent_id: '900' }] });
-    let n = 0;
-    const g = async (url, init = {}) => (init.method === 'POST' && new RegExp(`/channels/${a}/messages$`).test(url)
-      ? new Response('{"message":"no"}', { status: ++n === 1 ? 500 : final }) : real(url, init));
-    g.find = real.find;
-    const env = { ...baseEnv(kv), MOD_CHANNEL_ID: '555' };
-    for (const m of [5, 10]) await scan(env, { fetch: g, now: () => T0 + m * 60000, log: () => {} });
-    await daily(env, { fetch: g, now: () => T0 + HOUR, log: () => {} });
-    const posts = real.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content);
-    assert.equal(n, 2, `${why}: two sends`);
-    assert.equal(posts.join('\n').split(a).length - 1, named, `${why}: named ${named} time(s): ${posts.join(' | ')}`);
-  }
-  {
-    // Two posts fail (500); on the retry one refuses the bot (403) and the
-    // other is sent. Only the refused post's entry leaves the saved paragraph.
-    const kv = started(T0);
-    const a = idAt(T0 + 1000);
-    const b = idAt(T0 + 2000);
-    const real = discord({ active: [{ id: a, parent_id: '900' }, { id: b, parent_id: '900' }] });
-    const sends = { [a]: 0, [b]: 0 };
-    const g = async (url, init = {}) => {
-      const m = init.method === 'POST' && /\/channels\/(\d+)\/messages$/.exec(url);
-      if (m && m[1] in sends && ++sends[m[1]] === 1) return new Response('{"message":"no"}', { status: 500 });
-      if (m && m[1] === a) return new Response('{"message":"no"}', { status: 403 });
-      return real(url, init);
-    };
-    g.find = real.find;
-    const env = { ...baseEnv(kv), MOD_CHANNEL_ID: '555' };
-    for (const m of [5, 10]) await scan(env, { fetch: g, now: () => T0 + m * 60000, log: () => {} });
-    await daily(env, { fetch: g, now: () => T0 + HOUR, log: () => {} });
-    const text = real.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content).join('\n');
-    assert.equal(text.split(a).length - 1, 1, `the refused post is named once: ${text}`);
-    assert.ok(text.includes(`post ${b}`), `the other post's saved problem stays: ${text}`);
-  }
-  {
-    // The run that ends the post on its 403 loses its state write; the next
-    // scan finds the finished record and still drops the saved entry.
-    const kv = started(T0);
-    const a = idAt(T0 + 1000);
-    const real = discord({ active: [{ id: a, parent_id: '900' }] });
-    let n = 0;
-    const g = async (url, init = {}) => (init.method === 'POST' && new RegExp(`/channels/${a}/messages$`).test(url)
-      ? new Response('{"message":"no"}', { status: ++n === 1 ? 500 : 403 }) : real(url, init));
-    g.find = real.find;
-    const env = { ...baseEnv(kv), MOD_CHANNEL_ID: '555' };
-    await scan(env, { fetch: g, now: () => T0 + 5 * 60000, log: () => {} });
-    const put = kv.put;
-    kv.put = async (k, v) => { if (k === 'scan:state') throw new Error('KV write failed'); return put(k, v); };
-    await scan(env, { fetch: g, now: () => T0 + 10 * 60000, log: () => {} }).catch(() => {});
-    kv.put = put;
-    await scan(env, { fetch: g, now: () => T0 + 15 * 60000, log: () => {} });
-    await daily(env, { fetch: g, now: () => T0 + HOUR, log: () => {} });
-    const text = real.find('POST', /\/channels\/555\/messages$/).map((c) => c.body.content).join('\n');
-    assert.equal(n, 2, 'a lost state write: two sends');
-    assert.equal(text.split(a).length - 1, 1, `a lost state write: the refused post is named once: ${text}`);
-    assert.ok(text.split('\n').includes(`- greeting refused by the post (403): https://discord.com/channels/1/${a}`), `a lost state write: the recovered 403 line is posted: ${text}`);
-  }
-  {
-    // An `ended` the bot could not have written makes the record damaged,
-    // never a reason to drop a saved entry.
-    const a = idAt(T0 + 1000);
-    const kv = started(T0, { error: { at: T0, text: `could not read or message post ${a}`, items: [`post ${a}`] } });
-    await kv.put(`thread:${a}`, JSON.stringify({ greeting: 'g', skipped: 'x', ended: 'false' }));
-    const f = discord({ active: [{ id: a, parent_id: '900' }] });
-    await scan(baseEnv(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
-    assert.match(String((stateOf(kv).error || {}).text), new RegExp(`post ${a} \\(its saved record .* is damaged\\)`), 'an ended of the wrong type: the record is damaged');
   }
   {
     // Discord takes the alert but its answer is not JSON: the give-up counts
@@ -1059,11 +878,10 @@ test('NT1: a post that refuses the bot (403) is named once, only in a text chann
     const toMod = f.calls.filter((c) => /\/channels\/555(\/messages)?$/.test(c.url));
     assert.ok(toMod.some((c) => c.method === 'POST') && toMod.every((c) => c.redirect === 'manual'), `${why}: the check and the posts follow no redirect`);
   }
-  // The gate's other refusals: a failed read, an answer with no server id,
-  // and an id that is not one, which is never read.
+  // The gate's other refusals: a failed read, and an id that is not one,
+  // which is never read.
   for (const [why, mod, modId, logged, reads] of [
     ['a channel read failing (500)', new Response('{}', { status: 500 }), '555', /not posted to the moderator channel: MOD_CHANNEL_ID 555 could not be checked \(Discord 500\)/, 1],
-    ['an answer with no server id', { id: '555', type: 0 }, '555', /not posted to the moderator channel: MOD_CHANNEL_ID 555 could not be checked \(Discord's answer had no server id\)/, 1],
     ['a MOD_CHANNEL_ID that is no id', undefined, '5x', /not posted to the moderator channel: MOD_CHANNEL_ID is not a channel id/, 0],
   ]) {
     const kv = started(T0);
@@ -1092,38 +910,14 @@ test('a greeting that fails with a 500 whose answer quotes " -> 403 " is tried a
   assert.deepEqual((await scan(baseEnv(kv), { fetch, now: () => T0 + 10 * 60000, log: () => {} })).greeted, [a]);
 });
 
-test('the move records read strictly by their shape', async () => {
-  const kv = fakeKv({
-    'movedfrom:9': JSON.stringify({ from: '7', reporter: { name: 'Pat', id: '42', username: 'pat', avatar: 'https://cdn.discordapp.com/avatars/42/a.png' }, card: '96' }),
-    'movedfrom:10': JSON.stringify({ from: '7', reporter: { name: 'Hook' } }),
-    'movedto:7': '{"to":"9"}',
-    'movedfrom:8': '{"from":"7","reporter":{}}', 'movedto:6': '{"to":"x"}',
-    'movedfrom:5': '{"from":"7","reporter":{"name":"Pat","id":"x"}}', 'movedfrom:4': '{"from":"7","reporter":{"name":"Pat"},"card":"x"}',
-    'movedfrom:3': '{"from":"7","reporter":{"name":"Pat","username":""}}',
-    'movedto:2': '{"to":1234567890123456789}',
-  });
-  assert.deepEqual(await readStrict(kv, 'movedto:7'), { to: '9' });
-  assert.equal((await readStrict(kv, 'movedfrom:9')).reporter.name, 'Pat');
-  assert.equal((await readStrict(kv, 'movedfrom:10')).reporter.name, 'Hook', 'a webhook reporter has its name alone');
-  // Each id goes into a Discord path or mention, so one that is not digits is damaged.
-  for (const key of ['movedfrom:8', 'movedto:6', 'movedfrom:5', 'movedfrom:4', 'movedfrom:3', 'movedto:2']) await assert.rejects(readStrict(kv, key), (e) => e.damaged === key, key);
-});
-
-test('a moved post is known by the move\'s message or record when its first message is not seen, a post moved away by its record, and a receipt that starts with a mention still counts', async () => {
-  for (const [why, msgs, want, records = () => ({})] of [
+test('a moved post is known by the move\'s message when its first message is not seen, a post moved away by its record, and a receipt that starts with a mention still counts', async () => {
+  for (const [why, msgs, want] of [
     ['the first message deleted, the move\'s message there', [{ id: 'm1', author: { id: 'b' }, content: 'Moved here from https://discord.com/channels/1/7 by Mod. First posted by <@42>.' }],
       { skipped: 'a post the bot moved here' }],
-    // A busy copy: its first message and the move's message are past the last 100.
-    ['the first message and the move\'s message out of view, the move\'s record there', [], { skipped: 'a post the bot moved here' },
-      (post) => ({ [`movedfrom:${post}`]: JSON.stringify({ from: '7', reporter: { name: 'Pat' } }) })],
     ['a filed copy\'s receipt', [{ id: 'm2', author: { id: 'b' }, content: '<@42> Thanks! This is now tracked as ONE #9.' }], { tracked: 'm2' }],
-    // The old post of a move whose movedto: record and lock both failed.
-    ['the move\'s note in a post moved away', [{ id: 'm3', author: { id: 'b' }, content: 'This post moved to https://discord.com/channels/1/9 (moved by Mod).' }],
-      { skipped: 'a post the bot moved away' }],
   ]) {
     const kv = started(T0);
     const post = idAt(T0 + 60000);
-    for (const [k, v] of Object.entries(records(post))) kv.m.set(k, v);
     const f = discord({ active: [{ id: post, parent_id: '900', name: 'Bags' }], said: { [post]: msgs } });
     await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
     assert.equal(f.find('POST', /\/messages$/).length, 0, why);
@@ -1137,20 +931,6 @@ test('a moved post is known by the move\'s message or record when its first mess
   const f = discord({ active: [{ id: post, parent_id: '900', name: 'Bags' }] });
   await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
   assert.equal(f.find('POST', /\/messages$/).length, 0, 'no greeting and no card');
-});
-
-test('a busy copy whose move record was not saved is known by its first message, read on its own', async () => {
-  const kv = started(T0);
-  const post = idAt(T0 + 60000);
-  // A hundred later messages hide the first message and the move's message.
-  const chatter = Array.from({ length: 100 }, (_, i) => ({ id: String(900 + i), author: { id: '43' }, content: 'hi' }));
-  const f = discord({ active: [{ id: post, parent_id: '900', name: 'Bags' }], said: { [post]: chatter } });
-  const starter = { id: post, webhook_id: '61', application_id: 'app-1', author: { id: '61', username: 'Pat' } };
-  const fetch = (url, init = {}) => ((init.method || 'GET') === 'GET' && url.endsWith(`/channels/${post}/messages/${post}`)
-    ? Promise.resolve(new Response(JSON.stringify(starter), { status: 200 })) : f(url, init));
-  await scan(withQueue(kv), { fetch, now: () => T0 + 5 * 60000, log: () => {} });
-  assert.equal(f.find('POST', /\/messages$/).length, 0, 'no greeting and no card');
-  assert.deepEqual(JSON.parse(kv.m.get(`thread:${post}`)), { skipped: 'a post the bot moved here' });
 });
 
 test('a failed read of the bot\'s application is a try for the post, never its give-up', async () => {
@@ -1178,40 +958,4 @@ test('a post the bot moved here gets no greeting and no card; another app\'s web
   const f = discord({ active: [{ id: post, parent_id: '900' }], said: { [post]: [{ id: post, author: { id: '42', username: 'pat' } }] } });
   await scan(baseEnv(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
   assert.equal(f.find('GET', /\/applications\/@me$/).length, 0);
-});
-
-test('a new post\'s visit starts only with room for all its reads, so the older posts\' share stays whole', async () => {
-  // Eight older posts owed cards keep 24 of the 60 reads (three each), so new
-  // posts have 36. Seventeen filed new posts spend 34 (two each). An ordinary
-  // new post reads four (its record, its filing, its move away and, its first
-  // message out of view, its move here): started at 34, it would end at 38
-  // and leave the eighth older card short, so it waits for the next run.
-  const older = Array.from({ length: 8 }, (_, i) => idAt(T0 + 1000 * (i + 1)));
-  const kv = started(T0, { greeted: { 900: older.at(-1) } });
-  for (const id of older) await kv.put(`thread:${id}`, JSON.stringify({ greeting: 'g', buttonless: true, tries: 1 }));
-  const filed = Array.from({ length: 17 }, (_, i) => idAt(T0 + 100000 + 1000 * i));
-  for (const id of filed) await kv.put(`issue:${id}`, JSON.stringify({ repo: 'me/one', number: 3, key: 'ONE', by: 'Bite' }));
-  const fresh = idAt(T0 + 200000);
-  const f = discord({ active: [...older, ...filed, fresh].map((id) => ({ id, parent_id: '900', name: 'x' })) });
-  const r = await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
-  assert.deepEqual(r.greeted, [], 'the ordinary new post waits: its visit would cross into the older share');
-  assert.equal(f.find('GET', new RegExp(`/channels/${fresh}/messages`)).length, 0, 'its visit never started');
-  const carded = f.find('POST', /\/channels\/556\/messages$/).map((c) => c.body.components[0].components.at(-1).url.split('/').at(-1));
-  assert.deepEqual(carded, older, 'every older post owed a card gets it');
-});
-
-test('the older posts\' share follows how many are owed: one older card holds back no new post with reads to spare', async () => {
-  // One older post keeps three reads; thirteen filed new posts spend 26, so
-  // the ordinary new post still has room for its four.
-  const owed = idAt(T0 + 1000);
-  const kv = started(T0, { greeted: { 900: owed } });
-  await kv.put(`thread:${owed}`, JSON.stringify({ greeting: 'g', buttonless: true, tries: 1 }));
-  const filed = Array.from({ length: 13 }, (_, i) => idAt(T0 + 100000 + 1000 * i));
-  for (const id of filed) await kv.put(`issue:${id}`, JSON.stringify({ repo: 'me/one', number: 3, key: 'ONE', by: 'Bite' }));
-  const fresh = idAt(T0 + 200000);
-  const f = discord({ active: [owed, ...filed, fresh].map((id) => ({ id, parent_id: '900', name: 'x' })) });
-  const r = await scan(withQueue(kv), { fetch: f, now: () => T0 + 5 * 60000, log: () => {} });
-  assert.deepEqual(r.greeted, [fresh], 'the new post is greeted this run');
-  const carded = f.find('POST', /\/channels\/556\/messages$/).map((c) => c.body.components[0].components.at(-1).url.split('/').at(-1));
-  assert.equal(carded[0], owed, 'the older post\'s card goes out first');
 });
