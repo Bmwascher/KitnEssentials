@@ -47,7 +47,7 @@ export function world() {
   w.issue = (n, over = {}) => {
     const thread = over.thread || String(700 + n);
     const i = {
-      number: n, state: 'open', state_reason: null, labels: new Set(['from-discord']), updated_at: new Date(w.clock).toISOString(),
+      number: n, state: 'open', state_reason: null, labels: new Set(['from-discord']), user: { login: 'app[bot]' }, updated_at: new Date(w.clock).toISOString(),
       title: `Issue ${n}`, html_url: `https://github.com/me/one/issues/${n}`,
       body: `## Report\n\n> hi\n\n${MARK(thread)}`, comments: [], events: [], ...over,
     };
@@ -106,7 +106,7 @@ export function world() {
   w.said = (threadId) => w.threads.get(threadId).messages.map((m) => m.content);
 
   const view = (i) => ({
-    number: i.number, state: i.state, state_reason: i.state_reason, body: i.body, title: i.title, html_url: i.html_url, closed_at: i.closed_at || null,
+    number: i.number, state: i.state, state_reason: i.state_reason, body: i.body, title: i.title, html_url: i.html_url, closed_at: i.closed_at || null, user: i.user,
     labels: [...i.labels].map((name) => ({ name })),
     // A PR read through the issues API carries this field.
     ...(i.pull_request ? { pull_request: i.pull_request } : {}),

@@ -453,7 +453,7 @@ test('needs-info reopens an archived post, then pings only the reporter', async 
   await go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: 17, body: i.body, labels: [{ name: 'from-discord' }] } });
   assert.equal(w.threads.get('717').archived, false);
   const m = w.threads.get('717').messages[0];
-  assert.match(m.content, /^<@42> /);
+  assert.equal(m.content, '<@42> Could you add a bit more detail? A screenshot, your addon version and the steps to make it happen help a lot.');
   assert.deepEqual(m.allowed_mentions, { parse: [], users: ['42'] });
   assert.equal(m.message_reference, undefined, 'a mention, not a reply');
 });
@@ -2156,4 +2156,70 @@ test('PT6: with no bot token, a repo with issues the bot filed fails with the fi
     await main({ eventName: 'issues', payload, env, fetchImpl: w.fetch, log: quiet });
     assert.equal(w.said('717').length, 1, 'with the token, main runs the status run');
   }
+});
+
+// ---- Repeat reports ----------------------------------------------------------
+
+// A report comment for post `post` from player `player` (null: unknown), by `login`.
+const report = (w, n, post, player, login = 'app[bot]') =>
+  w.record(n, `Report 2 of this problem: [the Discord post](https://discord.com/channels/800/${post}).\n\n<!-- discord-report: ${post} player: ${player || 'unknown'} -->`, login);
+const askInfo = (w, n = 17) => {
+  const i = w.issues.get(n);
+  i.labels.add('needs-info');
+  return go(w, 'issues', { action: 'labeled', label: { name: 'needs-info' }, issue: { number: n, body: i.body, labels: [{ name: 'from-discord' }] } });
+};
+const fixed = (w) => { w.close(17, 'completed', 'aaaaaaa1'); return closed(w, 17); };
+const ASK = 'Could you add a bit more detail? A screenshot, your addon version and the steps to make it happen help a lot.';
+
+test('a status message names each added player once, in one last line, and pings them', async () => {
+  const copyBody = '## Report\n\n> hi\n\n<!-- discord-copy -->\n<!-- discord-message: 717 -->\n<!-- discord-thread: 717 reporter: 42 -->';
+  for (const [why, over, reports, step, first, also, users] of [
+    ['a close, two players', {}, [['801', '43'], ['802', '44']], fixed, /^\*\*Fixed!\*\*/, ['43', '44'], ['43', '44']],
+    ['a needs-info ask, two players', {}, [['801', '43'], ['802', '44']], askInfo, `<@42> ${ASK}`, ['43', '44'], ['42', '43', '44']],
+    ["a moved copy's close keeps the reporter first", { body: copyBody }, [['801', '43']], fixed, /^<@42> \*\*Fixed!\*\*/, ['43'], ['42', '43']],
+    ['one player who added two posts', {}, [['801', '43'], ['802', '43']], fixed, /^\*\*Fixed!\*\*/, ['43'], ['43']],
+    ["the reporter's own repeat report on a needs-info ask", {}, [['801', '42'], ['802', '43']], askInfo, `<@42> ${ASK}`, ['43'], ['42', '43']],
+    ["the reporter's own repeat report on a close", {}, [['801', '42']], fixed, /^\*\*Fixed!\*\*/, ['42'], ['42']],
+    ['a player the bot could not name', {}, [['801', null]], fixed, /^\*\*Fixed!\*\*/, [], []],
+    ['a report comment by another account', {}, [['801', '43', 'someone']], fixed, /^\*\*Fixed!\*\*/, [], []],
+  ]) {
+    const w = world();
+    w.issue(17, over);
+    for (const [post, player, login] of reports) report(w, 17, post, player, login);
+    await step(w);
+    const [m, ...more] = w.threads.get('717').messages;
+    assert.deepEqual(more, [], why);
+    const lines = m.content.split('\n');
+    if (typeof first === 'string') assert.equal(lines[0], first, why);
+    else assert.match(lines[0], first, why);
+    const line = also.length ? `Also reported by ${also.map((id) => `<@${id}>`).join(' ')}.` : null;
+    assert.deepEqual(lines.filter((l) => l.startsWith('Also reported by')), line ? [line] : [], why);
+    if (line) assert.equal(lines.at(-1), line, `${why}: the last line`);
+    assert.deepEqual(m.allowed_mentions.users, users, why);
+  }
+});
+
+test('a report added while a needs-info ask is written is named in it', async () => {
+  const w = world();
+  w.issue(17);
+  let added = false;
+  w.hooks.push(['POST', /issues\/17\/comments$/, () => { if (!added) { added = true; report(w, 17, '801', '43'); } }]);
+  await askInfo(w);
+  assert.deepEqual(w.said('717'), [`<@42> ${ASK}\nAlso reported by <@43>.`]);
+});
+
+test('a reply Discord refuses goes out plain with the added players still named and pinged', async () => {
+  const w = world();
+  w.issue(17, { body: '## Report\n\n> hi\n\n<!-- discord-message: 333 -->\n<!-- discord-thread: 717 reporter: 42 -->' });
+  report(w, 17, '801', '43');
+  w.fail.push(['POST', /discord\.com\/api\/v10\/channels\/717\/messages$/, new Response('{"message":"Invalid Form Body"}', { status: 400 }), 1]);
+  w.close(17, 'completed', 'aaaaaaa1');
+  const logged = [];
+  await run({ eventName: 'issues', payload: { repository, action: 'closed', issue: { number: 17 } }, env, fetchImpl: w.fetch, log: (s) => logged.push(s) });
+  const [m, ...more] = w.threads.get('717').messages;
+  assert.deepEqual(more, []);
+  assert.equal(m.message_reference, undefined);
+  assert.match(m.content, /\nAlso reported by <@43>\.$/);
+  assert.deepEqual(m.allowed_mentions, { parse: [], users: ['43'] });
+  assert.ok(logged.includes('#17: Discord refused the reply; the message went out plain, its mentions still pinging'), logged.join('\n'));
 });

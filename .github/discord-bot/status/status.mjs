@@ -15,12 +15,14 @@ import { readFileSync, appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { STATUS, LABELS, MESSAGES, parseMarker, parseFiledMessage, timedFetch, isRelease, DEFAULT_RELEASE_PATTERN, checklistStatus, checklistKey, statusOf,
   shownStatuses, preferStatus, triagedAlone, withAccepted, showsAccepted, ACCEPTED, inlineCode, hasTag, tagLine, acceptedLine, isDiscordId, STATUS_NAMES, BOT_LOGIN,
-  hasLabel, eligible } from '../src/core.js';
+  hasLabel, eligible, ownReports } from '../src/core.js';
 import { discordClient, postGone } from '../src/discord.js';
 import { githubClient } from '../src/github.js';
 import { checklistRunner, parseChecklist } from './checklist.mjs';
 
 export { eligible };
+// The added players to mention: each with an id, once.
+const joined = (issue, comments) => [...new Set(ownReports(issue, comments).map((r) => r.playerId).filter(Boolean))];
 const NO_ACCEPTED_SLOT = 'no free tag slot for Accepted on the post';
 const NO_ACCEPTED_TAG = 'the forum has no Accepted tag';
 // Only PRs from people with a role on the repo move a post to In progress.
@@ -249,8 +251,11 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     const told = [];
     // The staff checklist record, one per issue.
     const ckRecords = [];
+    // Every comment, of any author, for the added players' report comments.
+    const comments = [];
     for (let page = 1; ; page++) {
       const batch = await gh.call('GET', `/repos/${repo}/issues/${n}/comments?per_page=100&page=${page}`);
+      comments.push(...batch);
       for (const c of batch) {
         if (!c.user || c.user.login !== BOT_LOGIN) continue;
         // A body edited in the browser comes back with CRLF line ends.
@@ -282,7 +287,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       }
       if (batch.length < 100) {
         const checklist = ckRecords.find((r) => r.threadId) || ckRecords[0] || null;
-        return { shipped, told, checklist };
+        return { shipped, told, checklist, comments };
       }
     }
   }
@@ -477,12 +482,14 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // an earlier attempt and was never sent (a re-run). Otherwise this run
   // writes a note, and of two runs writing at once the later drops its own.
   async function claim(n, key, text, status, adopt = false) {
-    const existing = owningNote((await recordsOf(n)).told, key);
-    if (existing) return adopt && runId && existing.run === runId && existing.state === 'attempted' ? existing : null;
+    const before = await recordsOf(n);
+    const existing = owningNote(before.told, key);
+    if (existing) return adopt && runId && existing.run === runId && existing.state === 'attempted' ? { ...existing, comments: before.comments } : null;
     const body = noteRecord(key, text, status, runId);
     const mine = await gh.call('POST', `/repos/${repo}/issues/${n}/comments`, { body });
-    const note = { id: mine && mine.id, body, text };
-    const first = owningNote((await recordsOf(n)).told, key);
+    const after = await recordsOf(n);
+    const note = { id: mine && mine.id, body, text, comments: after.comments };
+    const first = owningNote(after.told, key);
     if (first && mine && first.id !== mine.id) {
       await settleNote(note, 'dropped', 'another run claimed it');
       return null;
@@ -494,7 +501,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
   // sending first: a run never takes over a note so marked, so a send that
   // went out before its sent mark failed is never sent again. A failed send
   // marks it unconfirmed, for the sweep, and fails the run.
-  async function deliver(n, threadId, note, text, status, ping = [], reply = {}) {
+  async function deliver(n, threadId, note, text, status, ping = [], reply) {
     const body = await unmarked(note);
     if (body === null) {
       log(`#${n}: the note for "${text.slice(0, 60)}" was marked meanwhile; not sent`);
@@ -502,10 +509,14 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
     }
     note.body = `${body}\n<!-- discord-sending -->`;
     await gh.call('PATCH', `/repos/${repo}/issues/comments/${note.id}`, { body: note.body });
+    // Each added player the message does not already mention, in one last line.
+    const mentioned = reply.mention ? [...ping, reply.mention] : ping;
+    const also = reply.also.filter((id) => !mentioned.includes(id));
+    const content = `${reply.mention ? `<@${reply.mention}> ${text}` : text}${also.length ? `\n${MESSAGES.alsoReported(also)}` : ''}`;
     try {
-      const sent = await discord.send(threadId, reply.mention ? `<@${reply.mention}> ${text}` : text, reply.mention ? [...ping, reply.mention] : ping, reply);
-      // A plain message still pings the reporter it mentions.
-      if (sent && sent.replyRefused) log(`#${n}: Discord refused the reply; the message went out plain, ${reply.mention ? 'its mention still pinging the reporter' : 'with no ping'}`);
+      const sent = await discord.send(threadId, content, [...mentioned, ...also], reply);
+      // A plain message still pings everyone it mentions.
+      if (sent && sent.replyRefused) log(`#${n}: Discord refused the reply; the message went out plain, ${mentioned.length || also.length ? 'its mentions still pinging' : 'with no ping'}`);
     } catch (e) {
       if (statusOf(e) === 404) {
         log(`#${n}: Discord post is gone; message dropped`);
@@ -629,7 +640,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
       await dropNote(c.note, 'no longer true');
       return;
     }
-    await deliver(moved.n, moved.threadId, c.note, c.text, c.status, [], reply);
+    await deliver(moved.n, moved.threadId, c.note, c.text, c.status, [], { ...reply, also: joined(st.issue, st.records.comments) });
   }
 
   // Labels, then the post, then the messages claimed on the way. The sweep
@@ -853,7 +864,7 @@ export async function run({ eventName, payload, env, fetchImpl = fetch, log = co
               throw e;
             });
             if (gone) await dropNote(note, 'the Discord post is gone');
-            else await deliver(n, m.threadId, note, text, null, m.reporterId ? [m.reporterId] : []);
+            else await deliver(n, m.threadId, note, text, null, m.reporterId ? [m.reporterId] : [], { also: joined(issue, note.comments) });
           }
         }
       } catch (e) {
