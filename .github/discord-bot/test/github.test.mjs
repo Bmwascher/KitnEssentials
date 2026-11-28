@@ -43,3 +43,25 @@ test('a lock label says exactly when it was taken, by the clock the Worker uses'
     assert.equal(f.calls[0].body.description, 'Send to GitHub since 2026-11-18 18:40:05 UTC');
   } finally { Date.now = real; }
 });
+
+test('a transfer returns the issue where it now is, and only the probed refusal is marked refused', async () => {
+  const answer = (out) => fakeFetch([['POST', /\/graphql$/, () => out]]);
+  const ok = answer({ data: { transferIssue: { issue: { number: 7, url: 'https://github.com/me/two/issues/7' } } } });
+  assert.deepEqual(await githubClient('t', ok).transferIssue('I_1', 'R_2'), { number: 7, url: 'https://github.com/me/two/issues/7' });
+  assert.match(ok.calls[0].body.query, /createLabelsIfMissing: true/);
+  assert.deepEqual(ok.calls[0].body.variables, { issueId: 'I_1', repositoryId: 'R_2' });
+  // The answer GitHub gave without Contents write.
+  const forbidden = answer({ data: { transferIssue: null }, errors: [{ type: 'FORBIDDEN', message: 'Resource not accessible by integration' }] });
+  await assert.rejects(githubClient('t', forbidden).transferIssue('I_1', 'R_2'), (e) => e.refused === true && /Resource not accessible by integration/.test(e.message));
+  const other = answer({ data: { transferIssue: null }, errors: [{ type: 'UNPROCESSABLE', message: 'Cannot transfer' }] });
+  await assert.rejects(githubClient('t', other).transferIssue('I_1', 'R_2'), (e) => !e.refused && /Cannot transfer/.test(e.message));
+});
+
+test('an issue\'s comments are read to the last page, and a repo\'s node id from the repo', async () => {
+  const f = fakeFetch([
+    ['GET', /\/issues\/5\/comments\?/, (_, url) => (Number(/[?&]page=(\d+)/.exec(url)[1]) === 1 ? Array.from({ length: 100 }, (_, i) => ({ id: i })) : [{ id: 100 }])],
+    ['GET', /\/repos\/me\/two$/, () => ({ node_id: 'R_2' })],
+  ]);
+  assert.equal((await githubClient('t', f).comments('me/r', 5)).length, 101);
+  assert.equal(await githubClient('t', f).repoNodeId('me/two'), 'R_2');
+});

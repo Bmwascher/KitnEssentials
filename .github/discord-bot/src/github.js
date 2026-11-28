@@ -91,6 +91,33 @@ export function githubClient(token, fetchImpl = fetch) {
         if (batch.length < 100) return out;
       }
     },
+    // Every comment on an issue, following every page.
+    async comments(repo, n) {
+      const out = [];
+      for (let page = 1; page <= MAX_PAGES; page++) {
+        const batch = await call('GET', `/repos/${repo}/issues/${n}/comments?per_page=100&page=${page}`);
+        out.push(...batch);
+        if (batch.length < 100) return out;
+      }
+      throw new Error(`more than ${MAX_PAGES * 100} comments on ${repo} #${n}; stopping rather than skipping some`);
+    },
+    repoNodeId: async (repo) => (await call('GET', `/repos/${repo}`)).node_id,
+    // Moves an issue to another repo of the same owner, making any label
+    // the target lacks. An answer of `errors` throws GitHub's first message;
+    // only FORBIDDEN with no issue moved, the answer a token without
+    // Contents write gets, applied nothing and is marked `refused`.
+    async transferIssue(issueId, repositoryId) {
+      const out = await call('POST', '/graphql', {
+        query: 'mutation($issueId: ID!, $repositoryId: ID!) { transferIssue(input: { issueId: $issueId, repositoryId: $repositoryId, createLabelsIfMissing: true }) { issue { number url } } }',
+        variables: { issueId, repositoryId },
+      });
+      if (out.errors && out.errors.length) {
+        const [first] = out.errors;
+        throw Object.assign(new Error(String(first.message || first.type)), { refused: first.type === 'FORBIDDEN' && !(out.data && out.data.transferIssue) });
+      }
+      const { number, url } = out.data.transferIssue.issue;
+      return { number, url };
+    },
     // An issue already made from this Discord post, if any. Reads the issue list
     // (consistent at once), not search (which lags); errors reach the caller.
     // An issue filed from a post was made, so last updated, after the post
