@@ -10,9 +10,10 @@ import {
   parseForums, parseRoleIds, parseTemplates, templateCheck, templateGaps,
   templateNote, parseCustomId, templateLabels, filedCard, cardHead, BY_RIGHT_CLICK,
   parseRepoTags, repoFromTags, plainTags, usableRepoKeys,
-  MOVE_BUTTON, CLIENT_NAMES, cutUnits, splitTitle,
+  MOVE_BUTTON, CLIENT_NAMES, cutUnits, splitTitle, movedTitle, movedBody, BOT_LOGIN,
   queueCard, movedTags, webhookName, avatarUrl, isBotCopy,
 } from './core.js';
+import { checklistFirst, parseChecklist } from '../status/checklist.mjs';
 import { discordClient, postGone, archivedOf } from './discord.js';
 import { githubClient, installationToken, lockLabel } from './github.js';
 import { scan, daily, CRONS, SEND_BUTTON, readStrict, saveIssueRecord, hasButton, countedFetch, MOVED_HERE, isReceipt } from './scan.js';
@@ -1056,14 +1057,15 @@ export async function fileIssue(interaction, env, deps, t0 = Date.now()) {
 // The issue a post was filed as, for a move: the saved one when it is live,
 // else every configured repo searched. A saved issue that cannot be checked is `unclear`, with why. `key` is the one the saved
 // issue was filed under while REPOS still maps it to the issue's repo, else
-// the repo's first key.
+// the repo's first key; `repo` is where the issue is now, and `by` the
+// record's filer for the saved issue.
 async function findIssue(cfg, saved, postId, tokenFor, f) {
-  // The saved key names only the saved issue: one a search finds after the
-  // saved issue is gone is another filing.
+  // The saved key and filer name only the saved issue: one a search finds
+  // after the saved issue is gone is another filing.
   const found = (issue, from, own = false) => {
     const { repo } = whereIs(issue, from);
     const key = own && sameRepo(cfg.repos[saved.key], repo) ? saved.key : keyOf(cfg, repo);
-    return { issue, key };
+    return { issue, key, repo, by: own ? saved.by || null : null };
   };
   if (saved) {
     const r = await readSaved(saved, tokenFor, f);
@@ -1075,22 +1077,27 @@ async function findIssue(cfg, saved, postId, tokenFor, f) {
 }
 
 // The Move form's job, after Discord has its "thinking..." answer, under the
-// post's filing lock. It moves a post not yet filed; a filed one is refused
-// with no change. Before the new post exists nothing a player sees changes,
-// so every failure there moves nothing and moving again finishes the job.
-// After it exists, every step runs and the reply names each one not done,
-// with both posts' links: the old post is locked, so a second move cannot
-// redo it.
+// post's filing lock. A filed post's issue follows it: another repo than the
+// form showed transfers the issue, the last write before the new post, and
+// after the new post the issue, its record and its checklist thread are
+// rewritten for it. Before the new post exists nothing a player sees
+// changes, so every failure there moves nothing, and once the issue is
+// found every refusal says where it is. After it exists, every step runs
+// and the reply names each one not done, with both posts' links: the old
+// post is locked, so a second move cannot redo it.
 export async function movePost(interaction, env, deps, t0 = Date.now()) {
   const cfg = config(env);
-  const { threadId: oldId, cardId } = parseCustomId(interaction.data.custom_id);
+  const { threadId: oldId, cardId, shownKey, shownClient } = parseCustomId(interaction.data.custom_id);
   const v = modalValues(interaction.data);
   const targetId = v.forum;
   const target = cfg.forumInfo[targetId];
-  const client = target.client || normClient(v.client);
+  let client = target.client || normClient(v.client);
   const guildId = interaction.guild_id;
   const link = (id) => `https://discord.com/channels/${guildId}/${id}`;
-  const mover = staffRef(interaction.member.user);
+  const user = interaction.member.user;
+  const mover = staffRef(user);
+  // The mover as the issue's Moved to line names them, as the filing names its sender.
+  const moverPerson = { name: personName(user, interaction.member), username: user.username, id: user.id };
   const log = deps.log || console.error;
   const { callMs = CALL_MS, kvMs = KV_MS } = deps; // tests shorten these
   const until = (by) => timedFetch(deps.fetch, callMs, t0 + by);
@@ -1100,8 +1107,12 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
   const followup = followupFor(interaction, deps, log, t0);
   const kv = env.STATE;
   const notes = [];
+  // Where a filed post's issue is, once found: as found, or as a transfer
+  // left it. Every reply that moves nothing then ends by saying so.
+  let at = null;
+  const where = (text) => (at ? `${text}${/\.$/.test(text) ? '' : '.'} The issue is ${at.key} #${at.number} in ${at.repo} (${at.url}).` : text);
   const refuse = async (why, kind) => {
-    await followup(`Nothing was moved: ${why}.`);
+    await followup(where(`Nothing was moved: ${why}.`));
     return { refused: kind };
   };
   let lockToken = '';
@@ -1137,23 +1148,40 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       return await refuse("could not read this post's saved record just now. Try again", 'record');
     }
     if (records.movedTo) return await refuse(`this post was already moved to ${link(records.movedTo.to)}`, 'moved');
-    // A filed post is refused before a locked one's advice: unlocking it
-    // would not let it move.
     const found = await findIssue(cfg, records.saved, oldId, tokenFor, prep);
     if (found.unclear) {
       await followup(couldNotCheck(cfg, records.saved, oldId, found.unclear, 'Nothing was moved.'));
       return { refused: 'saved-issue' };
     }
-    if (found.issue) {
-      await followup(`This post is already tracked as ${found.key} #${found.issue.number} (${found.issue.html_url}); moving filed posts comes in a later update.`);
-      return { refused: 'filed' };
-    }
-    // Filed, though neither search finds its issue: a filing record never
-    // saved or deleted, and the issue's label removed or the issue moved
-    // outside REPOS. Moving it would leave that issue on the locked post.
-    const receipt = await ownReceipt(discord, oldId);
-    if (receipt) {
-      return await refuse(`the bot's "now tracked" reply in this post (${link(oldId)}/${receipt.id}) says it was sent to GitHub, though its issue was not found by its filing record or the from-discord label; moving filed posts comes in a later update. If that issue was deleted, delete that reply, then move the post again`, 'filed');
+    const { issue } = found;
+    // A filed post's issue: where it is, where it goes, and its checklist
+    // record, read with the token the steps after the new post reuse.
+    let ghIssue = null;
+    let transferTo = null;
+    let checklist = null;
+    if (issue) {
+      at = { key: found.key, repo: found.repo, number: issue.number, url: issue.html_url };
+      // Only a key other than the one the form showed changes the repo; a
+      // key for the issue's own repo changes the key alone.
+      const picked = v.repo && v.repo !== shownKey ? v.repo : null;
+      if (picked && !sameRepo(cfg.repos[picked], found.repo)) transferTo = cfg.repos[picked];
+      if (transferTo && issue.state === 'closed') {
+        return await refuse(`${found.key} #${issue.number} is closed, so it stays in ${found.repo}; move the post again keeping its repo`, 'closed');
+      }
+      // A transfer renames the issue only once it is confirmed.
+      if (picked && !transferTo) at.key = picked;
+      ghIssue = githubClient(await access(found.repo), prep);
+      // Anyone may comment on a public issue: only the workflow's own record counts.
+      checklist = (await ghIssue.comments(found.repo, issue.number))
+        .filter((c) => c.user && c.user.login === BOT_LOGIN).map(parseChecklist).find((r) => r && r.threadId) || null;
+    } else {
+      // Filed, though neither search finds its issue: a filing record never
+      // saved or deleted, and the issue's label removed or the issue moved
+      // outside REPOS. Moving it would leave that issue on the locked post.
+      const receipt = await ownReceipt(discord, oldId);
+      if (receipt) {
+        return await refuse(`the bot's "now tracked" reply in this post (${link(oldId)}/${receipt.id}) says it was sent to GitHub, though its issue was not found by its filing record or the from-discord label, so the bot cannot move it. If that issue was deleted, delete that reply, then move the post again`, 'filed');
+      }
     }
     if (old.thread_metadata.locked) return await refuse('the post is locked: a moderator can unlock it, then move it', 'locked');
 
@@ -1213,6 +1241,35 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       throw e;
     }
 
+    // The transfer, the last write before the new post: refused or never
+    // sent, the issue is where it was and the lock goes; with no answer it
+    // may have moved, so the lock stays, as after a create with no answer.
+    const from = at && { ...at };
+    if (transferTo) {
+      const targetToken = await access(transferTo);
+      let repoId;
+      try {
+        repoId = await githubClient(targetToken, prep).repoNodeId(transferTo);
+      } catch (e) {
+        return await refuse(`could not read ${transferTo} (${httpStatus(e)}). Try again`, 'transfer');
+      }
+      let moved;
+      try {
+        moved = await ghIssue.transferIssue(issue.node_id, repoId);
+      } catch (e) {
+        const said = e.message.slice(0, 300);
+        if (e.refused || refusal4xx(e)) {
+          return await refuse(`GitHub refused the transfer of ${from.key} #${from.number} to ${transferTo} (${said}). Moving an issue to another repo needs the GitHub App's Contents: Read and write and Issues: Read and write, on repos of one owner; /bot-check names a missing permission`, 'transfer');
+        }
+        if (/^out of time before /.test(e.message)) throw e;
+        log(`move of post ${oldId}: transfer not confirmed: ${e.message.slice(0, 200)}`);
+        keepLock = true;
+        await followup(`Nothing confirmed: GitHub did not confirm the transfer of ${from.key} #${from.number} to ${transferTo} (${said}), so the issue may be there now. It was last known as ${from.key} #${from.number} in ${from.repo} (${from.url}). The post was not moved; its lock ${lockLabel(oldId)} in ${cfg.lockRepo} stays.`);
+        return { uncertain: 'transfer' };
+      }
+      at = { key: v.repo, repo: transferTo, number: moved.number, url: moved.url };
+    }
+
     // Each file in order that fits Discord's limits is downloaded; the rest,
     // and any whose download fails, is stopped or cannot start in time, stay
     // on the old post. The downloads end with the prep phase, so a slow file
@@ -1234,14 +1291,27 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
 
     const left = first.attachments.length - files.length;
 
-    const type = target.type;
+    // A filed post's type is the forum's, else its issue's type label's, else
+    // unknown, which keeps the issue's. Its client, in a forum with none of
+    // its own and left as the form showed it, is the issue's title's.
+    const labelNames = issue ? (issue.labels || []).map((l) => l.name || l) : [];
+    let type = target.type;
+    if (issue) {
+      type = type || normType((labelNames.find((l) => /^type: /.test(l)) || '').slice(6));
+      const own = splitTitle(issue.title);
+      if (!target.client && v.client === shownClient && own && normClient(own.client)) client = normClient(own.client);
+    }
+    const newTitle = issue ? movedTitle(issue.title, { repoKey: at.key, client, type }) : null;
     const text = first.content;
     const cut = text.length > MAX_REPLY;
     // Built before the create, so the catch below sees only the create's own
     // failure. A thread read may carry no tag list (movedTags' default).
     const payload = {
-      thread_name: old.name,
-      applied_tags: movedTags({ applied: old.applied_tags, from: tagsIn(channels, old.parent_id), to: tagsIn(channels, targetId), client, fixedClient: target.client, fixedType: target.type, repoTags: cfg.repoTags }),
+      thread_name: newTitle && cfg.rename ? fitName(newTitle) : old.name,
+      applied_tags: movedTags({
+        applied: old.applied_tags, from: tagsIn(channels, old.parent_id), to: tagsIn(channels, targetId), client,
+        fixedClient: target.client, fixedType: issue ? type : target.type, repoTags: cfg.repoTags, repoKey: issue ? at.key : null,
+      }),
       content: cut ? `${cutUnits(text, MAX_REPLY - 1)}…` : text || (files.length ? '' : NOTHING_TO_COPY),
       username: webhookName(reporter.name, reporter.username),
       // A webhook's reporter has no avatar.
@@ -1260,7 +1330,7 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       // create.
       log(`move of post ${oldId}: create not confirmed: ${e.message.slice(0, 200)}`);
       keepLock = true;
-      await followup(`Nothing confirmed: Discord did not answer the new post's create in <#${targetId}>, so a copy of ${link(oldId)} may exist there. The old post was not changed; its lock ${lockLabel(oldId)} in ${cfg.lockRepo} stays.`);
+      await followup(where(`Nothing confirmed: Discord did not answer the new post's create in <#${targetId}>, so a copy of ${link(oldId)} may exist there. The old post was not changed; its lock ${lockLabel(oldId)} in ${cfg.lockRepo} stays.`));
       return { uncertain: 'create' };
     }
 
@@ -1291,13 +1361,25 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
     // The old post's record comes first: it refuses a later send or move of
     // the old post and keeps the scan off it.
     await put(`movedto:${oldId}`, { to: newId });
+    // A filed post's record and issue next, so a send of the new post finds
+    // the issue by either. The issue's writes use the token already held for
+    // the repo it is now in.
+    const ghLater = issue && githubClient(await access(at.repo), until(MOVE_REST_BY_MS));
+    let title = issue ? issue.title : '';
+    if (issue) {
+      await put(`issue:${newId}`, { repo: at.repo, number: at.number, key: at.key, by: found.by });
+      const edit = { body: movedBody(issue.body, { guildId, newId, mover: moverPerson }), ...(newTitle && newTitle !== issue.title ? { title: newTitle } : {}) };
+      if (await step('issue link to the new post', () => ghLater.call('PATCH', `/repos/${at.repo}/issues/${at.number}`, edit)) && edit.title) title = edit.title;
+    }
     // The queue card shows the new post, edited before movedfrom: so the
     // record names the card. With no card, or one Discord refuses to edit
     // (deleted), a new card is posted: the card is how an approved role, who
     // has no right-click command, reaches the post.
     let card = cfg.queue ? cardId || (records.thread && records.thread.card) || (records.movedFrom && records.movedFrom.card) || '' : '';
     if (cfg.queue) {
-      const body = queueCard({ guildId, forumId: targetId, postId: newId, author: reporter, client, type, moved: mover });
+      const body = issue
+        ? filedCard({ guildId, postId: newId, head: cardHead(targetId, newId), key: at.key, number: at.number, by: found.by })
+        : queueCard({ guildId, forumId: targetId, postId: newId, author: reporter, client, type, moved: mover });
       await step('queue card for the new post', async () => {
         if (card) {
           try {
@@ -1312,19 +1394,45 @@ export async function movePost(interaction, env, deps, t0 = Date.now()) {
       });
     }
     await put(`movedfrom:${newId}`, { from: oldId, reporter, ...(card ? { card } : {}) });
-    const here = MESSAGES.movedHere({ from: link(oldId), by: mover, reporter, left, cut });
+    const here = MESSAGES.movedHere({ from: link(oldId), by: mover, reporter, left, cut, tracked: issue ? { key: at.key, number: at.number } : null });
     await step('moved message in the new post', () => later.send(newId, here, reporter.id ? [reporter.id] : []));
     await step('note in the old post', () => later.send(oldId, MESSAGES.movedTo({ to: newUrl, by: mover })));
     // An old post left open keeps its lock label, so nothing moves or sends
     // it again until the busy reply's hour has passed.
     if (!await step('lock on the old post', () => later.call('PATCH', `/channels/${oldId}`, { locked: true, archived: true }))) keepLock = true;
-    // At most six short lines: the reply never nears Discord's length.
+    // The issue's client and type labels, after phase 1's steps so a late
+    // create leaves those their time, then its checklist thread. Only
+    // client: and type: labels change, so from-discord stays as it is.
+    let labels = labelNames;
+    if (issue) {
+      const want = [`client: ${client.toLowerCase()}`, ...(type ? [`type: ${type.toLowerCase()}`] : [])];
+      const drop = labelNames.filter((l) => (/^client: /.test(l) || (type && /^type: /.test(l))) && !want.includes(l));
+      const add = want.filter((l) => !labelNames.includes(l));
+      if (await step('issue labels', async () => {
+        for (const l of drop) await ghLater.removeLabel(at.repo, at.number, l);
+        if (add.length) await ghLater.addLabels(at.repo, at.number, add);
+      })) labels = [...labelNames.filter((l) => !drop.includes(l)), ...add];
+    }
+    if (checklist) {
+      const t = checklist.threadId;
+      const done = (e) => { if (!taken(e)) throw e; };
+      // Discord edits no message in an archived thread, so the move opens it.
+      await step('staff checklist thread', async () => {
+        await later.call('PATCH', `/channels/${t}`, { archived: false }).catch(done);
+        await later.call('PATCH', `/channels/${t}/messages/${t}`, {
+          content: checklistFirst({ title, issueUrl: at.url, guildId, postId: newId, labels }), allowed_mentions: { parse: [] },
+        }).catch(done);
+      });
+    }
+    // At most ten short lines: the reply never nears Discord's length.
+    const filed = issue ? ` ${at.key} #${at.number}: ${at.url}` : '';
+    const moved = transferTo ? ` (transferred from ${from.key} #${from.number})` : '';
     await followup(notes.length
-      ? `The move stopped partway: ${newUrl} was made from ${link(oldId)}. Not done:\n${notes.map((n) => `- ${n}`).join('\n')}`
-      : `Moved to ${newUrl} from ${link(oldId)}.`);
+      ? `The move stopped partway: ${newUrl} was made from ${link(oldId)}${issue ? ` (${filed.trim()})` : ''}. Not done:\n${notes.map((n) => `- ${n}`).join('\n')}`
+      : `Moved to ${newUrl} from ${link(oldId)}.${filed}${moved}`);
     return { moved: newId, notes };
   } catch (e) {
-    await followup(`Nothing was moved: ${e.message.slice(0, 1500)}`);
+    await followup(where(`Nothing was moved: ${e.message.slice(0, 1500)}`));
     return { error: e.message };
   } finally {
     // A lock kept stays; a release that fails is logged. The next send's or

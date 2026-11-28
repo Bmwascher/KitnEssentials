@@ -4,7 +4,8 @@ import { generateKeyPairSync, createVerify } from 'node:crypto';
 import { handle, COMMAND_NAME, CHECK_COMMAND, scheduled, privateText } from '../src/worker.js';
 import { CRONS, MOVED_HERE } from '../src/scan.js';
 import { importAppKey, appJwt } from '../src/github.js';
-import { MESSAGES } from '../src/core.js';
+import { MESSAGES, movedBody } from '../src/core.js';
+import { checklistBody, checklistFirst } from '../status/checklist.mjs';
 import { fakeFetch, fakeKv, FORUM, stall } from './fake-fetch.mjs';
 import { setupWorld } from './setup-world.mjs';
 
@@ -1651,8 +1652,39 @@ function moveWorld(edit = () => {}) {
     ['GET', /api\.github\.com\/repos\/me\/test-two\/issues\?state=all.*labels=from-discord/, () => answerOf(s.two)],
     ['POST', /api\.github\.com\/repos\/me\/test-one\/labels$/, () => answerOf(s.claim)],
     ['DELETE', /api\.github\.com\/repos\/me\/test-one\/labels\/discord-lock-700$/, () => null],
+    // A filed post's issue (`s.issue`), its comments, the target repo, the
+    // transfer, the issue's edits and its checklist thread 960.
+    ['GET', /api\.github\.com\/repos\/me\/test-(one|two)\/issues\/\d+$/, () => (s.issue ? answerOf(s.issue) : new Response('{}', { status: 404 }))],
+    ['GET', /api\.github\.com\/repos\/me\/test-(one|two)\/issues\/\d+\/comments\?/, () => answerOf(s.comments || [])],
+    ['GET', /api\.github\.com\/repos\/me\/test-two$/, () => answerOf(s.repo || { node_id: 'R_2' })],
+    ['POST', /api\.github\.com\/graphql$/, () => answerOf(s.gql)],
+    ['PATCH', /api\.github\.com\/repos\/me\/test-(one|two)\/issues\/\d+$/, () => answerOf(s.patch || {})],
+    ['POST', /api\.github\.com\/repos\/me\/test-(one|two)\/issues\/\d+\/labels$/, () => answerOf(s.addLabels || [])],
+    ['DELETE', /api\.github\.com\/repos\/me\/test-(one|two)\/issues\/\d+\/labels\//, () => null],
+    ['PATCH', /\/channels\/960$/, () => answerOf(s.open || {})],
+    ['PATCH', /\/channels\/960\/messages\/960$/, () => answerOf(s.firstEdit || {})],
   ]);
   return { f, s, kv };
+}
+// A filed post: issue:700 names ONE #40, whose title, labels and footer are
+// the bot's, with its checklist record naming thread 960. The post shows
+// Triaged and Accepted.
+const ISSUE_URL = 'https://github.com/me/test-one/issues/40';
+const ISSUE_BODY = '| Reporter | Pat |\n\n## Report\n\n> My bags overlap\n\n<!-- discord-message: 700 -->\n<!-- discord-thread: 700 reporter: 42 -->';
+const filedIssue = (over = {}) => ({
+  number: 40, state: 'open', node_id: 'I_40', html_url: ISSUE_URL, repository_url: 'https://api.github.com/repos/me/test-one',
+  title: '[ONE] [Retail] [Bug] [Bags] Bags overlap', body: ISSUE_BODY,
+  labels: [{ name: 'from-discord' }, { name: 'type: bug' }, { name: 'client: retail' }], ...over,
+});
+const RECORD = { id: 3, user: { login: 'github-actions[bot]' }, body: checklistBody({ state: '960', guildId: '1', since: 1, issueUrl: ISSUE_URL }) };
+function filedWorld(edit = () => {}, issue = {}) {
+  return moveWorld((s) => {
+    s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-one', number: 40, key: 'ONE', by: '<@5>' }) };
+    s.issue = filedIssue(issue);
+    s.comments = [RECORD];
+    s.post.applied_tags = ['t-retail', 't-bug', 's-tri', 't-acc'];
+    edit(s);
+  });
 }
 const moveClick = (member = MOD) => ({ type: 2, member, guild_id: '1', channel_id: '700', data: { name: 'Move post', target_id: '800' } });
 const movePress = (member = HELPER) => ({ type: 3, member, guild_id: '1', channel_id: '556', message: { id: '96' }, data: { custom_id: 'move:700', component_type: 2 } });
@@ -1989,37 +2021,13 @@ test('a member read that stalls does not hold the webhook lookup: the post moves
 });
 
 test('a move refused before the new post changes nothing and says why', async () => {
-  const RECEIPT = /^Nothing was moved: the bot's "now tracked" reply in this post \(https:\/\/discord\.com\/channels\/1\/700\/m8\) says it was sent to GitHub, though its issue was not found by its filing record or the from-discord label; moving filed posts comes in a later update\. If that issue was deleted, delete that reply, then move the post again\.$/;
-  const FILED = (s) => {
-    s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-one', number: 40, key: 'ONE' }) };
-    s.extra = [['GET', /api\.github\.com\/repos\/me\/test-one\/issues\/40$/, () => ({ number: 40, html_url: 'https://github.com/me/test-one/issues/40', repository_url: 'https://api.github.com/repos/me/test-one' })]];
-  };
+  const RECEIPT = /^Nothing was moved: the bot's "now tracked" reply in this post \(https:\/\/discord\.com\/channels\/1\/700\/m8\) says it was sent to GitHub, though its issue was not found by its filing record or the from-discord label, so the bot cannot move it\. If that issue was deleted, delete that reply, then move the post again\.$/;
   for (const [why, edit, want, envOver = {}] of [
     ['a locked post', (s) => { s.post.thread_metadata.locked = true; }, /^Nothing was moved: the post is locked: a moderator can unlock it, then move it\.$/],
-    // A filed post gets the filed refusal, locked or not: unlocking it would
-    // not let it move.
-    ['a locked filed post', (s) => { FILED(s); s.post.thread_metadata.locked = true; },
-      /^This post is already tracked as ONE #40 \(https:\/\/github\.com\/me\/test-one\/issues\/40\); moving filed posts comes in a later update\.$/],
-    // The key it was filed under, where two keys name its repo.
-    ['a post filed under a second key of its repo', (s) => {
-      s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-two', number: 12, key: 'DUO' }) };
-      s.extra = [['GET', /api\.github\.com\/repos\/me\/test-two\/issues\/12$/, () => ({ number: 12, html_url: 'https://github.com/me/test-two/issues/12', repository_url: 'https://api.github.com/repos/me/test-two' })]];
-    }, /^This post is already tracked as DUO #12 /, { REPOS: '{"ONE":"me/test-one","TWO":"me/test-two","DUO":"me/test-two"}' }],
-    // The saved issue deleted, another found by the marker: another filing,
-    // so not the saved key.
-    ['a saved issue deleted and another found by its marker', (s) => {
-      s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-two', number: 12, key: 'DUO' }) };
-      s.extra = [['GET', /api\.github\.com\/repos\/me\/test-two\/issues\/12$/, () => new Response('{}', { status: 410 })]];
-      s.two = [{ number: 13, html_url: 'https://github.com/me/test-two/issues/13', repository_url: 'https://api.github.com/repos/me/test-two', body: '<!-- discord-thread: 700 reporter: 42 -->' }];
-    }, /^This post is already tracked as TWO #13 /, { REPOS: '{"ONE":"me/test-one","TWO":"me/test-two","DUO":"me/test-two"}' }],
     ['a post already moved', (s) => { s.kv = { 'movedto:700': '{"to":"990"}' }; }, /^Nothing was moved: this post was already moved to https:\/\/discord\.com\/channels\/1\/990\.$/],
     ['a filing record that is not JSON', (s) => { s.kv = { 'issue:700': '{' }; }, /^Nothing was moved: could not read this post's saved record just now\. Try again\.$/],
     ['a post already moved, which the move locked', (s) => { s.kv = { 'movedto:700': '{"to":"990"}' }; s.post.thread_metadata.locked = true; },
       /^Nothing was moved: this post was already moved to https:\/\/discord\.com\/channels\/1\/990\.$/],
-    ['a filed post', FILED, /^This post is already tracked as ONE #40 \(https:\/\/github\.com\/me\/test-one\/issues\/40\); moving filed posts comes in a later update\.$/],
-    ['a filed post with no record, found by its marker', (s) => {
-      s.two = [{ number: 12, html_url: 'https://github.com/me/test-two/issues/12', repository_url: 'https://api.github.com/repos/me/test-two', body: '<!-- discord-thread: 700 reporter: 42 -->' }];
-    }, /^This post is already tracked as TWO #12 \(https:\/\/github\.com\/me\/test-two\/issues\/12\); moving filed posts comes in a later update\.$/],
     // Filed with no record saved (no STATE bound then, or the save failed),
     // its issue's from-discord label removed since: neither search finds it,
     // and the bot's reply in the post still says it was filed.
@@ -2169,4 +2177,304 @@ test('a moved post moved again is copied under the original player, whose record
   assert.deepEqual(w.f.find('POST', /\/channels\/990\/messages$/)[0].body.allowed_mentions, { parse: [], users: ['42'] });
   assert.deepEqual(JSON.parse(kv.m.get('movedfrom:990')), { from: '700', reporter, card: '96' });
   assert.equal(w.f.find('GET', /\/guilds\/1\/members\//).length, 0, 'no member read for a copy');
+});
+
+// ---- Moving a filed post ---------------------------------------------------------
+
+// The Move form as the record pre-filled it: ONE, client Retail, from card 96.
+const filedSubmit = (values = {}, { custom = 'mv:700:96:ONE:Retail', member = MOD } = {}) => moveSubmit(values, { custom, member });
+const FILED_MOVED = `${MOVED} ONE #40: ${ISSUE_URL}`;
+const FILED_PARTWAY = `The move stopped partway: https://discord.com/channels/1/990 was made from https://discord.com/channels/1/700 (ONE #40: ${ISSUE_URL}). Not done:`;
+const WHERE = ` The issue is ONE #40 in me/test-one (${ISSUE_URL}).`;
+const TWO_URL = 'https://github.com/me/test-two/issues/7';
+const TRANSFERRED = { data: { transferIssue: { issue: { number: 7, url: TWO_URL } } } };
+const DUO_REPOS = { REPOS: '{"ONE":"me/test-one","TWO":"me/test-two","DUO":"me/test-two"}' };
+const reEscape = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+const labelCalls = (f) => [...f.find('DELETE', /\/issues\/\d+\/labels\//).map((c) => `-${decodeURIComponent(c.url.split('/labels/')[1])}`),
+  ...f.find('POST', /\/issues\/\d+\/labels$/).flatMap((c) => c.body.labels.map((l) => `+${l}`))];
+
+test('a filed post moves keeping its repo: the issue, its record, its card and its checklist thread follow the new post', async () => {
+  const w = filedWorld();
+  const { res, kv, told } = await runMove(w, filedSubmit());
+  const f = w.f;
+  assert.deepEqual(res, { moved: '990', notes: [] });
+  assert.equal(told, FILED_MOVED);
+  assert.equal(f.find('POST', /\/graphql$/).length, 0, 'no transfer');
+  // Phase 1's steps, then the labels, then the checklist thread last.
+  const order = [['POST', /\?wait=true$/], ['PATCH', /\/issues\/40$/], ['PATCH', /\/channels\/556\/messages\/96$/], ['POST', /\/channels\/990\/messages$/],
+    ['POST', /\/channels\/700\/messages$/], ['PATCH', /\/channels\/700$/], ['DELETE', /\/issues\/40\/labels\//], ['PATCH', /\/channels\/960$/],
+    ['PATCH', /\/channels\/960\/messages\/960$/], ['PATCH', /\/webhooks\/app\/itok/]].map(([m, re]) => at(f, m, re));
+  assert.deepEqual(order, [...order].sort((a, b) => a - b), `in order: ${order}`);
+  const sent = f.find('POST', /\?wait=true$/)[0].body.payload;
+  assert.equal(sent.thread_name, '[ONE] [Retail] [Feature] [Bags] Bags overlap', 'the issue\'s rebuilt title');
+  assert.deepEqual(sent.applied_tags, ['f-tri', 'f-one', 'f-retail', 'f-acc'], 'the status, the key\'s repo tag, the client and Accepted');
+  const patch = f.find('PATCH', /\/issues\/40$/)[0].body;
+  assert.equal(patch.title, '[ONE] [Retail] [Feature] [Bags] Bags overlap');
+  assert.equal(patch.body, ISSUE_BODY.replace('<!-- discord-message: 700 -->\n<!-- discord-thread: 700 reporter: 42 -->', [
+    'Moved to [the new post](https://discord.com/channels/1/990) by [moddy](https://discord.com/users/5) (`moddy`).',
+    '<!-- discord-copy -->', '<!-- discord-message: 990 -->', '<!-- discord-thread: 990 reporter: 42 -->'].join('\n')), 'only the footer replaced, by the mover\'s line and the copy footer');
+  assert.deepEqual(labelCalls(f), ['-type: bug', '+type: feature']);
+  assert.deepEqual(JSON.parse(kv.m.get('issue:990')), { repo: 'me/test-one', number: 40, key: 'ONE', by: '<@5>' });
+  assert.deepEqual(f.find('PATCH', /\/channels\/960$/)[0].body, { archived: false });
+  const first = f.find('PATCH', /\/channels\/960\/messages\/960$/)[0].body;
+  assert.equal(first.content, checklistFirst({ title: patch.title, issueUrl: ISSUE_URL, guildId: '1', postId: '990', labels: ['from-discord', 'client: retail', 'type: feature'] }));
+  assert.match(first.content, /\nPlayer post: https:\/\/discord\.com\/channels\/1\/990\nclient: retail . type: feature\n/);
+  assert.deepEqual(first.allowed_mentions, { parse: [] });
+  assert.equal(f.find('PATCH', /\/channels\/960$/).length, 1, 'no archive after the edit');
+  const card = f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body;
+  assert.equal(card.content, '~~**New post in <#901>:** <#990>~~\n**Filed as ONE #40** by <@5>');
+  assert.deepEqual(card.components[0].components.map((b) => b.custom_id || b.url), ['move:990', 'https://discord.com/channels/1/990']);
+  assert.equal(f.find('POST', /\/channels\/990\/messages$/)[0].body.content,
+    'Moved here from https://discord.com/channels/1/700 by <@5>. First posted by <@42>. Tracked as ONE #40.');
+});
+
+test('a filed post moved to another repo transfers its issue first, and everything after follows the new repo and number', async () => {
+  const w = filedWorld((s) => { s.gql = TRANSFERRED; });
+  const { kv, told } = await runMove(w, filedSubmit({ repo: 'TWO' }));
+  const f = w.f;
+  assert.equal(told, `${MOVED} TWO #7: ${TWO_URL} (transferred from ONE #40)`);
+  assert.ok(at(f, 'POST', /\/graphql$/) < at(f, 'POST', /\?wait=true$/), 'the transfer before the create');
+  assert.deepEqual(f.find('POST', /\/graphql$/)[0].body.variables, { issueId: 'I_40', repositoryId: 'R_2' });
+  assert.deepEqual(f.find('POST', /\?wait=true$/)[0].body.payload.applied_tags, ['f-tri', 'f-two', 'f-retail', 'f-acc'], 'the target key\'s repo tag, not the source\'s');
+  assert.equal(f.find('PATCH', /test-two\/issues\/7$/)[0].body.title, '[TWO] [Retail] [Feature] [Bags] Bags overlap');
+  assert.deepEqual(labelCalls(f), ['-type: bug', '+type: feature']);
+  assert.equal(f.find('DELETE', /test-two\/issues\/7\/labels\//).length, 1, 'labels on the moved issue');
+  assert.deepEqual(JSON.parse(kv.m.get('issue:990')), { repo: 'me/test-two', number: 7, key: 'TWO', by: '<@5>' });
+  assert.match(f.find('PATCH', /\/channels\/960\/messages\/960$/)[0].body.content, new RegExp(`\nIssue: ${reEscape(TWO_URL)}\n`));
+  assert.match(f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, /\*\*Filed as TWO #7\*\* by <@5>$/);
+});
+
+test('a filed post keeps its old name when the title is not the bot\'s, and the title still follows when renaming is off', async () => {
+  const hand = filedWorld(() => {}, { title: 'Bags overlap after resize' });
+  await runMove(hand, filedSubmit());
+  assert.equal(hand.f.find('POST', /\?wait=true$/)[0].body.payload.thread_name, 'Bags overlap', 'a hand title: the old post\'s name');
+  assert.equal('title' in hand.f.find('PATCH', /\/issues\/40$/)[0].body, false, 'and no title sent');
+  const off = filedWorld();
+  await runMove(off, filedSubmit(), { RENAME_POSTS: '0' });
+  assert.equal(off.f.find('POST', /\?wait=true$/)[0].body.payload.thread_name, 'Bags overlap', 'renaming off: the old post\'s name');
+  assert.equal(off.f.find('PATCH', /\/issues\/40$/)[0].body.title, '[ONE] [Retail] [Feature] [Bags] Bags overlap', 'and still the new title');
+});
+
+test('the repo the form showed keeps the issue where it is; only another repo transfers it', async () => {
+  const elsewhere = { repository_url: 'https://api.github.com/repos/me/test-two', html_url: 'https://github.com/me/test-two/issues/40' };
+  const inTwo = (s) => { s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-two', number: 40, key: 'TWO' }) }; };
+  for (const [why, edit, form, envOver, issue, reply] of [
+    ['the field left empty', () => {}, filedSubmit({ repo: null }), {}, {}, FILED_MOVED],
+    ['the shown key, the issue moved by hand to another repo', () => {}, filedSubmit({ repo: 'ONE' }), {}, elsewhere, `${MOVED} TWO #40: https://github.com/me/test-two/issues/40`],
+    ['another key for the same repo', inTwo, filedSubmit({ repo: 'DUO' }, { custom: 'mv:700:96:TWO:Retail' }), DUO_REPOS, elsewhere, `${MOVED} DUO #40: https://github.com/me/test-two/issues/40`],
+    ['a closed issue with the shown key', () => {}, filedSubmit({ repo: 'ONE' }), {}, { state: 'closed' }, FILED_MOVED],
+    ['a closed issue with another key for its repo', inTwo, filedSubmit({ repo: 'DUO' }, { custom: 'mv:700:96:TWO:Retail' }), DUO_REPOS, { ...elsewhere, state: 'closed' },
+      `${MOVED} DUO #40: https://github.com/me/test-two/issues/40`],
+    ['an unfiled post with a repo picked', (s) => { s.kv = {}; s.issue = null; s.comments = []; }, filedSubmit({ repo: 'TWO' }), {}, {}, MOVED],
+  ]) {
+    const w = filedWorld(edit, issue);
+    const { told } = await runMove(w, form, envOver);
+    assert.equal(told, reply, why);
+    assert.equal(w.f.find('POST', /\/graphql$/).length, 0, `${why}: no transfer`);
+  }
+});
+
+test('a target forum with no type keeps the issue\'s type, from its type label', async () => {
+  const NO_TYPE = { FORUMS: '{"900":{"client":"Retail","type":"Bug"},"901":{},"902":{"client":"Forever","type":"Bug"}}' };
+  const feedback = (s) => {
+    s.channels = CHANNELS.map((c) => (c.id === '900' ? { ...c, available_tags: [...c.available_tags, { id: 't-fb', name: 'Feedback' }] } : c));
+    s.post.applied_tags = [...s.post.applied_tags, 't-fb'];
+  };
+  for (const [why, edit, issue] of [
+    ['the type label sets it', () => {}, {}],
+    ['a kept Feature tag on a bug is dropped', feedback, {}],
+    ['no type label: the title keeps its type', () => {}, { labels: [{ name: 'from-discord' }, { name: 'client: retail' }] }],
+  ]) {
+    const w = filedWorld(edit, issue);
+    await runMove(w, filedSubmit(), NO_TYPE);
+    assert.deepEqual(labelCalls(w.f), [], `${why}: no label call`);
+    const sent = w.f.find('POST', /\?wait=true$/)[0].body.payload;
+    assert.equal(sent.thread_name, '[ONE] [Retail] [Bug] [Bags] Bags overlap', why);
+    assert.equal(sent.applied_tags.includes('f-feat'), false, `${why}: no Feature tag`);
+  }
+});
+
+test('a target forum with no client keeps the issue\'s client when the form\'s was left as shown', async () => {
+  const ALL = { title: '[ONE] [All] [Bug] [UI] Title', labels: [{ name: 'from-discord' }, { name: 'type: bug' }, { name: 'client: all' }] };
+  const kept = filedWorld(() => {}, ALL);
+  await runMove(kept, filedSubmit({ client: 'Retail' }, { custom: 'mv:700:96:ONE:Retail' }));
+  assert.equal(kept.f.find('PATCH', /\/issues\/40$/)[0].body.title, '[ONE] [All] [Feature] [UI] Title');
+  assert.deepEqual(labelCalls(kept.f), ['-type: bug', '+type: feature'], 'no client label call');
+  assert.ok(kept.f.find('POST', /\?wait=true$/)[0].body.payload.applied_tags.includes('f-forever'), 'tags for client All');
+  const picked = filedWorld(() => {}, ALL);
+  await runMove(picked, filedSubmit({ client: 'Retail' }, { custom: 'mv:700:96:ONE:All' }));
+  assert.equal(picked.f.find('PATCH', /\/issues\/40$/)[0].body.title, '[ONE] [Retail] [Feature] [UI] Title');
+  assert.deepEqual(labelCalls(picked.f), ['-type: bug', '-client: all', '+client: retail', '+type: feature']);
+});
+
+test('a filed move with nothing to change in the title or labels writes neither, and never adds from-discord', async () => {
+  const w = filedWorld(() => {}, { labels: [{ name: 'type: bug' }, { name: 'client: retail' }] });
+  await runMove(w, filedSubmit(), { FORUMS: '{"900":{"client":"Retail","type":"Bug"},"901":{"client":"Retail","type":"Bug"},"902":{}}' });
+  assert.equal('title' in w.f.find('PATCH', /\/issues\/40$/)[0].body, false);
+  assert.deepEqual(labelCalls(w.f), []);
+});
+
+test('a filed post found another way moves with that issue, and a locked one says where the issue is', async () => {
+  const thirteen = filedIssue({ number: 13, html_url: 'https://github.com/me/test-two/issues/13', repository_url: 'https://api.github.com/repos/me/test-two' });
+  // The saved issue deleted, another found by its marker: another filing, so no filer.
+  const gone = filedWorld((s) => {
+    s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-two', number: 12, key: 'DUO', by: '<@5>' }) };
+    s.issue = () => new Response('{}', { status: 410 });
+    s.two = [thirteen];
+  });
+  const goneRun = await runMove(gone, filedSubmit({ repo: null }, { custom: 'mv:700:96:DUO:Retail' }), DUO_REPOS);
+  assert.equal(goneRun.told, `${MOVED} TWO #13: https://github.com/me/test-two/issues/13`);
+  assert.deepEqual(JSON.parse(goneRun.kv.m.get('issue:990')), { repo: 'me/test-two', number: 13, key: 'TWO', by: null });
+  assert.equal(gone.f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, '~~**New post in <#901>:** <#990>~~\n**Filed as TWO #13**');
+  // No record: found by its marker, with no filer.
+  const search = filedWorld((s) => { s.kv = {}; s.one = [filedIssue()]; });
+  const searchRun = await runMove(search, filedSubmit({ repo: null }, { custom: 'mv:700:96::Retail' }));
+  assert.equal(searchRun.told, FILED_MOVED);
+  assert.equal(JSON.parse(searchRun.kv.m.get('issue:990')).by, null);
+  // Filed under a second key of its repo: that key throughout.
+  const duo = filedWorld((s) => { s.kv = { 'issue:700': JSON.stringify({ repo: 'me/test-two', number: 40, key: 'DUO', by: '<@5>' }) }; },
+    { repository_url: 'https://api.github.com/repos/me/test-two', html_url: 'https://github.com/me/test-two/issues/40' });
+  const duoRun = await runMove(duo, filedSubmit({ repo: 'DUO' }, { custom: 'mv:700:96:DUO:Retail' }), DUO_REPOS);
+  assert.equal(duoRun.told, `${MOVED} DUO #40: https://github.com/me/test-two/issues/40`);
+  assert.equal(JSON.parse(duoRun.kv.m.get('issue:990')).key, 'DUO');
+  assert.match(duo.f.find('PATCH', /\/issues\/40$/)[0].body.title, /^\[DUO\] /);
+  // A locked filed post: the locked refusal, then where the issue is.
+  const locked = filedWorld((s) => { s.post.thread_metadata.locked = true; });
+  assert.equal((await runMove(locked, filedSubmit())).told, `Nothing was moved: the post is locked: a moderator can unlock it, then move it.${WHERE}`);
+});
+
+test('a refusal after the issue is found ends by saying where it is, and nothing is transferred', async () => {
+  for (const [why, edit, form, issue, want] of [
+    ['a record naming another repo, and no Manage Webhooks', (s) => { s.hooks = refusal; }, filedSubmit(),
+      { repository_url: 'https://api.github.com/repos/me/test-two', html_url: 'https://github.com/me/test-two/issues/40' },
+      'Nothing was moved: the bot lacks Manage Webhooks in <#901>. The issue is TWO #40 in me/test-two (https://github.com/me/test-two/issues/40).'],
+    ['a closed issue and another repo', () => {}, filedSubmit({ repo: 'TWO' }), { state: 'closed' },
+      `Nothing was moved: ONE #40 is closed, so it stays in me/test-one; move the post again keeping its repo.${WHERE}`],
+    ['the comments read failing', (s) => { s.comments = () => new Response('oops', { status: 500 }); }, filedSubmit(), {},
+      `Nothing was moved: GitHub GET /repos/me/test-one/issues/40/comments?per_page=100&page=1 -> 500 oops.${WHERE}`],
+  ]) {
+    const w = filedWorld(edit, issue);
+    const { told } = await runMove(w, form);
+    assert.equal(told, want, why);
+    assert.equal(w.f.find('POST', /\/graphql$/).length, 0, `${why}: no transfer`);
+    assert.equal(w.f.find('POST', /\?wait=true$/).length, 0, `${why}: no new post`);
+    assert.equal(w.f.find('DELETE', /discord-lock-700$/).length, 1, `${why}: the lock released`);
+  }
+});
+
+test('a transfer refused or never sent leaves the issue in its repo and releases the lock; one not confirmed keeps it', async () => {
+  const NEEDS = 'Moving an issue to another repo needs the GitHub App\'s Contents: Read and write and Issues: Read and write, on repos of one owner; /bot-check names a missing permission.';
+  const unconfirmed = (msg) => `Nothing confirmed: GitHub did not confirm the transfer of ONE #40 to me/test-two (${msg}), so the issue may be there now. It was last known as ONE #40 in me/test-one (${ISSUE_URL}). The post was not moved; its lock discord-lock-700 in me/test-one stays.`;
+  const noTarget = async ({ repo }) => {
+    if (repo === 'me/test-two') throw Object.assign(new Error('GitHub GET /repos/me/test-two/installation -> 404 nf'), { github: { status: 404 } });
+    return 'inst';
+  };
+  for (const [why, edit, want, kept, depsOver = {}] of [
+    ['refused: no Contents write', (s) => { s.gql = { data: { transferIssue: null }, errors: [{ type: 'FORBIDDEN', message: 'Resource not accessible by integration' }] }; },
+      `Nothing was moved: GitHub refused the transfer of ONE #40 to me/test-two (Resource not accessible by integration). ${NEEDS}${WHERE}`, false],
+    ['refused: a 422', (s) => { s.gql = () => new Response('bad', { status: 422 }); },
+      `Nothing was moved: GitHub refused the transfer of ONE #40 to me/test-two (GitHub POST /graphql -> 422 bad). ${NEEDS}${WHERE}`, false],
+    ['the target token failing', () => {}, `Nothing was moved: could not get access to me/test-two (GitHub GET /repos/me/test-two/installation -> 404 nf). Try again.${WHERE}`, false, { installationToken: noTarget }],
+    ['the target repo read answering 404', (s) => { s.repo = () => new Response('{}', { status: 404 }); }, `Nothing was moved: could not read me/test-two (404). Try again.${WHERE}`, false],
+    ['the target repo read answering 500', (s) => { s.repo = () => new Response('{}', { status: 500 }); }, `Nothing was moved: could not read me/test-two (500). Try again.${WHERE}`, false],
+    ['no answer', (s) => { s.gql = () => { throw new Error('Network connection lost.'); }; }, unconfirmed('Network connection lost.'), true],
+    ['a 500', (s) => { s.gql = () => new Response('oops', { status: 500 }); }, unconfirmed('GitHub POST /graphql -> 500 oops'), true],
+    ['an error of another type', (s) => { s.gql = { data: { transferIssue: null }, errors: [{ type: 'UNPROCESSABLE', message: 'Cannot transfer' }] }; }, unconfirmed('Cannot transfer'), true],
+  ]) {
+    const w = filedWorld(edit);
+    const { told } = await runMove(w, filedSubmit({ repo: 'TWO' }), {}, depsOver);
+    assert.equal(told, want, why);
+    assert.equal(w.f.find('POST', /\?wait=true$/).length, 0, `${why}: nothing created`);
+    assert.equal(w.f.find('DELETE', /discord-lock-700$/).length, kept ? 0 : 1, `${why}: the lock`);
+    if (/token|repo read/.test(why)) assert.equal(w.f.find('POST', /\/graphql$/).length, 0, `${why}: no transfer sent`);
+    if (/token/.test(why)) assert.equal(w.f.find('GET', /\/repos\/me\/test-two$/).length, 0, `${why}: no repo read`);
+  }
+  // No time left to send the mutation: never sent, so the lock is released.
+  const clock = shiftClock();
+  try {
+    clock.at(0);
+    const w = filedWorld((s) => { s.repo = () => { clock.at(12000); return { node_id: 'R_2' }; }; });
+    const { told } = await runMove(w, filedSubmit({ repo: 'TWO' }));
+    assert.equal(told, `Nothing was moved: out of time before POST https://api.github.com/graphql.${WHERE}`);
+    assert.equal(w.f.find('POST', /\/graphql$/).length, 0);
+    assert.equal(w.f.find('DELETE', /discord-lock-700$/).length, 1);
+  } finally { clock.restore(); }
+  // After a transfer, a create refused or not answered names the new repo.
+  const NEW_WHERE = ` The issue is TWO #7 in me/test-two (${TWO_URL}).`;
+  const refused = filedWorld((s) => { s.gql = TRANSFERRED; s.made = () => new Response('{"message":"Invalid Form Body"}', { status: 400 }); });
+  assert.match((await runMove(refused, filedSubmit({ repo: 'TWO' }))).told, new RegExp(`^Nothing was moved: Discord refused the new post \\([^)]*-> 400 [^)]*\\)\\.${reEscape(NEW_WHERE)}$`));
+  const lost = filedWorld((s) => { s.gql = TRANSFERRED; s.made = () => { throw new Error('Network connection lost.'); }; });
+  assert.equal((await runMove(lost, filedSubmit({ repo: 'TWO' }))).told,
+    `Nothing confirmed: Discord did not answer the new post's create in <#901>, so a copy of https://discord.com/channels/1/700 may exist there. The old post was not changed; its lock discord-lock-700 in me/test-one stays.${NEW_WHERE}`);
+  assert.equal(lost.f.find('DELETE', /discord-lock-700$/).length, 0, 'the unanswered create keeps the lock');
+});
+
+test('after a transfer whose create was refused, moving again with the form\'s default transfers nothing and finishes', async () => {
+  let runs = 0;
+  let moved = false;
+  const w = filedWorld((s) => {
+    s.gql = () => { moved = true; return TRANSFERRED; };
+    s.issue = () => (moved ? filedIssue({ number: 7, html_url: TWO_URL, repository_url: 'https://api.github.com/repos/me/test-two' }) : filedIssue());
+    s.made = () => (runs === 1 ? new Response('{"message":"Invalid Form Body"}', { status: 400 }) : { id: '990', channel_id: '990' });
+  });
+  runs = 1;
+  await runMove(w, filedSubmit({ repo: 'TWO' }));
+  runs = 2;
+  const before = w.f.calls.length;
+  await runMove(w, filedSubmit({ repo: 'ONE' }));
+  const second = w.f.calls.slice(before);
+  assert.equal(second.filter((c) => /\/graphql$/.test(c.url)).length, 0, 'no transfer');
+  assert.equal(second.filter((c) => /\?wait=true$/.test(c.url)).length, 1, 'the post created');
+  assert.equal(w.f.find('PATCH', /\/webhooks\/app\/itok/).at(-1).body.content, `${MOVED} TWO #7: ${TWO_URL}`);
+});
+
+test('a filed move\'s step after the new post that fails is named, and the later steps still run', async () => {
+  for (const [why, edit, line] of [
+    ['the record not saved', (s) => { s.putFails = 'issue:990'; }, 'record issue:990'],
+    ['the issue edit refused', (s) => { s.patch = refusal; }, 'issue link to the new post'],
+    ['a label add refused', (s) => { s.addLabels = refusal; }, 'issue labels'],
+    ['the checklist message edit refused', (s) => { s.firstEdit = refusal; }, 'staff checklist thread'],
+  ]) {
+    const w = filedWorld(edit);
+    const { told } = await runMove(w, filedSubmit());
+    assert.equal(told, `${FILED_PARTWAY}\n- ${line}`, why);
+    assert.equal(w.f.find('PATCH', /\/channels\/960\/messages\/960$/).length, 1, `${why}: the checklist step still runs`);
+    assert.equal(w.f.find('PATCH', /\/channels\/700$/).length, 1, `${why}: the old post still locked`);
+  }
+});
+
+test('the checklist step edits only a thread the bot\'s record names', async () => {
+  const gone = filedWorld((s) => { s.open = () => new Response('{"message":"Unknown Channel"}', { status: 404 }); });
+  assert.equal((await runMove(gone, filedSubmit())).told, `${FILED_PARTWAY}\n- staff checklist thread`);
+  assert.equal(gone.f.find('PATCH', /\/channels\/960\/messages\/960$/).length, 0, 'no message edit');
+  for (const [why, comments] of [
+    ['a record with no thread yet', [{ ...RECORD, body: checklistBody({ state: 'pending', guildId: '', since: 1, issueUrl: ISSUE_URL }) }]],
+    ['no record', []],
+    ['a record-shaped comment by someone else', [{ ...RECORD, user: { login: 'pat' } }]],
+  ]) {
+    const w = filedWorld((s) => { s.comments = comments; });
+    assert.equal((await runMove(w, filedSubmit())).told, FILED_MOVED, why);
+    assert.equal(w.f.calls.filter((c) => /\/channels\/960/.test(c.url)).length, 0, `${why}: no checklist call`);
+  }
+});
+
+test('Send to GitHub on a moved filed post finds its issue by the move\'s record and writes the card the move wrote', async () => {
+  const w = filedWorld();
+  const { kv } = await runMove(w, filedSubmit());
+  const card = w.f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content;
+  const f = fakeFetch([
+    ['GET', /\/channels\/990$/, () => ({ id: '990', parent_id: '901', name: 'x', applied_tags: [] })],
+    ['GET', /\/repos\/me\/test-one\/issues\/40$/, () => filedIssue()],
+    ['POST', /test-one\/labels$/, () => new Response('{}', { status: 201 })],
+    ['DELETE', /discord-lock-990$/, () => null],
+    ['PATCH', /\/channels\/556\/messages\/96$/, () => ({})],
+    ['PATCH', /\/webhooks\//, () => ({})],
+  ]);
+  const form = { ...submit({ repo: 'ONE' }), channel_id: '990' };
+  form.data = { ...form.data, custom_id: 'gh:990:990' };
+  const ctx = ctxFor();
+  await handle(await signed(form), { ...MOVE_ENV, STATE: kv }, ctx, { fetch: f, installationToken: async () => 'inst', log: () => {} });
+  await Promise.all(ctx.jobs);
+  assert.equal(f.find('PATCH', /\/webhooks\//)[0].body.content, `Already tracked: ONE #40 ${ISSUE_URL}`);
+  assert.equal(f.find('PATCH', /\/channels\/556\/messages\/96$/)[0].body.content, card, 'the card the move wrote');
 });
