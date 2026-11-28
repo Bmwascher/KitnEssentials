@@ -494,8 +494,9 @@ private repo to a public one; it keeps a milestone only when the target has
 one of the same name and due date, and the bot makes in the target any label
 it lacks. GitHub copies the labels a few seconds after it answers, so
 before it changes the client and type labels the bot reads the issue again,
-once a second for up to five seconds, until the old labels are there. The
-GitHub App needs Contents: Read and write as well as Issues on both repos (Checking the setup). After the bot found the issue, every reply
+up to six times a second apart, until the old labels are there. The
+GitHub App needs Contents: Read and write as well as Issues on both repos
+(Checking the setup). After the bot found the issue, every reply
 that moved nothing ends by saying where it is, "The issue is KEY #n in
 owner/repo (link)."; a refusal before that, such as a busy post, names no
 issue. A transfer GitHub refused (an HTTP 4xx, or its missing-permission
@@ -1002,7 +1003,7 @@ Accepted on purpose; each line says how you would notice it.
     other than the issue's changes it.
   - A transfer slow enough to use most of the move's 12-second preparation
     leaves more files on the old post.
-  - A transfer whose labels GitHub has not copied within five seconds: the
+  - A transfer whose labels GitHub has not copied by the sixth read: the
     move changes the labels anyway, and a client or type label it removed
     can come back with the copy; remove it by hand.
   - A title a maintainer lengthened to near GitHub's 256 characters can make

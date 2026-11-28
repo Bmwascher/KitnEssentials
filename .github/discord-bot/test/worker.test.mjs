@@ -2273,7 +2273,8 @@ test('after a transfer the labels wait for GitHub to copy the issue\'s labels, t
     assert.equal(n, want, `${why}: reads of the moved issue`);
     assert.deepEqual(slept, Array(want - 1).fill(1000), `${why}: a second between reads`);
     assert.deepEqual(labelCalls(w.f), ['-type: bug', '+type: feature'], why);
-    assert.ok(at(w.f, 'GET', /test-two\/issues\/7$/) < at(w.f, 'DELETE', /test-two\/issues\/7\/labels\//), `${why}: read before the removal`);
+    const lastRead = w.f.calls.map((c) => c.method === 'GET' && /test-two\/issues\/7$/.test(c.url)).lastIndexOf(true);
+    assert.ok(lastRead < at(w.f, 'DELETE', /test-two\/issues\/7\/labels\//), `${why}: every read before the removal`);
   }
 });
 
