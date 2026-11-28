@@ -62,7 +62,8 @@ STALE_DAYS = "3"
 # RENAME_POSTS = "0"
 # The tag that marks a post's repo, by REPOS key (tag names in any letter
 # case): it pre-fills the repo in the Send to GitHub form. A move carries it
-# to the new post by name, like any tag.
+# to the new post by name, like any tag; a filed post's move sets the tag of
+# its issue's key.
 # REPO_TAGS = '{"UI":"UI"}'
 # Optional: the template fields each type of post should fill, checked as
 # advice for moderators only, in a forum with no readable pinned template.
